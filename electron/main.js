@@ -169,6 +169,27 @@ function onReady() {
     getWin: () => win,
   });
 
+  // [R-24 상태 주시] 한 번 스캔된 뒤(스냅샷 보유) 재스캔 전까지 git·freshness를 주기 재수집해
+  //   변경분을 메인 창에 push('spip:projectsUpdated'). 빈 store(0개)면 tick은 무동작이라 항상 시작해도
+  //   안전하다 — 첫 스캔으로 store.load()되면 그때부터 실제로 주시한다. 스캔 중엔 tick이 건너뛴다.
+  try {
+    ctx.stateWatcher.start({
+      store: ctx.store,
+      config: ctx.config,
+      isScanning: () => {
+        const phase = ctx.scanController ? ctx.scanController.status().phase : 'idle';
+        return phase === 'scanning' || phase === 'finalizing';
+      },
+      onUpdate: (payload) => {
+        if (win && !win.isDestroyed() && win.webContents && !win.webContents.isDestroyed()) {
+          try { win.webContents.send('spip:projectsUpdated', payload); } catch (_) { /* 창 파괴 레이스 격리 */ }
+        }
+      },
+    });
+  } catch (err) {
+    logger.error('상태 주시 시작 실패 — 주시 없이 계속', err);
+  }
+
   // 메뉴(P2-1) — 메뉴 클릭은 포커스된 창의 webContents로 'spip:menu:<action>'를 send하고,
   //   renderer가 preload onMenu(cb)로 구독해 해당 액션(폴더선택/재스캔/새로고침/정보)을 수행한다.
   //   dead wiring(아무도 안 받는 send) 해소 — 발신·수신이 단일 계약(action 집합)으로 연결된다.
@@ -263,6 +284,8 @@ function disposeResources() {
   if (_disposed) return;
   _disposed = true;
   try { if (ctx && ctx.scanController && typeof ctx.scanController.dispose === 'function') ctx.scanController.dispose(); } catch (err) { logger.error('dispose 실패', err); }
+  // [R-24] 상태 주시 워처 타이머 정리(멱등).
+  try { if (ctx && ctx.stateWatcher && typeof ctx.stateWatcher.stop === 'function') ctx.stateWatcher.stop(); } catch (err) { logger.error('워처 정리 실패', err); }
 }
 
 // [P2-2] 실제 종료 1지점: 자원 dispose는 여기서만(=Q4 통과/창 없음 확정 후). 멱등 설계.

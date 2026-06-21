@@ -42,7 +42,7 @@
 
   <h1>Project-SPIP — 진행 현황판</h1>
   <p class="sub">PC 내 흩어진 VS Code 프로젝트를 스캔해 인사이트를 보여주는 로컬 대시보드</p>
-  <p class="meta">기준일 2026-06-21 · 현재 단계: <span class="badge done">M7(R-22 별도 즐겨찾기 토스트 창 · R-23 카드 드래그 애니메이션) 구현 완료 · 검증 통과</span> · 다음: 후속/백로그(비차단) + 사용자 PC 1회 수동 확인(토스트 등장·blur 닫힘·독립 표시·FLIP·DnD·트레이·다이얼로그·클립보드·Q4) · v1.0.1</p>
+  <p class="meta">기준일 2026-06-21 · 현재 단계: <span class="badge done">M8(R-24 상태 주시 · 라이브 갱신) 구현 완료 · 검증 통과</span> · 다음: 후속/백로그(비차단) + 사용자 PC 1회 수동 확인(라이브 갱신·드래그 중 보류·스캔 경합 + 기존 토스트·FLIP·DnD·트레이·다이얼로그·Q4) · 테스트 503/503 · v1.0.1</p>
 
   <!-- 핵심 지표 -->
   <h2>핵심 지표</h2>
@@ -180,6 +180,21 @@
     </table>
     <div class="note">
       <b>헤드리스 한계 — 사용자 PC 1회 수동 확인 필요(추측 PASS 아님).</b> 코드·정책 정합·단위·실기동 스모크는 PASS이나 GUI/OS 표시·입력 상호작용은 헤드리스에서 실증 불가라 분리한다(QA 8건). <b>토스트 등장</b> 트레이 '즐겨찾기' 클릭 시 우측하단 토스트가 즉시 뜸(대시보드가 트레이에 숨어 있어도) · <b>독립 표시</b> 메인창을 닫아 트레이 상주 상태에서도 위젯 단독 등장 · <b>blur 닫힘</b> 위젯 밖 클릭 시 100ms grace 후 hide·재포커스 시 취소 · <b>focus 게이팅</b> 비포커스 상태 첫 클릭은 포커스만 획득(open·copyText·setFavorite 미실행) · <b>FLIP 시각</b> 드래그/키보드 순서변경 시 카드가 점프 없이 부드럽게 이동·<code>prefers-reduced-motion</code> 시 즉시 적용 · <b>양 창 동기화</b> 메인·위젯 동시 표시 중 한쪽 즐겨찾기 토글이 다른 쪽에 즉시 반영(broadcast).
+    </div>
+  </div>
+
+  <!-- M8 -->
+  <h2>M8 (R-24 상태 주시 · 라이브 갱신) — 구현 완료 · 검증 통과</h2>
+  <div class="panel">
+    <p style="margin:0 0 10px;font-size:13.5px;color:#cbd5e1;">사용자 요청 1건을 점진 확장으로 반영했다. <b>R-24</b>는 한 번 스캔한 뒤로는 <b>재스캔 전까지 상태를 계속 주시</b>하도록, 신규 <code>StateWatcher</code>(주기 폴링 기본 15초·하한 3초)가 이미 발견된 known project 경로에 <b>git·freshness 수집기만 재적용</b>(무거운 walker/detector/size 미수행·N-01 보존)해 변경분만 <code>spip:projectsUpdated</code> 단방향 push로 대시보드에 라이브 반영한다. 보안 0 약화 — 경로는 매 tick <code>canonicalize</code> 재해석(H-1)·git은 <code>git -C</code> 절대경로(H-2)·페이로드는 §8.1 shape만(L-3)·신규 invoke 채널 0. 스캔과는 phase 게이트로 분리(스캔 중 tick 건너뜀). 영속은 재스캔만(메모리 오버레이). 결정 근거: <b>ADR-M8-1</b>(폴링 채택 vs fs.watch). 설계 정본: <span class="links"><a href="../architecture/m8-design.html">m8-design.html</a></span>(rev.1). 전체 <b>503 테스트 통과</b>(M8 신규 12 포함).</p>
+    <table>
+      <thead><tr><th>ID</th><th>기능</th><th>구현(실제)</th><th>상태</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">R-24</td><td>상태 주시(라이브 갱신)</td><td><code>lib/server/stateWatcher.js</code> — <code>tick()</code>가 known 경로마다 git·freshness 재수집→<code>stateChanged</code> diff→변경분만 <code>onUpdate</code>. <code>normalizeGit/normalizeFreshness</code>(buildProject 동형)·<code>_busy</code> 재진입 가드·<code>isScanning</code> 게이트·타이머 <code>unref</code>·interval clamp. <code>lib/server/snapshotStore.js</code> <code>applyLiveState(id,git,freshness)</code>(in-place·구조 필드 불변). <code>electron/context.js</code> stateWatcher 생성 · <code>electron/main.js</code> start(store·config·isScanning phase 게이트·onUpdate→win.send)·disposeResources stop · <code>electron/preload.js</code> <code>onProjectsUpdated</code> 구독 · <code>public/app.js</code> <code>subscribeProjectsUpdated</code>·<code>applyProjectsUpdate</code>(id 병합·toViewModel·stale KPI 재계산·드래그 중 <code>_dragging</code> 렌더 보류)</td><td><span class="badge done">완료</span></td></tr>
+      </tbody>
+    </table>
+    <div class="note">
+      <b>헤드리스 한계 — 사용자 PC 1회 수동 확인 필요.</b> 순수 tick(변경분만 onUpdate·무변경 미호출)·H-1 소멸 경로 skip·스캔 중 무동작·_busy 재진입·start/stop 멱등·<code>applyLiveState</code> 계약은 단위 PASS이나, 실 git 동작 후 라이브 갱신 시각은 헤드리스 실증 불가라 분리한다. <b>라이브 갱신</b> 프로젝트에서 커밋/수정 후 ~15초 내 카드의 미커밋/미푸시 배지·방치(stale) 표시가 재스캔 없이 갱신 · <b>드래그 중 보류</b> SortableJS 드래그 동안 갱신이 와도 그리드가 흔들리지 않고 드롭 후 반영 · <b>스캔 경합</b> 재스캔 진행 중에는 주시가 멈췄다가 완료 후 새 목록으로 자동 재개.
     </div>
   </div>
 

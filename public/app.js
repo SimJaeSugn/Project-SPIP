@@ -933,6 +933,7 @@ function initBrowser() {
     toolPathInput: {},           // 툴별 경로 직접 입력 컨트롤드 값 { id: text }
     busyTools: false,            // 툴 경로 설정 in-flight
     trayUnsubscribe: null,       // R-21: spip.onTray 구독 해제 함수
+    projectsUpdatedUnsubscribe: null, // R-24: spip.onProjectsUpdated 구독 해제 함수
   };
 
   const app = document.getElementById('app');
@@ -2491,6 +2492,54 @@ function initBrowser() {
     }
     store.trayUnsubscribe = null;
   }
+
+  /* =====================================================================
+   * R-24: 상태 주시(라이브 갱신) 구독 — spip.onProjectsUpdated → git·freshness 병합
+   *   main 의 StateWatcher 가 재스캔 없이 주기 재수집한 변경분을 push 한다.
+   *   payload: { projects:[<§8.1 project(갱신분)>] }. 부재(웹/테스트) graceful.
+   * ===================================================================== */
+  function subscribeProjectsUpdated() {
+    unsubscribeProjectsUpdated();
+    if (!hasBridge() || typeof spip.onProjectsUpdated !== 'function') return; // graceful
+    const unsub = spip.onProjectsUpdated((payload) => applyProjectsUpdate(payload));
+    store.projectsUpdatedUnsubscribe = (typeof unsub === 'function') ? unsub : null;
+  }
+  function unsubscribeProjectsUpdated() {
+    if (typeof store.projectsUpdatedUnsubscribe === 'function') {
+      try { store.projectsUpdatedUnsubscribe(); } catch (_) { /* ignore */ }
+    }
+    store.projectsUpdatedUnsubscribe = null;
+  }
+  /**
+   * 라이브 갱신 병합. 변경된 project(들)를 store.raw/viewModels 에 id 로 교체하고 재렌더한다.
+   *   - 식별/구조 필드는 watcher 가 건드리지 않으므로 toViewModel 로 전체 재매핑해도 안전.
+   *   - stale KPI 는 freshness 변동을 반영하도록 로컬 재계산.
+   *   - 드래그 중이면 데이터만 병합하고 렌더는 보류(드래그 종료 후 자연 렌더에 반영) — DnD 파손 방지.
+   *   - 대시보드 뷰에서만 렌더(스캐닝/설정 등 컨텍스트 보존).
+   */
+  function applyProjectsUpdate(payload) {
+    if (!payload || typeof payload !== 'object' || !Array.isArray(payload.projects)) return;
+    const ups = payload.projects.filter((p) => p && typeof p === 'object' && typeof p.id === 'string');
+    if (!ups.length) return;
+    if (!Array.isArray(store.raw)) store.raw = [];
+    if (!Array.isArray(store.viewModels)) store.viewModels = [];
+    let changed = false;
+    for (const up of ups) {
+      const ri = store.raw.findIndex((p) => p && p.id === up.id);
+      if (ri < 0) continue; // 현재 스냅샷에 없는 id(재스캔으로 교체 등) — 무시
+      store.raw[ri] = up;
+      const vi = store.viewModels.findIndex((v) => v && v.id === up.id);
+      const vm = toViewModel(up);
+      if (vi >= 0) store.viewModels[vi] = vm; else store.viewModels.push(vm);
+      changed = true;
+    }
+    if (!changed) return;
+    // stale KPI 로컬 보정(freshness 변동 반영).
+    if (store.stats && typeof store.stats === 'object') {
+      store.stats.staleCount = store.viewModels.filter((v) => v && v.isStale).length;
+    }
+    if (store.state.view === 'dashboard' && !store._dragging) render();
+  }
   /** onTray 콜백 본체 — action 토큰 디스패치(매핑은 순수 dispatchTrayAction).
    *  [M7 §8.1·R4] 'favorites' 분기 제거 — 트레이 '즐겨찾기'는 main 이 위젯 창을 직접 열고
    *  메인창에 push 하지 않는다. onTray 는 'dashboard'(대시보드 포커스)만 수신한다. */
@@ -2648,7 +2697,10 @@ function initBrowser() {
       chosenClass: 'card--chosen',  // 선택된 원본 카드
       dragClass: 'card--drag',      // 따라다니는 드래그 클론(fallback)
       fallbackTolerance: 4,
+      // [R-24] 드래그 동안은 라이브 갱신 재렌더를 보류해 DnD 파손을 막는다.
+      onStart: () => { store._dragging = true; },
       onEnd: (evt) => {
+        store._dragging = false;
         if (!evt || evt.oldIndex === evt.newIndex) return; // 위치 동일 — 무시
         const grid2 = evt.to || grid;
         const newIds = Array.prototype.slice.call(grid2.querySelectorAll('[data-card-id]'))
@@ -2970,12 +3022,15 @@ function initBrowser() {
   subscribeMenu();
   // R-21: 트레이 push 구독(앱 1회). 부재 시 graceful — subscribeTray 내부 가드.
   subscribeTray();
+  // R-24: 상태 주시 라이브 갱신 구독(앱 1회). 부재 시 graceful — 내부 가드.
+  subscribeProjectsUpdated();
 
-  // teardown: 창 unload 시 구독 해제(누수 방지 — 메뉴·진행·트레이 구독 모두).
+  // teardown: 창 unload 시 구독 해제(누수 방지 — 메뉴·진행·트레이·주시 구독 모두).
   function teardown() {
     unsubscribeMenu();
     unsubscribeScan();
     unsubscribeTray();
+    unsubscribeProjectsUpdated();
   }
   if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
     window.addEventListener('pagehide', teardown);

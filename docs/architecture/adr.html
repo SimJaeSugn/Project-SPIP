@@ -55,6 +55,9 @@
 </header>
 
 <main>
+<div style="margin:18px 0;padding:14px 18px;border:1px solid #a78bfa;border-left:4px solid #a78bfa;border-radius:10px;background:rgba(167,139,250,.08);color:#ddd6fe;font-size:13.5px;line-height:1.7;">
+  <b>마일스톤 ADR 안내 (MVP 이후).</b> 본 문서는 MVP ADR(ADR-001~006)을 담는다. 이후 마일스톤 ADR은 각 마일스톤 설계 정본에 수록한다 — ADR-M4-* (<code>m4-design.html</code>) · ADR-M6-* (<code>m6-design.html</code>) · ADR-M7-* (<code>m7-design.html</code>) · <b>ADR-M8-1 (<code>m8-design.html</code>)</b>. <b>ADR-M8-1 — 상태 주시 메커니즘: 주기 폴링 채택(vs fs.watch).</b> R-24를 충족하기 위해 known 프로젝트의 git·freshness를 주기 폴링(기본 15초)으로 재수집한다. fs.watch는 다수 디렉터리 watch의 자원·플랫폼(Windows) 리스크·구현 복잡도로 보류. 폴링은 단순·예측가능·외부 의존 0이며 스캔과 phase 게이트로 분리. 영향: 최대 갱신 지연 = 폴링 주기. 정본: <code>docs/architecture/m8-design.html</code> §10.
+</div>
 
 <section class="toc">
   <h2>ADR 목록</h2>

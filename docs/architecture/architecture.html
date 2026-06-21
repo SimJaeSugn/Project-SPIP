@@ -72,6 +72,9 @@
 </header>
 
 <main>
+<div style="margin:18px 0;padding:14px 18px;border:1px solid #a78bfa;border-left:4px solid #a78bfa;border-radius:10px;background:rgba(167,139,250,.08);color:#ddd6fe;font-size:13.5px;line-height:1.7;">
+  <b>마일스톤 델타 안내 (MVP 이후).</b> 본 설계서는 <b>MVP 기준(rev.2)</b>이며, 이후 마일스톤(M4·M6·M7·M8)의 아키텍처 델타는 마일스톤별 설계 정본에서 관리한다 — <code>docs/architecture/{m4,m6,m7,m8}-design.html</code> · 추적성 <code>docs/traceability.html</code>. <b>최신: M8 — R-24 상태 주시(라이브 갱신)</b>: 신규 <code>lib/server/stateWatcher.js</code>(주기 폴링 워처)가 재스캔 없이 known 경로에 git·freshness 수집기만 재적용해 변경분을 <code>spip:projectsUpdated</code> 단방향 push. 경로 재해석(H-1)·git -C 절대경로(H-2)·§8.1 shape만 노출(L-3)·신규 invoke 채널 0. 결정 ADR-M8-1(폴링 vs fs.watch). 정본: <code>docs/architecture/m8-design.html</code>.
+</div>
 
 <section class="toc">
   <h2>목차</h2>

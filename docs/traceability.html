@@ -68,7 +68,7 @@
 </head>
 <body>
 <header>
-  <span class="tag">추적성 매트릭스</span><span class="tag">v1.5</span><span class="tag">현재 단계: M7(R-22 즐겨찾기 독립 토스트 창·R-23 카드 reorder FLIP) 구현 완료·검증 통과</span>
+  <span class="tag">추적성 매트릭스</span><span class="tag">v1.6</span><span class="tag">현재 단계: M8(R-24 상태 주시·라이브 갱신) 구현 완료·검증 통과</span>
   <h1>Project-SPIP — 추적성 매트릭스</h1>
   <p>요구가 <b>기획 → 설계 결정/모듈 → 구현 위치 → 검증</b>까지 끊기지 않고 이어지는지를 한 표로 관리하는 1급 산출물.
   PRD의 모든 요구(기능 R-01~R-16, 비기능 N-01~N-07) + M6 백로그(R-17~R-21) + M7(R-22·R-23)를 행으로 가지며, 각 요구를 아키텍처 설계서 §14 매핑·본문 §5~§9 모듈/계약/API·§7 디렉터리 트리(구현 위치)와 검증 기록(QA·코드·보안 PASS)에 연결한다.</p>
@@ -82,6 +82,9 @@
   <div class="note" style="background:rgba(167,139,250,.08);border-color:rgba(167,139,250,.3);color:#ddd6fe;">
     <b>M7(R-22·R-23) 추가·구현 완료.</b> 사용자 요청 2건을 점진 확장으로 반영했다 — <b>R-22</b> 즐겨찾기를 메인창 내 오버레이가 아닌 <b>대시보드와 독립된 별도 프레임리스 토스트형 창</b>으로 전환(우측하단·트레이에서 열림·대시보드가 트레이에 숨어 있어도 등장). 새 창에도 메인창과 동등 보안(동일 webPreferences·<code>app://favorites.html</code>·CSP default session 공유·per-wc 하드닝·senderFrame 정확일치)을 적용하고 위젯 전용 축소 preload(6채널)로 표면을 좁혔다. 메인창 슬라이더 오버레이는 제거됨(ADR-M6-5 Superseded → ADR-M7-1). <b>R-23</b> 카드 reorder FLIP 애니메이션(<code>prefers-reduced-motion</code> 존중·카드뷰 한정·렌더러 전용). 설계 정본: <code>docs/architecture/m7-design.html</code>(rev.2). 설계 reviewer 2회·보안 2회 PASS·구현 다면검증(보안 PASS·코드 P1 0·QA 통합가능)·전체 <b>474 테스트 통과</b>(M7 신규 58 포함). GUI/OS 상호작용(토스트 등장·blur 닫힘·독립 표시·FLIP 시각·양 창 동기화)은 헤드리스 한계로 <b>사용자 PC 1회 수동 확인</b>.
   </div>
+  <div class="note" style="background:rgba(167,139,250,.08);border-color:rgba(167,139,250,.3);color:#ddd6fe;">
+    <b>M8(R-24) 추가·구현 완료.</b> 사용자 요청 1건을 점진 확장으로 반영했다 — <b>R-24</b> 한 번 스캔한 뒤로는 <b>재스캔 전까지 상태를 계속 주시</b>(라이브 갱신). 신규 <code>StateWatcher</code>(주기 폴링 기본 15초)가 이미 발견된 known project 경로에 <b>git·freshness 수집기만 재적용</b>(무거운 walker/detector/size 미수행·N-01 보존)해 변경분만 <code>spip:projectsUpdated</code> 단방향 push로 대시보드에 라이브 반영한다. 보안 0 약화 — 경로는 매 tick <code>canonicalize</code> 재해석(H-1)·git은 <code>git -C</code> 절대경로(H-2)·페이로드는 §8.1 shape만(L-3)·신규 invoke 채널 0. 스캔과는 phase 게이트로 분리(스캔 중 tick 건너뜀). 영속은 재스캔만(메모리 오버레이). 설계 정본: <code>docs/architecture/m8-design.html</code>(rev.1·ADR-M8-1 폴링 채택 vs fs.watch). 전체 <b>503 테스트 통과</b>(M8 신규 12 포함). GUI 라이브 갱신(실 git 변경 후 ~15초 내 배지/방치 갱신·드래그 중 보류)은 헤드리스 한계로 <b>사용자 PC 1회 수동 확인</b>.
+  </div>
   <div class="meta">문서 유형: 추적성 매트릭스 · 작성: 기술 문서 작성자 · 최종 갱신: 2026-06-21 · 현재 단계: <b>전체(MVP+M4+M6+M7) 구현 완료·검증 통과</b> · 입력: PRD v1.0 / architecture.html rev.2 / m4-design.html / m6-design.html rev.2 / m7-design.html rev.2 / adr.html rev.2 / S0~S7 + M4 후속 6건 + M6 백로그 5건 + M7 2건 구현물 / 검증 PASS(MVP S7 + M4 설계 2회·다면검증 + M6 설계 2회·보안·코드·QA + M7 설계 2회·보안 2회·구현 보안·코드·QA)</div>
 </header>
 
@@ -90,13 +93,14 @@
 <section id="summary">
   <h2>요약</h2>
   <div class="grid">
-    <div class="card"><div class="k">전체 요구 수</div><div class="kpi">30</div><div class="v">기능 R 23건(R-01~R-23) + 비기능 N 7건. 추적 누락 0.</div></div>
+    <div class="card"><div class="k">전체 요구 수</div><div class="kpi">31</div><div class="v">기능 R 24건(R-01~R-24) + 비기능 N 7건. 추적 누락 0.</div></div>
     <div class="card"><div class="k">MVP 집합</div><div class="kpi">16</div><div class="v">기능 11(R-01·02·04·06·07·08·10·11·12·13·14) + 비기능 5(N-02·03·04·05·06)</div></div>
     <div class="card"><div class="k">M4 후속</div><div class="kpi">6</div><div class="v">R-03·R-05·R-09·R-15·R-16 + N-07(접근성) — 전건 <b>구현 완료</b></div></div>
     <div class="card"><div class="k">M6 백로그</div><div class="kpi">5</div><div class="v">R-17·R-18·R-19·R-20·R-21 — 전건 <b>구현 완료·검증 통과</b></div></div>
     <div class="card"><div class="k">M7</div><div class="kpi">2</div><div class="v">R-22(즐겨찾기 독립 토스트 창)·R-23(카드 reorder FLIP) — 전건 <b>구현 완료·검증 통과</b></div></div>
+    <div class="card"><div class="k">M8</div><div class="kpi">1</div><div class="v">R-24(상태 주시·라이브 갱신) — <b>구현 완료·검증 통과</b></div></div>
     <div class="card"><div class="k">품질 기준</div><div class="kpi">1</div><div class="v">N-01(성능) — 기능 스토리 아닌 산출물 품질 기준으로 적용</div></div>
-    <div class="card"><div class="k">현재 상태</div><div class="kpi" style="font-size:16px;">M7(R-22·R-23) 구현 완료·검증 통과</div><div class="v">전송 Electron IPC. QA 통합가능·코드 P1 0·보안 PASS. 테스트 474/474·탐지율 100%·필터 0.154ms.</div></div>
+    <div class="card"><div class="k">현재 상태</div><div class="kpi" style="font-size:16px;">M8(R-24) 구현 완료·검증 통과</div><div class="v">전송 Electron IPC. QA 통합가능·코드 P1 0·보안 PASS. 테스트 503/503.</div></div>
   </div>
   <div class="note">
     <b>현재 단계 = 전체(MVP+M4+M6+M7) 구현 완료·검증 통과.</b> S0~S7 구현물 + M4 후속 6건 구현물(<code>scan.js</code>·<code>server.js</code>·<code>lib/server/scanController.js</code>·<code>lib/scan/driveEnum.js</code>·<code>lib/scan/collectors/size.js</code>·<code>lib/scan/walker.js</code>(depthLimit)·<code>public/**</code> 진행/접근성·<code>test/**</code>)이 실재한다. 본 매트릭스의 "구현 위치"는 <b>실제 파일 경로</b>이고, "검증" 칸은 다면 검증의 <b>실측 결과</b>를 반영한다. 통과한 검증: <b>QA(통합·동작) GO · 코드 품질 PASS · 보안 게이트 PASS(치명·높음·중간·낮음 0)</b>. 핵심 실측: <code>node --test</code> <b>213/213</b> 통과(MVP 107 → M4 포함 213) · 탐지율 100%(게이트 ≥95%) · 클라이언트 필터/정렬 5000건 0.154ms(게이트 200ms). M4 후속 6건(R-03·05·09·15·16·N-07)은 모두 <b>구현 완료</b>로 전이했다.
@@ -116,9 +120,9 @@
 </section>
 
 <section id="matrix">
-  <h2>추적성 매트릭스 — 전체 요구 (R-01~R-23, N-01~N-07)</h2>
+  <h2>추적성 매트릭스 — 전체 요구 (R-01~R-24, N-01~N-07)</h2>
 
-  <h3>기능 요구 (R-01 ~ R-23)</h3>
+  <h3>기능 요구 (R-01 ~ R-24)</h3>
   <div class="tbl-wrap">
   <table>
     <tr>
@@ -338,6 +342,15 @@
       <td>QA 통합 가능 — 순수 <code>computeFlip</code>(좌표 diff·reduce 시 빈 배열) 단위·드래그 중 카드 제외·키보드 경로 정합. 코드 P1 0. <b>474/474</b>. <span class="planned">사용자 PC: 실 드래그/키보드 시 카드 부드러운 이동·prefers-reduced-motion 즉시 적용 시각 확인(헤드리스 한계)</span></td>
       <td><span class="pill st-design">구현 완료</span></td>
     </tr>
+    <tr>
+      <td class="rid">R-24</td>
+      <td class="req">한 번 스캔한 뒤로는 <b>재스캔 전까지 상태를 계속 주시</b>(git·수정시각 라이브 갱신)</td>
+      <td><span class="pill m4" style="background:rgba(167,139,250,.16);color:#c4b5fd;border:1px solid rgba(167,139,250,.45)">M8</span></td>
+      <td><b>[전송: IPC push]</b> <code>StateWatcher</code>(주기 폴링 기본 15초·하한 3초)가 known project 경로에 git·freshness 수집기만 재적용(무거운 walker/detector/size 미수행·N-01 보존)→변경분만 <code>spip:projectsUpdated</code> 단방향 push. 경로는 매 tick <code>pathGuard.canonicalize</code> 재해석(H-1)·git은 <code>git -C</code> 절대경로(H-2)·페이로드는 §8.1 shape만(L-3). 스캔 중(phase∈{scanning,finalizing}) tick 건너뜀·재진입(_busy) 가드·타이머 unref. 메모리 오버레이(영속은 재스캔만). 신규 invoke 채널 0(단방향 송신). ADR-M8-1(폴링 채택 vs fs.watch). M8 §3~§7</td>
+      <td class="mono">lib/server/stateWatcher.js(tick·normalizeGit·normalizeFreshness·stateChanged·start/stop)<br>lib/server/snapshotStore.js(applyLiveState — git/freshness in-place·구조 불변)<br>electron/context.js(stateWatcher 생성)<br>electron/main.js(start: store·config·isScanning phase 게이트·onUpdate send / disposeResources stop)<br>electron/preload.js(onProjectsUpdated 구독)<br>public/app.js(subscribeProjectsUpdated·applyProjectsUpdate·toViewModel 병합·stale KPI 재계산·_dragging 보류)</td>
+      <td>QA 통합 가능 — 순수 tick(변경분만 onUpdate·무변경 미호출)·H-1 소멸 경로 skip·스캔 중 무동작·_busy 재진입·start/stop 멱등·interval clamp 단위. <code>applyLiveState</code>(in-place·구조 불변·미존재 id null) 단위. 보안 PASS(단방향 push·경로 재해석·절대 git·최소 노출). 코드 P1 0. <b>503/503</b>(M8 신규 12). test/stateWatcher·snapshotStore. <span class="planned">사용자 PC: 실 git 변경 후 ~15초 내 카드 배지/방치 라이브 갱신·드래그 중 보류 시각 확인(헤드리스 한계)</span></td>
+      <td><span class="pill st-design">구현 완료</span></td>
+    </tr>
   </table>
   </div>
 
@@ -474,7 +487,7 @@
     <tr><td>막바지 버그픽스 (스캔 전환·패키징 크래시)</td><td class="pass">PASS</td><td>전환 후 발견된 블로커 2건 해소. ① 스캔 후 무한 로딩 — <code>scanController.start()</code> 터미널 phase(<code>finalizing</code>/<code>done</code>/<code>error</code>) push 누락 → emit 추가(세대 가드 유지), 회귀 <code>test/scanController-onprogress.test.js</code>. ② 패키징 앱 무반응 — <code>EnableEmbeddedAsarIntegrityValidation</code> fuse(Win+electron-builder 24.x) <code>FindResource</code> FATAL → 그 fuse만 off(나머지 보안 fuse 유지), <code>app://</code> 핸들러 fs 직접 읽기·<code>did-fail-load</code> 창 강제 표시. <b>npm test 306/306</b>. <b>실 GUI에서 앱 실행·창 표시·스캔→대시보드 전환 동작 확인됨.</b> 버전 1.0.1</td></tr>
   </table>
   <div class="note">
-    <b>추적 누락 0 확인.</b> 전체 요구 30건(기능 R-01~R-23 23건 + 비기능 N-01~N-07 7건)이 모두 본 매트릭스에 행으로 존재하며, 각 행의 "설계 결정/모듈"·"구현 위치"·"검증"·"상태" 칸이 모두 채워졌다(빈 칸 없음). MVP 16(R-01·02·04·06·07·08·10·11·12·13·14 + N-02·03·04·05·06)은 S7 QA·코드·보안 3면 PASS로, M4 후속 6(R-03·05·09·15·16·N-07)은 M4 설계 2회·다면검증 QA(GO)·코드·보안 + 재검증 2회로, M6 백로그 5(R-17·18·19·20·21)는 M6 설계 2회·보안 PASS·코드 P1 0·QA 통합가능으로, M7 2(R-22·23)는 M7 설계 2회·보안 2회 PASS·구현 보안 PASS·코드 P1 0·QA 통합가능으로 모두 <b>구현 완료</b>이며, 품질기준 1(N-01)은 측정 완료다. 즉 전체 30건이 <b>구현 완료·검증 통과</b>로 일관된다.
+    <b>추적 누락 0 확인.</b> 전체 요구 31건(기능 R-01~R-24 24건 + 비기능 N-01~N-07 7건)이 모두 본 매트릭스에 행으로 존재하며, 각 행의 "설계 결정/모듈"·"구현 위치"·"검증"·"상태" 칸이 모두 채워졌다(빈 칸 없음). <b>M8 1(R-24)</b>은 M8 설계(<code>m8-design.html</code>·ADR-M8-1)·구현 보안 PASS·코드 P1 0·QA 통합가능(<code>503/503</code>)으로 <b>구현 완료</b>다. MVP 16(R-01·02·04·06·07·08·10·11·12·13·14 + N-02·03·04·05·06)은 S7 QA·코드·보안 3면 PASS로, M4 후속 6(R-03·05·09·15·16·N-07)은 M4 설계 2회·다면검증 QA(GO)·코드·보안 + 재검증 2회로, M6 백로그 5(R-17·18·19·20·21)는 M6 설계 2회·보안 PASS·코드 P1 0·QA 통합가능으로, M7 2(R-22·23)는 M7 설계 2회·보안 2회 PASS·구현 보안 PASS·코드 P1 0·QA 통합가능으로 모두 <b>구현 완료</b>이며, 품질기준 1(N-01)은 측정 완료다. 즉 전체 30건이 <b>구현 완료·검증 통과</b>로 일관된다.
   </div>
   <div class="note" style="background:rgba(167,139,250,.08);border-color:rgba(167,139,250,.3);color:#ddd6fe;">
     <b>M6·M7 사용자 PC 수동 확인(헤드리스 한계·차단 아님).</b> GUI/OS 상호작용은 헤드리스에서 실증 불가라 분리한다. <b>[M6]</b> U-1 카드 DnD→manual·재시작 후 순서 유지 · U-2 <code>pickToolExecutable</code> 네이티브 파일 다이얼로그·실 <code>code.exe</code> 지정·<code>.bat/.lnk</code> 거부 · U-3 실 클립보드 붙여넣기 · U-4 트레이 아이콘/메뉴(대시보드·즐겨찾기·종료)·더블클릭 복원·풍선 1회 · Q4 스캔 진행 중 종료 확인 다이얼로그 분기. <b>[M7]</b> 트레이 '즐겨찾기' 클릭 시 우측하단 토스트 즉시 등장 · 대시보드를 닫아 트레이에만 있어도 위젯 독립 표시 · 위젯 밖 클릭(blur) 시 100ms grace 후 hide·재포커스 시 취소 · 비포커스 첫 클릭은 포커스만(액션 미실행, focus 게이팅) · 드래그/키보드 reorder 시 카드 FLIP 시각·<code>prefers-reduced-motion</code> 시 즉시 적용 · 메인·위젯 동시 표시 중 한쪽 별 토글이 다른 쪽 즉시 반영(broadcast). 코드·정책 정합은 PASS.
@@ -485,6 +498,6 @@
 </section>
 
 </main>
-<footer>Project-SPIP · 추적성 매트릭스 v1.5 · 요구 30건(R 23 + N 7) · MVP 16 + 품질 1 + M4 6 + M6 5 + M7 2 · 추적 누락 0 · 전송 Electron IPC(과도기 HTTP 보존) · 현재 단계: M7(R-22·R-23) 구현 완료·검증 통과(QA 통합가능 · 코드 P1 0 · 보안 PASS · 테스트 474/474 · 탐지율 100% · 필터 0.154ms) · 자족형 HTML 산출물</footer>
+<footer>Project-SPIP · 추적성 매트릭스 v1.6 · 요구 31건(R 24 + N 7) · MVP 16 + 품질 1 + M4 6 + M6 5 + M7 2 + M8 1 · 추적 누락 0 · 전송 Electron IPC(과도기 HTTP 보존) · 현재 단계: M8(R-24 상태 주시) 구현 완료·검증 통과(QA 통합가능 · 코드 P1 0 · 보안 PASS · 테스트 503/503) · 자족형 HTML 산출물</footer>
 </body>
 </html>

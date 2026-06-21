@@ -59,6 +59,15 @@ contextBridge.exposeInMainWorld('spip', {
     return () => ipcRenderer.removeListener('spip:scanProgress', h); // 해제 함수 반환
   },
 
+  // [R-24 상태 주시] 라이브 갱신 구독 — main이 보내는 'spip:projectsUpdated'를 renderer 콜백으로 중계.
+  //   payload: { projects:[<§8.1 project(갱신분)>] }. 채널명 하드코딩(MUST). unsubscribe 함수 반환.
+  onProjectsUpdated: (cb) => {
+    if (typeof cb !== 'function') return () => {};
+    const h = (_evt, payload) => cb(payload);
+    ipcRenderer.on('spip:projectsUpdated', h);
+    return () => ipcRenderer.removeListener('spip:projectsUpdated', h); // 해제 함수 반환
+  },
+
   // 메뉴 명령 구독(P2-1) — main이 보내는 'spip:menu:<action>'를 renderer 콜백으로 중계.
   //   action ∈ pickFolders|rescan|refresh|about (화이트리스트). 채널명 하드코딩(MUST).
   //   콜백 shape: cb({ action }). unsubscribe 함수 반환.

@@ -16,6 +16,7 @@ const { loadConfig } = require('../lib/common/config');
 const { Logger } = require('../lib/common/logger');
 const { SnapshotStore } = require('../lib/server/snapshotStore');
 const { ScanController } = require('../lib/server/scanController');
+const { StateWatcher } = require('../lib/server/stateWatcher');
 
 /**
  * 앱 컨텍스트를 조립해 반환한다.
@@ -32,11 +33,14 @@ function buildContext(opts) {
   const loaded = store.load({ cachePath: opts.cachePath, logger });
 
   const scanController = new ScanController({ logger });
+  // [R-24] 상태 주시 워처(재스캔 없이 git·freshness 주기 재수집). 시작/배선은 main이 담당.
+  const stateWatcher = new StateWatcher({ logger, intervalMs: opts.watchIntervalMs });
 
   return {
     config,
     store,
     scanController,
+    stateWatcher,
     cachePath: opts.cachePath, // 미지정이면 lib가 기본 경로(paths.cachePath) 사용
     logger,
     loaded,
