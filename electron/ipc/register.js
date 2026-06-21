@@ -19,6 +19,9 @@ const dataIpc = require('./data');
 const actionsIpc = require('./actions');
 const scanIpc = require('./scan');
 const foldersIpc = require('./folders');
+const clipboardIpc = require('./clipboard');
+const toolsIpc = require('./tools');
+const uiStateIpc = require('./uiState');
 // [P3-4] 신뢰 origin 단일 원천(security.js). 리터럴 이중정의 제거.
 const { TRUSTED_ORIGIN } = require('../security');
 
@@ -73,13 +76,14 @@ function isTrustedSender(event, opts) {
 
 /**
  * ipcMain에 모든 채널을 등록한다.
- * @param {object} deps { ipcMain, dialog, getWebContents, getWin, ctx, logger, trustedOrigin?, allowFileUrl? }
+ * @param {object} deps { ipcMain, dialog, clipboard, getWebContents, getWin, ctx, logger, trustedOrigin?, allowFileUrl? }
  *   - ctx: { config, store, scanController, cachePath, logger }
  *   - getWebContents: () => webContents  (진행 푸시 대상, 지연 평가)
  *   - getWin: () => BrowserWindow  (dialog 부모)
+ *   - clipboard: Electron clipboard(R-17 copyText 주입)
  */
 function registerIpcHandlers(deps) {
-  const { ipcMain, dialog, getWebContents, getWin, ctx, logger } = deps;
+  const { ipcMain, dialog, clipboard, getWebContents, getWin, ctx, logger } = deps;
   const senderOpts = { trustedOrigin: deps.trustedOrigin || TRUSTED_ORIGIN, allowFileUrl: !!deps.allowFileUrl };
 
   // 진행 푸시 콜백(F-1/§4.3) — rescan이 start로 전달.
@@ -121,6 +125,23 @@ function registerIpcHandlers(deps) {
     dialog,
     win: typeof getWin === 'function' ? getWin() : undefined,
   })));
+
+  // [M6 R-17] 클립보드 — main clipboard 주입.
+  guard('spip:copyText', (args) => clipboardIpc.copyText(args, { clipboard }));
+
+  // [M6 R-18] 외부 툴 — tools.js. setToolPath/pick는 캐시 무효화·persist·force 재검증.
+  guard('spip:getTools', () => toolsIpc.getTools(ctx));
+  guard('spip:setToolPath', (args) => toolsIpc.setToolPath(args, ctx));
+  guard('spip:pickToolExecutable', (args) => toolsIpc.pickToolExecutable(args, Object.assign({}, ctx, {
+    dialog,
+    win: typeof getWin === 'function' ? getWin() : undefined,
+  })));
+
+  // [M6 R-19/R-20] UI 상태 — uiState.js.
+  guard('spip:getUiState', () => uiStateIpc.getUiState(ctx));
+  guard('spip:setFavorite', (args) => uiStateIpc.setFavorite(args, ctx));
+  guard('spip:setOrder', (args) => uiStateIpc.setOrder(args, ctx));
+  guard('spip:setSortMode', (args) => uiStateIpc.setSortMode(args, ctx));
 }
 
 module.exports = { registerIpcHandlers, isTrustedSender, TRUSTED_ORIGIN };

@@ -1,0 +1,73 @@
+'use strict';
+/**
+ * ipc-uistate.test.js — electron/ipc/uiState.js (M6 R-19/R-20, 헤드리스 F-3)
+ * getUiState·setFavorite·setOrder·setSortMode. id 형식 검증·집합·manual 전환.
+ * uiStateStore를 인메모리 stub으로 주입.
+ */
+const { test } = require('node:test');
+const assert = require('node:assert');
+
+const uiState = require('../electron/ipc/uiState');
+const realStore = require('../lib/common/uiStateStore');
+
+// 인메모리 store stub (read/write + normalize 실제 로직 재사용).
+function memStore(initial) {
+  let state = realStore.normalizeState(initial || {});
+  return {
+    read: () => state,
+    write: (s) => { state = realStore.normalizeState(s); return state; },
+    _get: () => state,
+  };
+}
+function ctxWith(store) { return { uiStateStore: store }; }
+
+test('getUiState — graceful 반환 shape', () => {
+  const ctx = ctxWith(memStore({ favorites: ['aa11'], order: ['aa11'], sortMode: 'manual' }));
+  const r = uiState.getUiState(ctx);
+  assert.strictEqual(r.ok, true);
+  assert.deepStrictEqual(r.favorites, ['aa11']);
+  assert.deepStrictEqual(r.order, ['aa11']);
+  assert.strictEqual(r.sortMode, 'manual');
+});
+
+test('setFavorite — 잘못된 id → INVALID_ID', () => {
+  const ctx = ctxWith(memStore());
+  assert.deepStrictEqual(uiState.setFavorite({ id: 'BAD!', on: true }, ctx), { ok: false, code: 'INVALID_ID' });
+  assert.deepStrictEqual(uiState.setFavorite({ id: 123, on: true }, ctx), { ok: false, code: 'INVALID_ID' });
+});
+
+test('setFavorite — add/remove 집합', () => {
+  const s = memStore();
+  const ctx = ctxWith(s);
+  let r = uiState.setFavorite({ id: 'aa11', on: true }, ctx);
+  assert.deepStrictEqual(r.favorites, ['aa11']);
+  r = uiState.setFavorite({ id: 'bb22', on: true }, ctx);
+  assert.deepStrictEqual(r.favorites.sort(), ['aa11', 'bb22']);
+  r = uiState.setFavorite({ id: 'aa11', on: false }, ctx);
+  assert.deepStrictEqual(r.favorites, ['bb22']);
+});
+
+test('setFavorite — 중복 add 무해(집합)', () => {
+  const ctx = ctxWith(memStore({ favorites: ['aa11'] }));
+  const r = uiState.setFavorite({ id: 'aa11', on: true }, ctx);
+  assert.deepStrictEqual(r.favorites, ['aa11']);
+});
+
+test('setOrder — ids 배열 아니면 INVALID_ORDER', () => {
+  const ctx = ctxWith(memStore());
+  assert.deepStrictEqual(uiState.setOrder({ ids: 'nope' }, ctx), { ok: false, code: 'INVALID_ORDER' });
+});
+
+test('setOrder — 순서 설정 + sortMode=manual 전환·중복/형식 정리', () => {
+  const ctx = ctxWith(memStore({ sortMode: 'auto' }));
+  const r = uiState.setOrder({ ids: ['bb22', 'aa11', 'bb22', 'BAD!'] }, ctx);
+  assert.strictEqual(r.ok, true);
+  assert.deepStrictEqual(r.order, ['bb22', 'aa11']); // 중복·형식불일치 제거
+  assert.strictEqual(r.sortMode, 'manual');
+});
+
+test('setSortMode — 화이트리스트 외 → auto', () => {
+  const ctx = ctxWith(memStore({ sortMode: 'manual' }));
+  assert.strictEqual(uiState.setSortMode({ mode: 'weird' }, ctx).sortMode, 'auto');
+  assert.strictEqual(uiState.setSortMode({ mode: 'manual' }, ctx).sortMode, 'manual');
+});

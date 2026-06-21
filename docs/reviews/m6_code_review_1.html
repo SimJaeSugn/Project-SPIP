@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project-SPIP — M6 코드 품질 리뷰 (1회차)</title>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#1e293b; --text:#e2e8f0; --sub:#94a3b8;
+    --accent:#34d399; --ref:#38bdf8; --line:#334155; --warn:#fbbf24; --danger:#f87171;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:"Segoe UI","Malgun Gothic",system-ui,sans-serif;line-height:1.7;}
+  header{padding:44px 32px 32px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#13203b,#0f172a);}
+  header h1{margin:0 0 8px;font-size:27px;}
+  header .tag{display:inline-block;background:rgba(52,211,153,.12);color:var(--accent);
+    border:1px solid rgba(52,211,153,.4);border-radius:999px;padding:3px 12px;font-size:13px;margin-right:8px;}
+  header p{margin:12px 0 0;color:var(--sub);max-width:1000px;}
+  .meta{margin-top:14px;font-size:12.5px;color:var(--sub);}
+  main{max-width:1180px;margin:0 auto;padding:30px;}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:22px 26px;margin:20px 0;}
+  h2{margin:0 0 14px;font-size:20px;color:var(--accent);border-left:4px solid var(--accent);padding-left:12px;}
+  h3{font-size:15px;color:var(--ref);margin:20px 0 8px;}
+  p{margin:8px 0;}
+  code{background:#0b1220;color:var(--ref);padding:1px 6px;border-radius:5px;font-size:12.5px;font-family:Consolas,monospace;}
+  table{width:100%;border-collapse:collapse;margin:12px 0;font-size:13px;}
+  th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top;}
+  th{background:#142035;color:var(--accent);}
+  tr:nth-child(even) td{background:rgba(255,255,255,.02);}
+  .pill{font-size:11px;font-weight:700;padding:2px 9px;border-radius:6px;white-space:nowrap;display:inline-block;}
+  .p1{background:rgba(248,113,113,.16);color:#fca5a5;border:1px solid rgba(248,113,113,.5);}
+  .p2{background:rgba(251,191,36,.16);color:#fcd34d;border:1px solid rgba(251,191,36,.5);}
+  .p3{background:rgba(56,189,248,.16);color:#7dd3fc;border:1px solid rgba(56,189,248,.45);}
+  .pass{background:rgba(52,211,153,.16);color:#6ee7b7;border:1px solid rgba(52,211,153,.5);}
+  .loc{font-family:Consolas,monospace;font-size:12px;color:var(--warn);white-space:nowrap;}
+  .verdict{font-size:22px;font-weight:800;color:var(--accent);}
+  .note{background:rgba(56,189,248,.08);border:1px solid rgba(56,189,248,.3);border-radius:8px;
+    padding:12px 16px;font-size:13px;color:#bae6fd;margin:12px 0;}
+  .warn-box{background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.3);border-radius:8px;
+    padding:12px 16px;font-size:13px;color:#fde68a;margin:12px 0;}
+  .ok-box{background:rgba(52,211,153,.08);border:1px solid rgba(52,211,153,.3);border-radius:8px;
+    padding:12px 16px;font-size:13px;color:#bbf7d0;margin:12px 0;}
+  ul{margin:8px 0;padding-left:22px;} li{margin:5px 0;}
+  .kpi{display:flex;gap:14px;flex-wrap:wrap;margin-top:16px;}
+  .kpi div{background:#0b1220;border:1px solid var(--line);border-radius:10px;padding:12px 18px;min-width:120px;}
+  .kpi b{display:block;font-size:24px;}
+  .kpi span{font-size:12px;color:var(--sub);}
+  footer{text-align:center;color:var(--sub);font-size:12px;padding:26px;border-top:1px solid var(--line);}
+</style>
+</head>
+<body>
+<header>
+  <span class="tag">M6 코드 품질 리뷰</span><span class="tag">1회차</span><span class="tag">정확성·중복·복잡도·죽은코드·일관성</span>
+  <h1>Project-SPIP — M6 신규/변경 코드 품질 리뷰 (1회차)</h1>
+  <p>M6(R-17~R-21) 신규/수정 코드의 <b>코드 품질</b>(정확성 결함·중복·복잡도·죽은 코드·일관성·리소스 누수)을 검증한다.
+  동작(qa)·보안(security)은 별도. 기준: <code>docs/architecture/m6-design.html</code> rev.2, 기존 CommonJS 스타일.
+  <code>docs/Development/</code> 표준 문서는 부재 — 주변 코드 일관성·일반 모범사례를 기준으로 본다.</p>
+  <div class="meta">리뷰어: 코드 품질 전담 · 작성일: 2026-06-21 · 대상: lib/common/{toolRegistry,uiStateStore,config,paths,safeExec}.js · electron/{main,preload,tray}.js · electron/ipc/{clipboard,tools,uiState,register,actions,folders}.js · public/app.js · 테스트 9종 · 테스트 실행: 110 pass / 0 fail</div>
+  <div class="kpi">
+    <div><b style="color:var(--accent)">PASS</b><span>종합 판정</span></div>
+    <div><b style="color:var(--danger)">0</b><span>P1 (정확성 결함)</span></div>
+    <div><b style="color:var(--warn)">5</b><span>P2 (개선)</span></div>
+    <div><b style="color:var(--ref)">7</b><span>P3 (사소)</span></div>
+  </div>
+</header>
+
+<main>
+
+<section>
+  <h2>종합 판정 · 요약</h2>
+  <p class="verdict">PASS</p>
+  <p>정확성 결함(P1)은 발견되지 않았다. 설계(rev.2)의 보안·생명주기·영속 게이트가 코드에 충실히 반영되어 있고,
+  도메인(lib)과 전송(electron/ipc) 분리, 순수 함수 + 의존성 주입 구조가 일관되며, 테스트가 6개 보안항목·tray·uiState·reorder·favorites·슬라이더를
+  의미 있게(거짓 안심 없이) 검증한다. 발견 항목은 모두 <b>개선(P2)·사소(P3)</b> 수준으로, 동작·안전을 깨지 않는다.</p>
+  <div class="ok-box"><b>강점:</b> ① <code>resolveTool</code>가 매 호출 <code>{force:true}</code>로 캐시 우회(M6-H-1) — actions·tools 양쪽 일관. ② tools 스키마 args 전면 제거가 normalizeTools·mergeToolPath·preload·뷰모델까지 전 계층 일치(M6-H-2). ③ <code>uiStateStore.read</code> 1MB→길이→깊이→정규화 4단 가드(M6-M-4). ④ <code>persistConfigKeys</code> read-merge 일반화로 <code>persistScanRoots</code> 위임 정합(P2-1). ⑤ 생명주기 <code>doFinalQuit</code> 단일 종료 경로 + <code>_disposed</code> 멱등(P2-2). ⑥ preload onTray/onMenu 동일 패턴·unsubscribe 반환·teardown 정리.</p>
+  <table>
+    <tr><th style="width:60px;">심각도</th><th style="width:50px;">건수</th><th>항목</th></tr>
+    <tr><td><span class="pill p1">P1</span></td><td>0</td><td>없음</td></tr>
+    <tr><td><span class="pill p2">P2</span></td><td>5</td><td>P2-1 setFavorite/setOrder/setSortMode read-modify-write 동시쓰기 경쟁 · P2-2 resolveBin 절대경로 force 시 캐시 오염 · P2-3 commitReorder의 reorder 후 setSortMode 중복 영속 호출 · P2-4 mergeToolPath의 normalizeTools 재호출이 비-known id 무음 소거 · P2-5 favoriteViewModels/applyOrder 중복 구조</td></tr>
+    <tr><td><span class="pill p3">P3</span></td><td>7</td><td>P3-1 슬라이더 인덱스 보정 중복(syncSliderIndex vs 인라인 modulo) · P3-2 describeTool 미사용 label 재정규화 누락 · P3-3 getTools resolveTool 2회 평가 · P3-4 writeDefaultConfig가 tools 키 누락 · P3-5 toolRegistry MAX_TOOL_PATH_LEN 중복 상수 · P3-6 isPlainObject 3중 정의 · P3-7 actions resolveBin 미사용 캐시 의존 주석</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>1. 정확성 결함 (P1) — 없음</h2>
+  <p>설계가 지목한 정확성 경계를 코드 레벨에서 추적했고, 모두 올바르게 처리됨을 확인했다.</p>
+  <table>
+    <tr><th style="width:200px;">점검 경계</th><th style="width:90px;">위치</th><th>확인 결과</th></tr>
+    <tr><td>close-to-tray / isQuitting</td><td class="loc">main.js:212-240</td><td><span class="pill pass">OK</span> <code>!isQuitting</code>→preventDefault+hide, 완전종료 경로만 Q4. <code>win.isDestroyed()</code> 가드 일관.</td></tr>
+    <tr><td>doFinalQuit 멱등</td><td class="loc">main.js:252-264</td><td><span class="pill pass">OK</span> <code>_disposed</code> early-return으로 dispose 1회. tray 파괴 후 <code>tray=null</code> 재진입 안전.</td></tr>
+    <tr><td>Q4 취소 → 정상 복귀</td><td class="loc">main.js:235-236</td><td><span class="pill pass">OK</span> 취소 시 <code>isQuitting=false</code>·dispose 미실행으로 scanController 생존(조기 dispose 불일치 없음).</td></tr>
+    <tr><td>second-instance argv 비신뢰</td><td class="loc">main.js:83-89</td><td><span class="pill pass">OK</span> <code>_argv/_cwd</code> 미참조, <code>win.show/restore/focus</code>만. m6-security 테스트가 정적 고정.</td></tr>
+    <tr><td>uiStateStore read 경계</td><td class="loc">uiStateStore.js:106-123</td><td><span class="pill pass">OK</span> stat·size(1MB)·raw.length·_safeParse(깊이32)·normalizeState 4단. 모든 throw→defaultState.</td></tr>
+    <tr><td>uiStateStore write 손상 방지</td><td class="loc">uiStateStore.js:131-161</td><td><span class="pill pass">OK</span> tmp(wx)→fsync→chmod→rename→chmod, 실패 시 fd close·tmp unlink. 0600 보장.</td></tr>
+    <tr><td>resolveTool force 경로</td><td class="loc">toolRegistry.js:104-120</td><td><span class="pill pass">OK</span> known id 검사→사용자경로 force→PATH force. deps.resolveBin 비함수 가드.</td></tr>
+    <tr><td>드래그 reorder order 적용</td><td class="loc">app.js:726-757, 2574-2598</td><td><span class="pill pass">OK</span> applyOrder는 used Set으로 중복 방지·소멸 id skip·신규 append. moveInOrder 범위/동일 가드. commitReorder가 표시밖 항목 보강.</td></tr>
+    <tr><td>즐겨찾기 토글 상태</td><td class="loc">app.js:704-712, 2524-2539</td><td><span class="pill pass">OK</span> toggleFavorite 불변·중복없음. 낙관적 반영 후 서버 응답으로 재동기화.</td></tr>
+    <tr><td>슬라이더 인덱스 래핑</td><td class="loc">app.js:776-783</td><td><span class="pill pass">OK</span> <code>((i%n)+n)%n</code> 음수/초과 모두 정규화. n=0 → 0.</td></tr>
+    <tr><td>이벤트 구독 누수</td><td class="loc">app.js:2458-2469, 2971-2980</td><td><span class="pill pass">OK</span> onTray unsubscribe 반환·teardown(pagehide/beforeunload)에서 menu/scan/tray 모두 해제.</td></tr>
+    <tr><td>비동기 미await</td><td class="loc">actions.js:113, tools.js:146</td><td><span class="pill pass">OK</span> open은 exec await. setFavorite/setOrder/setSortMode는 동기 write(의도적). pickToolExecutable는 async/await.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>2. 개선 항목 (P2)</h2>
+
+  <h3>P2-1 — setFavorite/setOrder/setSortMode의 read-modify-write 동시쓰기 경쟁</h3>
+  <table>
+    <tr><th style="width:90px;">무엇</th><td>uiState IPC 3개 핸들러가 모두 <code>store.read()</code> → 메모리 수정 → <code>store.write()</code> 패턴이다. 동일 채널이 빠르게 연속 호출되면(드래그 직후 즐겨찾기 토글 등) 두 핸들러가 같은 디스크 상태를 읽고 각자 다른 키를 갱신·쓰기 → <b>나중 쓰기가 먼저 쓰기의 변경을 덮어쓸 수 있다</b>(lost update).</td></tr>
+    <tr><th>위치</th><td class="loc">electron/ipc/uiState.js:47-95</td></tr>
+    <tr><th>왜 문제</th><td>render 측은 낙관적 반영 후 응답으로 재동기화하므로 화면은 곧 일관되나, 디스크의 <code>ui-state.json</code>이 일시적으로 한 필드를 잃을 수 있다. IPC handle은 직렬화되지만 <code>read</code>가 동기 statSync/readFileSync라 단일 호출 내 race는 없고, <b>서로 다른 채널 호출 사이</b>에 메모리 캐시가 없어 매번 디스크를 재독한다. 현재 모든 핸들러가 동기이고 Electron ipcMain.handle은 순차 처리하므로 실제 손상 가능성은 낮으나(<b>P1 아님</b>), in-memory 단일 상태 캐시가 없는 설계가 미래 비동기화 시 취약하다.</td></tr>
+    <tr><th>권고</th><td>uiState IPC가 ctx 레벨에서 1개 in-memory 상태를 보유하고 write 후 그 캐시를 갱신하거나(read는 캐시 우선), 최소한 본 동기 가정(핸들러가 동기 read-write)을 모듈 주석에 불변식으로 명시. 현재 구조 유지 가능하나 향후 async store 도입 시 lost-update 회귀 위험을 문서화.</td></tr>
+  </table>
+
+  <h3>P2-2 — resolveBin 절대경로 + {force:true} 시 _binCache 오염</h3>
+  <table>
+    <tr><th style="width:90px;">무엇</th><td><code>resolveBin(absPath,{force:true})</code>는 캐시 읽기는 건너뛰지만 결과를 <code>_binCache.set(name, resolved)</code>(safeExec.js:89)로 <b>여전히 캐시에 기록</b>한다. resolveTool/tools.js는 항상 force라 영향 없지만, 향후 비-force 호출자가 이 절대경로 키를 조회하면 <b>등록 시점의 stale 결과</b>를 받는다.</td></tr>
+    <tr><th>위치</th><td class="loc">lib/common/safeExec.js:82-90</td></tr>
+    <tr><th>왜 문제</th><td>M6-H-1의 취지(TOCTOU·캐시 신뢰 제거)에 비추면 사용자 지정 절대경로는 캐시에 남기지 않는 편이 안전하다. 현재 M6 경로는 전부 force라 결함이 발현되지 않으나(<b>P1 아님</b>), 캐시에 사용자 경로가 남는 것 자체가 설계 의도(매 실행 fs 재확인)와 미묘하게 어긋난다. <code>setToolPath</code>가 <code>clearBinCache()</code>로 전체를 비우므로 누적은 방지되지만, 그 사이 비-force 조회는 stale.</td></tr>
+    <tr><th>권고</th><td>safeExec.js의 절대경로 분기에서 force일 때는 <code>_binCache.set</code>을 생략(또는 절대경로는 아예 캐시 키로 쓰지 않음). 단일 라인 변경. lib 무수정 원칙과 충돌하나 설계가 "사용자 지정 경로는 캐시 신뢰 금지"를 명시하므로 정합 개선.</td></tr>
+  </table>
+
+  <h3>P2-3 — commitReorder의 setOrder + applySortMode 중복 영속</h3>
+  <table>
+    <tr><th style="width:90px;">무엇</th><td><code>commitReorder</code>가 <code>applySortMode('reorder')</code>(→ <code>setSortMode('manual')</code> IPC) 호출 후, 곧이어 <code>setOrder(merged)</code> IPC를 호출한다. <code>setOrder</code>는 이미 서버에서 <code>sortMode='manual'</code>을 동반 영속하므로 <b>setSortMode 쓰기가 불필요한 추가 디스크 쓰기</b>다.</td></tr>
+    <tr><th>위치</th><td class="loc">public/app.js:2586-2589 (applySortMode→2549), uiState.js:79</td></tr>
+    <tr><th>왜 문제</th><td>매 드래그/이동마다 <code>ui-state.json</code>에 2회 원자적 쓰기(setSortMode + setOrder)가 발생. 정확성 결함은 아니나 불필요한 쓰기·중복 경로(P2-1 동시쓰기 경쟁 표면도 키운다). 또한 두 쓰기 사이에 P2-1 lost-update 창이 생긴다.</td></tr>
+    <tr><th>권고</th><td>reorder 흐름에서는 메모리 sortMode만 'manual'로 두고 IPC는 <code>setOrder</code> 한 번만 호출(setOrder가 manual 동반). <code>applySortMode('reorder')</code>의 영속 호출을 생략하거나, reorder trigger 시 setSortMode IPC를 스킵.</td></tr>
+  </table>
+
+  <h3>P2-4 — mergeToolPath의 normalizeTools 재통과가 비-known id를 무음 소거</h3>
+  <table>
+    <tr><th style="width:90px;">무엇</th><td><code>mergeToolPath</code>가 새 맵을 <code>normalizeTools(next)</code>로 한 번 더 통과시킨다. <code>setToolPath</code>는 진입부에서 이미 <code>isKnownToolId</code>로 거부하므로 안전하지만, 만약 기존 config.tools에 (과거 버전·수동 편집으로) known이 아닌 항목이 섞여 있으면 이 재정규화가 <b>그것을 조용히 드롭</b>한다.</td></tr>
+    <tr><th>위치</th><td class="loc">electron/ipc/tools.js:89-99</td></tr>
+    <tr><th>왜 문제</th><td>이는 설계상 의도된 단일 화이트리스트 원천(known id만 영속)과 정합하므로 동작은 옳다(<b>P1 아님</b>). 다만 "다른 항목 보존"이라는 함수 주석(line 86)과 실제 동작(비-known 드롭)이 미묘하게 어긋나 오해 소지가 있다.</td></tr>
+    <tr><th>권고</th><td>주석을 "known id 항목만 보존·정규화(비-known은 화이트리스트 정책상 드롭)"로 정정. 동작 변경 불필요.</td></tr>
+  </table>
+
+  <h3>P2-5 — favoriteViewModels / applyOrder 구조 중복</h3>
+  <table>
+    <tr><th style="width:90px;">무엇</th><td><code>favoriteViewModels</code>(app.js:789)와 <code>applyOrder</code>(app.js:726)가 "id 배열 → byId Map 구성 → used Set으로 순서대로 픽" 패턴을 거의 동일하게 반복한다.</td></tr>
+    <tr><th>위치</th><td class="loc">public/app.js:726-744, 789-800</td></tr>
+    <tr><th>왜 문제</th><td>중복 로직. applyOrder는 뒤에 신규 append가 추가되는 차이만 있다. 유지보수 시 한쪽만 고칠 위험.</td></tr>
+    <tr><th>권고</th><td>"id 순서대로 vm 픽" 공통 헬퍼(<code>pickByIds(vms, ids, {appendRest})</code>)로 추출. 둘 다 호출. 순수 함수라 단위테스트 그대로 통과.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>3. 사소 항목 (P3)</h2>
+  <table>
+    <tr><th style="width:70px;">ID</th><th style="width:200px;">위치</th><th>내용 / 권고</th></tr>
+    <tr><td><span class="pill p3">P3-1</span></td><td class="loc">app.js:2792-2798, 2835-2836</td><td>슬라이더 인덱스 보정이 <code>syncSliderIndex</code>와 <code>renderFavoritesSlider</code> 인라인 modulo 두 곳에 분산. <code>nextSlideIndex</code>/공통 clamp로 단일화 권고.</td></tr>
+    <tr><td><span class="pill p3">P3-2</span></td><td class="loc">tools.js:40-51</td><td><code>describeTool</code>가 config의 <code>entry.label</code>을 재정규화 없이 그대로 표시값으로 사용(loadConfig가 정규화하므로 안전하나, 직접 set 직후 메모리 맵은 normalizeTools 통과분이라 OK). 일관성상 한 출처로만 label 산출 주석 보강.</td></tr>
+    <tr><td><span class="pill p3">P3-3</span></td><td class="loc">tools.js:43 (describeTool)</td><td>setToolPath 1회 처리 중 <code>describeTool</code>가 <code>resolveTool</code>(force fs 접근)을 다시 호출 → 동일 호출 내 resolveBin이 2회 실행될 수 있음(검증 1회 + describe 1회). 빈도 낮아 비용 무시 가능하나, 검증 결과 <code>real</code>을 재사용하면 fs 접근 1회로 절감.</td></tr>
+    <tr><td><span class="pill p3">P3-4</span></td><td class="loc">config.js:298-313</td><td><code>writeDefaultConfig</code>가 scaffold에 <code>tools</code> 키를 안 넣음(loadConfig가 폴백하므로 동작엔 무해). 일관성상 <code>tools:{}</code> 추가 또는 "tools는 런타임 생성" 주석.</td></tr>
+    <tr><td><span class="pill p3">P3-5</span></td><td class="loc">tools.js:28, toolRegistry.js:25</td><td><code>MAX_TOOL_PATH_LEN</code>을 tools.js가 toolRegistry에서 재export(line 28·177). 단일 원천은 유지되나 export 표면 중복 — 직접 <code>toolRegistry.MAX_TOOL_PATH_LEN</code> 참조 권고.</td></tr>
+    <tr><td><span class="pill p3">P3-6</span></td><td class="loc">toolRegistry.js:38, uiStateStore.js:36, tools.js:90(inline)</td><td><code>isPlainObject</code>가 3곳에 독립 정의(+tools.js는 인라인 typeof 검사). 사소하나 lib/common 공용 util로 통합 여지(기존 코드에도 분산되어 있어 현 일관성은 유지됨).</td></tr>
+    <tr><td><span class="pill p3">P3-7</span></td><td class="loc">actions.js:25</td><td><code>const { resolveBin, safeExec } = require('safeExec')</code>에서 resolveBin은 ctx 주입 폴백으로만 쓰임 — 정상이나, openInVsCode는 resolveTool 경유라 직접 resolveBin 호출 없음. import는 폴백용으로 필요(죽은 코드 아님). 확인용 기록.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>4. 모듈 경계 · 죽은 코드 · 일관성</h2>
+  <table>
+    <tr><th style="width:200px;">항목</th><th>판정</th></tr>
+    <tr><td>도메인(lib) vs 전송(electron/ipc) 분리</td><td><span class="pill pass">OK</span> toolRegistry·uiStateStore는 Electron 미import 순수 도메인. clipboard/tools/uiState IPC는 어댑터 + 주입. 경계 깨끗.</td></tr>
+    <tr><td>lib 무수정 원칙</td><td><span class="pill pass">OK</span> safeExec 무수정(resolveBin force 분기 기존 존재). config는 persistConfigKeys/normalizeTools 추가만(기존 키 불변). paths는 uiStatePath 1개 추가. 설계 §10 정합. (P2-2는 lib 개선 제안이나 필수 아님)</td></tr>
+    <tr><td>preload 최소성</td><td><span class="pill pass">OK</span> 채널명 하드코딩, generic invoke 비노출, 인자 String/Boolean/Array 1차 고정. onTray/onMenu 동일 패턴·unsubscribe.</td></tr>
+    <tr><td>IPC 핸들러 검증 패턴 일관</td><td><span class="pill pass">OK</span> 전 신규 채널 register.guard 경유(senderFrame·try/catch·고정 code). 인자 추출 <code>args && typeof args==='object'</code> 패턴 일관.</td></tr>
+    <tr><td>persistScanRoots → persistConfigKeys 위임</td><td><span class="pill pass">OK</span> folders.js:170-172가 1줄 위임. 시그니처 호환 보존. config-persist 테스트가 scanRoots 보존 검증.</td></tr>
+    <tr><td>죽은 코드</td><td><span class="pill pass">OK</span> 명백한 미사용 없음. import는 폴백/주입 경로로 모두 사용. (P3-7 확인 완료)</td></tr>
+    <tr><td>주석-코드 일치(보안 주석)</td><td><span class="pill p2">소폭</span> 대부분 정확. P2-4(mergeToolPath "다른 항목 보존" 주석 vs 비-known 드롭)만 미세 불일치 — 정정 권고.</td></tr>
+    <tr><td>네이밍</td><td><span class="pill pass">OK</span> normalize*/resolve*/describe*/sanitize* 동사 컨벤션 일관. R-xx·M6-x 추적 태그 일관.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>5. 테스트 품질</h2>
+  <p>신규 테스트 9종(toolRegistry·uiStateStore·ipc-tools·ipc-uistate·ipc-clipboard·tray·m6-security·dashboard-m6·config-persist) 실행 — <b>110 pass / 0 fail</b>. 거짓 안심 여부를 점검했다.</p>
+  <table>
+    <tr><th style="width:180px;">검증 대상</th><th>판정</th></tr>
+    <tr><td>6개 보안항목</td><td><span class="pill pass">의미있음</span> ① resolveBin force:true를 실제 호출 인자(<code>c.opts.force===true</code>)로 단언. ② clearBinCache 실호출 카운트. ③ args drop을 응답 키·persist patch 양쪽에서 단언. ④ 1MB 초과 파일 실파일로 검증. ⑤⑥ main.js 정적 정규식(생명주기는 GUI라 정적 분석이 합리적 경계).</td></tr>
+    <tr><td>tray</td><td><span class="pill pass">의미있음</span> 메뉴 라벨 순서·구분선·콜백 디스패치·destroy를 Electron stub 주입으로 검증. 콜백 미제공 throw 방지도 커버.</td></tr>
+    <tr><td>uiState</td><td><span class="pill pass">의미있음</span> store stub이 <b>실제 normalizeState 재사용</b> — 정규화를 우회하지 않아 거짓 통과 위험 낮음. INVALID_ID/ORDER·집합·manual 전환 커버.</td></tr>
+    <tr><td>reorder</td><td><span class="pill pass">의미있음</span> applyOrder(소멸 skip·신규 append)·moveInOrder(범위/동일)·nextSortMode 전이 순수 단언.</td></tr>
+    <tr><td>favorites</td><td><span class="pill pass">의미있음</span> toggle 불변·중복없음·비유효 graceful·필터 합류.</td></tr>
+    <tr><td>슬라이더</td><td><span class="pill pass">의미있음</span> nextSlideIndex 음수/초과/빈목록 래핑·교집합·dispatchTrayAction 화이트리스트.</td></tr>
+  </table>
+  <div class="warn-box"><b>테스트 커버 공백(P2 연계, 결함 아님):</b> ① P2-1 동시쓰기 경쟁은 단위테스트 부재(직렬 처리 가정). ② P2-3 reorder의 중복 영속(setSortMode+setOrder)을 검증하는 테스트가 없어 회귀로 잡히지 않음. ③ tray <code>displayBalloon</code> 1회 표시(MQ-4)·<code>resolveTrayImage</code> 폴백은 미검증. 향후 보강 권고.</div>
+</section>
+
+<section>
+  <h2>6. 마무리</h2>
+  <p><b>판정: PASS</b> — 정확성 결함(P1) 0건. M6 신규/변경 코드는 설계 rev.2의 게이트를 충실히 구현했고, 도메인/전송 분리·순수함수+주입·테스트 품질이 양호하다.
+  P2 5건·P3 7건은 통과를 막지 않는 개선·정리 항목이다. 가장 가치 있는 후속은 <b>P2-3(reorder 중복 영속 제거)</b>과 <b>P2-1(uiState 동시쓰기 불변식 명시/단일 캐시)</b>, <b>P2-2(절대경로 force 캐시 오염)</b>다.</p>
+  <p>코드는 직접 수정하지 않았다. 수정은 담당 개발자에게 위임한다.</p>
+</section>
+
+</main>
+<footer>Project-SPIP — M6 코드 품질 리뷰 1회차 · docs/reviews/m6_code_review_1.html · 2026-06-21</footer>
+</body>
+</html>

@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project-SPIP — M6 설계 델타 보안 검증 (R-17~R-21, 1회차)</title>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#1e293b; --text:#e2e8f0; --sub:#94a3b8;
+    --accent:#34d399; --ref:#38bdf8; --line:#334155; --warn:#fbbf24; --danger:#f87171;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:"Segoe UI","Malgun Gothic",system-ui,sans-serif;line-height:1.7;}
+  header{padding:48px 32px 36px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#13203b,#0f172a);}
+  header h1{margin:0 0 8px;font-size:27px;}
+  header .tag{display:inline-block;background:rgba(52,211,153,.12);color:var(--accent);
+    border:1px solid rgba(52,211,153,.4);border-radius:999px;padding:3px 12px;font-size:13px;margin-right:8px;}
+  header p{margin:14px 0 0;color:var(--sub);max-width:990px;}
+  .meta{margin-top:16px;font-size:13px;color:var(--sub);}
+  main{max-width:1160px;margin:0 auto;padding:32px;}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:24px 28px;margin:22px 0;}
+  h2{margin:0 0 16px;font-size:21px;color:var(--accent);border-left:4px solid var(--accent);padding-left:12px;}
+  h3{font-size:16px;color:var(--ref);margin:22px 0 10px;}
+  h4{font-size:14px;color:var(--text);margin:16px 0 6px;}
+  p{margin:8px 0;}
+  ul,ol{margin:8px 0;padding-left:22px;}li{margin:5px 0;}
+  code{background:#0b1220;color:var(--ref);padding:1px 6px;border-radius:5px;font-size:13px;font-family:Consolas,monospace;}
+  pre{background:#0b1220;border:1px solid var(--line);border-radius:8px;padding:14px 16px;
+    overflow-x:auto;font-size:12.5px;color:#cbd5e1;font-family:Consolas,monospace;line-height:1.55;}
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13.5px;}
+  th,td{border:1px solid var(--line);padding:9px 11px;text-align:left;vertical-align:top;}
+  th{background:#142035;color:var(--accent);}
+  tr:nth-child(even) td{background:rgba(255,255,255,.02);}
+  .fid{font-family:Consolas,monospace;font-weight:700;white-space:nowrap;color:var(--warn);}
+  .sev{font-size:11px;font-weight:700;padding:2px 9px;border-radius:6px;white-space:nowrap;display:inline-block;}
+  .crit{background:rgba(248,113,113,.18);color:#fecaca;border:1px solid rgba(248,113,113,.6);}
+  .high{background:rgba(251,146,60,.16);color:#fdba74;border:1px solid rgba(251,146,60,.55);}
+  .med{background:rgba(251,191,36,.14);color:#fcd34d;border:1px solid rgba(251,191,36,.5);}
+  .low{background:rgba(56,189,248,.14);color:#7dd3fc;border:1px solid rgba(56,189,248,.5);}
+  .pass{background:rgba(52,211,153,.16);color:#6ee7b7;border:1px solid rgba(52,211,153,.5);}
+  .verdict{display:inline-block;border-radius:999px;padding:6px 22px;font-size:18px;font-weight:800;}
+  .v-pass{background:rgba(52,211,153,.16);color:#6ee7b7;border:1px solid rgba(52,211,153,.6);}
+  .v-cond{background:rgba(251,191,36,.16);color:#fde68a;border:1px solid rgba(251,191,36,.6);}
+  .v-fail{background:rgba(248,113,113,.18);color:#fecaca;border:1px solid rgba(248,113,113,.6);}
+  .note{background:rgba(56,189,248,.08);border:1px solid rgba(56,189,248,.3);border-radius:8px;
+    padding:12px 16px;font-size:13.5px;color:#bae6fd;margin:10px 0;}
+  .warn-box{background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.3);border-radius:8px;
+    padding:12px 16px;font-size:13.5px;color:#fde68a;margin:10px 0;}
+  .danger-box{background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.35);border-radius:8px;
+    padding:12px 16px;font-size:13.5px;color:#fecaca;margin:10px 0;}
+  .ok-box{background:rgba(52,211,153,.08);border:1px solid rgba(52,211,153,.3);border-radius:8px;
+    padding:12px 16px;font-size:13.5px;color:#bbf7d0;margin:10px 0;}
+  figure{margin:18px 0;background:#0b1220;border:1px solid var(--line);border-radius:10px;padding:18px;}
+  figcaption{color:var(--sub);font-size:12.5px;margin-top:10px;text-align:center;}
+  .legend{display:flex;gap:18px;flex-wrap:wrap;font-size:12.5px;color:var(--sub);margin-top:10px;justify-content:center;}
+  .legend span{display:inline-flex;align-items:center;gap:6px;}
+  .dot{width:11px;height:11px;border-radius:3px;display:inline-block;}
+  footer{text-align:center;color:var(--sub);font-size:12.5px;padding:30px;border-top:1px solid var(--line);}
+  .scorecard{display:flex;gap:14px;flex-wrap:wrap;margin:16px 0;}
+  .scard{flex:1;min-width:104px;background:#0b1220;border:1px solid var(--line);border-radius:10px;padding:14px;text-align:center;}
+  .scard .n{font-size:28px;font-weight:800;}
+  .scard .l{font-size:12px;color:var(--sub);margin-top:4px;}
+  .mono{font-family:Consolas,monospace;}
+  .stride{font-family:Consolas,monospace;font-size:11px;color:#c4b5fd;}
+</style>
+</head>
+<body>
+<header>
+  <span class="tag">M6 설계 보안 게이트</span><span class="tag">STRIDE 위협 모델링</span><span class="tag">R-17~R-21 · 1회차</span>
+  <h1>Project-SPIP — M6 설계 델타 보안 검증 보고서</h1>
+  <p>M6 백로그 5기능(<code>R-17 경로복사 · R-18 외부 툴 경로 · R-19 드래그 reorder · R-20 즐겨찾기 · R-21 트레이/close-to-tray</code>)이 추가하는 신규 공격 표면을 적대적 관점으로 위협 모델링한다. 기준은 기존 베이스라인(<code>electron_design_security_review_2.html</code>·<code>electron_security_review_1.html</code>의 EC-1~6·senderFrame·preload allowlist·contextIsolation/sandbox·CSP)이며, 실측 코드(<code>lib/common/safeExec.js</code>·<code>pathGuard.js</code>·<code>electron/ipc/register.js</code>·<code>actions.js</code>·<code>folders.js</code>·<code>config.js</code>)를 읽어 설계 주장의 코드 접지 여부를 확인했다. 핵심 입장은 <b>"renderer XSS(RC-2)가 이미 성립했다"</b>는 가정 아래, 신규 표면이 임의 코드 실행/권한 상승으로 번지는지를 본다.</p>
+  <div class="meta">검증자: Security Reviewer · 일자: 2026-06-21 · 대상: docs/architecture/m6-design.html(671줄) · 기준: electron_design_security_review_2 / electron_security_review_1(EC-1~6) + 실측 코드 6모듈 · 방법: 자산·신뢰경계 식별 → STRIDE 위협 도출 → 코드 접지 확인 → 등급화 → 종합 판정 · docs/Development 부재 → 표준 보안 체크리스트 적용 · 본 검증은 설계(구현 전) 게이트이며 코드를 직접 수정하지 않음</div>
+</header>
+
+<main>
+
+<!-- ===================== 판정 ===================== -->
+<section id="verdict">
+  <h2>0. 종합 판정</h2>
+  <p style="font-size:16px;">판정: <span class="verdict v-cond">조건부 PASS (CONDITIONAL)</span></p>
+  <div class="scorecard">
+    <div class="scard"><div class="n" style="color:#fecaca;">0</div><div class="l">치명 (Critical)</div></div>
+    <div class="scard"><div class="n" style="color:#fdba74;">2</div><div class="l">높음 (High)</div></div>
+    <div class="scard"><div class="n" style="color:#fcd34d;">4</div><div class="l">보통 (Medium)</div></div>
+    <div class="scard"><div class="n" style="color:#7dd3fc;">3</div><div class="l">낮음 (Low)</div></div>
+    <div class="scard"><div class="n" style="color:#6ee7b7;">7</div><div class="l">보존 PASS</div></div>
+  </div>
+  <div class="warn-box"><b>요약:</b> M6 설계는 R-18(사용자 지정 외부 툴 실행)이라는 <b>구조적으로 가장 위험한 신규 표면</b>을 도입하면서도, 기존 H-1(pathGuard)·H-2(resolveBin .exe 한정·shell:false)·M-4(in-flight 상한) 체인을 <b>재작성 없이 재사용</b>하는 올바른 방향을 택했다. 실측 결과 <code>safeExec.resolveBin</code>은 설계 주장대로 절대경로·<code>.exe</code>·실행파일 검증 분기를 이미 보유(<code>safeExec.js:82~91</code>)하고, <code>safeExec</code>는 spawn 직전 <code>.exe</code>를 재검증(<code>:146~152</code>)한다 — 사용자 지정 경로에도 동일 적용된다는 설계 주장은 <b>코드 접지된다</b>. 치명 항목은 없다. 다만 <b>높음 2건</b>(M6-H-1 resolveBin 캐시로 인한 TOCTOU·재검증 누락 위험, M6-H-2 args 사용자 지정 인자 주입 표면)은 설계 명세에 방어가 빠져 있어 <b>구현 전 설계 반영이 필수</b>다. 이를 반영하면 PASS로 승격 가능하다.</div>
+  <div class="ok-box"><b>잘 보존된 부분(PASS 명시):</b> 신규 IPC 8채널 전부 <code>register.js</code> guard 경유(senderFrame·try/catch·고정 code) 명세 / 클립보드 main <code>writeText</code> 텍스트 한정·읽기 미노출 / ui-state id가 실행·경로에 미사용(표시·정렬 메타 한정) / 즐겨찾기 슬라이더 메인창 오버레이(신규 BrowserWindow·preload·CSP 0) / contextIsolation·sandbox·preload allowlist·CSP·textContent(L-1)·0600 원자적 쓰기 보존 / pathGuard H-1 open 일반화 후에도 불변.</div>
+</section>
+
+<!-- ===================== 자산·신뢰경계 ===================== -->
+<section id="boundary">
+  <h2>1. 자산 · 신뢰 경계 · 데이터 흐름 (M6 델타)</h2>
+  <p>보호 대상: ① 사용자 OS(임의 코드 실행 방지) ② 사용자 파일시스템(허용 경로 외 접근 방지) ③ 설정·UI 상태 무결성. 핵심 신뢰 경계는 <b>renderer→IPC→main</b>이며, M6는 여기에 <b>"사용자가 지정한 실행 파일 경로"</b>라는 신규 부분신뢰 입력을 추가한다.</p>
+  <figure>
+    <svg viewBox="0 0 1120 470" width="100%" role="img" aria-label="M6 신뢰 경계와 데이터 흐름">
+      <defs>
+        <marker id="ar" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 Z" fill="#38bdf8"/></marker>
+        <marker id="ad" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 Z" fill="#f87171"/></marker>
+        <marker id="ag" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 Z" fill="#34d399"/></marker>
+      </defs>
+      <!-- renderer zone -->
+      <rect x="24" y="40" width="300" height="390" rx="12" fill="#170d0d" stroke="#f87171" stroke-dasharray="6 4"/>
+      <text x="174" y="64" fill="#fca5a5" font-size="13" text-anchor="middle" font-weight="bold" font-family="Segoe UI">renderer (부분신뢰 · XSS 성립 가정)</text>
+      <rect x="48" y="86" width="252" height="54" rx="8" fill="#0b1220" stroke="#f87171"/>
+      <text x="174" y="108" fill="#e2e8f0" font-size="10.5" text-anchor="middle" font-family="Segoe UI">설정 UI: setToolPath(id,path,args)</text>
+      <text x="174" y="124" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">임의 문자열 경로·인자 (R-18) ← 위험원</text>
+      <rect x="48" y="152" width="252" height="48" rx="8" fill="#0b1220" stroke="#fbbf24"/>
+      <text x="174" y="172" fill="#e2e8f0" font-size="10.5" text-anchor="middle" font-family="Segoe UI">copyText / setFavorite / setOrder</text>
+      <text x="174" y="188" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">텍스트·id 메타 (R-17/19/20)</text>
+      <rect x="48" y="212" width="252" height="48" rx="8" fill="#0b1220" stroke="#38bdf8"/>
+      <text x="174" y="232" fill="#e2e8f0" font-size="10.5" text-anchor="middle" font-family="Segoe UI">즐겨찾기 슬라이더 오버레이</text>
+      <text x="174" y="248" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">메인창 내 · 신규 창/preload 없음 (R-21)</text>
+      <rect x="48" y="300" width="252" height="44" rx="8" fill="#0b1220" stroke="#34d399"/>
+      <text x="174" y="326" fill="#6ee7b7" font-size="10" text-anchor="middle" font-family="Segoe UI">preload: 채널명 하드코딩, invoke 비노출</text>
+
+      <!-- boundary line -->
+      <line x1="362" y1="40" x2="362" y2="430" stroke="#fbbf24" stroke-width="2" stroke-dasharray="4 5"/>
+      <text x="362" y="34" fill="#fbbf24" font-size="10" text-anchor="middle" font-family="Segoe UI">신뢰 경계 (IPC)</text>
+
+      <!-- main zone -->
+      <rect x="400" y="40" width="360" height="390" rx="12" fill="#0b1f17" stroke="#34d399" stroke-dasharray="6 4"/>
+      <text x="580" y="64" fill="#6ee7b7" font-size="13" text-anchor="middle" font-weight="bold" font-family="Segoe UI">main (신뢰 · 전 채널 재검증)</text>
+      <rect x="420" y="86" width="320" height="60" rx="8" fill="#101a30" stroke="#34d399"/>
+      <text x="580" y="108" fill="#e2e8f0" font-size="10.5" text-anchor="middle" font-family="Segoe UI">register.guard: senderFrame(app://) + try/catch</text>
+      <text x="580" y="126" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">신규 8채널 전부 경유 (EC-5 보존)</text>
+      <rect x="420" y="158" width="320" height="58" rx="8" fill="#101a30" stroke="#fbbf24"/>
+      <text x="580" y="180" fill="#fcd34d" font-size="10.5" text-anchor="middle" font-family="Segoe UI">toolRegistry.resolveTool (신규)</text>
+      <text x="580" y="196" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">M6-H-1: 캐시·재검증 / M6-H-2: args 주입</text>
+      <rect x="420" y="228" width="320" height="56" rx="8" fill="#101a30" stroke="#34d399"/>
+      <text x="580" y="250" fill="#6ee7b7" font-size="10.5" text-anchor="middle" font-family="Segoe UI">resolveBin: 절대경로·.exe·실행파일 (불변)</text>
+      <text x="580" y="266" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">safeExec.js:82~91 실측 확인</text>
+      <rect x="420" y="296" width="320" height="56" rx="8" fill="#101a30" stroke="#34d399"/>
+      <text x="580" y="318" fill="#6ee7b7" font-size="10.5" text-anchor="middle" font-family="Segoe UI">safeExec: shell:false·.exe 재검증·인자배열</text>
+      <text x="580" y="334" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">safeExec.js:146~155·182~191 (H-2/M-4)</text>
+      <rect x="420" y="364" width="320" height="46" rx="8" fill="#101a30" stroke="#34d399"/>
+      <text x="580" y="390" fill="#6ee7b7" font-size="10" text-anchor="middle" font-family="Segoe UI">pathGuard canonicalize+isAllowed (H-1 불변)</text>
+
+      <!-- OS zone -->
+      <rect x="800" y="120" width="296" height="230" rx="12" fill="#1a1206" stroke="#fbbf24" stroke-dasharray="6 4"/>
+      <text x="948" y="146" fill="#fcd34d" font-size="13" text-anchor="middle" font-weight="bold" font-family="Segoe UI">OS 자산</text>
+      <rect x="822" y="166" width="252" height="50" rx="8" fill="#0b1220" stroke="#f87171"/>
+      <text x="948" y="190" fill="#fecaca" font-size="10.5" text-anchor="middle" font-family="Segoe UI">spawn(.exe) — 임의 코드 실행 표적</text>
+      <text x="948" y="206" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">R-18 핵심 보호 대상</text>
+      <rect x="822" y="228" width="252" height="44" rx="8" fill="#0b1220" stroke="#34d399"/>
+      <text x="948" y="254" fill="#6ee7b7" font-size="10" text-anchor="middle" font-family="Segoe UI">FS: config.json / ui-state.json (0600)</text>
+      <rect x="822" y="284" width="252" height="44" rx="8" fill="#0b1220" stroke="#34d399"/>
+      <text x="948" y="310" fill="#6ee7b7" font-size="10" text-anchor="middle" font-family="Segoe UI">OS 클립보드 (writeText only)</text>
+
+      <path d="M324 113 L418 113" fill="none" stroke="#f87171" stroke-width="2" marker-end="url(#ad)"/>
+      <path d="M740 192 L800 192" fill="none" stroke="#f87171" stroke-width="2" marker-end="url(#ad)"/>
+      <path d="M740 320 L818 250" fill="none" stroke="#34d399" stroke-width="1.6" marker-end="url(#ag)"/>
+    </svg>
+    <div class="legend">
+      <span><span class="dot" style="background:#f87171"></span> 신뢰 안 함(공격 경로)</span>
+      <span><span class="dot" style="background:#fbbf24"></span> 신뢰 경계/자산</span>
+      <span><span class="dot" style="background:#34d399"></span> 검증 통과 신뢰 흐름</span>
+    </div>
+    <figcaption>그림 1. M6 신뢰 경계. R-18의 setToolPath(임의 경로·인자)가 유일한 신규 고위험 입력이며, 방어선은 resolveTool→resolveBin→safeExec→pathGuard 체인. 클립보드·ui-state·슬라이더는 표면이 작다.</figcaption>
+  </figure>
+</section>
+
+<!-- ===================== 발견 항목 ===================== -->
+<section id="findings">
+  <h2>2. 발견 항목 (STRIDE · 등급화)</h2>
+
+  <h3>2.1 높음 (구현 전 설계 반영 필수)</h3>
+  <table>
+    <tr><th style="width:80px;">ID</th><th style="width:150px;">취약점</th><th style="width:120px;">위치 / STRIDE</th><th style="width:60px;">심각도</th><th>악용 시나리오 · 권고 조치</th></tr>
+    <tr>
+      <td class="fid">M6-H-1</td>
+      <td>resolveBin name-캐시로 인한 사용자 지정 경로 TOCTOU / 재검증 누락</td>
+      <td>§6.1 resolveTool · safeExec.js:37,75~91,89<br><span class="stride">Elevation / Tampering</span></td>
+      <td><span class="sev high">높음</span></td>
+      <td>
+        <b>시나리오:</b> 실측 <code>resolveBin</code>은 <code>_binCache</code>(Map, name→absPath|null)로 결과를 영구 캐시한다(<code>safeExec.js:38,77,89</code>). 설계의 <code>resolveTool</code>은 <code>rb(tool.path)</code>를 <b>실행 시점마다</b> 호출하지만, 절대경로 키가 캐시에 있으면 <b>fs 재검증 없이 캐시값 반환</b>한다. 공격(XSS, RC-2 가정)이 ⓐ 존재하는 양성 <code>.exe</code> 경로를 setToolPath로 등록(검증 통과·캐시됨) → ⓑ 같은 경로에 악성 실행 파일을 덮어쓰기(사용자 쓰기 가능 위치, 예 <code>%LOCALAPPDATA%</code>) → ⓒ open 시 캐시된 절대경로가 재검증 없이 spawn = <b>임의 코드 실행</b>. 또한 setToolPath 검증 통과 후 실제 spawn까지 사이 파일 교체(고전 TOCTOU)도 동일.
+        <br><b>권고:</b> ① 사용자 지정 경로는 <b>setToolPath 시점 검증</b>과 <b>resolveTool/spawn 직전 검증</b>을 <b>둘 다</b> 명세하고, 후자는 캐시 우회(예 <code>rb(path, {force:true})</code> 또는 <code>isExecutableFile</code> 즉시 재호출)로 spawn 직전 최신 fs 상태를 본다. ② 설계 §3.2가 "검증은 실행 시점에 resolveBin이 수행"이라 했으나 캐시로 그 보장이 깨짐을 명시하고, <code>resolveTool</code>이 사용자 경로에 한해 force 재해석함을 설계에 박는다. ③ 가능하면 사용자 지정 경로의 허용 디렉터리(쓰기 불가 Program Files 등)를 권고 안내(완전 차단은 과함, MQ로).
+      </td>
+    </tr>
+    <tr>
+      <td class="fid">M6-H-2</td>
+      <td>사용자 지정 args 인자 주입 — 에디터 플래그 악용</td>
+      <td>§3.2 tools.args · §6.2 exec(r.bin,[...r.args,real])<br><span class="stride">Elevation / Tampering</span></td>
+      <td><span class="sev high">높음</span></td>
+      <td>
+        <b>시나리오:</b> <code>shell:false</code>·인자 배열이라 셸 메타문자 주입(OS 커맨드 인젝션)은 차단된다(PASS). 그러나 args는 <b>대상 프로그램에 그대로 전달되는 신뢰 안 된 플래그</b>다. 다수 에디터/툴이 위험 플래그를 가진다 — 예: VS Code <code>--install-extension &lt;vsix&gt;</code>, Chromium 계열 <code>--no-sandbox</code>, 일부 툴의 <code>--exec</code>/<code>-c</code>/<code>--eval</code>. XSS가 setToolPath로 <code>path=신뢰툴, args=["--위험플래그", ...]</code>을 등록하면, 검증을 통과한 <b>양성 실행 파일을 무기화</b>해 확장 설치·샌드박스 무력화·코드 실행으로 이어질 수 있다(LOLBin 패턴). 설계는 args를 "string·≤16·≤256" 형태 검증만 하고 <b>내용/의미 검증이 없다</b>.
+        <br><b>권고:</b> ① args를 <b>기본 비허용/공백</b>으로 두고, 정말 필요한 알려진 안전 플래그만 <b>화이트리스트</b>로 받는 것을 1순위로. ② 최소한 <code>--</code>로 시작하지 않는 위치 인자 금지, 그리고 <b>경로(real)는 항상 args 뒤 마지막 위치 고정</b>(현 설계 <code>[...r.args, real]</code>은 충족 — 명시 유지). ③ args가 임의로 허용되면 "사용자 지정 args는 해당 툴에 대한 신뢰 위임"임을 위협모델에 명시하고, args 편집을 pickToolExecutable(네이티브 dialog) 경로에서는 노출하지 않는 등 setToolPath args 입력 자체를 MVP에서 보류하는 안을 ADR로 검토.
+      </td>
+    </tr>
+  </table>
+
+  <h3>2.2 보통</h3>
+  <table>
+    <tr><th style="width:80px;">ID</th><th style="width:150px;">취약점</th><th style="width:120px;">위치 / STRIDE</th><th style="width:60px;">심각도</th><th>악용 시나리오 · 권고 조치</th></tr>
+    <tr>
+      <td class="fid">M6-M-1</td>
+      <td>toolId 일반화로 인한 PATH 폴백의 RCE 표면 미세 확대</td>
+      <td>§6.1 resolveTool 폴백 <code>rb(toolId)</code><br><span class="stride">Elevation</span></td>
+      <td><span class="sev med">보통</span></td>
+      <td>
+        <b>시나리오:</b> <code>resolveTool</code>은 사용자 경로 실패 시 <code>rb(toolId)</code>로 PATH 탐색 폴백한다. toolId는 <code>^[a-z0-9_-]{1,32}$</code>로 제한되나(PASS), XSS가 <code>setOrder</code>류가 아닌 <code>open(id, toolId)</code>에 임의 toolId를 줄 수 있다. toolId가 PATH상 동명 실행 파일(예 사용자가 만든 <code>code.exe</code>가 우선순위 PATH 디렉터리에 존재)을 가리키면 의도 외 바이너리 실행 가능. 단 <code>resolveBin</code>은 cwd(".")·빈 항목을 PATH에서 제외(<code>safeExec.js:96~98</code>)하고 <code>.exe</code>만 허용하므로 표면은 작다.
+        <br><b>권고:</b> open의 toolId를 <b>config.tools에 등록된 id로만</b> 제한(레지스트리 멤버십 검증)하고, 미등록 toolId의 PATH 자동 탐색은 예약 id(<code>code</code>) 등 명시 화이트리스트로 한정. 임의 toolId의 PATH 탐색 폴백을 막아 "renderer가 PATH 임의 바이너리 이름을 호출"하는 경로를 차단.
+      </td>
+    </tr>
+    <tr>
+      <td class="fid">M6-M-2</td>
+      <td>pickToolExecutable의 exe 필터는 UI 편의일 뿐 — main 재검증 의존 명시 필요</td>
+      <td>§4.1 pickToolExecutable · §6.3<br><span class="stride">Spoofing / Elevation</span></td>
+      <td><span class="sev med">보통</span></td>
+      <td>
+        <b>시나리오:</b> 설계는 pickToolExecutable을 "OS가 준 절대경로(신뢰 출처)"로 본다. 출처 신뢰는 타당하나, dialog의 <code>filters:[exe]</code>는 <b>표시 필터일 뿐 강제가 아니다</b>(사용자가 "모든 파일"로 바꿔 <code>.bat</code>/<code>.lnk</code> 선택 가능, OS에 따라 <code>.lnk</code>는 타겟 해석 위험). 설계가 "setToolPath와 동일 검증 후 영속"이라 했으므로 결과적으로 resolveBin이 <code>.exe</code>만 통과시켜 안전하지만, 이 <b>"dialog 결과도 신뢰하지 않고 main 재검증"</b> 원칙을 설계 표에 명시적으로 못박아야 한다(현재는 "OS 신뢰 출처"로만 기술되어 검증 누락 구현을 유발할 수 있음).
+        <br><b>권고:</b> §4.1 pickToolExecutable 행에 "dialog 반환 경로도 setToolPath와 <b>동일한 resolveBin 검증 필수</b>(필터는 신뢰 근거 아님)"를 명문화. <code>.lnk</code>는 <code>.exe</code> 아니므로 자동 거부됨을 확인 항목으로.
+      </td>
+    </tr>
+    <tr>
+      <td class="fid">M6-M-3</td>
+      <td>close-to-tray 백그라운드 상주가 만드는 표면 — second-instance·트레이 push 신뢰 경계</td>
+      <td>§9.2 second-instance / tray push<br><span class="stride">Spoofing / DoS</span></td>
+      <td><span class="sev med">보통</span></td>
+      <td>
+        <b>시나리오:</b> 앱이 트레이에 상주하면 ⓐ <code>second-instance</code> 이벤트가 외부(다른 프로세스의 동명 실행)로 트리거되어 창을 표시·복원시킨다 — payload(argv/cwd)를 신뢰해 처리하면 위험하나, 설계는 <code>win.show()/restore()/focus()</code>만 하고 <b>argv를 파싱·실행하지 않음</b>(PASS 방향). ⓑ 트레이 메뉴 클릭→<code>spip:tray:*</code> push는 main이 메인 win.webContents로만 보냄(senderFrame류 아님, 단방향 push라 신뢰 경계 안). 잔여 위험은 second-instance argv를 향후 "열 프로젝트 경로"로 쓰는 확장 시 신뢰 경계 붕괴.
+        <br><b>권고:</b> §9.2에 "second-instance payload(argv/cwd)는 <b>절대 신뢰·실행하지 않으며 win.show 트리거로만 사용</b>" 불변식을 명시. 트레이 push action은 <code>dashboard|favorites</code> 고정 화이트리스트임을 명문화(임의 action push 금지).
+      </td>
+    </tr>
+    <tr>
+      <td class="fid">M6-M-4</td>
+      <td>ui-state.json 신규 영속 파일의 손상/거대/주입 graceful 명세는 있으나 크기·파싱 상한 부재</td>
+      <td>§3.2 uiStateStore · §14<br><span class="stride">DoS / Tampering</span></td>
+      <td><span class="sev med">보통</span></td>
+      <td>
+        <b>시나리오:</b> id 형식(<code>^[0-9a-f]{1,64}$</code>)·개수 상한(favorites 512)·중복 제거·화이트리스트는 잘 설계됨(PASS 방향, id가 실행/경로에 미사용이라 오염 영향 극소). 그러나 <b>파일 자체의 바이트 크기 상한·JSON 파싱 전 크기 가드</b>가 명세에 없다. 로컬 파일을 임의 조작할 수 있는 공격자(또는 디스크 손상)가 수백 MB JSON·깊은 중첩을 넣으면 <code>JSON.parse</code> 단계에서 메모리/시간 DoS. config.js graceful 패턴 재사용이라 했으나 그 패턴에도 명시적 크기 상한이 있는지는 설계상 불명.
+        <br><b>권고:</b> uiStateStore.read에 <b>파일 크기 상한(예 1MB)·읽기 후 길이 가드 → 초과 시 기본값 폴백</b>을 명세. order/favorites 배열 길이 상한을 파싱 직후에도 재적용(슬라이스). schemaVersion 불일치 시 폴백 규칙 명문화.
+      </td>
+    </tr>
+  </table>
+
+  <h3>2.3 낮음</h3>
+  <table>
+    <tr><th style="width:80px;">ID</th><th style="width:150px;">취약점</th><th style="width:120px;">위치 / STRIDE</th><th style="width:60px;">심각도</th><th>악용 시나리오 · 권고 조치</th></tr>
+    <tr>
+      <td class="fid">M6-L-1</td>
+      <td>copyText 길이 처리 불일치(거부 vs slice)</td>
+      <td>§4.1 copyText "len≤8192 거부" vs "writeText(text.slice(0,8192))"<br><span class="stride">Information</span></td>
+      <td><span class="sev low">낮음</span></td>
+      <td>설계가 한 행에서 "len≤8192 그 외 거부"와 "<code>slice(0,8192)</code>"를 함께 적어 모순. 보안 영향은 미미(클립보드 텍스트일 뿐)하나, 거부와 자동 절단 중 하나로 통일해야 구현 모호성이 없다. <b>권고:</b> 초과 시 명시 거부(<code>INVALID_TEXT</code>)로 단일화 권고. 클립보드 <b>읽기</b> 미노출은 PASS.</td>
+    </tr>
+    <tr>
+      <td class="fid">M6-L-2</td>
+      <td>tools.label 길이 64 외 제어문자·방향 제어 문자 sanitize 미명세</td>
+      <td>§3.2 label · §6.3 textContent<br><span class="stride">Spoofing(UI)</span></td>
+      <td><span class="sev low">낮음</span></td>
+      <td>label은 textContent로 렌더(XSS 불가, PASS)하나, 길이만 자르고 개행·RTL override(U+202E) 등 제어문자를 거르지 않으면 UI 스푸핑(가짜 툴명 위장) 여지. <b>권고:</b> label에서 제어문자/방향제어문자 제거(또는 인쇄가능 문자만 허용)를 normalizeTools에 추가.</td>
+    </tr>
+    <tr>
+      <td class="fid">M6-L-3</td>
+      <td>실패 code의 NOT_FOUND/NOT_EXECUTABLE 등이 경로 존재 여부를 oracle로 노출</td>
+      <td>§4.1 setToolPath 응답 code<br><span class="stride">Information</span></td>
+      <td><span class="sev low">낮음</span></td>
+      <td><code>NOT_FOUND</code> vs <code>NOT_EXECUTABLE</code> 구분은 임의 경로의 존재/타입을 renderer에 알려주는 약한 정보노출 oracle(이미 XSS 가정 시 fs 직접 불가하나 main 경유로 일부 추정 가능). 사용자 UX(친절한 안내)와 트레이드오프라 낮음. <b>권고:</b> 사용자 설정 UI 특성상 수용 가능. 다만 응답 code는 고정 토큰만(절대경로·스택 미동봉, L-3 유지)임을 확인 항목으로.</td>
+    </tr>
+  </table>
+</section>
+
+<!-- ===================== 보존 PASS ===================== -->
+<section id="preserved">
+  <h2>3. 기존 통제 보존 — PASS 명시</h2>
+  <table>
+    <tr><th style="width:230px;">통제 (베이스라인)</th><th style="width:70px;">판정</th><th>M6 설계의 보존 근거 (코드 접지)</th></tr>
+    <tr><td>신규 IPC 전부 register.guard 경유<br>(EC-5 senderFrame · EC-1 재검증)</td><td><span class="sev pass">PASS</span></td><td>§4.2가 신규 8채널 전부 <code>guard()</code> 등록 명세. <code>register.js:89~102</code>의 guard는 senderFrame(app:// 정확 일치, EI-L-1)·try/catch→고정 INTERNAL/FORBIDDEN을 자동 적용. 범용 invoke 비노출·채널명 하드코딩 명세(§4.1 preload 의사코드)도 기존 MUST 유지.</td></tr>
+    <tr><td>resolveBin 절대경로·.exe 한정<br>(H-2)</td><td><span class="sev pass">PASS</span></td><td>설계 §6.1 주장("resolveBin은 절대경로면 .exe·실행파일 검증만") = 실측 <code>safeExec.js:82~91</code>과 정확히 일치. 사용자 지정 경로도 동일 분기 통과. <b>단 캐시 재검증은 M6-H-1로 보강 필요.</b></td></tr>
+    <tr><td>safeExec shell:false · .exe 재검증 · 인자 배열 · in-flight 상한 (H-2/M-4)</td><td><span class="sev pass">PASS</span></td><td><code>safeExec.js:146~152</code>(spawn 직전 .exe 재검증)·<code>:155</code>(인자 전부 string)·<code>:182~191</code>(shell:false·windowsHide)·<code>:167~172</code>(in-flight 상한). <code>.bat/.cmd</code> 거부(PATHEXT RCE 차단)도 <code>:30,64~66</code>로 실재. R-18 open 흐름이 이 체인 그대로 재사용.</td></tr>
+    <tr><td>pathGuard H-1 (open 일반화 후 불변)</td><td><span class="sev pass">PASS</span></td><td>§6.2 의사코드가 <code>pg.canonicalize</code>+<code>isAllowed(getAllowKeySet())</code>를 toolId 일반화 후에도 유지. 실측 <code>actions.js:76~81</code>과 동일 순서. 실행 인자로 가는 경로(real)는 화이트리스트 통과분만 — 사용자 입력 text(설정 경로)와 실행 대상(real)을 혼동하지 않음.</td></tr>
+    <tr><td>클립보드 main writeText 텍스트 한정 (R-17)</td><td><span class="sev pass">PASS</span></td><td>§5·ADR-M6-1: main <code>clipboard.writeText</code>만, 읽기·이미지·기타 포맷 미노출. navigator.clipboard 미사용(CSP/sandbox 변수 제거). 입력은 string·길이 검증 후 클립보드에만(실행·경로 해석 0). 표면 극소. (길이 처리 모순은 L-1.)</td></tr>
+    <tr><td>ui-state id가 실행·경로에 미사용 (R-19/20)</td><td><span class="sev pass">PASS</span></td><td>§11·§3.2: favorites/order id는 표시·정렬 메타에만 사용, 실행/경로 접근에 미사용. 형식(<code>^[0-9a-f]{1,64}$</code>)·개수 상한·중복 제거. 오염돼도 표면 극소(소멸 id graceful skip). (크기 상한은 M6-M-4.)</td></tr>
+    <tr><td>즐겨찾기 슬라이더 표면 0 추가 (R-21)</td><td><span class="sev pass">PASS</span></td><td>ADR-M6-5: 별도 BrowserWindow 아닌 메인창 내 오버레이 → 신규 webPreferences·preload·CSP·senderFrame 구성 0. 기존 메인창 보안 컨텍스트 그대로. 트레이는 OS 위젯(렌더 컨텍스트 없음). 보안 표면 증가 없음 — 올바른 결정.</td></tr>
+    <tr><td>contextIsolation·sandbox·CSP·textContent(L-1)·0600 (보존)</td><td><span class="sev pass">PASS</span></td><td>§11 표가 contextIsolation·sandbox·nodeIntegration:false 불변, CSP 메타·세션 헤더 불변(외부 링크·인라인 스크립트 0, PATH 안내 정적 텍스트·shell.openExternal 미사용), 신규 표시 문자열 전부 textContent, ui-state·config 영속 0600 원자적 쓰기(folders.persistScanRoots 패턴, 실측 <code>folders.js:170~207</code>) 재사용 명세.</td></tr>
+  </table>
+</section>
+
+<!-- ===================== 확인 필요 ===================== -->
+<section id="ask">
+  <h2>4. 확인 필요 (위험 수용 결정)</h2>
+  <table>
+    <tr><th style="width:90px;">항목</th><th>질문 / 결정 필요</th><th style="width:200px;">권고 기본값</th></tr>
+    <tr><td>SQ-1</td><td><b>(M6-H-2 관련)</b> tools.args 사용자 자유 입력을 MVP에 포함할지. 자유 args는 "양성 실행 파일의 위험 플래그 무기화" 표면을 연다. 화이트리스트만 받거나, MVP에서 args 편집을 보류할지.</td><td>MVP는 args 빈 배열 고정(편집 미노출). 추후 알려진 안전 플래그 화이트리스트로 확장.</td></tr>
+    <tr><td>SQ-2</td><td><b>(M6-H-1 관련)</b> 사용자 지정 실행 경로의 허용 위치를 제한할지(쓰기 가능 사용자 디렉터리의 .exe 등록을 경고/차단). 완전 차단은 정상 사용자 워크플로(포터블 에디터)를 막을 수 있음.</td><td>차단 대신 spawn 직전 강제 재검증(캐시 우회)을 필수화. 위치 제한은 경고 안내까지만.</td></tr>
+    <tr><td>SQ-3</td><td>open(id, toolId)의 toolId를 config.tools 등록 멤버로 제한할지(M6-M-1), 아니면 예약 id의 PATH 자동탐색을 유지할지.</td><td>등록 멤버 + 예약 id(code) 화이트리스트로 제한.</td></tr>
+  </table>
+  <div class="note">SQ-1·SQ-2는 R-18 핵심 위험과 직결되므로, PM/사용자 결정 전이라도 <b>설계 문서에 방어 명세(spawn 직전 재검증·args 기본 차단)를 선반영</b>한 뒤 정책만 조정하는 것을 권고한다.</div>
+</section>
+
+<!-- ===================== 결론 ===================== -->
+<section id="conclusion">
+  <h2>5. 결론 · 게이트 처리</h2>
+  <p>판정: <span class="verdict v-cond">조건부 PASS</span> — 치명 0, 높음 2(M6-H-1·M6-H-2), 보통 4, 낮음 3.</p>
+  <div class="warn-box">
+    <b>게이트 조건(구현 착수 전 설계 반영 필수):</b>
+    <ol>
+      <li><b>M6-H-1</b>: 사용자 지정 경로는 setToolPath 검증 + <b>spawn 직전 캐시 우회 재검증</b>(force/즉시 fs 확인)을 둘 다 설계에 명시. resolveBin name-캐시가 "실행 시점 검증"을 무력화함을 §3.2·§6.1에 반영.</li>
+      <li><b>M6-H-2</b>: tools.args를 <b>기본 차단/화이트리스트</b>로 좁히고, real 경로 마지막 위치 고정을 명문화(SQ-1 결정 반영).</li>
+    </ol>
+    위 2건을 설계에 반영하면(2회차 재검토 시) <b>PASS 승격 가능</b>. 보통 4건은 구현 시 동시 반영 권고, 낮음 3건은 백로그.
+  </div>
+  <p>M6 설계의 전반 방향(기존 H-1/H-2/M-4 체인 재사용·신규 표면 격리·오버레이 선택·텍스트 한정 클립보드)은 보안적으로 건전하며, 위협을 새로 만들기보다 <b>기존 통제에 편입</b>하려는 의도가 일관된다. 다만 R-18은 본질적으로 "사용자가 무엇을 실행할지 정하는" 기능이라 캐시·인자 두 지점에서 방어가 명시적으로 박혀야 안전하다. 코드는 직접 수정하지 않으며, 위 시정 항목을 담당 아키텍트/개발자에게 이관한다.</p>
+</section>
+
+<footer>
+  Project-SPIP — M6 설계 델타 보안 검증(R-17~R-21) 1회차 · Security Reviewer · 2026-06-21 · 조건부 PASS(높음 2 해소 시 PASS) · 본 보고서는 설계 게이트이며 구현 코드를 수정하지 않는다 · 저장: docs/reviews/m6_design_security_review_1.html
+</footer>
+
+</main>
+</body>
+</html>

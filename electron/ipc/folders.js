@@ -162,48 +162,13 @@ function removeRootResolve(rawPath, currentRoots, ctx) {
 
 /**
  * config.scanRoots를 spip.config.json에 원자적 0600 쓰기로 영속한다(M-2).
- * 기존 파일 내용을 보존하고 scanRoots만 갱신(다른 설정 키 유실 방지).
- * serializer의 임시파일→fsync→rename 패턴을 재사용한다.
+ * [P2-1] 키-범용 config.persistConfigKeys({scanRoots})로 위임(시그니처 호환 보존).
+ *   기존 read-merge·임시파일→fsync→rename→0600 패턴은 persistConfigKeys로 일반화됨.
  * @param {string[]} roots
  * @param {object} ctx { logger, configPath?, deps? }
  */
 function persistScanRoots(roots, ctx) {
-  ctx = ctx || {};
-  const _fs = (ctx.deps && ctx.deps.fs) || fs;
-  const _paths = (ctx.deps && ctx.deps.paths) || paths;
-  const cfgPath = ctx.configPath || _paths.configPath();
-  const logger = ctx.logger;
-
-  // 기존 설정 보존 병합. 읽기 실패/부재면 빈 객체에서 시작.
-  let existing = {};
-  try {
-    const raw = _fs.readFileSync(cfgPath, 'utf8');
-    const parsed = JSON.parse(raw);
-    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) existing = parsed;
-  } catch (_) { /* 부재/손상 — 빈 객체로 시작 */ }
-
-  existing.scanRoots = roots;
-  const body = JSON.stringify(existing, null, 2);
-
-  const dir = _paths.ensureDirFor(cfgPath); // 0700 보장(M-2)
-  const tmp = path.join(dir, '.' + path.basename(cfgPath) + '.' + process.pid + '.' + Date.now() + '.tmp');
-
-  let fd;
-  try {
-    fd = _fs.openSync(tmp, 'wx', FILE_MODE);
-    _fs.writeFileSync(fd, body, { encoding: 'utf8' });
-    try { _fs.fsyncSync(fd); } catch (_) { /* fsync 미지원 무시 */ }
-    _fs.closeSync(fd);
-    fd = undefined;
-    try { _fs.chmodSync(tmp, FILE_MODE); } catch (_) { /* noop */ }
-    _fs.renameSync(tmp, cfgPath);
-    try { _fs.chmodSync(cfgPath, FILE_MODE); } catch (_) { /* noop */ }
-  } catch (err) {
-    if (fd !== undefined) { try { _fs.closeSync(fd); } catch (_) { /* noop */ } }
-    try { if (_fs.existsSync(tmp)) _fs.unlinkSync(tmp); } catch (_) { /* noop */ }
-    if (logger) logger.error('config 영속화 실패', err);
-    throw err;
-  }
+  config.persistConfigKeys({ scanRoots: roots }, ctx);
 }
 
 // ───── IPC 핸들러(Electron API 사용 — register.js에서 dialog 주입) ─────

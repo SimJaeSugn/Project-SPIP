@@ -23,12 +23,13 @@ if (process.env.ELECTRON_RUN_AS_NODE) {
 
 const path = require('path');
 const fs = require('fs');
-const { app, BrowserWindow, Menu, dialog, ipcMain, protocol, shell } = require('electron');
+const { app, BrowserWindow, Menu, dialog, ipcMain, protocol, shell, clipboard } = require('electron');
 
 const { buildContext } = require('./context');
 const { registerIpcHandlers } = require('./ipc/register');
 const { applyCspHeaders, hardenWebContents, TRUSTED_ORIGIN } = require('./security');
 const { buildMenuTemplate } = require('./menu');
+const { createTray } = require('./tray');
 const { Logger } = require('../lib/common/logger');
 
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
@@ -60,6 +61,11 @@ function contentTypeFor(filePath) {
 
 let win = null;
 let ctx = null;
+let tray = null;
+// [R-21] 트레이 '종료'·앱 quit 시에만 true. close-to-tray 분기 기준(§9.2).
+let isQuitting = false;
+// [R-21/MQ-4] 최초 hide 시 트레이 풍선 안내를 1회만 표시.
+let trayBalloonShown = false;
 const logger = new Logger();
 
 // app:// 를 표준·보안 스킴으로 등록(앱 ready 전 호출 필수).
@@ -72,8 +78,11 @@ const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
   app.quit();
 } else {
-  app.on('second-instance', () => {
+  // [M6-M-3] second-instance가 전달하는 argv/cwd payload는 비신뢰 — 절대 파싱·경로 사용·실행 안 함.
+  //   win.show()/restore()/focus() 트리거로만 사용(트레이로 숨어 있어도 복원).
+  app.on('second-instance', (_e, _argv, _cwd) => {
     if (win) {
+      win.show();
       if (win.isMinimized()) win.restore();
       win.focus();
     }
@@ -146,6 +155,7 @@ function onReady() {
   registerIpcHandlers({
     ipcMain,
     dialog,
+    clipboard, // [R-17] main clipboard 주입(copyText).
     ctx,
     logger,
     trustedOrigin: TRUSTED_ORIGIN,
@@ -167,6 +177,26 @@ function onReady() {
     },
   })));
 
+  // [R-21] 트레이 생성(창 생성 후). 콜백은 main이 소유하는 생명주기 함수로 연결.
+  //   ★P2-2: onQuit는 app.quit()을 직접 부르지 않고 win.close() 트리거로 통일 → 실제 종료(dispose+
+  //   destroy+exit)는 close 핸들러가 Q4 통과 후 doFinalQuit 단일 경로에서만 수행(조기 dispose 방지).
+  try {
+    tray = createTray({
+      onShowDashboard: () => { if (win && !win.isDestroyed()) { win.show(); win.focus(); } },
+      onShowFavorites: () => {
+        if (win && !win.isDestroyed()) {
+          win.show();
+          win.focus();
+          // 트레이 push action 화이트리스트(M6-M-3) — favorites 고정, 메인 win.webContents 단방향.
+          win.webContents.send('spip:tray:favorites');
+        }
+      },
+      onQuit: () => { isQuitting = true; if (win && !win.isDestroyed()) win.close(); else doFinalQuit(); },
+    });
+  } catch (err) {
+    logger.error('트레이 생성 실패 — 트레이 없이 계속', err);
+  }
+
   win.loadURL('app://index.html');
   win.once('ready-to-show', () => win.show());
   // 방어: 렌더러 로드가 실패하면 ready-to-show가 영영 안 와서 창이 숨은 채(=무반응) 멈춘다.
@@ -176,8 +206,22 @@ function onReady() {
     if (win && !win.isDestroyed()) win.show();
   });
 
-  // 종료 시 스캔 진행 중이면 확인 다이얼로그(Q4).
+  // [R-21] close-to-tray 생명주기(§9.2/ADR-M6-4).
+  //   평소 X(close): 종료가 아니라 트레이로 숨김(스캔은 백그라운드 지속). 최초 1회 트레이 풍선 안내(MQ-4).
+  //   완전 종료(isQuitting=true)에서만 Q4(스캔 중 확인) 적용 — ★dispose는 Q4 통과 후 doFinalQuit에서만(P2-2).
   win.on('close', (e) => {
+    if (!isQuitting) {
+      e.preventDefault();
+      win.hide();
+      if (!trayBalloonShown && tray && tray.tray && typeof tray.tray.displayBalloon === 'function') {
+        trayBalloonShown = true;
+        try {
+          tray.tray.displayBalloon({ title: 'Project-SPIP', content: '트레이에서 계속 실행 중입니다. 종료하려면 트레이 메뉴의 “종료”를 사용하세요.' });
+        } catch (_) { /* noop */ }
+      }
+      return;
+    }
+    // 완전 종료 경로(isQuitting=true)에서만 Q4 적용.
     const phase = ctx && ctx.scanController ? ctx.scanController.status().phase : 'idle';
     if (phase === 'scanning' || phase === 'finalizing') {
       e.preventDefault();
@@ -188,7 +232,10 @@ function onReady() {
         cancelId: 1,
         message: '스캔이 진행 중입니다. 종료하시겠습니까?',
       });
-      if (choice === 0) win.destroy();
+      if (choice === 0) { doFinalQuit(); win.destroy(); } // 확정 시에만 dispose(P2-2)
+      else { isQuitting = false; } // ★취소: 종료 의도 해제·미dispose로 정상 복귀(스캔 지속)
+    } else {
+      doFinalQuit();
     }
   });
 
@@ -201,16 +248,27 @@ function onReady() {
 // [P2-4] 앱 종료 직전 진행 스캔 watchdog 타이머 등 리소스 정리(타이머 leak 방지).
 //   makeProgressSender는 getWebContents()가 null/파괴 wc를 반환하면 무동작이므로 sender 자체
 //   별도 해제는 불필요. scanController.dispose()로 watchdog 타이머만 명시 해제한다.
+//   ★멱등(P2-2): 중복 호출돼도 dispose는 1회 효과(_disposed 가드)·외부 OS 종료(before-quit) 직접 도달 시도 안전.
+let _disposed = false;
 function disposeResources() {
+  if (_disposed) return;
+  _disposed = true;
   try { if (ctx && ctx.scanController && typeof ctx.scanController.dispose === 'function') ctx.scanController.dispose(); } catch (err) { logger.error('dispose 실패', err); }
 }
 
-app.on('before-quit', disposeResources);
-
-app.on('window-all-closed', () => {
+// [P2-2] 실제 종료 1지점: 자원 dispose는 여기서만(=Q4 통과/창 없음 확정 후). 멱등 설계.
+function doFinalQuit() {
   disposeResources();
-  if (process.platform !== 'darwin') app.quit();
-});
+  if (tray && typeof tray.destroy === 'function') { tray.destroy(); tray = null; }
+  app.exit(0);
+}
+
+// ★before-quit: dispose를 여기서 직접 하지 않는다(중복·조기 dispose 방지). isQuitting 가드만.
+//   외부 OS 종료(로그오프 등)로 before-quit이 직접 와도 doFinalQuit/disposeResources 멱등성으로 안전.
+app.on('before-quit', () => { isQuitting = true; });
+
+// ★window-all-closed에서 quit 제거 — 트레이 상주(전 플랫폼). 완전 종료는 onQuit→close→doFinalQuit가 담당.
+app.on('window-all-closed', () => { /* no-op: 트레이 상주. 창 닫혀도 quit 안 함 */ });
 
 app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0 && app.isReady()) onReady();

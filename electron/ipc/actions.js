@@ -24,6 +24,7 @@
 const pathGuard = require('../../lib/common/pathGuard');
 const { resolveBin, safeExec } = require('../../lib/common/safeExec');
 const driveEnum = require('../../lib/scan/driveEnum');
+const toolRegistry = require('../../lib/common/toolRegistry');
 
 // id별 in-flight 상한(M-4) — 같은 프로젝트 중복 열기 폭주 차단(actionHandlers와 동일).
 const MAX_INFLIGHT_PER_ID = 2;
@@ -55,10 +56,20 @@ function sanitizeRescanOpts(opts) {
 }
 
 /**
- * spip:openInVsCode — id로 역참조 → 화이트리스트 검증(H-1) → code 실행(H-2/M-4).
- * actionHandlers.open 3~6단계를 그대로 이식. HTTP 상태코드 매핑은 드롭.
- * @param {object} args { id }
- * @param {object} ctx { store, pathGuard?, resolveBin?, safeExec?, logger }
+ * §4.2 toolId sanitize. 비문자열/형식불일치/미등록(화이트리스트 외)은 null(M6-M-1).
+ * @returns {string|null}
+ */
+function sanitizeToolId(raw) {
+  return toolRegistry.isKnownToolId(raw) ? raw : null;
+}
+
+/**
+ * spip:openInVsCode(확장) — id로 역참조 → 화이트리스트 검증(H-1) → 툴 실행(H-2/M-4 + M6-H-1/H-2/M-1).
+ * toolId 미지정 시 'code'(하위호환). toolId는 KNOWN_TOOL_IDS 멤버만 허용(M6-M-1).
+ * resolveTool이 spawn 직전 resolveBin(.,{force:true})로 캐시 우회 강제 재검증(M6-H-1).
+ * 실행 인자는 [real] 고정(사용자 args 없음, M6-H-2).
+ * @param {object} args { id, toolId? }
+ * @param {object} ctx { store, config, pathGuard?, resolveBin?, safeExec?, logger }
  * @returns {Promise<{ok:true,code:'OPENING'} | {ok:false,code:string}>}
  */
 async function openInVsCode(args, ctx) {
@@ -66,9 +77,20 @@ async function openInVsCode(args, ctx) {
   const pg = (ctx && ctx.pathGuard) || pathGuard;
   const rb = (ctx && typeof ctx.resolveBin === 'function') ? ctx.resolveBin : resolveBin;
   const exec = (ctx && typeof ctx.safeExec === 'function') ? ctx.safeExec : safeExec;
+  const config = (ctx && ctx.config) || {};
 
   const id = sanitizeOpenId(args);
   if (id === null) return { ok: false, code: 'ID_NOT_FOUND' };
+
+  // toolId: 미지정 하위호환='code'. 비null이지만 미등록이면 거부(M6-M-1).
+  const rawToolId = args && typeof args === 'object' ? args.toolId : undefined;
+  let toolId;
+  if (rawToolId === undefined || rawToolId === null || rawToolId === '') {
+    toolId = 'code';
+  } else {
+    toolId = sanitizeToolId(rawToolId);
+    if (toolId === null) return { ok: false, code: 'TOOL_NOT_FOUND' }; // 화이트리스트 외 toolId
+  }
 
   const project = store.getById(id);
   if (!project) return { ok: false, code: 'ID_NOT_FOUND' };
@@ -80,16 +102,18 @@ async function openInVsCode(args, ctx) {
     return { ok: false, code: 'PATH_NOT_ALLOWED' };
   }
 
-  // H-2: code CLI 절대경로 해석. 미설치 → CODE_CLI_NOT_FOUND.
-  const codeBin = rb('code');
-  if (!codeBin) return { ok: false, code: 'CODE_CLI_NOT_FOUND' };
+  // H-2 + ★M6-H-1: resolveTool이 사용자 경로 우선→PATH 폴백, 매 호출 force 재검증(캐시 우회).
+  const r = toolRegistry.resolveTool(toolId, config, { resolveBin: rb });
+  if (!r.bin) {
+    return { ok: false, code: toolId === 'code' ? 'CODE_CLI_NOT_FOUND' : 'TOOL_NOT_FOUND' };
+  }
 
-  // H-2/M-4: spawn(shell:false, detached) + id별 in-flight 상한. 검증된 실경로(real) 전달.
+  // H-2/M-4: spawn(shell:false, detached) + 툴/id별 in-flight 상한. ★실행 인자 [real] 고정(M6-H-2).
   try {
-    await exec(codeBin, [real], {
+    await exec(r.bin, [real], {
       shell: false,
       detached: true,
-      inflightKey: 'open:' + id,
+      inflightKey: 'open:' + toolId + ':' + id, // P3-1: 툴별 분리
       maxInflight: MAX_INFLIGHT_PER_ID,
     });
     return { ok: true, code: 'OPENING' };
@@ -164,4 +188,4 @@ function rescan(args, ctx) {
   return { ok: true, code: 'SCAN_STARTED', scanId: acquired.scanId, startedAt: acquired.startedAt };
 }
 
-module.exports = { openInVsCode, rescan, sanitizeOpenId, sanitizeRescanOpts, MAX_INFLIGHT_PER_ID, MAX_ID_LEN };
+module.exports = { openInVsCode, rescan, sanitizeOpenId, sanitizeToolId, sanitizeRescanOpts, MAX_INFLIGHT_PER_ID, MAX_ID_LEN };

@@ -82,7 +82,7 @@ test('open — 성공 → OPENING (safeExec에 실경로·shell:false·detached 
   assert.deepStrictEqual(calledWith.args, ['/x/real']);
   assert.strictEqual(calledWith.opts.shell, false);
   assert.strictEqual(calledWith.opts.detached, true);
-  assert.strictEqual(calledWith.opts.inflightKey, 'open:p1');
+  assert.strictEqual(calledWith.opts.inflightKey, 'open:code:p1'); // P3-1: 'open:'+toolId+':'+id
 });
 
 test('open — safeExec reject → OPEN_FAILED', async () => {

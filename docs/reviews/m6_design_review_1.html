@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>M6 설계 델타 검증 보고 #1 (독립 리뷰어)</title>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#1e293b; --text:#e2e8f0; --sub:#94a3b8;
+    --accent:#34d399; --ref:#38bdf8; --line:#334155; --warn:#fbbf24; --danger:#f87171;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:"Segoe UI","Malgun Gothic",system-ui,sans-serif;line-height:1.7;}
+  header{padding:44px 32px 32px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#13203b,#0f172a);}
+  header h1{margin:0 0 8px;font-size:27px;}
+  header .tag{display:inline-block;border-radius:999px;padding:3px 12px;font-size:13px;margin-right:8px;}
+  .t-fail{background:rgba(248,113,113,.14);color:#fca5a5;border:1px solid rgba(248,113,113,.5);}
+  .t-pass{background:rgba(52,211,153,.14);color:#6ee7b7;border:1px solid rgba(52,211,153,.5);}
+  .t-info{background:rgba(56,189,248,.12);color:#7dd3fc;border:1px solid rgba(56,189,248,.4);}
+  header p{margin:14px 0 0;color:var(--sub);max-width:980px;}
+  .meta{margin-top:14px;font-size:13px;color:var(--sub);}
+  main{max-width:1160px;margin:0 auto;padding:30px;}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:22px 26px;margin:20px 0;}
+  h2{margin:0 0 14px;font-size:20px;color:var(--accent);border-left:4px solid var(--accent);padding-left:12px;}
+  h3{font-size:15px;color:var(--ref);margin:20px 0 8px;}
+  p{margin:8px 0;}
+  ul,ol{margin:8px 0;padding-left:22px;}
+  li{margin:5px 0;}
+  code{background:#0b1220;color:var(--ref);padding:1px 6px;border-radius:5px;font-size:12.5px;}
+  table{width:100%;border-collapse:collapse;margin:12px 0;font-size:13px;}
+  th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top;}
+  th{background:#142035;color:var(--accent);}
+  tr:nth-child(even) td{background:rgba(255,255,255,.02);}
+  .pill{font-size:11px;font-weight:700;padding:2px 9px;border-radius:6px;white-space:nowrap;display:inline-block;}
+  .p1{background:rgba(248,113,113,.16);color:#fca5a5;border:1px solid rgba(248,113,113,.5);}
+  .p2{background:rgba(251,191,36,.16);color:#fcd34d;border:1px solid rgba(251,191,36,.45);}
+  .p3{background:rgba(56,189,248,.16);color:#7dd3fc;border:1px solid rgba(56,189,248,.45);}
+  .ok{background:rgba(52,211,153,.16);color:#6ee7b7;border:1px solid rgba(52,211,153,.5);}
+  .id{font-family:Consolas,monospace;color:var(--warn);font-weight:700;white-space:nowrap;}
+  .note{background:rgba(56,189,248,.08);border:1px solid rgba(56,189,248,.3);border-radius:8px;padding:12px 16px;font-size:13px;color:#bae6fd;}
+  .warn-box{background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.3);border-radius:8px;padding:12px 16px;font-size:13px;color:#fde68a;}
+  .verdict{font-size:15px;}
+  footer{text-align:center;color:var(--sub);font-size:12.5px;padding:28px;border-top:1px solid var(--line);}
+</style>
+</head>
+<body>
+<header>
+  <span class="tag t-pass">판정: PASS (조건부 — 반영 권고 포함)</span>
+  <span class="tag t-info">독립 검증 #1</span>
+  <h1>Project-SPIP — M6 설계 델타(R-17~R-21) 검증 보고</h1>
+  <p>검증 대상 <code>docs/architecture/m6-design.html</code>을 백로그 원문(<code>ref.md</code>)·기존 IPC 계약(<code>api-contract.md</code>·<code>electron-migration.html</code>)·실측 코드(<code>safeExec.js</code>·<code>actions.js</code>·<code>register.js</code>·<code>folders.js</code>·<code>config.js</code>·<code>paths.js</code>·<code>preload.js</code>·<code>main.js</code>)와 대조해 추적성·정합·완결성·실행가능성을 검증했다. 보안 상세 판정은 security-reviewer 소관이므로 추적성만 본다.</p>
+  <div class="meta">리뷰어: 독립 검증 담당 · 작성일: 2026-06-21 · 회차: 1 · 입장: 회의적(결함·누락 우선 탐색)</div>
+</header>
+
+<main>
+
+<section>
+  <h2>0. 판정 요약</h2>
+  <p class="verdict"><b>판정: PASS</b> — 6개 체크리스트 항목 모두 충족. 백로그 5기능이 R-17~R-21로 빠짐없이 설계되었고, 핵심 재사용 주장(<code>resolveBin</code> 절대경로 검증 분기, 0600 원자적 쓰기 패턴, 생명주기 전이)이 <b>실측 코드와 정확히 일치</b>한다. PM 확정 5건(MQ-1~MQ-5) 모두 본문에 정합 반영되었다.</p>
+  <p>다만 <b>구현 착수 전 정리할 권고 항목</b>이 있다(블로커 아님, 전부 P2/P3). 가장 중요한 것은 <b>config.tools 영속 경로의 명세 공백</b>(P2-1)과 <b>quit 취소 시 scanController 이미 dispose 가능성</b>(P2-2)이다. 이들은 설계를 막지 않으나 구현 시 표류를 막기 위해 명시 권고한다.</p>
+  <table>
+    <tr><th style="width:90px;">체크</th><th>항목</th><th style="width:90px;">결과</th></tr>
+    <tr><td>1</td><td>백로그 5기능 커버리지</td><td><span class="pill ok">PASS</span></td></tr>
+    <tr><td>2</td><td>기존 정합·전진호환(resolveBin·open·생명주기)</td><td><span class="pill ok">PASS</span></td></tr>
+    <tr><td>3</td><td>데이터 모델(config vs ui-state·id 안정성)</td><td><span class="pill ok">PASS</span> <span class="pill p2">P2 1건</span></td></tr>
+    <tr><td>4</td><td>IPC 계약 완결성</td><td><span class="pill ok">PASS</span> <span class="pill p3">P3 2건</span></td></tr>
+    <tr><td>5</td><td>sortMode 2모드 상호작용</td><td><span class="pill ok">PASS</span></td></tr>
+    <tr><td>6</td><td>실행가능성</td><td><span class="pill ok">PASS</span> <span class="pill p2">P2 1건</span></td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>1. 백로그 5기능 커버리지 — PASS</h2>
+  <p><code>ref.md</code> 5항목을 R-17~R-21에 1:1 매핑 검증. 누락·오해 없음.</p>
+  <table>
+    <tr><th style="width:110px;">백로그</th><th>요구</th><th>설계 위치</th><th style="width:70px;">판정</th></tr>
+    <tr><td>경로 복사</td><td><span class="id">R-17</span></td><td>§5 — main <code>clipboard.writeText</code>(MQ-1 절대경로 정합)</td><td><span class="pill ok">충족</span></td></tr>
+    <tr><td>VSCode PATH/툴경로+확장성</td><td><span class="id">R-18</span></td><td>§6 — toolRegistry 맵 + PATH 안내(ⓐ) + 직접 지정(ⓑ). 백로그의 "PATH 추가 방법 안내" + "경로 직접 추가" + "향후 확장" 3요구 모두 명시 충족</td><td><span class="pill ok">충족</span></td></tr>
+    <tr><td>카드 드래그 이동</td><td><span class="id">R-19</span></td><td>§7 — HTML5 DnD + ui-state.order + sortMode</td><td><span class="pill ok">충족</span></td></tr>
+    <tr><td>즐겨찾기</td><td><span class="id">R-20</span></td><td>§8 — ui-state.favorites + 토글/필터</td><td><span class="pill ok">충족</span></td></tr>
+    <tr><td>트레이(대시보드/종료/즐겨찾기)</td><td><span class="id">R-21</span></td><td>§9 — Tray 메뉴 3항목 + close-to-tray + 우측하단 슬라이더. 백로그의 "닫아도 트레이 상주"·"종료=창+트레이 전체"·"우측하단 슬라이딩 UI" 3세부 모두 정확 반영</td><td><span class="pill ok">충족</span></td></tr>
+  </table>
+  <div class="note"><b>의도 충족 확인:</b> 백로그 R-21 "종료 : SPIP 프로그램 전체 종료(창, 트레이)" → 설계 onQuit가 <code>isQuitting=true; app.quit()</code> + before-quit/close에서 <code>tray.destroy()</code>로 창·트레이 동시 종료. 정확 일치.</div>
+</section>
+
+<section>
+  <h2>2. 기존 정합·전진호환 — PASS (실측 대조 통과)</h2>
+
+  <h3>2.1 resolveBin 무수정 재사용 주장 — 실측 일치 ✔</h3>
+  <p>설계는 "<code>safeExec.resolveBin</code>이 <b>이미 name이 절대경로면 .exe·실행파일 검증만 수행</b>(safeExec.js:82)" → resolveBin 자체 미변경, resolveTool 래퍼에서 두 번 호출로 충족을 주장한다. <b>실측 확인 결과 정확하다.</b></p>
+  <table>
+    <tr><th>설계 주장</th><th>실측(safeExec.js)</th><th style="width:60px;">일치</th></tr>
+    <tr><td>절대경로면 검증만(line 82)</td><td><code>line 82: if (path.isAbsolute(name))</code> 분기 존재</td><td><span class="pill ok">✔</span></td></tr>
+    <tr><td>.exe만 통과·실행파일 검증</td><td><code>line 85: ALLOWED_WIN_EXTS.includes(ext) &amp;&amp; isExecutableFile(name)</code></td><td><span class="pill ok">✔</span></td></tr>
+    <tr><td>safeExec가 .exe·shell:false 재검증</td><td><code>line 146-152</code>(.exe만), <code>line 185 shell:false</code>, <code>line 155 args string 강제</code></td><td><span class="pill ok">✔</span></td></tr>
+    <tr><td>.bat/.cmd 거부(PATHEXT RCE 차단)</td><td><code>ALLOWED_WIN_EXTS=['.exe']</code>(line 30), winCandidates에서 비허용 확장자 후보 0</td><td><span class="pill ok">✔</span></td></tr>
+  </table>
+  <p>resolveBin 결과 캐시(<code>_binCache</code>)가 있어, 사용자 지정 경로/PATH 결과가 캐시된다. 사용자가 설정에서 경로를 변경했을 때 캐시 무효화가 필요할 수 있으나(<code>opts.force</code> 존재), 설계는 이를 다루지 않는다 — <b>경미(P3-2 참조)</b>.</p>
+
+  <h3>2.2 openInVsCode toolId 일반화 — 계약 비파괴 ✔</h3>
+  <p>실측 <code>actions.openInVsCode(args, ctx)</code>(line 64)와 preload <code>open:(id)=>{id:String(id)}</code>(preload.js:23). 설계의 <code>open(id, toolId?)</code> 확장은 <b>toolId 미지정 시 'code'로 폴백</b>(§4.1·§6.2)이라 기존 호출 무변경 동작 — 전진호환 성립. api-contract/electron-migration의 기존 응답코드(<code>ID_NOT_FOUND·PATH_NOT_ALLOWED·PATH_GONE·CODE_CLI_NOT_FOUND·OPEN_FAILED</code>) 보존 + <code>TOOL_NOT_FOUND</code> 추가. <b>기존 코드 깨짐 없음.</b></p>
+  <div class="warn-box"><b>주의(반영 권고, P3-1):</b> 설계 §6.2 의사코드의 <code>inflightKey:'open:'+toolId+':'+id</code>는 실측(<code>'open:'+id</code>, actions.js:92)과 키 형식이 다르다. 의도된 일반화로 보이나(툴별 분리), api-contract/electron-migration 갱신 시 "inflightKey 형식 변경"을 명시하지 않으면 구현자가 기존 형식과 혼동할 수 있다. 동작 영향은 없다(내부 키).</div>
+
+  <h3>2.3 close-to-tray vs 기존 생명주기 — 모순 없음 ✔</h3>
+  <p>실측 main.js와 설계 §9.2 전이를 1:1 대조했다.</p>
+  <table>
+    <tr><th style="width:170px;">항목</th><th>실측 main.js</th><th>설계 델타</th><th style="width:60px;">정합</th></tr>
+    <tr><td><code>win.on('close')</code></td><td>line 180-193: 스캔 중이면 Q4, 확인 시 destroy</td><td><code>!isQuitting</code>→hide; isQuitting 경로에서만 Q4(기존 보존)</td><td><span class="pill ok">✔</span></td></tr>
+    <tr><td><code>window-all-closed</code></td><td>line 210-213: 非darwin <code>app.quit()</code></td><td>no-op(트레이 상주) — 변경 명시</td><td><span class="pill ok">✔</span></td></tr>
+    <tr><td><code>second-instance</code></td><td>line 75-80: restore+focus</td><td><b>+win.show()</b> 추가(트레이 숨김 복원 위해 필요)</td><td><span class="pill ok">✔</span></td></tr>
+    <tr><td>단일 인스턴스 락</td><td>line 71-73: gotLock 불변</td><td>불변 유지</td><td><span class="pill ok">✔</span></td></tr>
+    <tr><td><code>before-quit</code></td><td>line 208: disposeResources</td><td>+isQuitting=true +tray.destroy()</td><td><span class="pill ok">✔</span></td></tr>
+  </table>
+  <p>설계가 기존 Q4 다이얼로그를 "완전 종료 경로에서만"으로 정확히 격리하고, second-instance에 show()를 더한 것은 트레이 숨김 상태 복원을 위해 <b>반드시 필요한 보완</b>으로, 누락 없이 짚었다.</p>
+</section>
+
+<section>
+  <h2>3. 데이터 모델 — PASS (P2-1 권고)</h2>
+  <p>config(tools) vs ui-state.json(favorites/order/sortMode) 분리 근거(ADR-M6-3)는 타당하다 — CLI 공유성·검증 정책·손상 허용도가 다른 데이터를 분리하는 결정은 합리적이며, 파일 2개로 한정(과분할 안 함)도 적절. 스키마·검증 규칙(toolId 화이트리스트·id 형식·개수 상한)도 기존 config.js의 normalize 패턴(<code>normalizeScanRoots</code> 등)과 일관.</p>
+  <p>id 안정성 가정(MQ-3)은 §3.3·§14에 명시되고 graceful skip(소멸 id 표시 무시·영속 유지)이 일관되게 서술됨. PM 확정(skip만)과 정합.</p>
+
+  <div class="warn-box">
+    <h3 style="margin-top:0;"><span class="pill p2">P2-1</span> config.tools 영속 경로(writer)가 미명세</h3>
+    <p><b>무엇:</b> <code>setToolPath</code>/<code>pickToolExecutable</code>가 config.tools를 어떤 함수로 0600 영속하는지 명세 공백.</p>
+    <p><b>위치:</b> §3.1·§4.1·§10(tree). 설계는 "<code>folders.persistScanRoots</code>의 0600 패턴 재사용"이라 하나, 실측 <code>persistScanRoots</code>(folders.js:170-207)는 <b><code>existing.scanRoots = roots</code>로 scanRoots 키만 쓰는 전용 함수</b>다 — tools를 못 쓴다(line 185 하드코딩).</p>
+    <p><b>문제:</b> ui-state.json은 신규 <code>uiStateStore.write</code>로 해결되나, config.tools는 ① persistScanRoots를 tools도 쓰도록 일반화할지 ② tools 전용 writer를 둘지 ③ uiStateStore류 범용 atomic-writer로 통합할지 미결. 구현자가 persistScanRoots를 그대로 호출하면 tools가 저장되지 않거나, scanRoots를 덮어쓸 위험.</p>
+    <p><b>권고:</b> §3 또는 §10에 "config.tools 영속 = persistScanRoots를 키-범용(예: <code>persistConfigKeys({tools})</code>)으로 소폭 일반화하여 기존 키 보존 병합 후 0600 쓰기"를 1줄 명시. 또는 ipc/tools.js가 자체 atomic writer를 두되 "기존 키 read-merge 보존"(persistScanRoots line 178-185 패턴)을 반드시 따른다고 명시.</p>
+  </div>
+  <div class="note"><b>참고(블로커 아님):</b> config.js <code>loadConfig</code>(line 214-227)는 현재 <b>고정 키만</b> 반환하고 미지의 <code>tools</code> 키를 통과시키지 않는다. 설계가 "normalizeTools 추가 + loadConfig 병합"을 §10에 명시했으므로 이 수정은 인지됨. LIMITS.maxTools(32) 추가도 기존 LIMITS(maxScanRoots:64) 패턴과 일관. 정합 OK.</div>
+</section>
+
+<section>
+  <h2>4. IPC 계약 완결성 — PASS (P3 2건)</h2>
+  <p>신규 8채널(copyText·getTools·setToolPath·pickToolExecutable·getUiState·setFavorite·setOrder·setSortMode) + openInVsCode 확장 + tray push 모두 ① 요청 shape ② main 재검증 ③ 응답 shape ④ 실패 code가 §4.1 표에 명시됨. 전부 <code>register.js</code> <code>guard()</code> 경유(senderFrame·try/catch·FORBIDDEN/INTERNAL 자동) — 실측 guard() 구조(register.js:89-102)와 정합. 기존 채널명과 충돌 없음(접두 <code>spip:</code> + 신규 동사). preload 노출도 채널명 하드코딩·범용 invoke 비노출 원칙 유지(실측 preload.js 패턴과 동일).</p>
+  <table>
+    <tr><th style="width:90px;">우선</th><th>항목 [무엇/위치/문제/권고]</th></tr>
+    <tr><td><span class="pill p3">P3-2</span></td><td><b>무엇:</b> resolveBin 캐시 무효화 미명세. <b>위치:</b> §6.1 resolveTool / setToolPath. <b>문제:</b> <code>_binCache</code>(safeExec.js:38)가 절대경로·toolId 결과를 캐시한다. setToolPath로 경로 변경 후 다음 resolveTool이 <b>이전 캐시값</b>을 반환할 수 있다(특히 같은 toolId의 PATH 폴백 결과). <b>권고:</b> setToolPath 성공 시 해당 path/toolId에 대해 <code>resolveBin(name,{force:true})</code> 호출 또는 _clearBinCache 명시. getTools의 resolved 산출도 같은 경로 사용.</td></tr>
+    <tr><td><span class="pill p3">P3-3</span></td><td><b>무엇:</b> getTools 응답의 resolved/source 산출 비용·시점. <b>위치:</b> §4.1 getTools. <b>문제:</b> resolved 계산이 매 getTools마다 resolveTool(=fs.statSync) 수행이면 툴 多·드로어 재오픈 시 동기 I/O 반복. <b>권고:</b> getTools는 설정 드로어 오픈 시에만 호출(빈도 낮음)임을 명시하거나, resolved 산출이 캐시 활용(P3-2와 연동)임을 1줄 부기. 동작 영향 경미.</td></tr>
+  </table>
+  <div class="note"><b>긍정 확인:</b> pickToolExecutable이 "OS dialog가 준 절대경로(신뢰 출처)도 setToolPath와 동일 검증 후 영속"으로 명시(§4.1) — renderer 비신뢰 원칙을 OS dialog 결과에도 일관 적용. copyText의 len≤8192·string 한정·경로검증 없음(텍스트 한정)도 명확. 추적성 OK(보안 상세는 security 소관).</div>
+</section>
+
+<section>
+  <h2>5. sortMode 2모드 상호작용 — PASS</h2>
+  <p>auto(modified/name/size 정렬, 드래그 불가) ↔ manual(order, 드래그 가능) 2모드 토글이 §3.2·§7에 명확. <b>드래그 시 setOrder가 sortMode='manual' 동반 전환</b>(§4.1 setOrder 응답 <code>{order, sortMode:'manual'}</code>), 정렬 셀렉터 재선택 시 auto 복귀. "둘을 동시 적용하지 않아 모호성 제거"라는 단일 규칙이 명료. 키보드 대체(위로/아래로 버튼, 동일 setOrder 경로)도 N-07 정합으로 명시. table 밀도에서의 동작(manual이면 order 순 행 정렬)까지 다룸. <b>상호작용 빈틈 없음.</b></p>
+  <p>경미 관찰(권고 아님): auto 모드일 때 사용자가 드래그를 시도→manual 자동 전환되는데, 이때 기존 정렬 셀렉터 UI 상태와 sortMode 표시 동기화(셀렉터가 "수동"을 반영)는 renderer 구현 디테일로 남는다. 설계 의도는 명확하므로 블로커 아님.</p>
+</section>
+
+<section>
+  <h2>6. 실행가능성 — PASS (P2-2 권고)</h2>
+  <p>변경이 신규 파일(tray.js·clipboard.js·tools.js·uiState.js·toolRegistry.js·uiStateStore.js)에 격리되고 기존 수정이 5개 최소 지점(생명주기·preload allowlist·register 등록·actions.open 일반화·config/paths 추가)으로 명확. 순수 함수+주입 구조 유지로 헤드리스 테스트 가능. <b>메인/IPC·renderer 착수 가능.</b> P2-1(config.tools writer) 외 블로커 없음.</p>
+  <div class="warn-box">
+    <h3 style="margin-top:0;"><span class="pill p2">P2-2</span> quit 취소 시 scanController 이미 dispose 가능성</h3>
+    <p><b>무엇:</b> 트레이 '종료'→Q4 다이얼로그 "취소" 경로의 자원 상태 미정의.</p>
+    <p><b>위치:</b> §9.2 close 핸들러 + before-quit 상호작용.</p>
+    <p><b>문제:</b> 설계는 onQuit가 <code>isQuitting=true; app.quit()</code> 호출. Electron에서 <code>app.quit()</code>은 <b>before-quit를 먼저 발화</b>하고, 설계의 before-quit는 <code>disposeResources()</code>(scanController.dispose, 실측 main.js:204-205)를 즉시 실행한다. 이후 win close 핸들러에서 스캔 중이라 Q4를 띄우고 사용자가 "취소"하면 <code>isQuitting=false</code>로 되돌리지만, <b>scanController는 이미 dispose된 상태</b>일 수 있다(watchdog 타이머 해제 등). 즉 "취소했는데 진행 중이던 스캔의 자원이 이미 정리됨" 불일치.</p>
+    <p><b>권고:</b> ① before-quit의 disposeResources를 "Q4 확정(실제 종료) 시점"으로 늦추거나, ② onQuit를 app.quit() 대신 win.close() 트리거→close 핸들러에서 Q4 통과 후에만 destroy+quit하는 단일 경로로 통일. 설계 §9.2에 "before-quit dispose와 Q4 취소의 순서"를 1단락 명시 권고. (현행 실측은 close에서 destroy만 하고 quit 안 하므로, 트레이 종료 경로 신설 시 이 순서를 새로 정의해야 함 — 설계가 이 신규 상호작용을 아직 명시 안 함.)</p>
+  </div>
+</section>
+
+<section>
+  <h2>7. PM 확정(MQ-1~MQ-5) 반영 일치 — 전부 정합</h2>
+  <table>
+    <tr><th style="width:70px;">확정</th><th>PM 결정</th><th>설계 반영</th><th style="width:60px;">일치</th></tr>
+    <tr><td>MQ-1</td><td>절대경로 복사</td><td>§5·§14 MQ-1 "절대경로 그대로 복사". MVP에서 절대경로를 clipboard로만 전달</td><td><span class="pill ok">✔</span></td></tr>
+    <tr><td>MQ-2</td><td>'열기' MVP=code 기본 버튼(레지스트리 확장형)</td><td>§6.3 "MVP는 code 기본 + 설정 등록, 드롭다운 후속" / §14 MQ-2 동일</td><td><span class="pill ok">✔</span></td></tr>
+    <tr><td>MQ-3</td><td>id 경로기반 graceful skip</td><td>§3.3·§7·§8·§14 일관 skip(재매핑 후속). 명확</td><td><span class="pill ok">✔</span></td></tr>
+    <tr><td>MQ-4</td><td>첫 close-to-tray 1회 알림</td><td>§14 리스크·ADR-M6-4 결과 "최초 hide 시 트레이 풍선 1회"</td><td><span class="pill ok">✔</span></td></tr>
+    <tr><td>MQ-5</td><td>즐겨찾기 메인창 오버레이</td><td>§9.3·ADR-M6-5 "별도 창 아닌 메인창 내 position:fixed 오버레이"</td><td><span class="pill ok">✔</span></td></tr>
+  </table>
+  <p>5건 모두 본문과 §14 미해결 질문 표의 "기본 권고"가 PM 확정과 동일 방향. 단 §14 표가 여전히 "미해결 질문" 제목으로 남아 있어, PM 확정 후이므로 <b>"확정 반영"으로 상태 갱신 권고(P3, 문서 위생)</b> — 동작 영향 없음.</p>
+</section>
+
+<section>
+  <h2>8. 반영 항목 종합 (생산자 전달용)</h2>
+  <table>
+    <tr><th style="width:70px;">우선</th><th style="width:200px;">무엇 / 위치</th><th>권고</th></tr>
+    <tr><td><span class="pill p2">P2-1</span></td><td>config.tools 영속 writer 미명세 / §3·§10</td><td>persistScanRoots는 scanRoots 전용. tools 영속을 키-범용 writer로 일반화하거나 tools 전용 writer(기존 키 read-merge 보존) 명시.</td></tr>
+    <tr><td><span class="pill p2">P2-2</span></td><td>quit 취소 시 scanController dispose 순서 / §9.2</td><td>before-quit dispose와 Q4 취소(isQuitting=false)의 순서를 정의. 트레이 종료→close 단일 경로 권고.</td></tr>
+    <tr><td><span class="pill p3">P3-1</span></td><td>inflightKey 형식 변경 / §6.2</td><td>api-contract/electron-migration 갱신 시 'open:'+toolId+':'+id 형식 변경 명시.</td></tr>
+    <tr><td><span class="pill p3">P3-2</span></td><td>resolveBin 캐시 무효화 / §6.1·setToolPath</td><td>setToolPath 성공 시 force 재해석/_clearBinCache 명시.</td></tr>
+    <tr><td><span class="pill p3">P3-3</span></td><td>getTools resolved 산출 비용 / §4.1</td><td>호출 빈도(드로어 오픈 시) 또는 캐시 활용 1줄 부기.</td></tr>
+    <tr><td><span class="pill p3">P3-4</span></td><td>§14 "미해결 질문" 상태 / §14</td><td>MQ-1~5 PM 확정 반영됨 — "확정"으로 상태 갱신(문서 위생).</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>9. 확인 필요(사용자/PM 판단)</h2>
+  <p>중대 쟁점 없음 — AskUserQuestion 상정 불필요. P2-2(quit 취소 순서)는 설계 보완으로 해결 가능한 기술 결정이며 사용자 판단 사항 아님. P2-1(tools writer)도 구현 세부로 생산자가 결정 가능.</p>
+</section>
+
+<footer>
+  Project-SPIP — M6 설계 델타 검증 보고 #1 · 독립 검증 담당 · 2026-06-21 · 판정 PASS(반영 권고 P2 2건·P3 4건, 블로커 없음) · 보안 상세는 security-reviewer 소관(본 보고는 추적성만)
+</footer>
+
+</main>
+</body>
+</html>

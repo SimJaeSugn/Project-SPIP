@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project-SPIP — M6 설계 델타 (백로그 5기능)</title>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#1e293b; --text:#e2e8f0; --sub:#94a3b8;
+    --accent:#34d399; --ref:#38bdf8; --line:#334155; --warn:#fbbf24; --danger:#f87171;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:"Segoe UI","Malgun Gothic",system-ui,sans-serif;line-height:1.7;}
+  header{padding:48px 32px 36px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#13203b,#0f172a);}
+  header h1{margin:0 0 8px;font-size:30px;}
+  header .tag{display:inline-block;background:rgba(52,211,153,.12);color:var(--accent);
+    border:1px solid rgba(52,211,153,.4);border-radius:999px;padding:3px 12px;font-size:13px;margin-right:8px;}
+  header p{margin:14px 0 0;color:var(--sub);max-width:980px;}
+  .meta{margin-top:16px;font-size:13px;color:var(--sub);}
+  main{max-width:1160px;margin:0 auto;padding:32px;}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:24px 28px;margin:22px 0;}
+  h2{margin:0 0 16px;font-size:21px;color:var(--accent);border-left:4px solid var(--accent);
+    padding-left:12px;}
+  h3{font-size:16px;color:var(--ref);margin:22px 0 10px;}
+  h4{font-size:14px;color:var(--text);margin:16px 0 6px;}
+  p{margin:8px 0;}
+  ul,ol{margin:8px 0;padding-left:22px;}
+  li{margin:5px 0;}
+  code{background:#0b1220;color:var(--ref);padding:1px 6px;border-radius:5px;font-size:13px;}
+  pre{background:#0b1220;border:1px solid var(--line);border-radius:8px;padding:14px 16px;
+    overflow-x:auto;font-size:13px;color:#cbd5e1;font-family:Consolas,monospace;line-height:1.55;}
+  pre .c{color:#64748b;}
+  pre .k{color:#7dd3fc;}
+  pre .s{color:#86efac;}
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13.5px;}
+  th,td{border:1px solid var(--line);padding:9px 11px;text-align:left;vertical-align:top;}
+  th{background:#142035;color:var(--accent);}
+  tr:nth-child(even) td{background:rgba(255,255,255,.02);}
+  .rid{font-family:Consolas,monospace;color:var(--accent);font-weight:700;white-space:nowrap;}
+  .nid{font-family:Consolas,monospace;color:var(--warn);font-weight:700;white-space:nowrap;}
+  .mono{font-family:Consolas,monospace;font-size:12.5px;}
+  .pill{font-size:11px;font-weight:700;padding:2px 9px;border-radius:6px;white-space:nowrap;}
+  .keep{background:rgba(52,211,153,.16);color:#6ee7b7;border:1px solid rgba(52,211,153,.5);}
+  .wrap{background:rgba(56,189,248,.16);color:#7dd3fc;border:1px solid rgba(56,189,248,.45);}
+  .new{background:rgba(251,191,36,.16);color:#fcd34d;border:1px solid rgba(251,191,36,.45);}
+  .inv{background:rgba(52,211,153,.16);color:#6ee7b7;border:1px solid rgba(52,211,153,.5);}
+  .evt{background:rgba(251,191,36,.16);color:#fcd34d;border:1px solid rgba(251,191,36,.45);}
+  .note{background:rgba(56,189,248,.08);border:1px solid rgba(56,189,248,.3);border-radius:8px;
+    padding:12px 16px;font-size:13.5px;color:#bae6fd;}
+  .warn-box{background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.3);border-radius:8px;
+    padding:12px 16px;font-size:13.5px;color:#fde68a;}
+  .danger-box{background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.35);border-radius:8px;
+    padding:12px 16px;font-size:13.5px;color:#fecaca;}
+  figure{margin:18px 0;background:#0b1220;border:1px solid var(--line);border-radius:10px;padding:18px;}
+  figcaption{color:var(--sub);font-size:12.5px;margin-top:10px;text-align:center;}
+  .legend{display:flex;gap:18px;flex-wrap:wrap;font-size:12.5px;color:var(--sub);margin-top:10px;justify-content:center;}
+  .legend span{display:inline-flex;align-items:center;gap:6px;}
+  .dot{width:11px;height:11px;border-radius:3px;display:inline-block;}
+  .toc a{color:var(--ref);text-decoration:none;}
+  .toc a:hover{text-decoration:underline;}
+  .toc ol{columns:2;}
+  .adr{border-left:3px solid var(--ref);padding-left:14px;margin:16px 0;}
+  .adr h4{color:var(--ref);margin-top:0;}
+  footer{text-align:center;color:var(--sub);font-size:12.5px;padding:30px;border-top:1px solid var(--line);}
+</style>
+</head>
+<body>
+<header>
+  <span class="tag">M6 설계 델타</span><span class="tag">백로그 5기능</span><span class="tag">Electron 점진 확장</span>
+  <h1>Project-SPIP — M6 설계 델타 (R-17 ~ R-21)</h1>
+  <p>기존 Electron 데스크톱 앱(<code>electron-migration.html</code> v1.1 기준)에 백로그 5개 신규 기능을 <b>점진 확장</b>으로 추가하기 위한 설계 델타다. <b>기존 프로세스 모델(main·preload·renderer)·IPC 계약·보안 베이스라인(contextIsolation·sandbox·preload allowlist·senderFrame 검증·전 채널 main 재검증·CSP)을 불변으로 보존</b>하고, 그 위에 신규 채널·데이터·UI 흐름만 얹는다. 본 문서는 설계이며 실행 가능한 구현 코드를 포함하지 않는다(IPC 계약·데이터 모델·의사코드·SVG·ADR까지만).</p>
+  <div class="meta">문서 유형: 설계 델타 · 작성: 수석 아키텍트 · 작성일: 2026-06-21 · <b>개정: rev.2 (2026-06-21, 검증 게이트 반영)</b> · 입력: docs/ref.md(백로그)·electron-migration.html(§4 IPC·§6 보안·§7 생명주기)·api-contract.md·architecture.html·m4-design.html · 실측 코드: electron/{main,preload,security,context,menu}.js·electron/ipc/{register,data,actions,scan,folders}.js·lib/common/{config,paths,safeExec,pathGuard}.js</div>
+  <div class="note" style="margin-top:18px;"><b>설계 원칙:</b> ① 단순성 우선 — 신규 분산화·새 저장소 도입 없이 기존 <code>electron/ipc/*</code> 얇은 어댑터 + <code>lib/common</code> 재사용으로 해결. ② 기존 보안 불변 — 새 채널 전부 <code>register.js</code> 공통 게이트(senderFrame 검증·try/catch·고정 code) 경유, 모든 입력 main 재검증. ③ 추적성 — 5기능을 <span class="rid">R-17</span>~<span class="rid">R-21</span>로 신규 부여하고 기존 요구(R-04·R-12 등)와 연결.</div>
+  <div class="danger-box" style="margin-top:14px;"><b>rev.2 개정 요약 (검증 게이트 반영 — 신규 §0):</b> 독립 검증 PASS(권고)·보안 조건부 PASS(높음 2)를 받아 다음을 본문에 반영했다. <b>① M6-H-1(resolveBin 캐시 TOCTOU)</b> → 외부 툴 spawn 직전 <b>캐시 우회 강제 재검증</b> 단계 신설(§6.1·§6.2·§11). <b>② M6-H-2(사용자 args 무기화)</b> → <b>PM 확정으로 tools.args 전면 제거</b>, 레지스트리 스키마 <code>{path,label}</code>, 실행 인자는 <code>[projectPath]</code> 고정(§3.2·§6). <b>③ M6-M-1/SQ-3</b> toolId 화이트리스트, <b>M6-M-2</b> pickToolExecutable main 재검증 명문화, <b>M6-M-3</b> second-instance argv 비신뢰, <b>M6-M-4</b> ui-state DoS 가드, <b>P2-1</b> config 부분갱신 writer, <b>P2-2</b> quit 취소↔dispose 순서. §14는 "확정"으로 상태 갱신.</div>
+</header>
+
+<main>
+
+<section class="toc">
+  <h2>목차</h2>
+  <ol>
+    <li><a href="#gate">0. 검증 게이트 반영 (rev.2 — 높음/보통/권고 시정)</a></li>
+    <li><a href="#overview">1. 개요 · 아키텍처 동인</a></li>
+    <li><a href="#quality">2. 품질 속성 요구</a></li>
+    <li><a href="#persist">3. 영속화 데이터 모델 (통합)</a></li>
+    <li><a href="#ipc">4. 신규 IPC 계약 (델타)</a></li>
+    <li><a href="#f17">5. R-17 프로젝트 경로 복사</a></li>
+    <li><a href="#f18">6. R-18 확장형 외부 툴 경로 설정</a></li>
+    <li><a href="#f19">7. R-19 카드 드래그 reorder</a></li>
+    <li><a href="#f20">8. R-20 즐겨찾기</a></li>
+    <li><a href="#f21">9. R-21 트레이 · 생명주기 변경 · 즐겨찾기 슬라이더</a></li>
+    <li><a href="#tree">10. 디렉터리 구조 델타</a></li>
+    <li><a href="#security">11. 보안 일관성 (불변 유지)</a></li>
+    <li><a href="#trace">12. 추적성 (요구 ↔ 채널/모듈)</a></li>
+    <li><a href="#adr">13. ADR</a></li>
+    <li><a href="#risk">14. 리스크 · 가정 · 미해결 질문</a></li>
+  </ol>
+</section>
+
+<section id="gate">
+  <h2>0. 검증 게이트 반영 (rev.2)</h2>
+  <p>본 절은 1회차 독립 검증(<code>docs/reviews/m6_design_review_1.html</code>, PASS·권고)과 보안 검증(<code>docs/reviews/m6_design_security_review_1.html</code>, 조건부 PASS·높음 2)의 모든 시정·반영 항목과 그 반영 위치를 한눈에 추적한다. <b>PM 확정 2건</b>(① tools.args 전면 제거 ② SQ 결정)을 본문에 선반영하고, 게이트 필수 2건(높음)을 해소했다.</p>
+  <table>
+    <tr><th style="width:90px;">항목</th><th style="width:70px;">등급</th><th>시정 내용 · 반영 위치</th></tr>
+    <tr><td class="nid">M6-H-1</td><td><span class="pill new">높음·필수</span></td><td><b>resolveBin 캐시 TOCTOU.</b> <code>_binCache</code>(safeExec.js:38,77,89)가 절대경로를 영구 캐시 → 등록 후 파일이 악성으로 교체돼도 재검증 없이 spawn. <b>시정</b>: 외부 툴 실행 직전 <b>캐시 우회 강제 재검증</b>(<code>resolveBin(path,{force:true})</code>) 단계를 <code>resolveTool</code>·open 흐름에 신설. 사용자 지정 경로는 캐시 신뢰 금지(매 실행 fs 재확인). → <b>§3.2·§6.1·§6.2·§11·ADR-M6-2</b>.</td></tr>
+    <tr><td class="nid">M6-H-2</td><td><span class="pill new">높음·필수</span></td><td><b>사용자 args 무기화/LOLBin.</b> <b>PM 확정 — tools.args 전면 제거.</b> 레지스트리 스키마를 <code>tools:{&lt;id&gt;:{path,label}}</code>로 변경(args 필드 삭제). 실행 인자는 서버/main이 구성하는 <code>[projectPath]</code> 고정(사용자 입력 아님) → 표면 원천 제거. → <b>§3.2·§6.1·§6.2·SQ-1·ADR-M6-2</b>.</td></tr>
+    <tr><td class="nid">M6-M-1<br>SQ-3</td><td><span class="pill wrap">보통</span></td><td><b>toolId 화이트리스트.</b> toolId는 레지스트리에 등록된 known id만 허용(MVP는 <code>code</code>). 임의 toolId 거부, PATH 폴백도 화이트리스트 멤버 한정. → <b>§4.1·§6.1·§6.2</b>.</td></tr>
+    <tr><td class="nid">M6-M-2</td><td><span class="pill wrap">보통</span></td><td><b>pickToolExecutable.</b> 네이티브 dialog의 .exe 필터는 신뢰 근거 아님 → 선택 결과도 main에서 동일 재검증(절대·존재·.exe·realpath·force). → <b>§4.1·§6.3</b>.</td></tr>
+    <tr><td class="nid">M6-M-3</td><td><span class="pill wrap">보통</span></td><td><b>second-instance.</b> argv는 비신뢰 → <code>win.show()</code>/포커스에만 사용, argv 파싱·경로 사용 금지 명시. → <b>§9.2</b>.</td></tr>
+    <tr><td class="nid">M6-M-4</td><td><span class="pill wrap">보통</span></td><td><b>ui-state.json DoS.</b> 읽기 시 파일 크기 상한(1MB)·JSON 깊이/파싱 가드(<code>_safeParse</code> 패턴 재사용)·손상 시 graceful 빈 상태. 0600 유지. → <b>§3.2·§3.4</b>.</td></tr>
+    <tr><td class="nid">P2-1</td><td><span class="pill wrap">권고</span></td><td><b>config.tools writer.</b> <code>persistScanRoots</code>는 scanRoots 전용(folders.js:185) → tools 못 씀. <b>config 부분 갱신 writer</b>(기존 키 read-merge 후 원자적 0600 쓰기)로 일반화. → <b>§3.5·§10</b>.</td></tr>
+    <tr><td class="nid">P2-2</td><td><span class="pill wrap">권고</span></td><td><b>트레이 종료↔dispose 순서.</b> Q4 "취소" 시 <code>before-quit</code> dispose가 이미 실행됐을 수 있음 → dispose 시점·isQuitting 복원 순서 정의(취소 시 정상 복귀). → <b>§9.2</b>.</td></tr>
+    <tr><td class="nid">P3·SQ-2</td><td><span class="pill wrap">권고</span></td><td>inflightKey 형식 변경(§6.2 주석)·resolveBin 캐시 무효화 정책(§6.1)·getTools resolved 산출 비용(§4.1)·SQ-2(사용자 경로는 검증 통과분만 저장/실행, 위치 제한 안 함, §3.2·§6.3)·§14 "미해결"→"확정" 갱신.</td></tr>
+  </table>
+  <div class="note"><b>L-1~L-3(낮음)</b>: copyText 길이 처리를 <b>초과 시 명시 거부(INVALID_TEXT)</b>로 단일화(§4.1)·tools.label 제어/방향제어문자 제거(§3.2)·실패 code 고정 토큰만(§4.1). 백로그 처리하지 않고 본 개정에서 함께 반영.</div>
+</section>
+
+<section id="overview">
+  <h2>1. 개요 · 아키텍처 동인</h2>
+  <p>백로그(<code>docs/ref.md</code>) 5개 항목을 아키텍처 동인으로 정리하고 신규 요구 ID를 부여한다. 모든 항목은 <b>기존 코드를 갈아엎지 않는 추가(addition)</b>로 설계한다 — 신규 IPC 채널은 기존 <code>register.js</code> guard에 등록만 하고, 영속화는 기존 <code>lib/common/paths·config</code> + <code>folders.js</code>의 0600 원자적 쓰기 패턴을 재사용한다.</p>
+  <table>
+    <tr><th style="width:90px;">요구</th><th style="width:200px;">백로그 원문</th><th>아키텍처 동인 / 결정 영향</th></tr>
+    <tr><td><span class="rid">R-17</span></td><td>프로젝트 경로 복사</td><td>클립보드 접근 위치(main <code>clipboard</code> vs renderer <code>navigator.clipboard</code>) — CSP·권한·preload 노출면 결정 필요. 영속 데이터 없음(순간 동작).</td></tr>
+    <tr><td><span class="rid">R-18</span></td><td>VS Code PATH 미존재 해결 + 툴 경로 직접 지정 + 확장성</td><td><b>M6 핵심.</b> <code>resolveBin('code')</code>이 PATH에만 의존 → 미발견 시 실패. ① 사용자 지정 실행 경로 우선 해석 ② 향후 다른 툴 확장 위한 <b>툴 레지스트리</b> ③ 사용자 입력 실행 경로의 main 검증(절대경로·존재·실행파일·shell:false). 설정류 영속 필요.</td></tr>
+    <tr><td><span class="rid">R-19</span></td><td>카드 드래그 위치 이동·영속</td><td>수동 순서(id 배열) 영속 위치 + 기존 정렬(modified/name/size)과의 모드 관계 정의. UI 상태 영속.</td></tr>
+    <tr><td><span class="rid">R-20</span></td><td>카드 즐겨찾기 토글·영속</td><td>즐겨찾기 id 집합 영속 + 필터/표시 통합. R-21 슬라이더의 입력 소스. UI 상태 영속.</td></tr>
+    <tr><td><span class="rid">R-21</span></td><td>트레이바(대시보드/종료/즐겨찾기) + close-to-tray + 즐겨찾기 슬라이딩 UI</td><td><b>생명주기 변경.</b> <code>window-all-closed</code>→quit를 close-to-tray로 전환(트레이 '종료'만 완전 종료). 단일 인스턴스 락·Q4 종료 다이얼로그와 상호작용. 즐겨찾기 슬라이더 창 형태(별도 창 vs 오버레이) 결정.</td></tr>
+  </table>
+  <div class="warn-box"><b>핵심 의존:</b> R-20(즐겨찾기)은 R-21(트레이 즐겨찾기 슬라이더)의 데이터 소스이므로 둘은 동일 영속 모델(<code>ui-state.json</code>의 <code>favorites</code>)을 공유한다. R-18(툴 레지스트리)은 기존 R-12(VS Code로 열기, <code>actions.openInVsCode</code>)의 <code>resolveBin('code')</code> 호출 지점을 일반화한다 — 이것이 유일하게 기존 도메인 호출부를 건드리는 변경이며, 나머지는 순수 추가다.</div>
+</section>
+
+<section id="quality">
+  <h2>2. 품질 속성 요구</h2>
+  <table>
+    <tr><th style="width:140px;">품질 속성</th><th>목표</th><th>M6에서의 구조적 충족</th></tr>
+    <tr><td>보안 (최우선)</td><td>기존 베이스라인 0 약화. 사용자 지정 실행 경로가 임의 명령 실행 표면이 되지 않음</td><td>신규 채널 전부 <code>register.js</code> guard 경유(senderFrame·try/catch·FORBIDDEN/INTERNAL). <code>resolveBin</code>의 절대경로·<code>.exe</code> 한정·<code>shell:false</code>·인자 배열 강제를 사용자 지정 경로에도 동일 적용. <b>실행 직전 캐시 우회 강제 재검증(M6-H-1)</b>·<b>실행 인자 <code>[projectPath]</code> 고정·사용자 args 없음(M6-H-2)</b>·<b>toolId 화이트리스트(M6-M-1)</b>. 클립보드는 main <code>clipboard.writeText</code>(텍스트 한정).</td></tr>
+    <tr><td>유지보수성</td><td>기존 모듈 경계 보존, 신규 책임 격리</td><td>R-18 → <code>lib/common/toolRegistry.js</code>(신규, 도메인) + <code>electron/ipc/tools.js</code>(어댑터). UI 상태 → <code>electron/ipc/uiState.js</code> + <code>lib/common/uiStateStore.js</code>. 트레이 → <code>electron/tray.js</code>. 기존 파일 수정은 최소 지점(아래 §10).</td></tr>
+    <tr><td>확장성</td><td>향후 에디터/툴 추가 시 코드 분기 없이 데이터로 확장</td><td>R-18 툴 레지스트리는 <code>tools: { &lt;toolId&gt;: { path, label } }</code> 맵 구조 — 새 툴 추가는 맵 항목 추가뿐(<b>args 필드 없음 — M6-H-2 시정</b>). <code>resolveBin</code>은 toolId 무관 일반 함수. <b>단 toolId는 레지스트리 등록 known id 화이트리스트로만 실행</b>(M6-M-1).</td></tr>
+    <tr><td>성능</td><td>드래그/즐겨찾기 토글 즉시 반응(&lt;50ms 체감). 영속 쓰기가 UI를 막지 않음</td><td>UI 상태는 renderer 메모리에서 즉시 반영(낙관적)하고 IPC 영속은 비동기 fire-and-forget. <code>ui-state.json</code>은 작은 파일(수 KB)이라 0600 원자적 쓰기 비용 무시 가능.</td></tr>
+    <tr><td>가용성/견고성</td><td><code>ui-state.json</code> 손상·부재여도 graceful(빈 상태). 트레이만 남은 상태에서 안정 동작</td><td>uiStateStore는 부재/손상 시 기본값(빈 favorites·빈 order)으로 폴백(config.js의 graceful 패턴 동일). 트레이는 창 파괴와 독립 생명주기.</td></tr>
+    <tr><td>접근성 (N-07 정합)</td><td>드래그/즐겨찾기/슬라이더 키보드 도달 가능</td><td>드래그는 키보드 대체(상/하 이동 버튼) 병행. 즐겨찾기 토글은 <code>&lt;button aria-pressed&gt;</code>. 슬라이더는 좌/우 버튼 + 화살표 키.</td></tr>
+  </table>
+</section>
+
+<section id="persist">
+  <h2>3. 영속화 데이터 모델 (통합 설계)</h2>
+  <p>3종 신규 영속 데이터의 저장 위치를 <b>성격</b>에 따라 분리한다 — <b>설정류(tools)는 기존 <code>spip.config.json</code></b>(CLI와 공유되는 동작 설정), <b>UI 상태류(favorites·card order)는 신규 <code>ui-state.json</code></b>(앱 GUI 전용, CLI 무관)에 둔다. 둘 다 동일 앱 데이터 폴더(<code>appDir()</code> = <code>%APPDATA%\spip</code>) 아래 두고, <code>folders.js</code>의 <b>0600 원자적 쓰기(임시파일→fsync→rename, M-2)를 재사용</b>한다.</p>
+
+  <h3>3.1 저장 위치 결정</h3>
+  <table>
+    <tr><th style="width:130px;">데이터</th><th style="width:160px;">저장 위치</th><th>근거 (ADR-M6-3)</th></tr>
+    <tr><td><b>tools</b> (레지스트리)</td><td><code>config/spip.config.json</code></td><td>스캔/실행 <b>동작에 영향을 주는 설정</b>이며, CLI(<code>scan.js</code>)가 향후 동일 툴 경로를 쓸 수 있다(예: git 경로). 기존 config 로드/검증 파이프라인(<code>loadConfig</code>·normalize)에 자연 편입. 기존 scanRoots와 같은 등급.</td></tr>
+    <tr><td><b>favorites</b> (id 집합)</td><td><code>ui-state/ui-state.json</code></td><td>순수 GUI 상태. CLI와 무관하고 동작에 영향 없음. config에 섞으면 설정 파일이 GUI 상태로 오염되고, CLI가 불필요한 키를 보게 됨. UI 상태는 손상 시 폐기 가능(graceful).</td></tr>
+    <tr><td><b>card order</b> (id 배열)</td><td><code>ui-state/ui-state.json</code></td><td>favorites와 동일 성격(GUI 상태). 한 파일에 묶어 쓰기 1회로 처리. 정렬 모드 토글 등 메타도 같이.</td></tr>
+  </table>
+  <div class="note"><b>왜 두 파일로 나누나(분리 근거):</b> 단일 파일로 합치면 더 단순해 보이나, ① config는 CLI 공유·검증 정책이 다르고 ② UI 상태는 빈번히 갱신(드래그/토글)되어 config 쓰기와 충돌·오염 위험이 있으며 ③ UI 상태 손상은 폐기해도 되지만 config 손상은 scanRoots 화이트리스트 유실로 이어진다. <b>"성격이 다른 데이터는 분리"</b>가 더 단순·안전하다. 단 파일은 2개로 한정(과분할 안 함).</div>
+
+  <h3>3.2 스키마</h3>
+  <h4>spip.config.json — tools 추가 (기존 키 불변)</h4>
+  <table>
+    <tr><th style="width:230px;">필드</th><th style="width:120px;">타입</th><th>의미 / 검증 (loadConfig 신규 normalizeTools)</th></tr>
+    <tr><td><code>tools</code></td><td><code>object</code></td><td>툴 레지스트리 맵. 부재/비객체 → <code>{}</code> 폴백. 항목 수 상한 <code>LIMITS.maxTools</code>(신규, 32).</td></tr>
+    <tr><td><code>tools.&lt;toolId&gt;</code></td><td><code>object</code></td><td><code>toolId</code>는 <code>^[a-z0-9_-]{1,32}$</code>만 채택(그 외 키 무시). 예약 id 예시: <code>code</code>, <code>git</code>.</td></tr>
+    <tr><td><code>tools.&lt;toolId&gt;.path</code></td><td><code>string|null</code></td><td>사용자 지정 실행 파일 <b>절대경로</b>. 없으면 <code>null</code>(→ PATH 탐색 폴백). 길이 ≤4096. 저장 시 형태(절대경로 모양) 검증, <b>실행/등록 시점</b>에 <code>resolveBin(path,{force:true})</code>로 캐시 우회 강제 재검증(<b>M6-H-1</b>: 절대·존재·.exe·실행파일·realpath). <b>위치 제한은 하지 않음</b>(SQ-2 — 포터블 에디터 워크플로 보존).</td></tr>
+    <tr><td><code>tools.&lt;toolId&gt;.label</code></td><td><code>string</code></td><td>UI 표시명(선택, 기본 toolId). textContent 렌더(L-1). <b>제어문자·방향제어문자(U+202E 등) 제거</b>·인쇄가능 문자만·길이 ≤64(L-2).</td></tr>
+  </table>
+  <div class="danger-box"><b>스키마 변경(M6-H-2 — PM 확정):</b> 이전 rev의 <code>tools.&lt;id&gt;.args</code> 필드를 <b>전면 삭제</b>한다. 사용자가 실행 인자를 지정하는 경로 자체를 없애 "양성 실행 파일을 위험 플래그로 무기화(LOLBin)"하는 표면을 원천 제거한다. 실행 인자는 항상 서버/main이 구성하는 <code>[projectPath]</code> 1개 고정이며, 사용자 입력은 인자로 전달되지 않는다. <code>normalizeTools</code>가 입력의 <code>args</code> 키를 읽으면 무시(drop)한다.</div>
+  <pre><span class="c">// spip.config.json 예시 (tools 추가분만 — args 필드 없음)</span>
+{
+  <span class="s">"scanRoots"</span>: [<span class="s">"E:\\03.프로젝트"</span>],
+  <span class="s">"tools"</span>: {
+    <span class="s">"code"</span>:  { <span class="s">"path"</span>: <span class="s">"C:\\Program Files\\Microsoft VS Code\\Code.exe"</span>, <span class="s">"label"</span>: <span class="s">"VS Code"</span> },
+    <span class="s">"cursor"</span>: { <span class="s">"path"</span>: <span class="k">null</span>, <span class="s">"label"</span>: <span class="s">"Cursor"</span> }
+  }
+}
+<span class="c">// 주의: code.cmd 같은 배치 파일은 H-2 정책상 .exe만 허용 → resolveBin이 거부.</span>
+<span class="c">// 사용자는 실제 실행 파일(예: Code.exe)을 지정해야 한다(아래 §6.3 검증·UI 안내).</span>
+<span class="c">// 'cursor'는 toolId 화이트리스트(레지스트리 등록 known id)에 포함되어야 실행 대상이 된다(M6-M-1).</span></pre>
+
+  <h4>ui-state.json — 신규 파일 (GUI 전용)</h4>
+  <table>
+    <tr><th style="width:230px;">필드</th><th style="width:120px;">타입</th><th>의미 / 검증 (uiStateStore)</th></tr>
+    <tr><td><code>schemaVersion</code></td><td><code>number</code></td><td>현재 1. 미래 마이그레이션 대비. 불일치 시 best-effort 또는 기본값 폴백.</td></tr>
+    <tr><td><code>favorites</code></td><td><code>string[]</code></td><td>즐겨찾기 프로젝트 id 배열(집합 의미, 중복 제거). 각 id <code>^[0-9a-f]{1,64}$</code>(스냅샷 id 형태)만 채택. 개수 ≤ <code>maxFavorites</code>(512). <b>스냅샷에 없는 id는 표시 시 무시</b>(소멸 프로젝트 graceful, 영속은 유지).</td></tr>
+    <tr><td><code>order</code></td><td><code>string[]</code></td><td>수동 카드 순서. id 배열. 검증 동일. <b>order에 없는 신규 프로젝트는 뒤에 append</b>, order에 있으나 스냅샷에 없는 id는 표시 시 skip(영속은 유지·다음 정리 시 제거).</td></tr>
+    <tr><td><code>sortMode</code></td><td><code>string</code></td><td><code>"auto"</code>(modified/name/size 정렬) 또는 <code>"manual"</code>(order 사용). 화이트리스트 외 → <code>"auto"</code>. R-19 정렬 모드 관계(§7).</td></tr>
+  </table>
+  <pre><span class="c">// ui-state/ui-state.json 예시</span>
+{
+  <span class="s">"schemaVersion"</span>: 1,
+  <span class="s">"favorites"</span>: [<span class="s">"c8a5bfbd4f959cca"</span>, <span class="s">"a1b2c3d4e5f60718"</span>],
+  <span class="s">"order"</span>:     [<span class="s">"a1b2c3d4e5f60718"</span>, <span class="s">"c8a5bfbd4f959cca"</span>, <span class="s">"ff00 aa11..."</span>],
+  <span class="s">"sortMode"</span>:  <span class="s">"manual"</span>
+}</pre>
+  <div class="warn-box"><b>paths.js 델타:</b> <code>uiStatePath()</code> = <code>&lt;appDir&gt;/ui-state/ui-state.json</code> 1개 함수만 추가. <code>appDir()</code>·<code>ensureDirFor()</code>는 무수정 재사용(0700 디렉터리·M-2). 데이터 폴더명은 <code>spip</code> 고정(ADR-EM-4 정합).</div>
+
+  <h3>3.3 ID 안정성 가정</h3>
+  <p>favorites·order는 프로젝트 <code>id</code>를 키로 쓴다. api-contract의 Project <code>id</code>는 경로 기반 해시(<code>c8a5bfbd4f959cca</code> 형태)로 <b>재스캔해도 경로가 같으면 안정</b>하다고 가정한다(현 도메인 동작). 폴더 이동/이름변경 시 id가 바뀌면 해당 즐겨찾기/순서는 끊긴다 — graceful skip으로 처리(에러 없음), 사용자 재지정. 이 가정은 §14에 명시.</p>
+
+  <h3>3.4 uiStateStore 읽기 가드 (M6-M-4 — DoS / 손상 방어)</h3>
+  <p><code>ui-state.json</code>은 로컬 파일이라 디스크 손상·외부 조작으로 <b>거대 JSON·깊은 중첩</b>이 들어오면 <code>JSON.parse</code> 단계에서 메모리/시간 DoS가 가능하다. id가 실행·경로에 미사용이라 오염 영향은 작지만, 읽기 단계 가드를 명시한다(기존 H-3 <code>_safeParse</code> 패턴 재사용).</p>
+  <pre><span class="c">// lib/common/uiStateStore.js read() 가드(설계 — 구현 아님)</span>
+<span class="k">const</span> MAX_UISTATE_BYTES = 1 * 1024 * 1024;   <span class="c">// 1MB 상한(M6-M-4)</span>
+<span class="k">const</span> DEFAULT_STATE = { schemaVersion: 1, favorites: [], order: [], sortMode: <span class="s">'auto'</span> };
+
+<span class="k">function</span> read(deps) {
+  <span class="k">try</span> {
+    <span class="k">const</span> st = fs.statSync(uiStatePath());
+    <span class="k">if</span> (st.size &gt; MAX_UISTATE_BYTES) <span class="k">return</span> clone(DEFAULT_STATE);   <span class="c">// 크기 상한 초과 → 빈 상태 폴백</span>
+    <span class="k">const</span> raw = fs.readFileSync(uiStatePath(), <span class="s">'utf8'</span>);
+    <span class="k">if</span> (raw.length &gt; MAX_UISTATE_BYTES) <span class="k">return</span> clone(DEFAULT_STATE);  <span class="c">// 길이 재확인(symlink·경합 대비)</span>
+    <span class="k">const</span> obj = _safeParse(raw);                                  <span class="c">// H-3 가드: 깊이 제한·예외 흡수, 실패 시 null</span>
+    <span class="k">if</span> (!isPlainObject(obj)) <span class="k">return</span> clone(DEFAULT_STATE);
+    <span class="k">return</span> normalizeState(obj);   <span class="c">// schemaVersion 불일치·배열 길이 상한(favorites≤512/order)·id 형식·중복 제거를 파싱 직후 재적용</span>
+  } <span class="k">catch</span> (_) { <span class="k">return</span> clone(DEFAULT_STATE); }   <span class="c">// 부재/손상/권한 → graceful 빈 상태</span>
+}</pre>
+  <div class="note"><b>요지:</b> ① 파싱 전 <b>바이트 크기 상한(1MB)</b> → 초과 시 즉시 기본값. ② <code>_safeParse</code>(JSON 깊이/예외 가드, 기존 H-3 패턴) 경유. ③ 파싱 직후 <code>normalizeState</code>가 배열 길이 상한·id 형식·중복 제거·sortMode 화이트리스트·schemaVersion 불일치 폴백을 재적용. 어떤 실패든 <b>빈 상태로 graceful</b>, 0600 유지.</div>
+
+  <h3>3.5 config 부분 갱신 writer (P2-1 — tools 영속)</h3>
+  <p>실측 <code>folders.persistScanRoots</code>(folders.js:170~207)는 <b><code>existing.scanRoots = roots</code>로 scanRoots 키만 쓰는 전용 함수</b>(line 185 하드코딩)라 <code>tools</code>를 영속할 수 없다. 이 함수의 <b>read-merge(기존 키 보존)→임시파일→fsync→rename→0600</b> 패턴을 <b>키-범용으로 일반화</b>한 부분 갱신 writer를 둔다.</p>
+  <pre><span class="c">// lib/common/config.js(또는 folders.js) — persistScanRoots를 키-범용으로 일반화(설계)</span>
+<span class="c">// 기존 persistScanRoots(roots, ctx)는 아래 위임으로 보존(시그니처 호환):</span>
+<span class="c">//   persistScanRoots(roots, ctx) => persistConfigKeys({ scanRoots: roots }, ctx)</span>
+<span class="k">function</span> persistConfigKeys(patch, ctx) {            <span class="c">// patch: 갱신할 키만(예 {tools}, {scanRoots})</span>
+  <span class="k">const</span> existing = readExistingConfigObject(cfgPath); <span class="c">// 부재/손상 → {} (persistScanRoots line 177~183과 동일)</span>
+  Object.assign(existing, patch);                  <span class="c">// 기존 키 보존 병합(타 키 유실 방지)</span>
+  atomicWrite0600(cfgPath, JSON.stringify(existing, <span class="k">null</span>, 2)); <span class="c">// 임시파일→fsync→rename→0600(line 188~206 재사용)</span>
+}</pre>
+  <div class="note"><b>적용:</b> <code>ipc/tools.js</code>의 setToolPath/pickToolExecutable는 정규화된 <code>tools</code> 전체 맵을 <code>persistConfigKeys({ tools })</code>로 1회 원자적 쓰기(기존 scanRoots·기타 키 보존). <code>ui-state.json</code>도 동일 패턴의 별도 <code>uiStateStore.write</code>(전체 상태 객체 원자적 쓰기). <b>두 writer 모두 부분 키만 갱신·나머지 read-merge·0600 원자적 쓰기를 보장</b>한다.</div>
+</section>
+
+<section id="ipc">
+  <h2>4. 신규 IPC 계약 (델타)</h2>
+  <p>기존 §4 계약을 보존한 채 신규 채널만 추가한다. <b>모든 신규 채널은 <code>register.js</code>의 <code>guard()</code>로 등록</b>되어 자동으로 ① senderFrame 발신자 검증(EM-M-2) ② try/catch→고정 <code>{ok:false,code:'INTERNAL'}</code> ③ 발신자 불일치 시 <code>FORBIDDEN</code>을 받는다. preload는 <code>window.spip</code>에 채널명 하드코딩 함수로만 노출(범용 invoke 비노출, MUST).</p>
+
+  <h3>4.1 신규 채널 목록 (api-contract / electron-migration 갱신 입력)</h3>
+  <table>
+    <tr><th style="width:175px;">채널 / preload API</th><th style="width:80px;">방향</th><th>요청 shape</th><th>main 재검증 (§11)</th><th>응답 shape</th></tr>
+    <tr><td><code>spip:copyText</code><br><span class="mono">spip.copyText(text)</span></td><td><span class="pill inv">invoke</span></td><td><code>{ text:string }</code></td><td><code>typeof text==='string'</code> &amp;&amp; <code>len≤8192</code>. <b>초과 시 명시 거부(절단 안 함, L-1 단일화)</b>. <b>경로 검증 없음</b>(클립보드는 텍스트일 뿐). <code>clipboard.writeText(text)</code></td><td><code>{ ok:true }</code> 또는 <code>{ ok:false, code:'INVALID_TEXT' }</code></td></tr>
+    <tr><td><code>spip:getTools</code><br><span class="mono">spip.getTools()</span></td><td><span class="pill inv">invoke</span></td><td>—</td><td>인자 무시. config.tools를 읽어 <b>해석 상태</b>(resolved/source)까지 산출. <b>설정 드로어 오픈 시에만 호출</b>(빈도 낮음); resolved는 <code>resolveTool</code> 1회 평가(P3-3). <b>응답에 args 없음</b></td><td><code>{ ok:true, tools:[{ id, label, path, resolved:boolean, source:'config'|'path'|'none' }] }</code></td></tr>
+    <tr><td><code>spip:setToolPath</code><br><span class="mono">spip.setToolPath(id, path)</span></td><td><span class="pill inv">invoke</span></td><td><code>{ id:string, path:string|null }</code></td><td><code>id</code> ∈ <code>^[a-z0-9_-]{1,32}$</code> <b>且 toolId 화이트리스트(레지스트리 known id) 멤버</b>(M6-M-1). <code>path</code> null이면 지정 해제(PATH 폴백). 비null이면 <b>절대경로·존재·실행파일·.exe(win)·realpath</b> 검증을 <code>resolveBin(path,{force:true})</code>로 <b>캐시 우회</b>(M6-H-1). <b>args 인자 없음(M6-H-2)</b>. 성공 시 캐시 무효화(<code>_clearBinCache</code> 또는 force) 후 <code>persistConfigKeys({tools})</code> 0600 영속(P2-1)</td><td><code>{ ok:true, tool:{ id,label,path,resolved,source } }</code> 또는 <code>{ ok:false, code:'INVALID_TOOL_ID'|'NOT_ABSOLUTE'|'NOT_FOUND'|'NOT_EXECUTABLE' }</code></td></tr>
+    <tr><td><code>spip:pickToolExecutable</code><br><span class="mono">spip.pickToolExecutable(id)</span></td><td><span class="pill inv">invoke</span></td><td><code>{ id:string }</code></td><td><code>id</code> 검증(화이트리스트 멤버). main이 <code>dialog.showOpenDialog({properties:['openFile'], filters:[exe]})</code> → <b>dialog의 .exe 필터는 표시용일 뿐 신뢰 근거 아님</b>(M6-M-2). 반환 절대경로도 setToolPath와 <b>동일하게 main 재검증</b>(절대·존재·.exe·realpath·<code>force</code>) 후 영속. <code>.lnk</code>/<code>.bat</code>은 .exe 아니므로 자동 거부</td><td><code>{ ok:true, tool:{...} }</code> 또는 <code>{ ok:false, code:'CANCELLED'|'NOT_EXECUTABLE' }</code></td></tr>
+    <tr><td><code>spip:openInVsCode</code> <span class="pill wrap">확장</span><br><span class="mono">spip.open(id, toolId?)</span></td><td><span class="pill inv">invoke</span></td><td><code>{ id:string, toolId?:string }</code></td><td><b>기존 채널 일반화</b>: <code>toolId</code> 미지정 시 <code>'code'</code>(하위호환). <code>toolId</code>는 <b>레지스트리 등록 known id 화이트리스트만 허용·임의 toolId 거부</b>(M6-M-1/SQ-3). 해석은 사용자 경로 우선→<b>화이트리스트 멤버에 한정한 PATH 폴백</b>. spawn 직전 <b>캐시 우회 강제 재검증</b>(M6-H-1). 실행 인자 <code>[real]</code> 고정(사용자 args 없음). 기존 H-1/H-2/M-4 전부 유지</td><td>기존과 동일 + <code>code:'TOOL_NOT_FOUND'</code>(미등록/미해석 toolId)</td></tr>
+    <tr><td><code>spip:getUiState</code><br><span class="mono">spip.getUiState()</span></td><td><span class="pill inv">invoke</span></td><td>—</td><td>인자 무시. ui-state.json 로드(graceful)</td><td><code>{ ok:true, favorites:string[], order:string[], sortMode:string }</code></td></tr>
+    <tr><td><code>spip:setFavorite</code><br><span class="mono">spip.setFavorite(id, on)</span></td><td><span class="pill inv">invoke</span></td><td><code>{ id:string, on:boolean }</code></td><td><code>id</code> ∈ id형식. <code>on</code> Boolean 강제. 집합 add/remove 후 0600 영속. 개수 상한</td><td><code>{ ok:true, favorites:string[] }</code> 또는 <code>{ ok:false, code:'INVALID_ID' }</code></td></tr>
+    <tr><td><code>spip:setOrder</code><br><span class="mono">spip.setOrder(ids)</span></td><td><span class="pill inv">invoke</span></td><td><code>{ ids:string[] }</code></td><td><code>ids</code> 배열·각 id 형식·개수 ≤상한·중복 제거. <code>sortMode='manual'</code>로 전환·영속</td><td><code>{ ok:true, order:string[], sortMode:'manual' }</code> 또는 <code>{ ok:false, code:'INVALID_ORDER' }</code></td></tr>
+    <tr><td><code>spip:setSortMode</code><br><span class="mono">spip.setSortMode(mode)</span></td><td><span class="pill inv">invoke</span></td><td><code>{ mode:string }</code></td><td><code>mode</code> ∈ <code>{auto,manual}</code> 화이트리스트. 영속</td><td><code>{ ok:true, sortMode:string }</code></td></tr>
+    <tr><td><code>spip:tray:*</code> (내부)</td><td><span class="pill evt">on/send</span></td><td>(트레이→renderer)</td><td>main이 트레이 메뉴 클릭 시 <code>spip:tray:&lt;action&gt;</code> push(action ∈ <code>dashboard|favorites</code>). renderer 구독</td><td>payload <code>{ action }</code> (기존 onMenu와 동일 패턴)</td></tr>
+  </table>
+  <div class="note"><b>preload allowlist 델타(의사코드, 구현 아님):</b> 신규 함수들을 기존 <code>window.spip</code> 객체에 추가하되 채널명 하드코딩 유지.</div>
+  <pre><span class="c">// preload.js 추가분(설계 — 채널명 하드코딩, ipcRenderer 원본 비노출)</span>
+copyText: (t) => ipcRenderer.invoke(<span class="s">'spip:copyText'</span>, { text: String(t) }),
+getTools: () => ipcRenderer.invoke(<span class="s">'spip:getTools'</span>),
+setToolPath: (id, p) => ipcRenderer.invoke(<span class="s">'spip:setToolPath'</span>, { id: String(id), path: p == null ? null : String(p) }),  <span class="c">// args 없음(M6-H-2)</span>
+pickToolExecutable: (id) => ipcRenderer.invoke(<span class="s">'spip:pickToolExecutable'</span>, { id: String(id) }),
+open: (id, toolId) => ipcRenderer.invoke(<span class="s">'spip:openInVsCode'</span>, { id: String(id), toolId: toolId ? String(toolId) : <span class="k">undefined</span> }),
+getUiState: () => ipcRenderer.invoke(<span class="s">'spip:getUiState'</span>),
+setFavorite: (id, on) => ipcRenderer.invoke(<span class="s">'spip:setFavorite'</span>, { id: String(id), on: !!on }),
+setOrder: (ids) => ipcRenderer.invoke(<span class="s">'spip:setOrder'</span>, { ids: Array.isArray(ids) ? ids.map(String) : [] }),
+setSortMode: (m) => ipcRenderer.invoke(<span class="s">'spip:setSortMode'</span>, { mode: String(m) }),
+onTray: (cb) => { <span class="c">/* 'spip:tray:dashboard'·'spip:tray:favorites' 구독, onMenu와 동일 패턴, unsubscribe 반환 */</span> },</pre>
+
+  <h3>4.2 register.js 등록 델타</h3>
+  <pre><span class="c">// register.js registerIpcHandlers 내부 추가(설계) — 모두 guard() 경유(공통 게이트 자동 적용)</span>
+guard(<span class="s">'spip:copyText'</span>, (args) => clipboardIpc.copyText(args, { clipboard }));   <span class="c">// main clipboard 주입</span>
+guard(<span class="s">'spip:getTools'</span>, () => toolsIpc.getTools(ctx));
+guard(<span class="s">'spip:setToolPath'</span>, (args) => toolsIpc.setToolPath(args, ctx));
+guard(<span class="s">'spip:pickToolExecutable'</span>, (args) => toolsIpc.pickToolExecutable(args, Object.assign({}, ctx, { dialog, win: getWin() })));
+guard(<span class="s">'spip:getUiState'</span>, () => uiStateIpc.getUiState(ctx));
+guard(<span class="s">'spip:setFavorite'</span>, (args) => uiStateIpc.setFavorite(args, ctx));
+guard(<span class="s">'spip:setOrder'</span>, (args) => uiStateIpc.setOrder(args, ctx));
+guard(<span class="s">'spip:setSortMode'</span>, (args) => uiStateIpc.setSortMode(args, ctx));
+<span class="c">// openInVsCode는 기존 등록을 toolId 일반화로 교체(시그니처 호환).</span></pre>
+</section>
+
+<section id="f17">
+  <h2>5. R-17 — 프로젝트 경로 복사</h2>
+  <p>카드/드로어에서 프로젝트 절대경로를 클립보드로 복사한다. <b>클립보드 접근은 main의 Electron <code>clipboard.writeText</code></b>로 한다(renderer <code>navigator.clipboard</code> 아님).</p>
+  <table>
+    <tr><th style="width:160px;">항목</th><th>설계</th></tr>
+    <tr><td>클립보드 위치</td><td><b>main</b> <code>clipboard.writeText</code>. <code>spip:copyText(text)</code> 채널 신규. ADR-M6-1 참조.</td></tr>
+    <tr><td>preload 노출</td><td><code>copyText(text)</code> 1개만 최소 노출. 채널명 하드코딩.</td></tr>
+    <tr><td>모듈</td><td><code>electron/ipc/clipboard.js</code>(신규, <code>copyText(args,{clipboard})</code> 순수 함수 — clipboard 주입으로 헤드리스 테스트).</td></tr>
+    <tr><td>renderer</td><td>카드 footer/드로어에 "경로 복사" 버튼 추가 → <code>spip.copyText(vm.path)</code> → 토스트 "경로를 복사했습니다". 실패 시 graceful 토스트.</td></tr>
+    <tr><td>데이터</td><td>영속 없음(순간 동작).</td></tr>
+    <tr><td>보안</td><td>입력 text는 main에서 string·길이 검증 후 <b>그대로 클립보드에만</b> 기록(실행·경로 해석 없음 → 위험 표면 극소). renderer가 임의 문자열을 넘겨도 클립보드 텍스트일 뿐. 경로 자체는 이미 renderer가 보유한 값(getProjects 응답)이라 신규 노출 없음.</td></tr>
+  </table>
+  <p><b>navigator.clipboard를 쓰지 않는 이유:</b> CSP <code>default-src 'none'</code> 환경에서 권한 프롬프트·포커스 의존·sandbox 상호작용이 불안정하고, "renderer에서 OS 자원 직접 접근 0" 원칙에 어긋난다. main 단일 채널이 더 단순·일관·안전하다(ADR-M6-1).</p>
+</section>
+
+<section id="f18">
+  <h2>6. R-18 — 확장형 외부 툴 경로 설정 (M6 핵심)</h2>
+  <p><code>code</code>가 PATH에 없으면 'VS Code로 열기'가 실패하는 문제를, ⓐ PATH 추가 안내 UI + ⓑ 설정에서 실행 파일 경로 직접 지정으로 해결한다. <b>단일 code 경로가 아닌 툴 레지스트리</b>로 설계해 향후 다른 에디터/툴을 데이터로 추가한다.</p>
+
+  <h3>6.1 툴 레지스트리 구조</h3>
+  <pre><span class="c">// lib/common/toolRegistry.js (신규 도메인 — 외부 의존성 0, Electron 미import)</span>
+<span class="c">// config.tools(맵)를 정규화하고, toolId의 실행 경로를 "사용자 지정 우선 → PATH 폴백"으로 해석.</span>
+
+<span class="c">// 알려진 toolId 집합(M6-M-1/SQ-3). MVP는 'code'. 새 툴 추가 시 여기에 등록해야 실행 대상이 됨.</span>
+<span class="k">const</span> KNOWN_TOOL_IDS = <span class="k">new</span> Set([<span class="s">'code'</span>]);   <span class="c">// 향후: 'cursor','idea' 등 명시 추가</span>
+
+<span class="c">// 1) 정규화(loadConfig가 호출): 형식 검증·폴백. args 필드는 읽지 않고 무시(M6-H-2)</span>
+<span class="k">function</span> normalizeTools(input, logger) {
+  <span class="k">const</span> out = {};
+  <span class="k">if</span> (!isPlainObject(input)) <span class="k">return</span> out;
+  <span class="k">for</span> (<span class="k">const</span> [id, v] <span class="k">of</span> Object.entries(input).slice(0, LIMITS.maxTools)) {
+    <span class="k">if</span> (!/^[a-z0-9_-]{1,32}$/.test(id)) <span class="k">continue</span>;       <span class="c">// 형식 화이트리스트</span>
+    <span class="k">if</span> (!KNOWN_TOOL_IDS.has(id)) <span class="k">continue</span>;               <span class="c">// 등록 known id만 채택(M6-M-1) — 임의 id 거부</span>
+    <span class="k">if</span> (!isPlainObject(v)) <span class="k">continue</span>;
+    out[id] = {
+      path: (<span class="k">typeof</span> v.path === <span class="s">'string'</span> &amp;&amp; v.path.length &lt;= 4096) ? v.path : <span class="k">null</span>,
+      label: sanitizeLabel(v.label, id),                 <span class="c">// 제어/방향제어문자 제거·인쇄가능만·≤64(L-2). v.args는 읽지 않음(M6-H-2)</span>
+    };
+  }
+  <span class="k">return</span> out;
+}
+
+<span class="c">// 2) 실행 경로 해석(actions.open이 호출): 사용자 지정 우선 → PATH. force 재검증으로 캐시 우회(M6-H-1)</span>
+<span class="k">function</span> resolveTool(toolId, config, deps) {                <span class="c">// deps.resolveBin 주입 가능</span>
+  <span class="k">if</span> (!KNOWN_TOOL_IDS.has(toolId)) <span class="k">return</span> { bin: <span class="k">null</span>, source: <span class="s">'none'</span> };  <span class="c">// 화이트리스트 외 toolId 즉시 거부(M6-M-1)</span>
+  <span class="k">const</span> rb = deps.resolveBin;
+  <span class="k">const</span> tool = (config.tools &amp;&amp; config.tools[toolId]) || <span class="k">null</span>;
+  <span class="c">// 사용자 지정 절대경로는 캐시를 믿지 않고 매 실행 force 재검증(절대·존재·.exe·실행파일·realpath)</span>
+  <span class="k">if</span> (tool &amp;&amp; tool.path) {
+    <span class="k">const</span> abs = rb(tool.path, { force: <span class="k">true</span> });           <span class="c">// ★M6-H-1: 캐시 우회 강제 재검증(safeExec.js:77 force 분기)</span>
+    <span class="k">if</span> (abs) <span class="k">return</span> { bin: abs, source: <span class="s">'config'</span> };
+  }
+  <span class="c">// 폴백: 화이트리스트 멤버인 toolId만 PATH에서 탐색(임의 PATH 바이너리 호출 차단)</span>
+  <span class="k">const</span> viaPath = rb(toolId, { force: <span class="k">true</span> });
+  <span class="k">if</span> (viaPath) <span class="k">return</span> { bin: viaPath, source: <span class="s">'path'</span> };
+  <span class="k">return</span> { bin: <span class="k">null</span>, source: <span class="s">'none'</span> };
+}</pre>
+  <div class="note"><b>resolveBin 확장 최소화 + 캐시 우회(M6-H-1):</b> 실측 <code>safeExec.resolveBin</code>(safeExec.js:82~91)은 <b>이미 "name이 절대경로면 .exe·실행파일 검증만 수행"</b>하며 <code>opts.force=true</code> 시 <b><code>_binCache</code>를 우회하고 fs를 재확인</b>한다(line 77). 따라서 R-18은 <code>resolveBin</code> <b>자체를 바꾸지 않고</b>, <code>resolveTool</code>이 매 실행 <code>{force:true}</code>로 호출하여 <b>등록 후 파일이 악성으로 교체돼도 spawn 직전 최신 fs 상태로 재검증</b>한다(TOCTOU·캐시 신뢰 제거). 기존 H-2 정책(.exe만·.bat/.cmd 거부·shell:false)이 사용자 지정 경로에도 그대로 적용된다 — <b>보안 핵심.</b></div>
+  <div class="warn-box"><b>캐시 무효화 정책(P3-2):</b> <code>setToolPath</code> 성공 시에도 해당 path/toolId에 대해 <code>resolveBin(.,{force:true})</code> 재해석(또는 <code>_clearBinCache</code>)을 수행해 이전 캐시값을 폐기한다. getTools의 <code>resolved</code> 산출도 동일 force 경로를 사용해 항상 최신 상태를 반영한다.</div>
+
+  <h3>6.2 open 흐름 일반화</h3>
+  <pre><span class="c">// electron/ipc/actions.js openInVsCode 델타(설계) — resolveBin 직접 호출을 resolveTool로 교체</span>
+<span class="k">async function</span> openInVsCode(args, ctx) {
+  <span class="k">const</span> id = sanitizeOpenId(args);
+  <span class="k">if</span> (id === <span class="k">null</span>) <span class="k">return</span> { ok:<span class="k">false</span>, code:<span class="s">'ID_NOT_FOUND'</span> };
+  <span class="k">const</span> toolId = sanitizeToolId(args &amp;&amp; args.toolId) || <span class="s">'code'</span>;   <span class="c">// 미지정 하위호환='code'</span>
+  <span class="k">if</span> (!toolRegistry.isKnownToolId(toolId)) <span class="k">return</span> { ok:<span class="k">false</span>, code:<span class="s">'TOOL_NOT_FOUND'</span> }; <span class="c">// ★M6-M-1: 화이트리스트 외 거부</span>
+  <span class="k">const</span> project = ctx.store.getById(id);
+  <span class="k">if</span> (!project) <span class="k">return</span> { ok:<span class="k">false</span>, code:<span class="s">'ID_NOT_FOUND'</span> };
+  <span class="c">// H-1: pathGuard canonicalize/isAllowed (불변)</span>
+  <span class="k">const</span> real = pg.canonicalize(project.path);
+  <span class="k">if</span> (real === <span class="k">null</span>) <span class="k">return</span> { ok:<span class="k">false</span>, code:<span class="s">'PATH_GONE'</span> };
+  <span class="k">if</span> (!pg.isAllowed(project.path, ctx.store.getAllowKeySet())) <span class="k">return</span> { ok:<span class="k">false</span>, code:<span class="s">'PATH_NOT_ALLOWED'</span> };
+  <span class="c">// H-2 + ★M6-H-1: resolveTool이 {force:true}로 spawn 직전 캐시 우회 강제 재검증(절대·존재·.exe·realpath)</span>
+  <span class="k">const</span> r = toolRegistry.resolveTool(toolId, ctx.config, { resolveBin: rb });
+  <span class="k">if</span> (!r.bin) <span class="k">return</span> { ok:<span class="k">false</span>, code: toolId === <span class="s">'code'</span> ? <span class="s">'CODE_CLI_NOT_FOUND'</span> : <span class="s">'TOOL_NOT_FOUND'</span> };
+  <span class="c">// H-2/M-4: shell:false·인자 배열·detached(불변). ★실행 인자는 [real] 고정 — 사용자 args 없음(M6-H-2)</span>
+  <span class="k">await</span> exec(r.bin, [real], { shell:<span class="k">false</span>, detached:<span class="k">true</span>, inflightKey:<span class="s">'open:'</span>+toolId+<span class="s">':'</span>+id, maxInflight: MAX_INFLIGHT_PER_ID });
+  <span class="k">return</span> { ok:<span class="k">true</span>, code:<span class="s">'OPENING'</span> };
+}</pre>
+  <div class="note"><b>inflightKey 형식 변경(P3-1):</b> 실측은 <code>'open:'+id</code>(actions.js:92)이나 본 일반화는 툴별 분리를 위해 <code>'open:'+toolId+':'+id</code>로 변경한다. 동작 영향은 없으나(내부 키) <b>api-contract/electron-migration 갱신 시 이 형식 변경을 명시</b>해 구현자 혼동을 막는다. <b>실행 인자는 항상 <code>[real]</code> 단일 고정</b>(검증된 프로젝트 경로) — 사용자 입력 인자가 spawn에 도달하는 경로는 존재하지 않는다(M6-H-2 원천 제거).</div>
+
+  <h3>6.3 설정 UI · PATH 안내 (ⓐ + ⓑ)</h3>
+  <table>
+    <tr><th style="width:170px;">항목</th><th>설계</th></tr>
+    <tr><td>설정 패널(기존 showSettings 드로어 재사용)</td><td>"외부 툴" 섹션 추가. <code>spip.getTools()</code>로 툴 목록·해석 상태(resolved/source) 표시. 각 툴: 경로 직접 입력 필드 + "파일 선택" 버튼(<code>pickToolExecutable</code>) + "지정 해제"(path=null).</td></tr>
+    <tr><td>ⓐ PATH 안내</td><td>툴이 <code>resolved:false</code>이고 source='none'이면 <b>안내 박스</b> 표시: "code가 PATH에 없습니다. VS Code에서 <code>Cmd/Ctrl+Shift+P → Shell Command: Install 'code' command in PATH</code> 실행 또는 아래에서 실행 파일을 직접 지정하세요." (정적 안내 텍스트, 외부 링크 없음 — shell.openExternal 금지 정합).</td></tr>
+    <tr><td>ⓑ 직접 지정</td><td>"파일 선택"→네이티브 <code>dialog</code>(openFile, exe 필터) 또는 텍스트 입력→<code>setToolPath</code>. <b>dialog 반환 경로도 신뢰하지 않고 main에서 동일 재검증</b>(절대·존재·.exe·realpath·force, M6-M-2). main 검증 실패 시 <code>code</code>를 한국어로 매핑("실행 파일이 아닙니다" 등). <b>실행 인자(args) 입력 필드는 제공하지 않음</b>(M6-H-2). 사용자 경로는 <b>위치 제한 없이</b> 검증 통과분만 저장(SQ-2).</td></tr>
+    <tr><td>카드 "열기" 버튼</td><td>해석된 툴이 1개면 그대로. 다수면 드롭다운(향후) — MVP는 <code>code</code> 기본 + 설정에서 다른 툴 등록 시 메뉴 확장. 표시는 textContent(L-1).</td></tr>
+  </table>
+  <div class="danger-box"><b>보안 핵심(R-18 — rev.2 강화):</b> 사용자 지정 실행 경로도 <b>renderer를 신뢰하지 않는다</b>. main에서 ① toolId가 <b>레지스트리 등록 known id 화이트리스트</b> 멤버일 때만 처리(M6-M-1) ② <code>resolveBin(path,{force:true})</code>로 <b>캐시 우회 강제 재검증</b>(절대경로·존재·일반파일·(win) <code>.exe</code>·realpath) — 등록 후 파일이 교체돼도 spawn 직전 최신 fs 상태로 재검증(M6-H-1) ③ <code>safeExec</code>가 <code>shell:false</code>·인자 배열·<code>.exe</code> 재검증(safeExec.js:146~152)·in-flight 상한 강제 ④ <b>실행 인자는 <code>[real]</code> 고정 — 사용자 args 없음</b>(M6-H-2 원천 제거). <code>.bat/.cmd/.lnk</code>는 .exe 아니므로 거부 — 검증 실패 시 UI 안내. 프로젝트 경로(real)는 항상 pathGuard 화이트리스트 통과분만 인자로 전달(H-1 불변).</div>
+</section>
+
+<section id="f19">
+  <h2>7. R-19 — 카드 드래그 reorder</h2>
+  <p>대시보드 카드를 드래그로 재배열하고 순서를 영속한다. 순서는 <code>ui-state.json</code>의 <code>order</code>(id 배열)에 저장한다.</p>
+  <table>
+    <tr><th style="width:170px;">항목</th><th>설계</th></tr>
+    <tr><td>정렬 모드 관계 (핵심)</td><td><b>2모드 토글</b>: <code>sortMode='auto'</code>(기존 modified/name/size 정렬, 드래그 불가) ↔ <code>'manual'</code>(수동 order, 드래그 가능). 사용자가 카드를 드래그하면 <b>자동으로 manual로 전환</b>(<code>setOrder</code>가 sortMode='manual' 동반). 정렬 셀렉터를 다시 고르면 'auto' 복귀. 둘을 동시 적용하지 않아 모호성 제거(ADR 없이 단순 규칙).</td></tr>
+    <tr><td>드래그 구현</td><td>renderer 네이티브 HTML5 DnD(<code>draggable</code>·dragover·drop) — 외부 라이브러리 0(런타임 dep 0 원칙). 드롭 시 메모리 order 즉시 재배열(낙관적 렌더) → <code>spip.setOrder(ids)</code> 비동기 영속.</td></tr>
+    <tr><td>접근성 대체</td><td>각 카드에 "위로/아래로" 이동 버튼(키보드 도달, N-07). 같은 setOrder 경로.</td></tr>
+    <tr><td>신규 프로젝트 처리</td><td>재스캔으로 새 id 등장 시 order에 없으면 <b>뒤에 append</b>. order에 있으나 스냅샷에 없는 id는 표시 skip(영속 유지).</td></tr>
+    <tr><td>데이터</td><td><code>ui-state.json.order</code> + <code>sortMode</code>. <code>spip:setOrder</code>·<code>spip:setSortMode</code>.</td></tr>
+    <tr><td>표시 밀도</td><td>드래그는 cards 밀도에서만(table 밀도는 정렬 컬럼 사용). manual 모드 + table이면 order 순으로 행 정렬.</td></tr>
+  </table>
+</section>
+
+<section id="f20">
+  <h2>8. R-20 — 즐겨찾기</h2>
+  <table>
+    <tr><th style="width:170px;">항목</th><th>설계</th></tr>
+    <tr><td>토글</td><td>카드/드로어에 별(★) 토글 버튼(<code>&lt;button aria-pressed&gt;</code>). 클릭 → 메모리 즉시 반영 → <code>spip.setFavorite(id, on)</code> 영속.</td></tr>
+    <tr><td>데이터</td><td><code>ui-state.json.favorites</code>(id 집합). <code>spip:setFavorite</code>·<code>spip:getUiState</code>.</td></tr>
+    <tr><td>필터/표시 관계</td><td>기존 필터 바에 "즐겨찾기만" 토글 필터 1개 추가(기존 <code>filters</code> 구조에 <code>favoritesOnly:boolean</code> 합류). 카드에 즐겨찾기면 별 강조. 정렬과 독립(필터일 뿐).</td></tr>
+    <tr><td>R-21 연계</td><td>favorites는 트레이 "즐겨찾기" 슬라이더(§9)의 데이터 소스. main도 동일 <code>uiStateStore.read()</code>로 favorites를 읽어 슬라이더 창에 전달.</td></tr>
+    <tr><td>graceful</td><td>스냅샷에 없는 즐겨찾기 id는 목록/슬라이더에서 무시(영속 유지). 손상 파일은 빈 favorites 폴백.</td></tr>
+  </table>
+</section>
+
+<section id="f21">
+  <h2>9. R-21 — 트레이 · 생명주기 변경 · 즐겨찾기 슬라이더</h2>
+
+  <h3>9.1 트레이 + 생명주기(close-to-tray)</h3>
+  <p>Electron <code>Tray</code> + 컨텍스트 메뉴(대시보드 열기 / 즐겨찾기 / 종료)를 추가하고, <b>대시보드 창을 닫아도 앱은 트레이에 상주</b>한다. 트레이 '종료'만 완전 종료다.</p>
+
+  <figure>
+    <svg viewBox="0 0 1100 470" width="100%" role="img" aria-label="close-to-tray 생명주기 상태 전이">
+      <defs>
+        <marker id="a1" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 Z" fill="#34d399"/></marker>
+        <marker id="a2" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 Z" fill="#f87171"/></marker>
+        <marker id="a3" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 Z" fill="#fbbf24"/></marker>
+      </defs>
+      <!-- 상태 노드 -->
+      <rect x="40" y="60" width="200" height="70" rx="10" fill="#0b1220" stroke="#34d399" stroke-width="1.6"/>
+      <text x="140" y="90" fill="#34d399" font-size="13" text-anchor="middle" font-weight="bold" font-family="Segoe UI">실행 / 창 표시</text>
+      <text x="140" y="110" fill="#94a3b8" font-size="9.5" text-anchor="middle" font-family="Segoe UI">win 표시 + 트레이 상주</text>
+
+      <rect x="450" y="60" width="200" height="70" rx="10" fill="#0b1220" stroke="#fbbf24" stroke-width="1.6"/>
+      <text x="550" y="90" fill="#fbbf24" font-size="13" text-anchor="middle" font-weight="bold" font-family="Segoe UI">트레이 상주(창 숨김)</text>
+      <text x="550" y="110" fill="#94a3b8" font-size="9.5" text-anchor="middle" font-family="Segoe UI">win.hide() · 프로세스 생존</text>
+
+      <rect x="860" y="60" width="200" height="70" rx="10" fill="#170d0d" stroke="#f87171" stroke-width="1.6"/>
+      <text x="960" y="90" fill="#fca5a5" font-size="13" text-anchor="middle" font-weight="bold" font-family="Segoe UI">완전 종료</text>
+      <text x="960" y="110" fill="#94a3b8" font-size="9.5" text-anchor="middle" font-family="Segoe UI">tray.destroy() · app.quit()</text>
+
+      <rect x="450" y="300" width="200" height="70" rx="10" fill="#0b1220" stroke="#38bdf8" stroke-width="1.6"/>
+      <text x="550" y="330" fill="#38bdf8" font-size="13" text-anchor="middle" font-weight="bold" font-family="Segoe UI">즐겨찾기 슬라이더</text>
+      <text x="550" y="350" fill="#94a3b8" font-size="9.5" text-anchor="middle" font-family="Segoe UI">우측하단 오버레이 표시</text>
+
+      <!-- 전이 -->
+      <path d="M240 88 L448 88" fill="none" stroke="#fbbf24" stroke-width="2" marker-end="url(#a3)"/>
+      <text x="344" y="78" fill="#fbbf24" font-size="10" text-anchor="middle" font-family="Segoe UI">창 X(close) → e.preventDefault + hide</text>
+
+      <path d="M450 118 Q344 160 242 124" fill="none" stroke="#34d399" stroke-width="2" marker-end="url(#a1)"/>
+      <text x="344" y="160" fill="#34d399" font-size="10" text-anchor="middle" font-family="Segoe UI">트레이 '대시보드 열기' / 트레이 더블클릭 → show()</text>
+
+      <path d="M650 95 L858 95" fill="none" stroke="#f87171" stroke-width="2" marker-end="url(#a2)"/>
+      <text x="754" y="85" fill="#f87171" font-size="10" text-anchor="middle" font-family="Segoe UI">트레이 '종료' → isQuitting=true</text>
+
+      <path d="M240 110 Q540 230 858 110" fill="none" stroke="#f87171" stroke-width="1.6" marker-end="url(#a2)" stroke-dasharray="5 4"/>
+      <text x="540" y="210" fill="#f87171" font-size="10" text-anchor="middle" font-family="Segoe UI">스캔 진행 중 종료 시 Q4 확인 다이얼로그(불변)</text>
+
+      <path d="M550 130 L550 298" fill="none" stroke="#38bdf8" stroke-width="2" marker-end="url(#a1)"/>
+      <text x="660" y="220" fill="#38bdf8" font-size="10" text-anchor="middle" font-family="Segoe UI">트레이 '즐겨찾기'</text>
+      <text x="660" y="236" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">→ 메인창 내 오버레이 표시</text>
+
+      <!-- 범례 박스 -->
+      <rect x="40" y="300" width="360" height="120" rx="8" fill="#101a30" stroke="#475569"/>
+      <text x="60" y="324" fill="#e2e8f0" font-size="11" font-family="Segoe UI" font-weight="bold">핵심 변경</text>
+      <text x="60" y="346" fill="#94a3b8" font-size="9.5" font-family="Segoe UI">· window-all-closed→quit 제거(트레이 상주)</text>
+      <text x="60" y="362" fill="#94a3b8" font-size="9.5" font-family="Segoe UI">· win.on('close'): isQuitting 아니면 hide</text>
+      <text x="60" y="378" fill="#94a3b8" font-size="9.5" font-family="Segoe UI">· 단일 인스턴스 락: second-instance → show()</text>
+      <text x="60" y="394" fill="#94a3b8" font-size="9.5" font-family="Segoe UI">· Q4(스캔 중 종료 확인)은 isQuitting 경로에서만</text>
+      <text x="60" y="410" fill="#94a3b8" font-size="9.5" font-family="Segoe UI">· dispose는 Q4 확정 후 doFinalQuit 1지점만(P2-2)</text>
+    </svg>
+    <div class="legend">
+      <span><span class="dot" style="background:#fbbf24"></span> 숨김(close-to-tray)</span>
+      <span><span class="dot" style="background:#34d399"></span> 복원(show)</span>
+      <span><span class="dot" style="background:#f87171"></span> 완전 종료</span>
+      <span><span class="dot" style="background:#38bdf8"></span> 즐겨찾기 슬라이더</span>
+    </div>
+    <figcaption>그림 1. close-to-tray 생명주기. 창 X는 종료가 아니라 hide. 완전 종료는 트레이 '종료'(isQuitting 플래그)만. 스캔 진행 중 완전 종료 시 Q4 다이얼로그 유지.</figcaption>
+  </figure>
+
+  <h3>9.2 생명주기 변경 상세</h3>
+  <pre><span class="c">// main.js 생명주기 델타(설계) — 기존 close 핸들러·window-all-closed를 close-to-tray로</span>
+<span class="k">let</span> isQuitting = <span class="k">false</span>;   <span class="c">// 트레이 '종료'·앱 quit 시에만 true</span>
+
+<span class="c">// 트레이 생성(onReady 내, 창 생성 후)</span>
+<span class="c">// ★P2-2: onQuit가 app.quit()을 직접 부르면 before-quit이 먼저 발화→disposeResources()가 즉시 실행되어</span>
+<span class="c">//   이후 Q4 '취소' 시 scanController가 이미 dispose된 불일치 발생. → onQuit는 win.close() 트리거로 통일하고</span>
+<span class="c">//   실제 종료(destroy+quit)는 'close' 핸들러가 Q4 통과 후에만 수행하는 단일 경로로 만든다.</span>
+tray = createTray({
+  onShowDashboard: () => { <span class="k">if</span> (win) { win.show(); win.focus(); } },
+  onShowFavorites: () => { <span class="k">if</span> (win) { win.show(); win.webContents.send(<span class="s">'spip:tray:favorites'</span>); } },
+  onQuit: () => { isQuitting = <span class="k">true</span>; <span class="k">if</span> (win) win.close(); <span class="k">else</span> doFinalQuit(); },  <span class="c">// app.quit() 직접 호출 안 함</span>
+});
+
+<span class="c">// 실제 종료 1지점: 자원 dispose는 여기서만(=Q4 통과/창 없음 확정 후).</span>
+<span class="k">function</span> doFinalQuit() { disposeResources(); tray &amp;&amp; tray.destroy(); app.exit(0); }
+
+win.on(<span class="s">'close'</span>, (e) => {
+  <span class="k">if</span> (!isQuitting) {                <span class="c">// ★ 평소 X 클릭: 종료 아닌 트레이로 숨김</span>
+    e.preventDefault();
+    win.hide();
+    <span class="k">return</span>;
+  }
+  <span class="c">// 완전 종료 경로에서만 Q4(스캔 진행 중 확인) 적용 — 기존 로직 보존. ★dispose는 아직 안 함(P2-2)</span>
+  <span class="k">const</span> phase = ctx.scanController.status().phase;
+  <span class="k">if</span> (phase === <span class="s">'scanning'</span> || phase === <span class="s">'finalizing'</span>) {
+    e.preventDefault();
+    <span class="k">const</span> choice = dialog.showMessageBoxSync(win, { type:<span class="s">'question'</span>, buttons:[<span class="s">'종료'</span>,<span class="s">'취소'</span>], defaultId:1, cancelId:1, message:<span class="s">'스캔이 진행 중입니다. 종료하시겠습니까?'</span> });
+    <span class="k">if</span> (choice === 0) { doFinalQuit(); win.destroy(); }   <span class="c">// 확정 시에만 dispose</span>
+    <span class="k">else</span> { isQuitting = <span class="k">false</span>; }    <span class="c">// ★취소: 종료 의도 해제·자원 미dispose로 정상 상태 복귀(스캔 지속)</span>
+  } <span class="k">else</span> { doFinalQuit(); }
+});
+
+<span class="c">// ★ window-all-closed에서 quit 제거 — 트레이 상주(비 macOS도). 완전 종료는 onQuit→close→doFinalQuit가 담당.</span>
+app.on(<span class="s">'window-all-closed'</span>, () => { <span class="c">/* no-op: 트레이 상주. 창 닫혀도 quit 안 함 */</span> });
+<span class="c">// ★before-quit: dispose를 여기서 하지 않는다(중복·조기 dispose 방지). isQuitting 가드만.</span>
+<span class="c">//   외부 OS 종료(로그오프 등)로 before-quit이 직접 와도 doFinalQuit이 멱등하면 안전.</span>
+app.on(<span class="s">'before-quit'</span>, () => { isQuitting = <span class="k">true</span>; });
+<span class="c">// ★M6-M-3: second-instance의 argv/cwd payload는 비신뢰 — 절대 파싱·경로 사용·실행 안 함. win.show 트리거로만.</span>
+app.on(<span class="s">'second-instance'</span>, (_e, _argv, _cwd) => { <span class="k">if</span> (win) { win.show(); <span class="k">if</span> (win.isMinimized()) win.restore(); win.focus(); } });</pre>
+  <table>
+    <tr><th style="width:200px;">상호작용</th><th>설계</th></tr>
+    <tr><td>단일 인스턴스 락</td><td>불변 유지. 둘째 실행 → <code>second-instance</code>에서 <code>win.show()</code>+focus(트레이로 숨어 있어도 복원). 트레이 상주 중 재실행해도 새 프로세스 안 뜸.</td></tr>
+    <tr><td>second-instance argv 신뢰 경계 (M6-M-3)</td><td><b>second-instance가 전달하는 argv/cwd payload는 비신뢰</b> — 절대 파싱·경로 해석·실행에 쓰지 않고 <code>win.show()/restore()/focus()</code> 트리거로만 사용. 향후 "argv로 프로젝트 열기" 확장 시에도 이 payload는 신뢰 경계 밖임을 불변식으로 유지.</td></tr>
+    <tr><td>트레이 push action 화이트리스트 (M6-M-3)</td><td>트레이 메뉴 클릭 push <code>spip:tray:&lt;action&gt;</code>의 action은 <code>dashboard|favorites</code> <b>고정 화이트리스트</b>만. 임의 action push 금지. push는 메인 win.webContents로만(단방향).</td></tr>
+    <tr><td>Q4 종료 다이얼로그 + dispose 순서 (P2-2)</td><td><b>완전 종료 경로(isQuitting=true)에서만</b> Q4 적용. 평소 X(close-to-tray)는 스캔 진행과 무관하게 hide만(스캔은 백그라운드 지속). <b>자원 dispose는 Q4 '종료' 확정 후 <code>doFinalQuit()</code>에서만</b> — Q4 '취소' 시 <code>isQuitting=false</code>로 복귀하고 scanController는 <b>dispose되지 않은 정상 상태</b>로 스캔 지속(조기 dispose 불일치 제거).</td></tr>
+    <tr><td>onQuit / before-quit (P2-2 단일 경로)</td><td>트레이 '종료'는 <code>app.quit()</code>을 직접 호출하지 않고 <code>win.close()</code> 트리거→close 핸들러가 Q4 통과 후 <code>doFinalQuit()</code>(=disposeResources+tray.destroy+app.exit) 1지점에서 종료. <code>before-quit</code>은 <code>isQuitting=true</code> 가드만(dispose 중복·조기 실행 방지). <code>doFinalQuit</code>은 멱등 설계.</td></tr>
+    <tr><td>macOS</td><td>기존 activate/Dock 동작 유지. close-to-tray는 전 플랫폼 공통(1차 타깃 Windows).</td></tr>
+  </table>
+
+  <h3>9.3 즐겨찾기 슬라이더 UI</h3>
+  <p>트레이 '즐겨찾기' → 우측하단에 즐겨찾기 카드를 좌우 슬라이딩으로 보는 UI. <b>별도 작은 창이 아니라 메인 창 내 오버레이</b>로 구현한다(ADR-M6-5).</p>
+  <figure>
+    <svg viewBox="0 0 1100 360" width="100%" role="img" aria-label="즐겨찾기 슬라이더 데이터·표시 흐름">
+      <defs>
+        <marker id="s1" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 Z" fill="#34d399"/></marker>
+        <marker id="s2" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 Z" fill="#38bdf8"/></marker>
+      </defs>
+      <!-- 트레이 -->
+      <rect x="40" y="50" width="180" height="60" rx="9" fill="#1a1206" stroke="#fbbf24"/>
+      <text x="130" y="76" fill="#fcd34d" font-size="12" text-anchor="middle" font-weight="bold" font-family="Segoe UI">Tray 메뉴</text>
+      <text x="130" y="94" fill="#94a3b8" font-size="9.5" text-anchor="middle" font-family="Segoe UI">'즐겨찾기' 클릭</text>
+      <!-- main -->
+      <rect x="300" y="40" width="220" height="120" rx="10" fill="#0b1220" stroke="#34d399"/>
+      <text x="410" y="66" fill="#34d399" font-size="12" text-anchor="middle" font-weight="bold" font-family="Segoe UI">main</text>
+      <text x="410" y="88" fill="#94a3b8" font-size="9.5" text-anchor="middle" font-family="Segoe UI">win.show()</text>
+      <text x="410" y="104" fill="#94a3b8" font-size="9.5" text-anchor="middle" font-family="Segoe UI">send('spip:tray:favorites')</text>
+      <text x="410" y="124" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">(favorites는 renderer가 보유,</text>
+      <text x="410" y="138" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">getUiState로 이미 적재)</text>
+      <!-- renderer 오버레이 -->
+      <rect x="600" y="30" width="460" height="290" rx="10" fill="#101a30" stroke="#38bdf8"/>
+      <text x="830" y="56" fill="#38bdf8" font-size="12" text-anchor="middle" font-weight="bold" font-family="Segoe UI">renderer — 메인창 내 오버레이(우측하단)</text>
+      <rect x="700" y="120" width="260" height="150" rx="10" fill="#0b1220" stroke="#475569"/>
+      <text x="830" y="150" fill="#e2e8f0" font-size="11" text-anchor="middle" font-family="Segoe UI" font-weight="bold">즐겨찾기 카드(현재 1장)</text>
+      <text x="830" y="172" fill="#94a3b8" font-size="9.5" text-anchor="middle" font-family="Segoe UI">name · path · 열기 · 경로복사</text>
+      <text x="830" y="190" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">(textContent 렌더, L-1)</text>
+      <!-- 좌우 화살표 -->
+      <text x="676" y="200" fill="#38bdf8" font-size="22" text-anchor="middle" font-family="Segoe UI">‹</text>
+      <text x="986" y="200" fill="#38bdf8" font-size="22" text-anchor="middle" font-family="Segoe UI">›</text>
+      <text x="830" y="248" fill="#64748b" font-size="9" text-anchor="middle" font-family="Segoe UI">좌/우 버튼·화살표 키로 슬라이딩 · 점 인디케이터</text>
+      <text x="830" y="300" fill="#94a3b8" font-size="9.5" text-anchor="middle" font-family="Segoe UI">favorites(id) ∩ getProjects 스냅샷 = 표시 카드(소멸 id skip)</text>
+
+      <path d="M220 80 L298 80" fill="none" stroke="#fbbf24" stroke-width="2" marker-end="url(#s1)"/>
+      <path d="M520 95 L598 95" fill="none" stroke="#34d399" stroke-width="2" marker-end="url(#s1)"/>
+    </svg>
+    <figcaption>그림 2. 즐겨찾기 슬라이더. 트레이 '즐겨찾기'→main이 win.show + 이벤트 push→renderer가 메인창 내 우측하단 오버레이로 favorites∩스냅샷 카드를 좌우 슬라이딩 표시.</figcaption>
+  </figure>
+  <table>
+    <tr><th style="width:200px;">결정</th><th>설계 / 근거</th></tr>
+    <tr><td>창 형태: 오버레이 (택1)</td><td><b>메인 창 내 오버레이</b> 채택. <b>근거:</b> ① 별도 BrowserWindow는 webPreferences·preload·CSP·senderFrame 검증·하드닝을 통째로 한 벌 더 구성·검증해야 함(보안 표면·복잡도 2배). ② favorites·projects 데이터가 이미 메인 renderer 메모리에 있어 추가 IPC 적재 불필요. ③ "우측하단 표시"는 메인창 내 <code>position:fixed</code> 오버레이로 충분. ADR-M6-5.</td></tr>
+    <tr><td>슬라이딩</td><td>CSS transform 슬라이드(외부 라이브러리 0). 좌/우 버튼 + 화살표 키(N-07) + 점 인디케이터.</td></tr>
+    <tr><td>표시 데이터</td><td><code>favorites(id) ∩ getProjects()</code> 교집합. 즐겨찾기지만 스냅샷에 없는 id는 skip. 빈 즐겨찾기면 "즐겨찾기가 없습니다" + 안내.</td></tr>
+    <tr><td>카드 액션</td><td>열기(<code>spip.open</code>)·경로복사(<code>spip.copyText</code>)·즐겨찾기 해제. 메인 카드와 동일 경로 재사용.</td></tr>
+    <tr><td>트리거</td><td>트레이 '즐겨찾기' push(<code>spip:tray:favorites</code>) 또는 메인 UI 내 버튼. 둘 다 동일 오버레이 토글.</td></tr>
+  </table>
+</section>
+
+<section id="tree">
+  <h2>10. 디렉터리 구조 델타</h2>
+  <pre>electron/
+├─ main.js              <span class="c"># [수정] 트레이 생성·isQuitting·close-to-tray·window-all-closed no-op·doFinalQuit 단일 종료 경로(P2-2) (§9.2)</span>
+├─ preload.js           <span class="c"># [수정] window.spip에 신규 함수 추가(채널명 하드코딩) (§4.1)</span>
+├─ menu.js              <span class="c"># [수정 선택] '즐겨찾기 보기' 메뉴 항목 추가(트레이와 동일 액션)</span>
+├─ tray.js              <span class="c"># ★[신규] createTray: Tray + 컨텍스트 메뉴(대시보드/즐겨찾기/종료) (R-21)</span>
+├─ security.js          <span class="c"># [불변] CSP·하드닝·senderFrame — 신규 채널도 동일 게이트</span>
+├─ context.js           <span class="c"># [수정 최소] ctx에 uiStateStore 핸들 추가(또는 ipc가 직접 read/write)</span>
+└─ ipc/
+   ├─ register.js       <span class="c"># [수정] 신규 채널 8개 guard() 등록 (§4.2)</span>
+   ├─ data.js           <span class="c"># [불변]</span>
+   ├─ actions.js        <span class="c"># [수정] openInVsCode를 resolveTool(toolId)로 일반화 (§6.2)</span>
+   ├─ scan.js           <span class="c"># [불변]</span>
+   ├─ folders.js        <span class="c"># [수정 최소] persistScanRoots를 persistConfigKeys(키-범용)로 일반화(기존 시그니처 위임 보존, P2-1) (§3.5)</span>
+   ├─ clipboard.js      <span class="c"># ★[신규] copyText(args,{clipboard}) (R-17)</span>
+   ├─ tools.js          <span class="c"># ★[신규] getTools·setToolPath·pickToolExecutable (R-18). 화이트리스트·force 재검증·persistConfigKeys({tools})</span>
+   └─ uiState.js        <span class="c"># ★[신규] getUiState·setFavorite·setOrder·setSortMode (R-19/R-20)</span>
+lib/common/
+├─ paths.js             <span class="c"># [수정 최소] uiStatePath() 1개 추가 (§3.2)</span>
+├─ config.js            <span class="c"># [수정] normalizeTools(args 무시·known id 화이트리스트·label sanitize) + LIMITS.maxTools; loadConfig에 tools 병합 (§3.2)</span>
+├─ safeExec.js          <span class="c"># [불변 — resolveBin 절대경로 검증 분기 이미 존재(safeExec.js:82)]</span>
+├─ pathGuard.js         <span class="c"># [불변]</span>
+├─ toolRegistry.js      <span class="c"># ★[신규] KNOWN_TOOL_IDS·normalizeTools·resolveTool(force 재검증)·isKnownToolId (R-18 도메인, Electron 미import)</span>
+└─ uiStateStore.js      <span class="c"># ★[신규] read(1MB 상한·_safeParse 가드, M6-M-4)·write(0600 원자적, P2-1 패턴) (R-19/20)</span>
+public/
+├─ index.html           <span class="c"># [수정] 즐겨찾기 슬라이더 오버레이 컨테이너 마크업(빈 컨테이너) — CSP 메타 불변</span>
+├─ styles.css           <span class="c"># [수정] 즐겨찾기 별·드래그·슬라이더 오버레이 스타일</span>
+└─ app.js               <span class="c"># [수정] 카드 드래그·즐겨찾기 토글·경로복사 버튼·설정 툴 섹션·슬라이더·onTray 구독</span>
+
+<span class="c"># 런타임 데이터(appDir 기준, 0600/0700 — 불변 정책):</span>
+<span class="c">#   %APPDATA%\spip\config\spip.config.json   (tools 키 추가, 기존 키 불변)</span>
+<span class="c">#   %APPDATA%\spip\ui-state\ui-state.json    ★신규(favorites·order·sortMode)</span>
+<span class="c">#   %APPDATA%\spip\cache\projects.json       (불변)</span></pre>
+  <div class="note"><b>변경 격리:</b> 신규 책임은 전부 신규 파일(<code>tray.js</code>·<code>clipboard.js</code>·<code>tools.js</code>·<code>uiState.js</code>·<code>toolRegistry.js</code>·<code>uiStateStore.js</code>)에 격리. 기존 파일 수정은 ① main.js 생명주기 ② preload allowlist ③ register 등록 ④ actions.open 일반화 ⑤ config/paths 최소 추가 — 모두 추가·치환이며 도메인 로직 재작성 없음. 헤드리스 단위테스트(F-3) 가능 구조(순수 함수 + 주입) 유지.</div>
+</section>
+
+<section id="security">
+  <h2>11. 보안 일관성 (불변 유지)</h2>
+  <p>기존 베이스라인을 0 약화로 보존한다. 신규 채널·UI 입력 전부 신뢰하지 않는다.</p>
+  <table>
+    <tr><th style="width:200px;">통제</th><th>M6 신규 기능에의 적용</th></tr>
+    <tr><td>contextIsolation·sandbox·nodeIntegration:false</td><td>불변. 신규 기능 모두 main 로직 + preload contextBridge만 사용(sandbox 호환).</td></tr>
+    <tr><td>preload 최소 allowlist</td><td>신규 함수도 채널명 하드코딩. <code>ipcRenderer</code> 원본·범용 invoke 비노출(MUST). copyText/setToolPath 등 인자 1차 고정(String/Boolean 강제).</td></tr>
+    <tr><td>senderFrame 발신자 검증(EM-M-2)</td><td>신규 채널 전부 <code>register.js</code> <code>guard()</code> 경유 → <code>isTrustedSender</code>(app:// 정확 일치) 자동 적용. 트레이 push도 메인 win.webContents로만.</td></tr>
+    <tr><td>전 채널 main 재검증(EM-H-1)</td><td>§4.1 표의 "main 재검증" 열대로 각 채널 인자 스키마·길이/개수 상한·화이트리스트·고정 실패 code. <b>경로/실행파일은 canonicalize/realpath·존재·.exe·shell:false 통과분만</b>. dialog 반환 경로도 신뢰하지 않고 재검증(M6-M-2).</td></tr>
+    <tr><td>safeExec H-2 + 캐시 우회 재검증 (R-18 핵심, M6-H-1)</td><td>사용자 지정 실행 경로도 <code>resolveBin(path,{force:true})</code>로 <b>캐시 우회 강제 재검증</b>(절대경로·<code>.exe</code> 한정·실행파일·realpath) → <code>safeExec</code> <code>shell:false</code>·인자 배열·.exe 재검증(safeExec.js:146~152)·in-flight 상한. <b>등록 후 파일 교체(TOCTOU)에도 spawn 직전 최신 fs 상태 확인</b>. <code>.bat/.cmd</code> 거부 유지(PATHEXT RCE 차단).</td></tr>
+    <tr><td>실행 인자 고정·사용자 args 제거 (M6-H-2)</td><td>외부 툴 실행 인자는 main이 구성하는 <code>[real]</code>(검증된 프로젝트 경로) 1개 고정. <b>tools 스키마에 args 필드 없음·사용자가 인자를 지정하는 경로 부재</b> → 양성 실행 파일을 위험 플래그로 무기화(LOLBin)하는 표면 원천 제거.</td></tr>
+    <tr><td>toolId 화이트리스트 (M6-M-1)</td><td>open/setToolPath/pickToolExecutable의 toolId는 <code>KNOWN_TOOL_IDS</code>(MVP <code>code</code>) 멤버만 허용. 임의 toolId 거부, PATH 폴백도 화이트리스트 멤버에 한정 → renderer가 임의 PATH 바이너리 이름을 호출하는 경로 차단.</td></tr>
+    <tr><td>pathGuard H-1</td><td>open 일반화 후에도 프로젝트 경로는 canonicalize+isAllowed 화이트리스트 통과 real만 실행 인자로. 사용자 입력 경로(text)와 실행 대상(real)을 혼동하지 않음.</td></tr>
+    <tr><td>clipboard 표면</td><td>main <code>clipboard.writeText</code>만(읽기·이미지·기타 포맷 미노출). 입력은 텍스트로만 취급(실행·경로 해석 없음).</td></tr>
+    <tr><td>입력 신뢰 안 함(드래그/즐겨찾기/order)</td><td>setFavorite/setOrder의 id는 형식 검증(<code>^[0-9a-f]{1,64}$</code>)·개수 상한. order 중복 제거. 임의 문자열로 무관 동작 유발 불가. <b>id는 실행·경로 접근에 쓰이지 않음</b>(즐겨찾기/순서 메타에만) → 오염돼도 표면 극소.</td></tr>
+    <tr><td>ui-state.json 읽기 DoS 가드 (M6-M-4)</td><td>읽기 시 <b>파일 크기 상한(1MB)</b> 선검사 → 초과 즉시 기본값. <code>_safeParse</code>(JSON 깊이/예외 가드, H-3 패턴) 경유. 파싱 직후 배열 길이 상한·id 형식·중복 제거·schemaVersion 폴백 재적용. 손상/거대/깊은 중첩 모두 <b>graceful 빈 상태</b>, 0600 유지.</td></tr>
+    <tr><td>textContent(L-1)·CSP</td><td>슬라이더·툴 라벨·거부 사유 등 모든 신규 표시 문자열 textContent 렌더. CSP 메타·세션 헤더 불변(외부 링크·인라인 스크립트 0). PATH 안내는 정적 텍스트(shell.openExternal 미사용).</td></tr>
+    <tr><td>0600 원자적 쓰기(M-2) + 부분 갱신(P2-1)</td><td><code>ui-state.json</code>·config tools 영속 모두 임시파일→fsync→rename→0600 패턴 재사용. config는 <code>persistScanRoots</code>를 <b>키-범용 <code>persistConfigKeys(patch)</code>로 일반화</b>(기존 키 read-merge 보존 후 원자적 쓰기) — tools만 갱신해도 scanRoots·기타 키 유실 없음. 부분 쓰기·권한 누수 없음.</td></tr>
+    <tr><td>트레이/슬라이더 webPreferences·CSP</td><td>슬라이더는 <b>메인창 내 오버레이</b>(ADR-M6-5)라 별도 창·preload·CSP 없음 — 기존 메인창 보안 컨텍스트 그대로 적용(추가 표면 0). 트레이는 OS 위젯(렌더 컨텍스트 없음).</td></tr>
+  </table>
+</section>
+
+<section id="trace">
+  <h2>12. 추적성 (요구 ↔ 채널/모듈)</h2>
+  <table>
+    <tr><th style="width:90px;">요구</th><th>신규 채널</th><th>신규/수정 모듈</th><th>영속</th><th>보안 게이트</th></tr>
+    <tr><td><span class="rid">R-17</span></td><td><code>spip:copyText</code></td><td>ipc/clipboard.js(신규)·preload·register·app.js</td><td>없음</td><td>guard·string/len 검증·clipboard.writeText only</td></tr>
+    <tr><td><span class="rid">R-18</span></td><td><code>getTools·setToolPath·pickToolExecutable</code> + <code>openInVsCode</code>(확장)</td><td>lib/common/toolRegistry.js(신규)·ipc/tools.js(신규)·config.js·folders.js(persistConfigKeys)·actions.js(수정)</td><td>config.json <code>tools{path,label}</code></td><td>guard·toolId 화이트리스트(M6-M-1)·resolveBin force 재검증(M6-H-1)·실행인자 [real] 고정·args 없음(M6-H-2)·dialog 결과 재검증(M6-M-2)·safeExec shell:false</td></tr>
+    <tr><td><span class="rid">R-19</span></td><td><code>setOrder·setSortMode·getUiState</code></td><td>lib/common/uiStateStore.js(신규)·ipc/uiState.js(신규)·app.js</td><td>ui-state.json <code>order·sortMode</code></td><td>guard·id 형식·개수 상한·중복 제거</td></tr>
+    <tr><td><span class="rid">R-20</span></td><td><code>setFavorite·getUiState</code></td><td>uiStateStore.js·ipc/uiState.js·app.js</td><td>ui-state.json <code>favorites</code></td><td>guard·id 형식·Boolean·개수 상한</td></tr>
+    <tr><td><span class="rid">R-21</span></td><td><code>spip:tray:*</code>(push)</td><td>electron/tray.js(신규)·main.js(생명주기 수정)·app.js(슬라이더·onTray)</td><td>favorites 재사용</td><td>트레이 push는 메인 win.webContents로만·오버레이는 기존 보안 컨텍스트</td></tr>
+  </table>
+  <p><b>기존 요구 연계:</b> R-18은 <span class="rid">R-12</span>(VS Code로 열기)의 일반화. R-17/R-20 슬라이더는 R-12·R-10(목록)과 같은 데이터(Project shape) 재사용. R-21 생명주기는 기존 Q4(스캔 중 종료 확인)·단일 인스턴스 락과 정합 유지.</p>
+</section>
+
+<section id="adr">
+  <h2>13. ADR</h2>
+
+  <div class="adr">
+    <h4>ADR-M6-1 — 클립보드 접근 위치: main clipboard (renderer navigator.clipboard 아님)</h4>
+    <p><b>상태:</b> 제안(승인 권고)</p>
+    <p><b>맥락:</b> R-17 경로 복사를 (a) renderer <code>navigator.clipboard.writeText</code> vs (b) main <code>clipboard.writeText</code> + IPC 중 선택.</p>
+    <p><b>고려한 대안:</b></p>
+    <ul>
+      <li><b>a. navigator.clipboard:</b> IPC 불필요(코드 적음). 그러나 CSP <code>default-src 'none'</code>·sandbox·포커스/권한 프롬프트 의존으로 동작 불안정, "renderer는 OS 자원 직접 접근 0" 원칙 위배.</li>
+      <li><b>b. main clipboard + spip:copyText:</b> 채널 1개·preload 함수 1개 추가. main이 OS 클립보드 단독 소유. 일관·예측 가능.</li>
+    </ul>
+    <p><b>결정:</b> <b>b</b>. <code>spip:copyText(text)</code> 신규, main <code>clipboard.writeText</code>. preload엔 <code>copyText</code>만 최소 노출.</p>
+    <p><b>근거:</b> 기존 아키텍처(모든 OS 접근은 main, renderer는 트리거만)와 정합. 권한·CSP 변수 제거. 텍스트 한정이라 표면 극소.</p>
+    <p><b>결과:</b> (+) 일관·안전·CSP 무영향. (−) IPC 왕복 1회(체감 무시). 클립보드 읽기는 미노출(필요 없음).</p>
+  </div>
+
+  <div class="adr">
+    <h4>ADR-M6-2 — 외부 툴: 단일 code 경로가 아닌 툴 레지스트리(map)</h4>
+    <p><b>상태:</b> 제안</p>
+    <p><b>맥락:</b> 백로그가 "향후 다른 툴도 추가할 수 있도록 확장성 고려"를 명시. 단일 <code>codePath</code> 설정으로 끝낼지, 일반 레지스트리로 갈지.</p>
+    <p><b>고려한 대안:</b></p>
+    <ul>
+      <li><b>A. config.codePath(단일):</b> 가장 단순하나 새 툴(cursor·neovim 등) 추가 시 매번 설정 키·코드 분기 필요 — 확장성 요구 미충족.</li>
+      <li><b>B. tools 맵 레지스트리:</b> <code>tools:{ &lt;id&gt;:{path,label} }</code>(<b>rev.2: args 필드 삭제 — M6-H-2</b>). 새 툴 = 맵 항목 + <code>KNOWN_TOOL_IDS</code> 등록뿐. open은 toolId 일반화. resolveBin은 그대로(<code>{force:true}</code>로만 호출).</li>
+      <li><b>C. 플러그인/스크립트 등록:</b> 과설계 — 임의 실행 스크립트는 보안 표면 폭증, 단일 사용자 도구에 불필요.</li>
+    </ul>
+    <p><b>결정:</b> <b>B(툴 레지스트리 맵)</b>. <code>resolveTool(toolId)</code>가 "사용자 지정 경로 우선 → PATH 폴백"하되 ① toolId는 <b>KNOWN_TOOL_IDS 화이트리스트</b> 멤버만(M6-M-1) ② 매 실행 <code>resolveBin(.,{force:true})</code>로 <b>캐시 우회 강제 재검증</b>(M6-H-1) ③ <b>실행 인자는 <code>[real]</code> 고정·사용자 args 없음</b>(M6-H-2). resolveBin·safeExec 무수정 재사용.</p>
+    <p><b>근거:</b> 확장성 요구를 데이터(맵)로 충족하면서 코드 분기 0. C의 임의 스크립트 표면은 거부. resolveBin이 이미 절대경로 검증·force 캐시 우회를 지원하므로 추가 비용 작음. <b>args 제거·toolId 화이트리스트·force 재검증으로 보안 게이트(M6-H-1/H-2/M-1)를 설계 단계에서 해소</b>.</p>
+    <p><b>결과:</b> (+) 새 툴 데이터로 추가·보안 정책(.exe·shell:false·force 재검증) 일괄 적용·LOLBin/TOCTOU 표면 제거. (−) open 시그니처에 toolId 추가(미지정 시 'code' 하위호환). config 스키마 1키 증가. 새 툴은 코드의 KNOWN_TOOL_IDS에도 등록 필요(데이터만으로는 임의 추가 불가 — 의도된 보안 트레이드오프). 사용자가 실행 플래그를 커스터마이즈하는 기능은 미지원(보안 우선).</p>
+  </div>
+
+  <div class="adr">
+    <h4>ADR-M6-3 — 영속화 위치: tools→config.json, favorites/order→신규 ui-state.json</h4>
+    <p><b>상태:</b> 제안</p>
+    <p><b>맥락:</b> 3종 신규 영속 데이터를 (a) 전부 config.json (b) 전부 신규 ui-state.json (c) 성격별 분리 중 선택.</p>
+    <p><b>고려한 대안:</b></p>
+    <ul>
+      <li><b>a. 전부 config.json:</b> 파일 1개로 단순. 그러나 GUI 상태(빈번 갱신·폐기 가능)가 CLI 공유 설정과 섞여 오염·충돌·CLI 불필요 키 노출.</li>
+      <li><b>b. 전부 ui-state.json:</b> tools는 동작 설정이라 CLI가 못 봄(git 경로 등 향후 공유 불가). 설정/상태 경계 모호.</li>
+      <li><b>c. 성격별 분리(2파일):</b> tools=설정류→config.json, favorites/order=UI 상태→ui-state.json. 각자 검증·graceful 정책 적용.</li>
+    </ul>
+    <p><b>결정:</b> <b>c</b>. config.json에 <code>tools</code> 추가(loadConfig 편입), 신규 <code>ui-state.json</code>에 favorites·order·sortMode. 둘 다 0600 원자적 쓰기.</p>
+    <p><b>근거:</b> 데이터 성격(공유성·검증·손상 허용도)이 다르면 분리가 더 안전·단순. 파일은 2개로만 한정(과분할 안 함). config 손상 위험(scanRoots 유실)과 UI 상태 폐기 가능성을 격리.</p>
+    <p><b>결과:</b> (+) 책임 분리·CLI 호환·graceful 격리. (−) 파일·로더 1개 추가(uiStateStore, persistScanRoots 패턴 재사용으로 비용 작음).</p>
+  </div>
+
+  <div class="adr">
+    <h4>ADR-M6-4 — close-to-tray: window-all-closed→quit 제거, 트레이 '종료'만 완전 종료</h4>
+    <p><b>상태:</b> 제안</p>
+    <p><b>맥락:</b> 백로그가 "대시보드는 닫아도 트레이는 남아 있어야 한다 / 종료는 전체 종료"를 명시. 현재 main은 <code>window-all-closed → app.quit()</code>.</p>
+    <p><b>고려한 대안:</b></p>
+    <ul>
+      <li><b>A. 최소화로 트레이:</b> minimize 가로채기. 그러나 "닫아도 상주" 요구(X 클릭)와 불일치.</li>
+      <li><b>B. close 가로채 hide + isQuitting 플래그:</b> X→hide, 트레이 '종료'만 isQuitting=true로 실제 quit. window-all-closed no-op.</li>
+    </ul>
+    <p><b>결정:</b> <b>B</b>. <code>win.on('close')</code>에서 <code>!isQuitting</code>이면 preventDefault+hide. 트레이 '종료'는 <code>app.quit()</code>을 직접 부르지 않고 <code>isQuitting=true; win.close()</code> 트리거 → close 핸들러가 Q4 통과 후 <code>doFinalQuit()</code>(dispose+tray.destroy+exit) <b>단일 종료 경로</b>로 종료(rev.2 P2-2). Q4(스캔 중 확인)는 완전 종료 경로에서만이며, <b>자원 dispose는 Q4 '종료' 확정 후에만</b>·'취소' 시 <code>isQuitting=false</code>로 정상 복귀(미dispose).</p>
+    <p><b>근거:</b> 백로그 요구 정확 충족. isQuitting 플래그는 Electron close-to-tray의 표준 패턴. 단일 인스턴스 락·Q4와 자연 정합. <b>app.quit()→before-quit이 먼저 disposeResources를 실행해 Q4 취소 시 scanController 조기 dispose 불일치</b>를 일으키므로, 종료 결정·dispose를 close 핸들러 한 곳으로 통일(P2-2 해소).</p>
+    <p><b>결과:</b> (+) 트레이 상주·요구 충족·dispose 시점 일관(취소 시 정상 상태). (−) 사용자가 "닫았는데 안 꺼짐" 혼동 가능 → 최초 hide 시 트레이 풍선 안내 1회(MQ-4 확정). 스캔이 트레이 숨김 상태로 백그라운드 지속(의도된 동작). before-quit은 isQuitting 가드만 두고 dispose를 옮겨 외부 OS 종료 시 <code>doFinalQuit</code> 멱등성에 의존.</p>
+  </div>
+
+  <div class="adr">
+    <h4>ADR-M6-5 — 즐겨찾기 슬라이더: 별도 창 아닌 메인창 내 오버레이</h4>
+    <p><b>상태:</b> 제안</p>
+    <p><b>맥락:</b> 트레이 '즐겨찾기'의 우측하단 슬라이딩 UI를 (a) 별도 작은 BrowserWindow vs (b) 메인창 내 오버레이로.</p>
+    <p><b>고려한 대안:</b></p>
+    <ul>
+      <li><b>A. 별도 BrowserWindow:</b> 데스크톱 위젯처럼 항상 위 표시 가능. 그러나 webPreferences·preload·CSP·senderFrame·하드닝을 한 벌 더 구성·검증(보안 표면·복잡도 2배), favorites/projects 데이터 재적재 IPC 필요.</li>
+      <li><b>B. 메인창 내 오버레이(position:fixed 우측하단):</b> 기존 보안 컨텍스트·데이터 그대로 재사용. 추가 창·preload 0. "우측하단 표시"는 CSS로 충족.</li>
+    </ul>
+    <p><b>결정:</b> <b>B(오버레이)</b>. 트레이 '즐겨찾기'→main이 win.show()+<code>spip:tray:favorites</code> push→renderer가 오버레이 토글.</p>
+    <p><b>근거:</b> 단순성·보안 표면 최소·데이터 재사용. 별도 창의 이점(독립 부유)은 단일 사용자 도구에 과함. 보안 검토 부담을 늘리지 않음.</p>
+    <p><b>결과:</b> (+) 보안 컨텍스트 1개 유지·구현 단순·검증 용이. (−) 메인창이 떠 있어야 슬라이더 표시(트레이 클릭 시 win.show로 해소). 진정한 "데스크톱 위젯"(창 없이 부유)은 미지원 — 요구 외.</p>
+  </div>
+</section>
+
+<section id="risk">
+  <h2>14. 리스크 · 가정 · 미해결 질문</h2>
+  <h3>리스크 / 완화</h3>
+  <table>
+    <tr><th style="width:260px;">리스크</th><th>완화</th></tr>
+    <tr><td>프로젝트 id 불안정 시 favorites/order 끊김(폴더 이동·개명)</td><td>id는 경로 해시(재스캔해도 경로 동일이면 안정) 가정. 끊긴 id는 graceful skip(에러 없음)·사용자 재지정. §14 가정·미해결 질문.</td></tr>
+    <tr><td>사용자가 <code>.cmd/.bat/.lnk</code>(예 code.cmd) 지정 → resolveBin 거부로 "설정했는데 안 됨" 혼동</td><td>setToolPath 실패 code(<code>NOT_EXECUTABLE</code>)를 한국어로 명확 매핑 + "실제 실행 파일(.exe)을 지정하세요" 안내. H-2 보안 정책은 약화 금지.</td></tr>
+    <tr><td>등록한 툴 실행 파일이 사후 악성으로 교체(TOCTOU, M6-H-1)</td><td>실행 직전 <code>resolveBin(.,{force:true})</code> 캐시 우회 강제 재검증으로 최신 fs 상태 확인. 위치 제한은 하지 않음(SQ-2 — 포터블 워크플로 보존), 대신 매 실행 재검증으로 방어.</td></tr>
+    <tr><td>close-to-tray 후 사용자가 종료 방법 못 찾음</td><td>최초 hide 시 트레이 풍선 안내 1회(선택). 트레이 메뉴에 '종료' 상시 노출.</td></tr>
+    <tr><td>ui-state.json 손상</td><td>uiStateStore graceful 폴백(빈 favorites·order·sortMode auto). config.js 동일 패턴.</td></tr>
+    <tr><td>드래그 reorder 빈번 갱신 → 잦은 디스크 쓰기</td><td>드롭 완료 시점에만 영속(드래그 중 미저장). 작은 파일·원자적 쓰기라 비용 무시.</td></tr>
+    <tr><td>트레이 아이콘 에셋 부재</td><td>build/ 아이콘 재사용(트레이용 작은 ico 항목 추가, 디자인 단계).</td></tr>
+  </table>
+  <h3>가정</h3>
+  <ul>
+    <li>프로젝트 <code>id</code>는 경로 기반으로 재스캔 간 안정(현 도메인 동작). favorites/order의 키 안정성 전제.</li>
+    <li>1차 타깃 Windows. <code>.exe</code> 한정 실행 정책·트레이는 Windows 기준(macOS/Linux는 후속).</li>
+    <li>즐겨찾기 슬라이더는 메인창이 살아있는 동안 동작(트레이 클릭 시 win.show로 보장).</li>
+  </ul>
+  <h3>확정된 결정 (PM 확정 · rev.2 — 검증 게이트 반영)</h3>
+  <p>이전 rev의 "미해결 질문" MQ-1~5와 보안 SQ-1~3은 PM 확정으로 모두 결정되어 본문에 반영됐다. 잔여 미해결 없음.</p>
+  <table>
+    <tr><th style="width:80px;">항목</th><th>결정 사항</th><th style="width:120px;">상태</th></tr>
+    <tr><td>MQ-1</td><td>경로 복사는 <b>절대경로 그대로</b> 복사(클립보드 텍스트 한정). §5 반영.</td><td><span class="pill keep">확정</span></td></tr>
+    <tr><td>MQ-2</td><td>MVP는 <b>code 기본 버튼</b> + 설정 등록(레지스트리 확장형). 드롭다운은 후속. §6.3 반영.</td><td><span class="pill keep">확정</span></td></tr>
+    <tr><td>MQ-3</td><td>id 불안정 시 <b>graceful skip만</b>(재매핑 후속). §3.3·§7·§8 반영.</td><td><span class="pill keep">확정</span></td></tr>
+    <tr><td>MQ-4</td><td>close-to-tray <b>최초 1회 트레이 풍선 안내</b>. ADR-M6-4 반영.</td><td><span class="pill keep">확정</span></td></tr>
+    <tr><td>MQ-5</td><td>즐겨찾기 <b>메인창 내 오버레이</b>(별도 창 아님). ADR-M6-5 반영.</td><td><span class="pill keep">확정</span></td></tr>
+    <tr><td>SQ-1</td><td><b>tools.args 전면 제거</b> — 사용자 지정 실행 인자 미지원. 실행 인자 <code>[real]</code> 고정(M6-H-2). §3.2·§6 반영.</td><td><span class="pill keep">확정</span></td></tr>
+    <tr><td>SQ-2</td><td>사용자 경로는 <b>위치 제한 없이</b> 절대·존재·.exe·realpath 검증 통과분만 저장/실행. 대신 spawn 직전 <b>force 재검증</b>(M6-H-1)으로 방어. §3.2·§6.3 반영.</td><td><span class="pill keep">확정</span></td></tr>
+    <tr><td>SQ-3</td><td>open(id, toolId)의 toolId는 <b>KNOWN_TOOL_IDS 등록 멤버로만</b> 제한(MVP code). 임의 toolId·PATH 자동탐색 거부(M6-M-1). §6.1·§6.2 반영.</td><td><span class="pill keep">확정</span></td></tr>
+  </table>
+</section>
+
+<footer>
+  Project-SPIP — M6 설계 델타(R-17~R-21) · 수석 아키텍트 · 2026-06-21 · <b>rev.2(검증 게이트 반영: 높음 M6-H-1/H-2 해소·보통 4·권고 P2/P3·SQ-1~3 확정)</b> · 기존 Electron 구조·보안 베이스라인 보존 점진 확장 · 본 문서는 설계 청사진이며 구현 코드를 포함하지 않는다.
+</footer>
+
+</main>
+</body>
+</html>

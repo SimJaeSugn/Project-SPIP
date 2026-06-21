@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>M6 통합·동작 QA 리포트 — Project-SPIP</title>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#161b22; --panel2:#1c2333; --border:#30363d;
+    --fg:#e6edf3; --muted:#9aa7b4; --accent:#58a6ff;
+    --pass:#3fb950; --fail:#f85149; --warn:#d29922; --info:#a371f7;
+    --code:#1f2630;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+    font-family:"Segoe UI",system-ui,-apple-system,sans-serif;line-height:1.6;font-size:15px}
+  .wrap{max-width:1080px;margin:0 auto;padding:32px 24px 80px}
+  h1{font-size:26px;margin:0 0 4px;letter-spacing:-.3px}
+  h2{font-size:20px;margin:38px 0 12px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+  h3{font-size:16px;margin:24px 0 8px;color:var(--accent)}
+  .sub{color:var(--muted);font-size:13.5px;margin-bottom:24px}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:18px 20px;margin:16px 0}
+  .verdict{background:linear-gradient(135deg,#15351f,#0d2415);border:1px solid #2ea04366;
+    border-radius:12px;padding:20px 22px;margin:22px 0}
+  .verdict.cond{background:linear-gradient(135deg,#3a2f12,#241d0d);border-color:#d2992266}
+  .verdict h2{border:0;margin:0 0 8px}
+  table{width:100%;border-collapse:collapse;margin:12px 0;font-size:14px}
+  th,td{border:1px solid var(--border);padding:9px 11px;text-align:left;vertical-align:top}
+  th{background:var(--panel2);color:#cdd9e5;font-weight:600}
+  td code,p code,li code{background:var(--code);padding:1px 6px;border-radius:5px;font-size:12.5px;color:#a5d6ff}
+  .pill{display:inline-block;padding:1px 9px;border-radius:20px;font-size:12px;font-weight:700;white-space:nowrap}
+  .p-pass{background:#1f3d28;color:#56d364;border:1px solid #2ea04355}
+  .p-fail{background:#3d1f1f;color:#ff7b72;border:1px solid #f8514955}
+  .p-warn{background:#3d3415;color:#e3b341;border:1px solid #d2992255}
+  .p-na{background:#272d36;color:#9aa7b4;border:1px solid #44505c}
+  .p-info{background:#2a213d;color:#c297ff;border:1px solid #a371f755}
+  ul{margin:8px 0 8px 0;padding-left:22px}
+  li{margin:4px 0}
+  .muted{color:var(--muted)}
+  .kbd{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12.5px}
+  pre{background:var(--code);border:1px solid var(--border);border-radius:8px;padding:12px 14px;
+    overflow:auto;font-size:12.5px;color:#c9d4e0}
+  .sev-b{color:#ff7b72;font-weight:700}
+  .sev-h{color:#ff9b6b;font-weight:700}
+  .sev-m{color:#e3b341;font-weight:700}
+  .sev-l{color:#7ee787;font-weight:700}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:14px 0}
+  .stat{background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:14px}
+  .stat .n{font-size:24px;font-weight:800}
+  .stat .l{font-size:12.5px;color:var(--muted)}
+  .tag{font-size:11.5px;color:var(--muted)}
+  footer{margin-top:48px;color:var(--muted);font-size:12.5px;border-top:1px solid var(--border);padding-top:16px}
+  svg{max-width:100%;height:auto}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>M6 통합·동작 검증 리포트</h1>
+  <div class="sub">
+    Project-SPIP · 마일스톤 M6(R-17~R-21) · QA 엔지니어 · 작성일 2026-06-21 ·
+    범위: <b>동작/통합만</b>(보안=security, 코드품질=code 별도) ·
+    근거: <code>npm test</code>(416 pass)·순수함수/ctx 모킹 검증·<b>실 Electron offscreen 스모크</b>
+  </div>
+
+  <div class="verdict">
+    <h2>종합 판정: 통합 가능 (Integratable) — 블로커/높음 버그 0</h2>
+    <p>
+      9개 신규 IPC 채널의 <b>preload↔renderer 경계면이 인자·반환 shape·code 집합 수준에서 정확히 맞물린다</b>(정적 대조 + 실 Electron 런타임 노출 확인).
+      백로그 5기능(R-17~R-21)은 순수함수·ctx 모킹·헤드리스 스모크 범위에서 수용 기준을 충족한다.
+      전체 416 테스트 통과, CLI·기존 IPC·MVP/M4/Electron 회귀 없음.
+      발견 항목은 모두 <b>보통/낮음(설계 정합 또는 무해한 미사용 경로)</b>이며 통합을 막지 않는다.
+      단, GUI 상호작용(드래그 DnD·트레이 풍선·다이얼로그 등)은 헤드리스 한계로 <b>사용자 PC 수동 확인 필요</b> 목록으로 분리한다(추측 PASS 아님).
+    </p>
+  </div>
+
+  <div class="grid">
+    <div class="stat"><div class="n" style="color:var(--pass)">416</div><div class="l">테스트 통과 (fail 0)</div></div>
+    <div class="stat"><div class="n" style="color:var(--pass)">9/9</div><div class="l">신규 채널 경계면 일치</div></div>
+    <div class="stat"><div class="n" style="color:var(--pass)">5/5</div><div class="l">백로그 기능 충족</div></div>
+    <div class="stat"><div class="n" style="color:var(--warn)">3</div><div class="l">관찰 항목(보통/낮음)</div></div>
+    <div class="stat"><div class="n" style="color:var(--info)">6</div><div class="l">PC 수동확인 필요</div></div>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2>1. 테스트 실행 (실제 근거)</h2>
+  <div class="card">
+    <p><b>명령:</b> <code>npm test</code> (= <code>node --test "test/**/*.test.js"</code>)</p>
+    <pre>ℹ tests 416
+ℹ pass 416
+ℹ fail 0
+ℹ cancelled 0  ℹ skipped 0  ℹ todo 0
+ℹ duration_ms ~1061</pre>
+    <p>M6 집중 파일(개별 실행) — <span class="pill p-pass">114 PASS</span>:
+      <code>dashboard-m6</code>·<code>ipc-tools</code>·<code>ipc-uistate</code>·<code>ipc-clipboard</code>·
+      <code>tray</code>·<code>uiStateStore</code>·<code>toolRegistry</code>·<code>config-persist</code>·
+      <code>m6-security</code>·<code>electron-preload-contract</code>.</p>
+    <p class="muted">현재 416건은 명세된 기준치와 일치. 실패 0건.</p>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2>2. preload ↔ renderer 계약 일치 (경계면 교차)</h2>
+  <p class="muted">
+    지난 <code>onMenu</code>/<code>open</code> 불일치(BUG-1) 전례를 의식해 9개 신규 채널의 인자·반환 shape·code 집합을
+    <b>preload(<code>electron/preload.js</code>) ↔ renderer(<code>public/app.js</code>) ↔ main 핸들러(<code>electron/ipc/*</code>)</b> 3면 교차 대조.
+    renderer는 <code>ipc(method, ...args) → spip[method](...args)</code> 어댑터로 호출하므로 인자 순서가 그대로 전달된다.
+  </p>
+  <table>
+    <thead><tr><th>채널 / 표면</th><th>preload 인자 1차고정</th><th>renderer 호출·소비</th><th>main 반환 shape / code</th><th>결과</th></tr></thead>
+    <tbody>
+      <tr><td><code>copyText(text)</code></td><td><code>{text:String(t)}</code></td><td><code>ipc('copyText',text)</code> → <code>res.ok</code>/<code>res.code==='INVALID_TEXT'</code></td><td><code>{ok:true}</code> / <code>{ok:false,code:'INVALID_TEXT'}</code></td><td><span class="pill p-pass">일치</span></td></tr>
+      <tr><td><code>getTools()</code></td><td>인자 없음</td><td><code>res.tools[]</code> → <code>toolView</code> 매핑(<code>args</code> 미참조)</td><td><code>{ok:true,tools:[{id,label,path,resolved,source}]}</code> · <b>args 없음</b></td><td><span class="pill p-pass">일치</span></td></tr>
+      <tr><td><code>setToolPath(id,p)</code></td><td><code>{id:String,path:null|String}</code></td><td><code>ipc('setToolPath',id,path)</code> → <code>applyToolUpdate(res)</code>/<code>describeToolError</code></td><td><code>{ok,tool}</code> / code∈<code>INVALID_TOOL_ID·NOT_ABSOLUTE·NOT_EXECUTABLE</code></td><td><span class="pill p-pass">일치</span></td></tr>
+      <tr><td><code>pickToolExecutable(id)</code></td><td><code>{id:String}</code></td><td><code>res.code==='CANCELLED'</code> 분기 처리</td><td><code>{ok,tool}</code> / code∈<code>CANCELLED·NOT_EXECUTABLE·INVALID_TOOL_ID·NOT_ABSOLUTE</code></td><td><span class="pill p-pass">일치</span></td></tr>
+      <tr><td><code>getUiState()</code></td><td>인자 없음</td><td><code>uiStateView(res)</code> → favorites/order/sortMode</td><td><code>{ok:true,favorites,order,sortMode}</code></td><td><span class="pill p-pass">일치</span></td></tr>
+      <tr><td><code>setFavorite(id,on)</code></td><td><code>{id:String,on:!!on}</code></td><td><code>ipc('setFavorite',id,on)</code> → <code>res.favorites[]</code></td><td><code>{ok:true,favorites}</code> / <code>{ok:false,code:'INVALID_ID'}</code></td><td><span class="pill p-pass">일치</span></td></tr>
+      <tr><td><code>setOrder(ids)</code></td><td><code>{ids:String[]}</code></td><td><code>ipc('setOrder',merged)</code> → <code>res.order</code>+<code>res.sortMode==='manual'</code></td><td><code>{ok:true,order,sortMode:'manual'}</code> / <code>INVALID_ORDER</code></td><td><span class="pill p-pass">일치</span></td></tr>
+      <tr><td><code>setSortMode(m)</code></td><td><code>{mode:String}</code></td><td><code>res.sortMode∈{auto,manual}</code> 적용</td><td><code>{ok:true,sortMode}</code></td><td><span class="pill p-pass">일치</span></td></tr>
+      <tr><td><code>onTray(cb)</code></td><td>콜백→<code>cb({action})</code>, <code>spip:tray:&lt;action&gt;</code> 구독</td><td><code>dispatchTrayAction(msg)</code>가 <code>msg.action</code> 객체 소비</td><td>payload <code>{action}</code>, action∈<code>dashboard|favorites</code></td><td><span class="pill p-pass">일치</span></td></tr>
+    </tbody>
+  </table>
+  <div class="card">
+    <p><b>특별 점검 항목 결과:</b></p>
+    <ul>
+      <li><code>onTray</code> payload <code>{action}</code> 객체 — preload가 <code>cb({action})</code>로 중계, renderer <code>dispatchTrayAction</code>이 <code>msg.action</code> 추출. <span class="pill p-pass">일치</span></li>
+      <li><code>setOrder → {order,sortMode}</code> — main <code>uiState.setOrder</code>가 항상 <code>sortMode:'manual'</code> 동반 반환, renderer가 둘 다 반영. <span class="pill p-pass">일치</span></li>
+      <li><code>getTools.tools[].{id,label,path,resolved,source}</code> (<b>args 없음</b>) — main 응답·renderer <code>toolView</code> 모두 <code>args</code> 미포함(<code>dashboard-m6</code> 테스트가 명시 단언). <span class="pill p-pass">일치</span></li>
+      <li><code>setToolPath</code> 에러 code 집합 — main 실제 산출 <code>{INVALID_TOOL_ID, NOT_ABSOLUTE, NOT_EXECUTABLE}</code>, renderer <code>describeToolError</code>가 해당 토큰 + <code>CANCELLED</code>/<code>INTERNAL</code> 모두 매핑. <span class="pill p-pass">일치</span> <span class="tag">(관찰 O-3 참조: NOT_FOUND는 매핑되나 미산출)</span></li>
+    </ul>
+    <p><b>정합 회귀 가드:</b> <code>electron-preload-contract.test.js</code>가 renderer의 모든 <code>ipc('리터럴')</code> 호출 ⊆ preload 노출 키임을 정적 보장(BUG-1 회귀 방지). 9개 신규 채널 모두 통과.</p>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2>3. 백로그 5기능 동작 검증 (순수함수 / ctx 모킹)</h2>
+  <p class="muted">main IPC 핸들러를 ctx 모킹으로 직접 구동(<code>clipboard</code>/<code>resolveBin</code>/<code>persistConfigKeys</code>/<code>uiStateStore</code> 주입)해 동작·분기·실패 code를 실측. 모든 케이스 통과.</p>
+  <table>
+    <thead><tr><th>요구</th><th>검증 시나리오 (실행)</th><th>기대 vs 실제</th><th>결과</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="kbd">R-17</td>
+        <td><code>copyText</code> 정상/길이초과(8193)/비문자열</td>
+        <td>8192 초과 → <code>INVALID_TEXT</code>, <b>절단 안 함·writeText 미호출</b> 확인. 정상은 1회 writeText.</td>
+        <td><span class="pill p-pass">PASS</span></td>
+      </tr>
+      <tr>
+        <td class="kbd">R-18</td>
+        <td><code>getTools</code> shape · <code>setToolPath</code>(whitelist·NOT_ABSOLUTE·NOT_EXECUTABLE·성공persist) · <code>setToolPath(null)</code> unset→PATH폴백 · <code>pickToolExecutable</code>(재검증·CANCELLED·INVALID_TOOL_ID) · <code>openInVsCode</code> toolId</td>
+        <td>비등록 toolId(<code>evil</code>/<code>hacktool</code>) 즉시 거부. 성공 시 <code>persistConfigKeys({tools})</code>+<code>clearBinCache</code>+<code>resolveBin(force:true)</code> 호출 확인. dialog 반환 경로도 동일 재검증(M6-M-2). <code>open</code> 기본 <code>code</code> 하위호환, exec args=<code>[projectPath]</code> 고정(M6-H-2).</td>
+        <td><span class="pill p-pass">PASS</span></td>
+      </tr>
+      <tr>
+        <td class="kbd">R-19</td>
+        <td><code>setOrder</code>(dedup·형식필터·manual 전환) · <code>setSortMode</code> auto↔manual · 비배열→<code>INVALID_ORDER</code> · <code>applyOrder</code> order 적용(renderer 순수함수)</td>
+        <td><code>setOrder</code>가 항상 <code>sortMode:'manual'</code> 동반. 중복/비형식 id 제거. <code>setSortMode('xxx')</code>→<code>auto</code> graceful 폴백. <code>applyOrder</code> manual 시 order순+신규 append.</td>
+        <td><span class="pill p-pass">PASS</span></td>
+      </tr>
+      <tr>
+        <td class="kbd">R-20</td>
+        <td><code>setFavorite</code> add/remove · <code>INVALID_ID</code> · 즐겨찾기 필터(<code>matchesFavoritesFilter</code>/<code>isFavorite</code>)</td>
+        <td>on=true 추가/false 제거, 잘못된 id(<code>BAD!</code>) → <code>INVALID_ID</code>. 필터 술어 정확.</td>
+        <td><span class="pill p-pass">PASS</span></td>
+      </tr>
+      <tr>
+        <td class="kbd">R-21</td>
+        <td><code>dispatchTrayAction</code>(dashboard|favorites|기타→null) · <code>nextSlideIndex</code>(래핑) · <code>favoriteViewModels</code>(교집합)</td>
+        <td>화이트리스트 외 action → null graceful. 슬라이더 인덱스 모듈러 래핑. 소멸 프로젝트 즐겨찾기 skip.</td>
+        <td><span class="pill p-pass">PASS</span> <span class="tag">(논리)</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- ============================================================ -->
+  <h2>4. 헤드리스 Electron 스모크 (실 런타임)</h2>
+  <p class="muted">
+    실제 <code>electron</code> 바이너리로 <code>electron/main.js</code> composition root를 부팅(offscreen, <code>--disable-gpu</code>)해
+    preload 노출·tray 생성·close-to-tray를 런타임으로 확인. 정적 분석을 넘는 실측 근거.
+  </p>
+  <div class="card">
+    <table>
+      <thead><tr><th>스모크 항목</th><th>관측</th><th>결과</th></tr></thead>
+      <tbody>
+        <tr><td>renderer <code>window.spip</code>에 신규 9채널 노출</td>
+          <td>실 렌더러에서 <code>Object.keys(window.spip)</code>에 <code>copyText·getTools·setToolPath·pickToolExecutable·getUiState·setFavorite·setOrder·setSortMode·onTray</code> 모두 존재(누락 0)</td>
+          <td><span class="pill p-pass">PASS</span></td></tr>
+        <tr><td><code>onTray</code> 함수 노출</td><td><code>typeof window.spip.onTray === 'function'</code></td><td><span class="pill p-pass">PASS</span></td></tr>
+        <tr><td>tray 생성</td><td>main 부팅 시 <code>createTray</code> 예외 없이 BrowserWindow+tray 구성(빌드 아이콘 폴백 동작)</td><td><span class="pill p-pass">PASS</span></td></tr>
+        <tr><td>close-to-tray (<code>!isQuitting</code> close → hide)</td>
+          <td><code>win.close()</code> 호출 후: <code>isDestroyed=false</code>, <code>isVisible=false</code> (파괴 아님·숨김). 설계 §9.2 일치.</td>
+          <td><span class="pill p-pass">PASS</span></td></tr>
+      </tbody>
+    </table>
+    <pre>SMOKE: PRELOAD_KEYS [...,"copyText","getTools","getUiState","onTray","setFavorite","setOrder","setSortMode","setToolPath","pickToolExecutable",...]
+SMOKE: PASS preload-9-channels
+SMOKE: PASS onTray-function
+SMOKE: CLOSE_TO_TRAY destroyed=false visibleBefore=true visibleAfter=false
+SMOKE: PASS close-to-tray-hide</pre>
+    <p class="tag">스모크 스크립트는 검증 후 정리(삭제)함. 재현: 임시 메인 로더로 <code>electron</code> 부팅 → <code>webContents.executeJavaScript('Object.keys(window.spip)')</code> → <code>win.close()</code> 후 <code>isDestroyed()/isVisible()</code> 관측.</p>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2>5. 요구 추적 (R-17 ~ R-21 백로그 의도 충족)</h2>
+  <table>
+    <thead><tr><th>요구</th><th>백로그 의도</th><th>충족 근거</th><th>판정</th></tr></thead>
+    <tbody>
+      <tr><td class="kbd">R-17</td><td>카드/드로어에서 경로 복사(클립보드)</td><td>main <code>clipboard.writeText</code> 단독 경로, <code>copyText</code> 버튼·토스트(<code>copyPath</code>), 길이초과 명시 거부</td><td><span class="pill p-pass">충족</span></td></tr>
+      <tr><td class="kbd">R-18</td><td>외부 툴 실행 파일 경로 직접 지정·PATH 폴백</td><td><code>getTools</code> 해석상태 표시 · <code>setToolPath</code>/<code>pickToolExecutable</code> · 지정해제(null)→PATH · <code>open(id,toolId)</code> 확장. 화이트리스트·force 재검증.</td><td><span class="pill p-pass">충족</span></td></tr>
+      <tr><td class="kbd">R-19</td><td>수동 카드 순서(드래그/키보드) + auto↔manual</td><td><code>setOrder</code>/<code>setSortMode</code> · <code>applyOrder</code>/<code>moveInOrder</code>/<code>nextSortMode</code> · 드래그→manual 자동전환. 키보드 대체(N-07) 존재.</td><td><span class="pill p-pass">충족</span> <span class="tag">(DnD 실조작 PC확인)</span></td></tr>
+      <tr><td class="kbd">R-20</td><td>즐겨찾기 토글 + 즐겨찾기만 필터</td><td><code>setFavorite</code> 영속 · <code>toggleFavorite</code>/<code>isFavorite</code>/<code>matchesFavoritesFilter</code> · 별 토글(<code>aria-pressed</code>)</td><td><span class="pill p-pass">충족</span></td></tr>
+      <tr><td class="kbd">R-21</td><td>트레이 상주 + 즐겨찾기 슬라이더/대시보드 복원</td><td>tray 메뉴·close-to-tray·<code>spip:tray:favorites</code> push→슬라이더 오버레이. '대시보드 열기'는 <code>win.show()</code>(설계대로 push 없음).</td><td><span class="pill p-pass">충족</span> <span class="tag">(O-1 참조)</span></td></tr>
+    </tbody>
+  </table>
+
+  <!-- ============================================================ -->
+  <h2>6. 회귀 (기존 동작·테스트 보존)</h2>
+  <table>
+    <thead><tr><th>영역</th><th>확인</th><th>결과</th></tr></thead>
+    <tbody>
+      <tr><td>CLI <code>scan.js</code></td><td><code>node scan.js --help</code> 정상 출력(옵션·경로 안내). bin <code>spip</code> 유지.</td><td><span class="pill p-pass">보존</span></td></tr>
+      <tr><td>기존 IPC <code>open/rescan/scan-status</code></td><td><code>spip:openInVsCode</code>·<code>spip:rescan</code>·<code>spip:getScanStatus</code> register.js에 그대로 등록, preload 노출 확인(스모크). <code>open</code>은 <code>toolId</code> 옵션 추가(하위호환 <code>code</code>).</td><td><span class="pill p-pass">보존</span></td></tr>
+      <tr><td>lib / MVP / M4 / Electron 테스트</td><td>전체 416건 통과(m4-scan/m4-rescan/server/scanner/walker/security 등 포함). 신규 채널은 기존 §4 계약 보존한 채 추가.</td><td><span class="pill p-pass">보존</span></td></tr>
+      <tr><td>persist 원자성</td><td>tools는 <code>persistConfigKeys({tools})</code>로 부분키만 갱신(scanRoots 등 보존), ui-state는 별도 <code>uiStateStore.write</code> 0600. <code>config-persist</code> 테스트 통과.</td><td><span class="pill p-pass">보존</span></td></tr>
+    </tbody>
+  </table>
+
+  <!-- ============================================================ -->
+  <h2>7. 발견 항목 (관찰 — 블로커/높음 없음)</h2>
+  <p class="muted">런타임을 깨는 경계면 불일치는 발견되지 않음. 아래는 설계 정합·무해한 미사용 경로 수준의 관찰.</p>
+
+  <div class="card">
+    <h3>O-1 <span class="sev-l">[낮음]</span> 트레이 <code>spip:tray:dashboard</code>는 push되지 않음 — renderer 핸들러는 미사용 경로</h3>
+    <ul>
+      <li><b>무엇이:</b> renderer <code>dispatchTrayAction</code>/<code>onTrayCommand</code>가 <code>dashboard</code> action을 처리하지만, main은 <code>spip:tray:favorites</code>만 send하고 <code>spip:tray:dashboard</code>는 보내지 않음.</li>
+      <li><b>어디서:</b> <code>electron/main.js</code> <code>onShowDashboard</code>(L185, <code>win.show()/focus()</code>만) ↔ <code>public/app.js</code> <code>onTrayCommand</code>(L2477 <code>dashboard</code> 분기).</li>
+      <li><b>기대 vs 실제:</b> <b>설계와 일치</b> — m6-design은 '대시보드 열기'를 <code>win.show()</code>로만 정의(L472), favorites만 push(L473). 즉 의도된 동작이며 renderer 분기는 forward-compatible dead-path.</li>
+      <li><b>심각도:</b> <span class="sev-l">낮음</span> — 동작 영향 없음. 정리하려면 renderer dashboard 분기 제거 또는 main에서 push 추가(택1). <b>통합 차단 아님.</b></li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h3>O-2 <span class="sev-l">[낮음]</span> <code>setToolPath</code> 빈문자열 경로 → <code>NOT_ABSOLUTE</code> (NOT_FOUND 아님)</h3>
+    <ul>
+      <li><b>무엇이:</b> <code>validateToolPath</code>가 <code>len===0</code>을 <code>NOT_ABSOLUTE</code>로 매핑. renderer는 빈 입력을 <code>null</code>(지정 해제)로 변환해 호출하므로 사용자 경로로는 도달하지 않음.</li>
+      <li><b>어디서:</b> <code>electron/ipc/tools.js</code> <code>validateToolPath</code>(L75).</li>
+      <li><b>기대 vs 실제:</b> 직접 빈 문자열 전달 시 의미상 "경로 없음"이나 <code>NOT_ABSOLUTE</code> 반환. renderer 경로상 무해.</li>
+      <li><b>심각도:</b> <span class="sev-l">낮음</span> — 사용자 표면 없음.</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h3>O-3 <span class="sev-l">[낮음]</span> <code>NOT_FOUND</code> code는 계약 표·renderer 매핑에 있으나 main이 산출하지 않음</h3>
+    <ul>
+      <li><b>무엇이:</b> 설계 §4.1 <code>setToolPath</code> code 집합에 <code>NOT_FOUND</code> 포함, renderer <code>describeToolError</code>도 매핑하지만, <code>validateToolPath</code>는 미존재 파일을 <code>NOT_EXECUTABLE</code>로 통합(주석에 명시 "미존재·비실행·비.exe 모두 여기로").</li>
+      <li><b>어디서:</b> <code>tools.js</code> L81 ↔ <code>m6-design.html §4.1</code> ↔ <code>app.js</code> <code>describeToolError</code>.</li>
+      <li><b>기대 vs 실제:</b> 데드 code(영원히 발생 안 함). 런타임 불일치 없음(renderer는 어떤 code든 graceful). 계약 문서 상 미세 불일치일 뿐.</li>
+      <li><b>심각도:</b> <span class="sev-l">낮음</span> — 동작 무영향. 정리 시 design code 표에서 <code>NOT_FOUND</code> 제거 권고(코드품질 영역, code-reviewer 위임).</li>
+    </ul>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2>8. 사용자 PC 확인 필요 목록 (헤드리스 한계 — 추측 PASS 금지)</h2>
+  <p class="muted">아래는 실 GUI/실 OS 상호작용이 필요해 헤드리스에서 단정할 수 없는 항목. <b>미검증</b>으로 분리한다.</p>
+  <table>
+    <thead><tr><th>#</th><th>확인 항목</th><th>절차</th><th>상태</th></tr></thead>
+    <tbody>
+      <tr><td>U-1</td><td>R-19 HTML5 드래그앤드롭으로 카드 순서 변경 → manual 전환·순서 영속</td><td>대시보드에서 카드를 드래그해 놓고, 재시작 후 순서 유지 확인</td><td><span class="pill p-na">미검증</span></td></tr>
+      <tr><td>U-2</td><td>R-18 <code>pickToolExecutable</code> 네이티브 파일 다이얼로그 실제 표시·<code>.exe</code> 선택→저장, <code>.bat/.lnk</code> 거부 메시지</td><td>설정&gt;외부 툴&gt;파일 선택 → 실제 <code>code.exe</code> 지정 후 카드 열기 동작</td><td><span class="pill p-na">미검증</span></td></tr>
+      <tr><td>U-3</td><td>R-17 실제 클립보드 붙여넣기 결과(OS 클립보드 내용)</td><td>복사 버튼 → 메모장에 Ctrl+V로 경로 확인</td><td><span class="pill p-na">미검증</span></td></tr>
+      <tr><td>U-4</td><td>R-21 트레이 아이콘 표시·메뉴 클릭(대시보드/즐겨찾기/종료)·더블클릭 복원·풍선 안내 1회</td><td>창 X → 트레이 잔류 확인, 트레이 메뉴 항목 동작, 종료로 완전 종료</td><td><span class="pill p-na">미검증</span></td></tr>
+      <tr><td>U-5</td><td>R-21 즐겨찾기 슬라이더 오버레이 시각/키보드 탐색(좌우 래핑)</td><td>트레이 '즐겨찾기' → 슬라이더 표시, 화살표 키 이동</td><td><span class="pill p-na">미검증</span></td></tr>
+      <tr><td>U-6</td><td>종료 시 스캔 진행 중 Q4 확인 다이얼로그(취소→스캔 지속, 종료→dispose)</td><td>재스캔 중 트레이 '종료' → 다이얼로그 분기 확인</td><td><span class="pill p-na">미검증</span></td></tr>
+    </tbody>
+  </table>
+  <p class="tag">참고: close-to-tray의 hide/!destroy 자체는 offscreen 스모크로 검증됨(§4). 위 U-4는 트레이 <b>시각/메뉴 클릭</b> 등 GUI 상호작용 부분에 한정.</p>
+
+  <!-- ============================================================ -->
+  <h2>9. 검증 범위 경계</h2>
+  <div class="card">
+    <ul>
+      <li>본 리포트는 <b>동작/통합</b>만 다룬다. 보안 취약점(toolId 화이트리스트의 위협모델 적정성·TOCTOU 잔여 위험 등)은 <b>security-reviewer</b>, 코드 가독성/중복/데드코드 정리(O-1·O-3)는 <b>code-reviewer</b> 영역.</li>
+      <li>O-1~O-3은 모두 "동작이 깨지는가" 기준에서 무해. 경계면 런타임 불일치는 0건.</li>
+    </ul>
+  </div>
+
+  <footer>
+    산출물: <code>E:\03.프로젝트\Project-SPIP\docs\reviews\m6_qa_1.html</code><br>
+    근거: <code>npm test</code> 416 pass · ctx 모킹 기능검증 8/8 · 실 Electron offscreen 스모크 4/4 · <code>node scan.js --help</code> 회귀<br>
+    QA 엔지니어 · 2026-06-21 · 종합 판정 <b>통합 가능</b> (블로커/높음 0, 보통 0, 낮음 3 관찰, PC 수동확인 6)
+  </footer>
+
+</div>
+</body>
+</html>

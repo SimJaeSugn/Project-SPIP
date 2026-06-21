@@ -98,9 +98,9 @@ test('정합 — open이 preload에 노출되고 채널 spip:openInVsCode로 inv
   const exposed = extractPreloadKeys(PRELOAD_SRC);
   assert.ok(exposed.has('open'), "preload가 'open'을 노출해야 한다(계약 §4.3)");
   assert.ok(!exposed.has('openInVsCode'), "잘못된 'openInVsCode' 키는 제거되어야 한다(NOTE-2)");
-  // open이 올바른 채널로 invoke하는지(채널명은 spip:openInVsCode 유지).
+  // open이 올바른 채널로 invoke하는지(채널명은 spip:openInVsCode 유지). M6: open(id, toolId?) 확장.
   assert.ok(
-    /open\s*:\s*\(\s*id\s*\)\s*=>\s*ipcRenderer\.invoke\(\s*'spip:openInVsCode'/.test(PRELOAD_SRC),
+    /open\s*:\s*\(\s*id\s*(?:,\s*toolId\s*)?\)\s*=>\s*ipcRenderer\.invoke\(\s*'spip:openInVsCode'/.test(PRELOAD_SRC),
     "open은 'spip:openInVsCode' 채널로 invoke해야 한다",
   );
 });

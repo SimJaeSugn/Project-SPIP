@@ -619,6 +619,222 @@ function summarizeAddResult(res) {
 }
 
 /* =====================================================================
+ * M6 (R-17~R-21): 순수 로직 (DOM 비의존, 테스트 대상)
+ *   - R-17 경로 복사 텍스트 구성
+ *   - R-18 tools 응답 → 설정 표시 뷰모델 매핑 + 실패 code 한국어
+ *   - R-19 order 적용 / sortMode 전이
+ *   - R-20 favorites 토글 상태 / 필터 합류
+ *   - R-21 슬라이더 인덱스 이동 / onTray 디스패치
+ *   계약: docs/architecture/m6-design.html §4(IPC), §6~9(UI). tools 응답에 args 없음.
+ * ===================================================================== */
+
+/**
+ * R-17: 클립보드로 복사할 경로 텍스트 구성(순수). copyText IPC 인자.
+ *   - 비문자열/공백 → null(복사할 것 없음 → 호출부가 토스트 생략/안내).
+ *   - 앞뒤 공백만 정리(경로 자체는 그대로 — main이 텍스트로만 취급, 변형/이스케이프 없음, L-1).
+ */
+function buildCopyText(path) {
+  if (typeof path !== 'string') return null;
+  const t = path.trim();
+  return t.length ? t : null;
+}
+
+/**
+ * R-18: getTools 응답 항목 → 설정 UI 표시 뷰모델(순수). 결측 graceful.
+ *   계약(§4.1): { id, label, path, resolved:boolean, source:'config'|'path'|'none' }
+ *   - label 비면 id 폴백(textContent 렌더 — L-1, 변형/이스케이프 없음).
+ *   - source 화이트리스트 밖이면 'none'.
+ *   - needsPathHelp: resolved=false && source='none' → PATH 안내 박스 노출(§6.3 ⓐ).
+ *   - statusLabel: 색 외 텍스트(N-07).
+ */
+function toolView(t) {
+  const o = (t && typeof t === 'object') ? t : {};
+  const id = typeof o.id === 'string' ? o.id : '';
+  const label = (typeof o.label === 'string' && o.label.length) ? o.label : (id || '(이름 없음)');
+  const path = (typeof o.path === 'string' && o.path.length) ? o.path : null;
+  const resolved = o.resolved === true;
+  const source = (o.source === 'config' || o.source === 'path') ? o.source : 'none';
+  return {
+    id,
+    label,
+    path,
+    resolved,
+    source,
+    needsPathHelp: !resolved && source === 'none',
+    statusLabel: toolStatusLabel(resolved, source),
+  };
+}
+
+/** R-18: 툴 해석 상태 → 표시 라벨(순수, 색 외 텍스트 N-07). */
+function toolStatusLabel(resolved, source) {
+  if (!resolved) return '미해결 — 실행 파일을 찾을 수 없음';
+  if (source === 'config') return '해결됨 — 지정한 경로';
+  if (source === 'path') return '해결됨 — PATH에서 발견';
+  return '미해결';
+}
+
+/** R-18: getTools 응답 배열 → toolView 배열(순수). 비배열 graceful. */
+function toolViews(tools) {
+  return (Array.isArray(tools) ? tools : []).map(toolView);
+}
+
+/**
+ * R-18: setToolPath/pickToolExecutable 실패 code → 한국어(순수, 고정 토큰만 — L-3).
+ *   계약(§4.1): INVALID_TOOL_ID | NOT_ABSOLUTE | NOT_FOUND | NOT_EXECUTABLE | CANCELLED
+ */
+function describeToolError(data) {
+  const obj = (data && typeof data === 'object') ? data : {};
+  const code = typeof obj.code === 'string' ? obj.code : '';
+  switch (code) {
+    case 'INVALID_TOOL_ID': return '알 수 없는 툴입니다.';
+    case 'NOT_ABSOLUTE': return '절대경로를 입력하세요.';
+    case 'NOT_FOUND': return '해당 경로에 파일이 없습니다.';
+    case 'NOT_EXECUTABLE': return '실행 파일이 아닙니다. (.exe 실행 파일을 지정하세요)';
+    case 'CANCELLED': return '파일 선택이 취소되었습니다.';
+    case 'INTERNAL': return '내부 오류가 발생했습니다.';
+    default: return code ? ('처리하지 못했습니다 (' + code + ')') : '처리하지 못했습니다.';
+  }
+}
+
+/**
+ * R-20: 즐겨찾기 집합 토글 결과(순수). 낙관적 메모리 반영용.
+ *   현재 set(배열) + id + on(Boolean) → 새 배열(중복 없음, 순서 보존).
+ *   on=true: 추가(이미 있으면 그대로). on=false: 제거. id 비유효 → 원본 그대로.
+ */
+function toggleFavorite(favorites, id, on) {
+  const set = (Array.isArray(favorites) ? favorites : []).filter((x) => typeof x === 'string');
+  if (typeof id !== 'string' || !id) return set.slice();
+  const has = set.includes(id);
+  if (on) {
+    return has ? set.slice() : set.concat([id]);
+  }
+  return set.filter((x) => x !== id);
+}
+
+/** R-20: 즐겨찾기 여부(순수). */
+function isFavorite(favorites, id) {
+  return Array.isArray(favorites) && typeof id === 'string' && favorites.includes(id);
+}
+
+/**
+ * R-19: sortMode + order(id 배열)를 viewModels 에 적용(순수).
+ *   - mode='manual': order 순서로 정렬하되 order 에 없는 신규 항목은 뒤에 append(§3.2·§7).
+ *       order 에 있으나 스냅샷에 없는 id 는 자동 skip(존재하는 vm 만 출력).
+ *   - mode='auto'(또는 그 외): 기존 정렬(sortViewModels) 적용.
+ *   원본 배열 불변.
+ */
+function applyOrder(viewModels, sortMode, order) {
+  const vms = Array.isArray(viewModels) ? viewModels : [];
+  if (sortMode !== 'manual') {
+    return sortViewModels(vms, 'modified'); // 호출부가 실제 sortKey 로 별도 정렬(여기선 manual 분기만 의미)
+  }
+  const ord = (Array.isArray(order) ? order : []).filter((x) => typeof x === 'string');
+  const byId = new Map();
+  for (const vm of vms) if (vm && typeof vm.id === 'string') byId.set(vm.id, vm);
+  const out = [];
+  const used = new Set();
+  for (const id of ord) {
+    if (byId.has(id) && !used.has(id)) { out.push(byId.get(id)); used.add(id); }
+  }
+  // order 에 없는 신규 프로젝트는 원래 순서대로 뒤에 append
+  for (const vm of vms) {
+    if (vm && typeof vm.id === 'string' && !used.has(vm.id)) { out.push(vm); used.add(vm.id); }
+  }
+  return out;
+}
+
+/**
+ * R-19: 드래그/키보드로 from → to 인덱스로 항목 이동한 새 id 배열(순수).
+ *   범위 밖/동일 인덱스 → 원본 복제. setOrder 인자 구성·낙관적 렌더에 사용.
+ */
+function moveInOrder(ids, from, to) {
+  const arr = (Array.isArray(ids) ? ids : []).slice();
+  if (!Number.isInteger(from) || !Number.isInteger(to)) return arr;
+  if (from < 0 || from >= arr.length || to < 0 || to >= arr.length || from === to) return arr;
+  const [item] = arr.splice(from, 1);
+  arr.splice(to, 0, item);
+  return arr;
+}
+
+/**
+ * R-19: 현재 표시 목록에서 sortMode 전이 결정(순수).
+ *   - 사용자가 카드를 드래그/이동 → 'manual' 강제 전환(setOrder 가 sortMode='manual' 동반, §7).
+ *   - 정렬 셀렉터 변경 → 'auto' 복귀.
+ *   반환 { sortMode, changed }.
+ */
+function nextSortMode(current, trigger) {
+  const cur = (current === 'manual') ? 'manual' : 'auto';
+  if (trigger === 'reorder') return { sortMode: 'manual', changed: cur !== 'manual' };
+  if (trigger === 'sortSelect') return { sortMode: 'auto', changed: cur !== 'auto' };
+  return { sortMode: cur, changed: false };
+}
+
+/**
+ * R-21: 슬라이더 인덱스 이동(순수, 래핑). count 항목에서 dir(-1/+1) 이동.
+ *   빈 목록 → 0. 범위 밖 cur 보정. 좌/우 버튼·화살표 키 공용.
+ */
+function nextSlideIndex(cur, dir, count) {
+  const n = Number.isInteger(count) && count > 0 ? count : 0;
+  if (n === 0) return 0;
+  let i = Number.isInteger(cur) ? cur : 0;
+  i = ((i % n) + n) % n;
+  const d = (dir === 1 || dir === -1) ? dir : 0;
+  return (((i + d) % n) + n) % n;
+}
+
+/**
+ * R-21: favorites(id) ∩ viewModels 교집합을 favorites 순서로 산출(순수).
+ *   스냅샷에 없는 즐겨찾기 id 는 skip(소멸 프로젝트 graceful, §8·§9.3).
+ */
+function favoriteViewModels(viewModels, favorites) {
+  const vms = Array.isArray(viewModels) ? viewModels : [];
+  const favs = (Array.isArray(favorites) ? favorites : []).filter((x) => typeof x === 'string');
+  const byId = new Map();
+  for (const vm of vms) if (vm && typeof vm.id === 'string') byId.set(vm.id, vm);
+  const out = [];
+  const used = new Set();
+  for (const id of favs) {
+    if (byId.has(id) && !used.has(id)) { out.push(byId.get(id)); used.add(id); }
+  }
+  return out;
+}
+
+/**
+ * R-20: 즐겨찾기 필터 합류(순수). favoritesOnly 면 즐겨찾기만 통과.
+ *   기존 matchesFilters/ matchesSearch 와 AND 결합(호출부). 여기선 즐겨찾기 술어만.
+ */
+function matchesFavoritesFilter(vm, favoritesOnly, favorites) {
+  if (!favoritesOnly) return true;
+  return isFavorite(favorites, vm && vm.id);
+}
+
+/**
+ * R-21: 트레이 push 액션({action}) → renderer 핸들러 토큰(순수). onMenu 패턴 정합.
+ *   계약(§4.1·§9.2): action ∈ dashboard | favorites (고정 화이트리스트). 그 외 → null(graceful).
+ */
+function dispatchTrayAction(msg) {
+  const action = (msg && typeof msg === 'object' && typeof msg.action === 'string') ? msg.action : '';
+  switch (action) {
+    case 'dashboard': return { handler: 'dashboard' };
+    case 'favorites': return { handler: 'favorites' };
+    default: return { handler: null };
+  }
+}
+
+/**
+ * R-19/20/21: getUiState 응답 → 초기 UI 상태 뷰모델(순수). 결측/손상 graceful.
+ *   계약(§4.1): { ok:true, favorites:string[], order:string[], sortMode:string }
+ *   sortMode 화이트리스트 밖 → 'auto'. 배열 아님 → 빈 배열. id 필터(문자열만).
+ */
+function uiStateView(res) {
+  const r = (res && typeof res === 'object') ? res : {};
+  const favorites = (Array.isArray(r.favorites) ? r.favorites : []).filter((x) => typeof x === 'string');
+  const order = (Array.isArray(r.order) ? r.order : []).filter((x) => typeof x === 'string');
+  const sortMode = (r.sortMode === 'manual') ? 'manual' : 'auto';
+  return { favorites, order, sortMode };
+}
+
+/* =====================================================================
  * 브라우저 전용 (DOM / fetch / 이벤트)
  * ===================================================================== */
 function initBrowser() {
@@ -641,6 +857,13 @@ function initBrowser() {
       selectedId: null,
       opening: {},               // id -> true(연타 방지)
       rescanning: false,         // 재스캔 요청 in-flight(버튼 비활성)
+      // M6 UI 상태(R-19/20/21) — getUiState 로 초기 적재, 액션 시 낙관적 반영 + IPC 영속
+      favorites: [],             // R-20: 즐겨찾기 id 집합(배열)
+      order: [],                 // R-19: 수동 카드 순서(id 배열)
+      sortMode: 'auto',          // R-19: 'auto' | 'manual'
+      favoritesOnly: false,      // R-20: '즐겨찾기만' 필터
+      dragId: null,              // R-19: 드래그 중인 카드 id
+      slider: { open: false, index: 0 }, // R-21: 즐겨찾기 슬라이더 오버레이 상태
     },
     // R-15: 진행 통지 컨텍스트(Electron push 모델 — 폴링 타이머 제거)
     scan: {
@@ -659,6 +882,11 @@ function initBrowser() {
     showSettings: false,         // 설정 패널(드로어형) 열림 여부
     opts: { withSize: false, allDrives: false }, // 재스캔 옵션 UI 상태
     menuUnsubscribe: null,       // P2-1: spip.onMenu 구독 해제 함수(teardown 시 호출)
+    // M6 (R-18) 외부 툴 설정 상태
+    tools: [],                   // getTools 응답(toolViews 입력)
+    toolPathInput: {},           // 툴별 경로 직접 입력 컨트롤드 값 { id: text }
+    busyTools: false,            // 툴 경로 설정 in-flight
+    trayUnsubscribe: null,       // R-21: spip.onTray 구독 해제 함수
   };
 
   const app = document.getElementById('app');
@@ -683,6 +911,10 @@ function initBrowser() {
       return { ok: false, code: 'INTERNAL', message: (err && err.message) ? err.message : 'IPC 오류' };
     }
   }
+  // M6 신규 채널 어댑터. method 를 변수로 전달해 ipc() 와 동일 경로(graceful)로 호출하되,
+  //   preload 미배포 환경(웹/테스트·devops 미병합)에서도 brideMissing 으로 안전 폴백한다.
+  //   (정합 테스트는 ipc('리터럴')만 대조하므로 신규 채널은 호출부가 직접 ipc(varMethod) 사용.)
+  function bridgeHas(method) { return !!(spip && typeof spip[method] === 'function'); }
 
   /* ---- DOM 빌더 헬퍼 (L-1: 텍스트는 항상 textContent) ---- */
   function el(tag, opts) {
@@ -1009,6 +1241,7 @@ function initBrowser() {
 
     if (store.state.selectedId) root.appendChild(renderDrawer());
     if (store.showSettings) root.appendChild(renderSettings());
+    if (store.state.slider.open) root.appendChild(renderFavoritesSlider()); // R-21
     return root;
   }
 
@@ -1022,6 +1255,8 @@ function initBrowser() {
     render();
     // 최신 config/roots 동기화(비동기 — 끝나면 재렌더)
     refreshConfig();
+    // R-18: 툴 해석 상태도 동기화(설정 드로어 오픈 시에만 — 빈도 낮음, §4.1)
+    refreshTools();
   }
   function closeSettings() {
     store.showSettings = false;
@@ -1061,6 +1296,9 @@ function initBrowser() {
 
     // 2) 재스캔 옵션 (getConfig 기반)
     body.appendChild(renderScanOptions());
+
+    // 3) 외부 툴 경로(R-18) — getTools 해석 상태 + 직접 지정/파일 선택 + PATH 안내
+    body.appendChild(renderToolSettings());
 
     aside.appendChild(body);
     overlay.appendChild(aside);
@@ -1147,6 +1385,99 @@ function initBrowser() {
     return label;
   }
 
+  /* =====================================================================
+   * R-18: 외부 툴 경로 설정 섹션 (getTools / setToolPath / pickToolExecutable)
+   *   - 각 툴: 해석 상태(resolved/source) + 경로 직접 입력 + 파일 선택 + 지정 해제
+   *   - resolved=false && source='none' → PATH 추가 방법 안내(정적 텍스트, 외부 링크 없음)
+   *   - 모든 경로/라벨은 textContent(L-1).
+   * ===================================================================== */
+  function renderToolSettings() {
+    const block = el('div', { cls: 'insight', children: [el('div', { cls: 'insight__title', text: '외부 툴 경로' })] });
+    const views = toolViews(store.tools);
+
+    if (!bridgeHas('getTools') && views.length === 0) {
+      block.appendChild(el('div', { cls: 'rootmgr__empty', text: '이 환경에서는 외부 툴 설정을 사용할 수 없습니다.' }));
+      return block;
+    }
+    if (views.length === 0) {
+      block.appendChild(el('div', { cls: 'rootmgr__empty', text: '툴 정보를 불러오는 중…' }));
+      return block;
+    }
+
+    for (const tv of views) block.appendChild(renderToolRow(tv));
+    return block;
+  }
+
+  function renderToolRow(tv) {
+    const row = el('div', { cls: 'toolrow' });
+
+    // 헤더: 라벨 + 상태 배지(색 외 텍스트, N-07)
+    const head = el('div', { cls: 'toolrow__head' });
+    head.appendChild(el('span', { cls: 'toolrow__label', text: tv.label })); // L-1
+    const statusCls = tv.resolved ? 'badge--git-clean' : 'badge--git-na';
+    head.appendChild(badge(statusCls, tv.statusLabel));
+    row.appendChild(head);
+
+    // 현재 해석 경로(있으면) — textContent
+    if (tv.path) {
+      row.appendChild(el('div', { cls: 'toolrow__path mono', text: tv.path, title: tv.path }));
+    }
+
+    // ⓐ PATH 안내(미해결 & source='none')
+    if (tv.needsPathHelp) {
+      row.appendChild(el('div', { cls: 'toolrow__help', attrs: { role: 'note' }, children: [
+        el('div', { cls: 'toolrow__help-title', text: tv.id + '을(를) PATH에서 찾을 수 없습니다.' }),
+        el('div', { cls: 'toolrow__help-body', text: 'VS Code에서 Ctrl/Cmd+Shift+P → "Shell Command: Install \'code\' command in PATH" 를 실행하거나, 아래에서 실행 파일(.exe)을 직접 지정하세요.' }),
+      ]}));
+    }
+
+    // ⓑ 경로 직접 입력 + 파일 선택 + 지정 해제
+    const inputRow = el('div', { cls: 'toolrow__inputrow' });
+    const inputId = 'tool-path-' + tv.id;
+    const pathInput = el('input', {
+      cls: 'rootmgr__input',
+      attrs: {
+        type: 'text', id: inputId,
+        placeholder: '실행 파일 절대경로 (예: C:\\Program Files\\Microsoft VS Code\\Code.exe)',
+        'aria-label': tv.label + ' 실행 파일 경로 직접 입력', autocomplete: 'off', spellcheck: 'false',
+      },
+    });
+    const curInput = (typeof store.toolPathInput[tv.id] === 'string') ? store.toolPathInput[tv.id] : (tv.path || '');
+    pathInput.value = curInput;
+    pathInput.addEventListener('input', (e) => { store.toolPathInput[tv.id] = e.target.value || ''; });
+    pathInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); onSetToolPath(tv.id); } });
+    if (store.busyTools) pathInput.disabled = true;
+    inputRow.appendChild(pathInput);
+
+    const setBtn = el('button', {
+      cls: 'btn btn--sm', text: '저장', attrs: { type: 'button', 'aria-label': tv.label + ' 경로 저장' },
+      on: { click: () => onSetToolPath(tv.id) },
+    });
+    if (store.busyTools) setBtn.disabled = true;
+    inputRow.appendChild(setBtn);
+    row.appendChild(inputRow);
+
+    const actions = el('div', { cls: 'toolrow__actions' });
+    const pickBtn = el('button', {
+      cls: 'btn btn--sm', text: '실행 파일 선택…', attrs: { type: 'button', 'aria-label': tv.label + ' 실행 파일 선택' },
+      on: { click: () => onPickToolExecutable(tv.id) },
+    });
+    if (store.busyTools || !bridgeHas('pickToolExecutable')) pickBtn.disabled = true;
+    actions.appendChild(pickBtn);
+
+    if (tv.path) {
+      const clearBtn = el('button', {
+        cls: 'btn btn--sm btn--ghost', text: '지정 해제', attrs: { type: 'button', 'aria-label': tv.label + ' 경로 지정 해제' },
+        on: { click: () => onClearToolPath(tv.id) },
+      });
+      if (store.busyTools) clearBtn.disabled = true;
+      actions.appendChild(clearBtn);
+    }
+    row.appendChild(actions);
+
+    return row;
+  }
+
   /* ---- 헤더 ---- */
   function renderHeader() {
     const header = el('header', { cls: 'topbar' });
@@ -1207,7 +1538,7 @@ function initBrowser() {
   /* ---- 툴바(표시개수·칩·정렬·뷰 토글) ---- */
   function renderToolbar() {
     const st = store.state;
-    const list = applyQuery(store.viewModels, st);
+    const list = displayList();
     const bar = el('div', { cls: 'toolbar' });
 
     const count = el('div', { cls: 'toolbar__count', children: [
@@ -1244,10 +1575,47 @@ function initBrowser() {
       const v = e.target.value;
       if (v === 'size' && !sizeOk) { toast('용량 데이터가 아직 측정되지 않아 최근 수정순으로 표시합니다.'); }
       st.sort = v;
+      // R-19: 정렬 셀렉터를 고르면 수동순서(manual) → auto 복귀(§7).
+      applySortMode('sortSelect');
       render();
     });
     sortWrap.appendChild(sel);
+    // R-19: 수동순서(manual) 상태 표시 + auto 복귀 토글(키보드 도달)
+    if (st.sortMode === 'manual') {
+      const manualBtn = el('button', {
+        cls: 'link-btn toolbar__manual',
+        text: '수동순서 · 자동정렬로',
+        attrs: { type: 'button', 'aria-label': '수동 순서 해제하고 자동 정렬로 전환' },
+        on: { click: () => { applySortMode('sortSelect'); render(); } },
+      });
+      sortWrap.appendChild(manualBtn);
+    }
     bar.appendChild(sortWrap);
+
+    // 카드/표 토글
+    bar.appendChild(segToggle([
+      ['cards', '카드', st.density === 'cards', () => { st.density = 'cards'; render(); }],
+      ['table', '표', st.density === 'table', () => { st.density = 'table'; render(); }],
+    ]));
+    // R-20: '즐겨찾기만' 필터 토글(aria-pressed)
+    const favOnly = el('button', {
+      cls: 'btn favfilter-btn' + (st.favoritesOnly ? ' is-active' : ''),
+      attrs: { type: 'button', 'aria-pressed': st.favoritesOnly ? 'true' : 'false', 'aria-label': '즐겨찾기만 보기 토글' },
+      on: { click: () => { st.favoritesOnly = !st.favoritesOnly; render(); } },
+    });
+    favOnly.appendChild(starIcon(st.favoritesOnly, 13));
+    favOnly.appendChild(el('span', { text: '즐겨찾기만' }));
+    bar.appendChild(favOnly);
+
+    // R-21: 즐겨찾기 슬라이더 오버레이 트리거(UI)
+    const sliderBtn = el('button', {
+      cls: 'btn',
+      attrs: { type: 'button', 'aria-label': '즐겨찾기 슬라이더 열기' },
+      on: { click: () => openFavoritesSlider() },
+    });
+    sliderBtn.appendChild(starIcon(true, 13));
+    sliderBtn.appendChild(el('span', { text: '슬라이더' }));
+    bar.appendChild(sliderBtn);
 
     // 카드/표 토글
     bar.appendChild(segToggle([
@@ -1261,6 +1629,13 @@ function initBrowser() {
     ]));
 
     return bar;
+  }
+
+  /** 별 아이콘 SVG(채움 여부). filled=true면 currentColor 채움. */
+  function starIcon(filled, size) {
+    const s = svg([{ t: 'path', d: 'M12 2.5l2.9 5.9 6.5.95-4.7 4.6 1.1 6.45L12 17.85 6.1 20.95l1.1-6.45-4.7-4.6 6.5-.95z' }], { size: size || 14, sw: 1.6 });
+    if (filled) { s.setAttribute('fill', 'currentColor'); }
+    return s;
   }
   function segToggle(items) {
     const group = el('div', { cls: 'seg' });
@@ -1442,9 +1817,28 @@ function initBrowser() {
     });
   }
 
+  /**
+   * 표시 목록(필터·검색·즐겨찾기 필터 적용 + 정렬/수동순서)을 산출.
+   *   - 즐겨찾기만(favoritesOnly) 필터를 기존 AND 필터에 합류(R-20).
+   *   - sortMode='manual' 이면 order(id 배열) 순서로 배치(신규는 뒤 append, R-19),
+   *     'auto' 면 기존 정렬(sort 키) 적용.
+   */
+  function displayList() {
+    const st = store.state;
+    const filtered = store.viewModels.filter((vm) =>
+      matchesFilters(vm, st.filters)
+      && matchesSearch(vm, st.search || '')
+      && matchesFavoritesFilter(vm, st.favoritesOnly, st.favorites)
+    );
+    if (st.sortMode === 'manual') {
+      return applyOrder(filtered, 'manual', st.order);
+    }
+    return sortViewModels(filtered, st.sort || 'modified');
+  }
+
   /* ---- 결과(카드/표/무결과) ---- */
   function renderResults() {
-    const list = applyQuery(store.viewModels, store.state);
+    const list = displayList();
     if (list.length === 0) return renderNoResults();
     return store.state.density === 'table' ? renderTable(list) : renderCards(list);
   }
@@ -1463,12 +1857,34 @@ function initBrowser() {
 
   function renderCards(list) {
     const grid = el('div', { cls: 'cards' });
-    for (const vm of list) grid.appendChild(buildCard(vm));
+    // 드래그 reorder 는 cards 밀도에서만(§7). 현재 표시 목록의 id 순서를 reorder 기준으로 삼는다.
+    const ids = list.map((vm) => vm.id);
+    for (let i = 0; i < list.length; i++) grid.appendChild(buildCard(list[i], i, ids));
     return grid;
   }
 
-  function buildCard(vm) {
+  function buildCard(vm, index, displayIds) {
     const card = el('article', { cls: 'card' });
+    // R-19: HTML5 드래그로 순서 변경. 드롭 시 자동 manual 전환 + setOrder 영속.
+    card.setAttribute('draggable', 'true');
+    card.dataset.cardId = vm.id || '';
+    if (store.state.dragId && store.state.dragId === vm.id) card.classList.add('is-dragging');
+    card.addEventListener('dragstart', (e) => {
+      store.state.dragId = vm.id;
+      try { e.dataTransfer.setData('text/plain', vm.id); e.dataTransfer.effectAllowed = 'move'; } catch (_) { /* ignore */ }
+      card.classList.add('is-dragging');
+    });
+    card.addEventListener('dragend', () => { store.state.dragId = null; card.classList.remove('is-dragging'); });
+    card.addEventListener('dragover', (e) => { e.preventDefault(); try { e.dataTransfer.dropEffect = 'move'; } catch (_) { /* ignore */ } card.classList.add('is-dropt'); });
+    card.addEventListener('dragleave', () => card.classList.remove('is-dropt'));
+    card.addEventListener('drop', (e) => {
+      e.preventDefault();
+      card.classList.remove('is-dropt');
+      const fromId = store.state.dragId;
+      store.state.dragId = null;
+      if (!fromId || fromId === vm.id) { render(); return; }
+      reorderByDrop(displayIds, fromId, vm.id);
+    });
 
     const head = el('div', { cls: 'card__head' });
     head.appendChild(dot(vm.language));
@@ -1481,6 +1897,8 @@ function initBrowser() {
     titleWrap.appendChild(el('div', { cls: 'card__name', text: vm.name, title: vm.name }));
     titleWrap.appendChild(el('div', { cls: 'card__path mono', text: vm.path, title: vm.path }));
     head.appendChild(titleWrap);
+    // R-20: 즐겨찾기 별 토글(aria-pressed)
+    head.appendChild(favoriteButton(vm));
     card.appendChild(head);
 
     card.appendChild(el('div', { cls: 'card__desc', text: vm.description || '설명 없음' }));
@@ -1499,12 +1917,60 @@ function initBrowser() {
     ]});
     footer.appendChild(meta);
     const acts = el('div', { cls: 'card__acts' });
+    // R-19: 드래그 키보드 대체(N-07) — 좌/우 이동 버튼
+    acts.appendChild(moveButton(displayIds, index, -1));
+    acts.appendChild(moveButton(displayIds, index, 1));
+    // R-17: 경로 복사
+    acts.appendChild(copyPathButton(vm, 'btn btn--ghost btn--sm'));
     acts.appendChild(el('button', { cls: 'btn btn--ghost', text: '상세', on: { click: () => openDrawer(vm.id) } }));
     acts.appendChild(openButton(vm, 'btn btn--dark'));
     footer.appendChild(acts);
     card.appendChild(footer);
 
     return card;
+  }
+
+  /** R-20: 즐겨찾기 별 토글 버튼(aria-pressed, N-07). */
+  function favoriteButton(vm) {
+    const on = isFavorite(store.state.favorites, vm.id);
+    const btn = el('button', {
+      cls: 'fav-btn' + (on ? ' is-on' : ''),
+      attrs: {
+        type: 'button',
+        'aria-pressed': on ? 'true' : 'false',
+        'aria-label': (on ? '즐겨찾기 해제: ' : '즐겨찾기 추가: ') + vm.name,
+        title: on ? '즐겨찾기 해제' : '즐겨찾기 추가',
+      },
+      on: { click: (e) => { e.stopPropagation(); setFavorite(vm.id, !on); } },
+    });
+    if (!vm.id) btn.disabled = true;
+    btn.appendChild(starIcon(on, 16));
+    return btn;
+  }
+
+  /** R-17: 경로 복사 버튼(클립보드는 main copyText IPC — navigator.clipboard 미사용). */
+  function copyPathButton(vm, cls) {
+    const btn = el('button', {
+      cls: cls || 'btn btn--ghost btn--sm', text: '경로 복사',
+      attrs: { type: 'button', 'aria-label': '경로 복사: ' + vm.path },
+      on: { click: (e) => { e.stopPropagation(); copyPath(vm.path); } },
+    });
+    return btn;
+  }
+
+  /** R-19: 키보드 순서 이동 버튼(좌=-1/우=+1). 같은 setOrder 경로(N-07 드래그 대체). */
+  function moveButton(displayIds, index, dir) {
+    const label = dir < 0 ? '앞으로 이동' : '뒤로 이동';
+    const btn = el('button', {
+      cls: 'btn btn--ghost btn--sm move-btn',
+      attrs: { type: 'button', 'aria-label': label },
+      title: label,
+      on: { click: (e) => { e.stopPropagation(); reorderByMove(displayIds, index, dir); } },
+    });
+    btn.appendChild(svg([{ t: 'path', d: dir < 0 ? 'M15 18l-6-6 6-6' : 'M9 18l6-6-6-6' }], { size: 14, sw: 2.2 }));
+    const last = displayIds.length - 1;
+    if ((dir < 0 && index <= 0) || (dir > 0 && index >= last)) btn.disabled = true;
+    return btn;
   }
 
   /** Git 배지들(카드/표 공용). table=true면 컴팩트 클래스. */
@@ -1561,9 +2027,12 @@ function initBrowser() {
       tr.appendChild(el('td', { cls: 'ta-right mono table__size', text: sizeStatusLabel(vm.sizeStatus, vm.totalBytes) }));
 
       const tdAct = el('td', { cls: 'ta-right' });
-      const btn = openButton(vm, 'btn btn--ghost btn--sm');
+      const actWrap = el('div', { cls: 'table__acts' });
+      actWrap.appendChild(favoriteButton(vm)); // R-20
+      actWrap.appendChild(copyPathButton(vm, 'btn btn--ghost btn--sm')); // R-17
+      actWrap.appendChild(openButton(vm, 'btn btn--ghost btn--sm'));
       // 행 클릭(드로어)와 분리
-      tdAct.appendChild(btn);
+      tdAct.appendChild(actWrap);
       tr.appendChild(tdAct);
 
       tbody.appendChild(tr);
@@ -1638,6 +2107,14 @@ function initBrowser() {
     openBtn.textContent = store.state.opening[vm.id] ? '여는 중…' : 'VS Code로 열기';
     openBtn.prepend(svg([{ t: 'path', d: 'M5 12h14M13 6l6 6-6 6' }], { size: 14 }));
     bodyWrap.appendChild(openBtn);
+    // R-17/R-20: 경로 복사 + 즐겨찾기 토글
+    const drawerActs = el('div', { cls: 'drawer__acts' });
+    drawerActs.appendChild(copyPathButton(vm, 'btn'));
+    const favWrap = favoriteButton(vm);
+    favWrap.classList.add('fav-btn--labeled');
+    favWrap.appendChild(el('span', { cls: 'fav-btn__label', text: isFavorite(store.state.favorites, vm.id) ? '즐겨찾기됨' : '즐겨찾기' }));
+    drawerActs.appendChild(favWrap);
+    bodyWrap.appendChild(drawerActs);
     bodyWrap.appendChild(el('div', { cls: 'drawer__desc', text: vm.description || '설명 없음' }));
 
     // insight 1: language
@@ -1974,6 +2451,38 @@ function initBrowser() {
     await reloadAfterScan();
   }
 
+  /* =====================================================================
+   * R-21: 트레이 push 구독 (spip.onTray → dashboard|favorites 디스패치)
+   *   main 이 트레이 메뉴 클릭 시 win.show() 후 {action} push. 부재(웹/테스트) graceful.
+   * ===================================================================== */
+  function subscribeTray() {
+    unsubscribeTray();
+    if (!hasBridge() || typeof spip.onTray !== 'function') return; // graceful
+    const unsub = spip.onTray((msg) => onTrayCommand(msg));
+    store.trayUnsubscribe = (typeof unsub === 'function') ? unsub : null;
+  }
+  function unsubscribeTray() {
+    if (typeof store.trayUnsubscribe === 'function') {
+      try { store.trayUnsubscribe(); } catch (_) { /* ignore */ }
+    }
+    store.trayUnsubscribe = null;
+  }
+  /** onTray 콜백 본체 — action 토큰 디스패치(매핑은 순수 dispatchTrayAction). */
+  function onTrayCommand(msg) {
+    const { handler } = dispatchTrayAction(msg);
+    if (handler === 'favorites') {
+      // 즐겨찾기 슬라이더 오버레이 표시(대시보드 뷰에서만 의미)
+      if (store.state.view === 'dashboard') openFavoritesSlider();
+      else { store.state.view = 'dashboard'; openFavoritesSlider(); }
+    } else if (handler === 'dashboard') {
+      // 대시보드 포커스/표시(슬라이더 닫고 대시보드로)
+      store.state.slider.open = false;
+      if (store.state.view !== 'dashboard' && store.viewModels.length) store.state.view = 'dashboard';
+      render();
+    }
+    // 그 외 — graceful 무시
+  }
+
   /** 메뉴 '정보' — 간단한 정보 토스트(L-1: textContent). */
   function showAbout() {
     toast('Project-SPIP — 로컬 프로젝트 스캐너 (Electron)');
@@ -1987,15 +2496,125 @@ function initBrowser() {
     try {
       const data = await ipc('open', id);
       if (data && data.ok) toast('VS Code에서 여는 중');
-      else toast(describeError(data), true);
+      else if (data && data.code === 'CODE_CLI_NOT_FOUND') {
+        // R-18: code 미발견 → 설정에서 경로 지정 안내(액션 토스트 + 설정 열기 유도)
+        toastWithAction('VS Code를 찾을 수 없습니다. 설정 > 외부 툴에서 실행 파일 경로를 지정하세요.', '설정 열기', () => openSettings());
+      } else toast(describeError(data), true);
     } finally {
       setTimeout(() => { delete store.state.opening[id]; render(); }, 800);
     }
   }
 
   /* =====================================================================
+   * R-17: 경로 복사 (main clipboard.writeText — navigator.clipboard 미사용)
+   * ===================================================================== */
+  async function copyPath(path) {
+    const text = buildCopyText(path);
+    if (!text) { toast('복사할 경로가 없습니다.', true); return; }
+    if (!bridgeHas('copyText')) { toast('이 환경에서는 복사를 사용할 수 없습니다.', true); return; }
+    const res = await ipc('copyText', text);
+    if (res && res.ok) toast('경로를 복사했습니다.');
+    else if (res && res.code === 'INVALID_TEXT') toast('경로가 너무 길어 복사하지 못했습니다.', true);
+    else toast('경로를 복사하지 못했습니다.', true);
+  }
+
+  /* =====================================================================
+   * R-20: 즐겨찾기 토글 (낙관적 메모리 반영 → setFavorite 영속)
+   * ===================================================================== */
+  async function setFavorite(id, on) {
+    if (!id) return;
+    // 낙관적: 메모리 즉시 반영
+    store.state.favorites = toggleFavorite(store.state.favorites, id, on);
+    if (store.state.slider.open) syncSliderIndex();
+    render();
+    if (!bridgeHas('setFavorite')) return; // 웹/테스트 graceful
+    const res = await ipc('setFavorite', id, on);
+    if (res && res.ok && Array.isArray(res.favorites)) {
+      store.state.favorites = res.favorites.filter((x) => typeof x === 'string');
+      if (store.state.slider.open) syncSliderIndex();
+      render();
+    } else if (res && res.ok === false) {
+      toast('즐겨찾기 저장에 실패했습니다.', true);
+    }
+  }
+
+  /* =====================================================================
+   * R-19: 드래그/키보드 reorder (자동 manual 전환 → setOrder 영속)
+   * ===================================================================== */
+  /** sortMode 전이 적용(reorder|sortSelect). 변경 시 setSortMode 영속. */
+  function applySortMode(trigger) {
+    const r = nextSortMode(store.state.sortMode, trigger);
+    if (!r.changed) { store.state.sortMode = r.sortMode; return; }
+    store.state.sortMode = r.sortMode;
+    if (bridgeHas('setSortMode')) {
+      ipc('setSortMode', r.sortMode).then((res) => {
+        if (res && res.ok && (res.sortMode === 'auto' || res.sortMode === 'manual')) {
+          store.state.sortMode = res.sortMode;
+        }
+      });
+    }
+  }
+
+  /** 드롭(fromId 를 targetId 위치로) → 표시 id 순서 재배열 → manual 전환 + 영속. */
+  function reorderByDrop(displayIds, fromId, targetId) {
+    const from = displayIds.indexOf(fromId);
+    const to = displayIds.indexOf(targetId);
+    commitReorder(moveInOrder(displayIds, from, to));
+  }
+
+  /** 키보드 이동(index 를 dir 만큼) → 표시 id 순서 재배열 → manual 전환 + 영속. */
+  function reorderByMove(displayIds, index, dir) {
+    commitReorder(moveInOrder(displayIds, index, index + dir));
+  }
+
+  /**
+   * 재배열 결과 영속. 현재 표시 목록이 부분집합(필터/즐겨찾기)일 수 있으므로,
+   *   전체 order 를 "새 표시순서 → 표시목록 밖 기존 항목" 으로 재구성해 저장한다(누락 방지).
+   */
+  function commitReorder(newDisplayIds) {
+    store.state.sortMode = 'manual';
+    // 전체 order 기준선: 기존 order + 스냅샷의 모든 id(누락 보강)
+    const allIds = store.viewModels.map((vm) => vm.id).filter((x) => typeof x === 'string');
+    const displaySet = new Set(newDisplayIds);
+    // 새 전체 순서: 표시목록은 새 순서, 그 외는 기존 상대 순서 유지
+    const base = (store.state.order && store.state.order.length) ? store.state.order.slice() : allIds.slice();
+    const rest = base.filter((id) => allIds.includes(id) && !displaySet.has(id));
+    const merged = newDisplayIds.concat(rest);
+    // allIds 중 어디에도 없는(신규) 항목 뒤 append
+    for (const id of allIds) if (!merged.includes(id)) merged.push(id);
+    store.state.order = merged;
+    // [P2-3] sortMode는 2575행에서 이미 manual로 로컬 설정됨. 영속은 아래 setOrder가
+    //   manual을 동반하므로, 여기서 applySortMode(=별도 setSortMode IPC)를 또 부르지 않는다(중복 제거).
+    render();
+    if (!bridgeHas('setOrder')) return; // 웹/테스트 graceful
+    ipc('setOrder', merged).then((res) => {
+      if (res && res.ok) {
+        if (Array.isArray(res.order)) store.state.order = res.order.filter((x) => typeof x === 'string');
+        if (res.sortMode === 'manual') store.state.sortMode = 'manual';
+        render();
+      } else if (res && res.ok === false) {
+        toast('순서 저장에 실패했습니다.', true);
+      }
+    });
+  }
+
+  /* =====================================================================
    * 폴더/루트 관리 액션 (Electron 신규)
    * ===================================================================== */
+
+  /**
+   * R-19/20/21: getUiState() 로 초기 favorites/order/sortMode 적재(graceful).
+   *   부재(웹/테스트) 시 기본값 유지. 적재 후 슬라이더 인덱스 보정.
+   */
+  async function loadUiState() {
+    if (!bridgeHas('getUiState')) return;
+    const res = await ipc('getUiState');
+    const uv = uiStateView(res && res.ok !== false ? res : null);
+    store.state.favorites = uv.favorites;
+    store.state.order = uv.order;
+    store.state.sortMode = uv.sortMode;
+    syncSliderIndex();
+  }
 
   /** getConfig() 동기화 → store.config / store.roots 갱신 후 재렌더. */
   async function refreshConfig() {
@@ -2006,6 +2625,70 @@ function initBrowser() {
       store.roots = cv.scanRoots;
       if (!cv.allowAllDrives) store.opts.allDrives = false; // 게이트 강등
     }
+    render();
+  }
+
+  /* =====================================================================
+   * R-18: 외부 툴 경로 액션 (getTools / setToolPath / pickToolExecutable)
+   * ===================================================================== */
+  /** getTools() 동기화 → store.tools 갱신 후 재렌더(설정 드로어 오픈 시). */
+  async function refreshTools() {
+    if (!bridgeHas('getTools')) { store.tools = []; return; }
+    const res = await ipc('getTools');
+    if (res && res.ok && Array.isArray(res.tools)) {
+      store.tools = res.tools;
+    }
+    render();
+  }
+
+  /** 단일 툴 응답({ok,tool}) → store.tools 갱신(해당 id 항목 교체/삽입). */
+  function applyToolUpdate(res) {
+    if (!res || res.ok !== true || !res.tool || typeof res.tool !== 'object') return false;
+    const t = res.tool;
+    const next = (Array.isArray(store.tools) ? store.tools : []).slice();
+    const i = next.findIndex((x) => x && x.id === t.id);
+    if (i >= 0) next[i] = t; else next.push(t);
+    store.tools = next;
+    if (typeof t.id === 'string') store.toolPathInput[t.id] = (typeof t.path === 'string') ? t.path : '';
+    return true;
+  }
+
+  /** 경로 직접 입력 저장(setToolPath). 빈 입력은 지정 해제(null)로 처리. */
+  async function onSetToolPath(id) {
+    if (store.busyTools || !bridgeHas('setToolPath')) return;
+    const raw = (typeof store.toolPathInput[id] === 'string') ? store.toolPathInput[id].trim() : '';
+    const path = raw.length ? raw : null;
+    store.busyTools = true;
+    render();
+    const res = await ipc('setToolPath', id, path);
+    store.busyTools = false;
+    if (applyToolUpdate(res)) toast(path ? '실행 파일 경로를 저장했습니다.' : '경로 지정을 해제했습니다.');
+    else toast(describeToolError(res), true);
+    render();
+  }
+
+  /** 경로 지정 해제(setToolPath(id, null)). */
+  async function onClearToolPath(id) {
+    if (store.busyTools || !bridgeHas('setToolPath')) return;
+    store.busyTools = true;
+    render();
+    const res = await ipc('setToolPath', id, null);
+    store.busyTools = false;
+    if (applyToolUpdate(res)) { store.toolPathInput[id] = ''; toast('경로 지정을 해제했습니다.'); }
+    else toast(describeToolError(res), true);
+    render();
+  }
+
+  /** 네이티브 dialog 로 실행 파일 선택(pickToolExecutable). main 재검증 후 저장. */
+  async function onPickToolExecutable(id) {
+    if (store.busyTools || !bridgeHas('pickToolExecutable')) return;
+    store.busyTools = true;
+    render();
+    const res = await ipc('pickToolExecutable', id);
+    store.busyTools = false;
+    if (applyToolUpdate(res)) toast('실행 파일을 지정했습니다.');
+    else if (res && res.code === 'CANCELLED') { /* 취소 — 조용히 */ }
+    else toast(describeToolError(res), true);
     render();
   }
 
@@ -2068,11 +2751,149 @@ function initBrowser() {
 
   let toastTimer = null;
   function toast(message, isError) {
+    toastEl.replaceChildren();
     toastEl.textContent = message; // L-1: 서버 유래 일부 포함 가능 → textContent
     toastEl.className = 'toast' + (isError ? ' toast--error' : '');
     toastEl.hidden = false;
     if (toastTimer) clearTimeout(toastTimer);
     toastTimer = setTimeout(() => { toastEl.hidden = true; }, 3500);
+  }
+
+  /** 액션 링크가 포함된 토스트(예: CODE_CLI_NOT_FOUND → '설정 열기'). 키보드 도달 버튼. */
+  function toastWithAction(message, actionLabel, onAction) {
+    toastEl.replaceChildren();
+    toastEl.appendChild(el('span', { text: message })); // L-1
+    if (actionLabel && typeof onAction === 'function') {
+      toastEl.appendChild(el('button', {
+        cls: 'toast__action', text: actionLabel,
+        attrs: { type: 'button' },
+        on: { click: () => { toastEl.hidden = true; onAction(); } },
+      }));
+    }
+    toastEl.className = 'toast toast--error';
+    toastEl.hidden = false;
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { toastEl.hidden = true; }, 6000);
+  }
+
+  /* =====================================================================
+   * R-21: 즐겨찾기 슬라이더 오버레이 (메인창 내 우측하단 오버레이 — 별도 창 아님)
+   *   - favorites ∩ 스냅샷 교집합을 좌우 슬라이딩으로 표시(소멸 id skip).
+   *   - 좌/우 버튼 + 화살표 키 + 점 인디케이터(N-07). Esc 닫기.
+   * ===================================================================== */
+  function openFavoritesSlider() {
+    store.state.slider.open = true;
+    syncSliderIndex();
+    render();
+  }
+  function closeFavoritesSlider() {
+    store.state.slider.open = false;
+    render();
+  }
+  /** 즐겨찾기 목록 변동 시 인덱스를 범위 내로 보정. */
+  function syncSliderIndex() {
+    const favs = favoriteViewModels(store.viewModels, store.state.favorites);
+    const n = favs.length;
+    if (n === 0) { store.state.slider.index = 0; return; }
+    if (store.state.slider.index >= n) store.state.slider.index = n - 1;
+    if (store.state.slider.index < 0) store.state.slider.index = 0;
+  }
+  function slideBy(dir) {
+    const favs = favoriteViewModels(store.viewModels, store.state.favorites);
+    store.state.slider.index = nextSlideIndex(store.state.slider.index, dir, favs.length);
+    render();
+  }
+
+  function renderFavoritesSlider() {
+    const favs = favoriteViewModels(store.viewModels, store.state.favorites);
+    const titleId = 'fav-slider-title';
+    const overlay = el('aside', {
+      cls: 'fav-slider',
+      attrs: { role: 'dialog', 'aria-modal': 'false', 'aria-labelledby': titleId },
+    });
+
+    const head = el('div', { cls: 'fav-slider__head' });
+    head.appendChild(el('div', { cls: 'fav-slider__title', text: '즐겨찾기', attrs: { id: titleId } }));
+    head.appendChild(el('div', { cls: 'spacer' }));
+    head.appendChild(el('button', {
+      cls: 'drawer__close', text: '×', attrs: { type: 'button', 'aria-label': '즐겨찾기 슬라이더 닫기' },
+      on: { click: closeFavoritesSlider },
+    }));
+    overlay.appendChild(head);
+
+    if (favs.length === 0) {
+      overlay.appendChild(el('div', { cls: 'fav-slider__empty', children: [
+        starIcon(false, 28),
+        el('div', { cls: 'fav-slider__empty-title', text: '즐겨찾기가 없습니다' }),
+        el('div', { cls: 'fav-slider__empty-sub', text: '카드의 별(★)을 눌러 즐겨찾기에 추가하세요.' }),
+      ]}));
+      // 키보드: Esc 닫기
+      overlay.addEventListener('keydown', onSliderKeydown);
+      setTimeout(() => { try { overlay.querySelector('.drawer__close').focus(); } catch (_) { /* ignore */ } }, 0);
+      return overlay;
+    }
+
+    let idx = store.state.slider.index;
+    idx = ((idx % favs.length) + favs.length) % favs.length;
+    store.state.slider.index = idx;
+    const vm = favs[idx];
+
+    const stage = el('div', { cls: 'fav-slider__stage' });
+    const prev = el('button', {
+      cls: 'fav-slider__nav fav-slider__nav--prev', attrs: { type: 'button', 'aria-label': '이전 즐겨찾기' },
+      on: { click: () => slideBy(-1) },
+    });
+    prev.appendChild(svg([{ t: 'path', d: 'M15 18l-6-6 6-6' }], { size: 18, sw: 2.2 }));
+    if (favs.length < 2) prev.disabled = true;
+
+    const cardWrap = el('div', { cls: 'fav-slider__card' });
+    cardWrap.appendChild(el('div', { cls: 'fav-slider__card-head', children: [
+      dot(vm.language, 9),
+      el('div', { cls: 'fav-slider__name', text: vm.name, title: vm.name }), // L-1
+    ]}));
+    cardWrap.appendChild(el('div', { cls: 'fav-slider__path mono', text: vm.path, title: vm.path })); // L-1
+    const sActs = el('div', { cls: 'fav-slider__acts' });
+    sActs.appendChild(openButton(vm, 'btn btn--dark btn--sm'));
+    sActs.appendChild(copyPathButton(vm, 'btn btn--sm'));
+    sActs.appendChild(el('button', {
+      cls: 'btn btn--sm', text: '즐겨찾기 해제',
+      attrs: { type: 'button', 'aria-label': '즐겨찾기 해제: ' + vm.name },
+      on: { click: () => setFavorite(vm.id, false) },
+    }));
+    cardWrap.appendChild(sActs);
+
+    const next = el('button', {
+      cls: 'fav-slider__nav fav-slider__nav--next', attrs: { type: 'button', 'aria-label': '다음 즐겨찾기' },
+      on: { click: () => slideBy(1) },
+    });
+    next.appendChild(svg([{ t: 'path', d: 'M9 18l6-6-6-6' }], { size: 18, sw: 2.2 }));
+    if (favs.length < 2) next.disabled = true;
+
+    stage.appendChild(prev);
+    stage.appendChild(cardWrap);
+    stage.appendChild(next);
+    overlay.appendChild(stage);
+
+    // 점 인디케이터 + 위치 표시(색 외 텍스트, N-07)
+    const dots = el('div', { cls: 'fav-slider__dots', attrs: { 'aria-hidden': 'true' } });
+    for (let i = 0; i < favs.length; i++) {
+      dots.appendChild(el('span', { cls: 'fav-slider__dot' + (i === idx ? ' is-active' : '') }));
+    }
+    overlay.appendChild(dots);
+    overlay.appendChild(el('div', {
+      cls: 'fav-slider__pos mono', attrs: { role: 'status', 'aria-live': 'polite' },
+      text: (idx + 1) + ' / ' + favs.length,
+    }));
+
+    overlay.addEventListener('keydown', onSliderKeydown);
+    setTimeout(() => { try { next.focus(); } catch (_) { /* ignore */ } }, 0);
+    return overlay;
+  }
+
+  function onSliderKeydown(e) {
+    if (e.key === 'Escape') { e.preventDefault(); closeFavoritesSlider(); return; }
+    if (e.key === 'ArrowLeft') { e.preventDefault(); slideBy(-1); return; }
+    if (e.key === 'ArrowRight') { e.preventDefault(); slideBy(1); }
   }
 
   function debounce(fn, ms) {
@@ -2126,6 +2947,8 @@ function initBrowser() {
           store.roots = configView(cfg).scanRoots;
         }
       });
+      // R-19/20/21: UI 상태(favorites/order/sortMode) 적재 후 재렌더(비블로킹)
+      loadUiState().then(() => { if (store.state.view === 'dashboard') render(); });
       render();
     } catch (err) {
       store._errorMsg = '데이터를 불러오지 못했습니다. (' + (err && err.message ? err.message : '오류') + ')';
@@ -2143,11 +2966,14 @@ function initBrowser() {
 
   // P2-1: 네이티브 메뉴 구독(앱 1회). 부재 시 graceful — subscribeMenu 내부 가드.
   subscribeMenu();
+  // R-21: 트레이 push 구독(앱 1회). 부재 시 graceful — subscribeTray 내부 가드.
+  subscribeTray();
 
-  // teardown: 창 unload 시 구독 해제(누수 방지 — 메뉴·진행 구독 모두).
+  // teardown: 창 unload 시 구독 해제(누수 방지 — 메뉴·진행·트레이 구독 모두).
   function teardown() {
     unsubscribeMenu();
     unsubscribeScan();
+    unsubscribeTray();
   }
   if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
     window.addEventListener('pagehide', teardown);
@@ -2198,6 +3024,22 @@ if (typeof module !== 'undefined' && module.exports) {
     configView,
     parseRootInput,
     summarizeAddResult,
+    // M6 (R-17~R-21) 순수 로직
+    buildCopyText,
+    toolView,
+    toolViews,
+    toolStatusLabel,
+    describeToolError,
+    toggleFavorite,
+    isFavorite,
+    applyOrder,
+    moveInOrder,
+    nextSortMode,
+    nextSlideIndex,
+    favoriteViewModels,
+    matchesFavoritesFilter,
+    dispatchTrayAction,
+    uiStateView,
   };
 } else if (typeof document !== 'undefined') {
   if (document.readyState === 'loading') {

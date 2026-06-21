@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>M6 설계 델타 재검증 보고 #2 (독립 리뷰어)</title>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#1e293b; --text:#e2e8f0; --sub:#94a3b8;
+    --accent:#34d399; --ref:#38bdf8; --line:#334155; --warn:#fbbf24; --danger:#f87171;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:"Segoe UI","Malgun Gothic",system-ui,sans-serif;line-height:1.7;}
+  header{padding:44px 32px 32px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#13203b,#0f172a);}
+  header h1{margin:0 0 8px;font-size:27px;}
+  header .tag{display:inline-block;border-radius:999px;padding:3px 12px;font-size:13px;margin-right:8px;}
+  .t-fail{background:rgba(248,113,113,.14);color:#fca5a5;border:1px solid rgba(248,113,113,.5);}
+  .t-pass{background:rgba(52,211,153,.14);color:#6ee7b7;border:1px solid rgba(52,211,153,.5);}
+  .t-info{background:rgba(56,189,248,.12);color:#7dd3fc;border:1px solid rgba(56,189,248,.4);}
+  header p{margin:14px 0 0;color:var(--sub);max-width:980px;}
+  .meta{margin-top:14px;font-size:13px;color:var(--sub);}
+  main{max-width:1160px;margin:0 auto;padding:30px;}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:22px 26px;margin:20px 0;}
+  h2{margin:0 0 14px;font-size:20px;color:var(--accent);border-left:4px solid var(--accent);padding-left:12px;}
+  h3{font-size:15px;color:var(--ref);margin:20px 0 8px;}
+  p{margin:8px 0;}
+  ul,ol{margin:8px 0;padding-left:22px;}
+  li{margin:5px 0;}
+  code{background:#0b1220;color:var(--ref);padding:1px 6px;border-radius:5px;font-size:12.5px;}
+  table{width:100%;border-collapse:collapse;margin:12px 0;font-size:13px;}
+  th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top;}
+  th{background:#142035;color:var(--accent);}
+  tr:nth-child(even) td{background:rgba(255,255,255,.02);}
+  .pill{font-size:11px;font-weight:700;padding:2px 9px;border-radius:6px;white-space:nowrap;display:inline-block;}
+  .p1{background:rgba(248,113,113,.16);color:#fca5a5;border:1px solid rgba(248,113,113,.5);}
+  .p2{background:rgba(251,191,36,.16);color:#fcd34d;border:1px solid rgba(251,191,36,.45);}
+  .p3{background:rgba(56,189,248,.16);color:#7dd3fc;border:1px solid rgba(56,189,248,.45);}
+  .ok{background:rgba(52,211,153,.16);color:#6ee7b7;border:1px solid rgba(52,211,153,.5);}
+  .resolved{background:rgba(52,211,153,.16);color:#6ee7b7;border:1px solid rgba(52,211,153,.5);}
+  .id{font-family:Consolas,monospace;color:var(--warn);font-weight:700;white-space:nowrap;}
+  .mono{font-family:Consolas,monospace;font-size:12px;}
+  .note{background:rgba(56,189,248,.08);border:1px solid rgba(56,189,248,.3);border-radius:8px;padding:12px 16px;font-size:13px;color:#bae6fd;}
+  .warn-box{background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.3);border-radius:8px;padding:12px 16px;font-size:13px;color:#fde68a;}
+  .ok-box{background:rgba(52,211,153,.08);border:1px solid rgba(52,211,153,.3);border-radius:8px;padding:12px 16px;font-size:13px;color:#bbf7d0;}
+  .verdict{font-size:15px;}
+  footer{text-align:center;color:var(--sub);font-size:12.5px;padding:28px;border-top:1px solid var(--line);}
+</style>
+</head>
+<body>
+<header>
+  <span class="tag t-pass">판정: PASS (권고 전건 해소 · 회귀 없음)</span>
+  <span class="tag t-info">독립 재검증 #2</span>
+  <h1>Project-SPIP — M6 설계 델타(R-17~R-21) 재검증 보고</h1>
+  <p>1회차(<code>docs/reviews/m6_design_review_1.html</code>, PASS·권고 P2 2건/P3 4건)를 아키텍트가 <b>rev.2</b>로 반영했다. 본 2회차는 ① 권고 해소 확인 ② 보안 게이트 반영(높음 2·보통 4·SQ 3)의 <b>기능 회귀 부재</b> ③ rev.2 신규 명세의 <b>실측 코드 정합</b>을 회의적 입장으로 재검증했다. 검증 대상 <code>docs/architecture/m6-design.html</code>(rev.2)를 실측 <code>lib/common/safeExec.js</code>·<code>electron/ipc/folders.js</code>·<code>electron/main.js</code>와 라인 단위로 대조했다.</p>
+  <div class="meta">리뷰어: 독립 검증 담당 · 작성일: 2026-06-21 · 회차: 2 · 입장: 회의적(재발·회귀·실측 불일치 우선 탐색) · 비고: 보안 상세 판정은 security-reviewer 소관(본 보고는 추적성·정합·회귀만)</div>
+</header>
+
+<main>
+
+<section>
+  <h2>0. 판정 요약</h2>
+  <p class="verdict"><b>판정: PASS</b> — 1회차 권고 6건(P2-1·P2-2·P3-1~4) 전건이 rev.2에 구체 명세로 반영되어 <b>해소</b>되었고, 보안 게이트 반영(args 제거·toolId 화이트리스트·force 재검증·dialog 재검증·second-instance argv 무시·ui-state DoS 가드)이 <b>백로그 5기능을 여전히 충족하면서 기능 회귀를 만들지 않음</b>을 확인했다. rev.2가 인용한 실측 라인(safeExec.js force 분기·folders.js persistScanRoots 패턴·main.js 종료 경로)이 <b>실제 코드와 정확히 일치</b>한다. §14는 "확정"으로 갱신되고 잔여 미해결 0이다.</p>
+  <table>
+    <tr><th style="width:90px;">확인</th><th>항목</th><th style="width:120px;">결과</th></tr>
+    <tr><td>P2-1</td><td>config.tools 영속 = persistConfigKeys(부분 갱신·read-merge·0600) 명세 + persistScanRoots 패턴 정합</td><td><span class="pill resolved">해소</span></td></tr>
+    <tr><td>P2-2</td><td>트레이 종료↔dispose 순서·doFinalQuit 단일 경로·Q4 취소 정상 복귀</td><td><span class="pill resolved">해소</span></td></tr>
+    <tr><td>P3-1~4</td><td>inflightKey 형식·캐시 무효화·getTools 비용·§14 상태 갱신</td><td><span class="pill resolved">해소</span></td></tr>
+    <tr><td>회귀</td><td>보안 반영(args 제거 등)이 백로그 5기능·VS Code 열기를 깨지 않음</td><td><span class="pill ok">회귀 없음</span></td></tr>
+    <tr><td>IPC 계약 rev.2</td><td>getTools args 제거·재검증·copyText 거부 일관·완결</td><td><span class="pill ok">PASS</span></td></tr>
+    <tr><td>§14</td><td>"확정" 갱신 · 미해결 0</td><td><span class="pill ok">PASS</span></td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>1. P2-1 — config.tools 영속 writer 해소 확인 (실측 정합)</h2>
+  <p><b>1회차 지적:</b> <code>persistScanRoots</code>는 scanRoots 전용이라 tools를 못 쓴다(folders.js:185 하드코딩). rev.2가 §3.5에 <b><code>persistConfigKeys(patch, ctx)</code></b>를 신설하고, <code>setToolPath</code>/<code>pickToolExecutable</code>가 <code>persistConfigKeys({tools})</code>로 영속한다고 명세했다(§3.5·§4.1·§10·§11). 실측 대조 결과 <b>rev.2가 인용한 패턴이 실제 코드와 일치</b>한다.</p>
+  <table>
+    <tr><th>rev.2 §3.5 명세</th><th>실측 folders.persistScanRoots</th><th style="width:60px;">정합</th></tr>
+    <tr><td><code>readExistingConfigObject</code> "부재/손상→{}"</td><td>line 178-183: try readFileSync→JSON.parse, 객체 아니면 <code>{}</code> 유지</td><td><span class="pill ok">일치</span></td></tr>
+    <tr><td><code>Object.assign(existing, patch)</code> 기존 키 보존 병합</td><td>line 185 <code>existing.scanRoots = roots</code>를 키-범용 병합으로 일반화 — 패턴 동일(read-merge 보존)</td><td><span class="pill ok">일치</span></td></tr>
+    <tr><td><code>atomicWrite0600</code> 임시파일→fsync→rename→0600</td><td>line 188-200: openSync(wx,FILE_MODE)→writeFileSync→fsyncSync→rename→chmod 0600</td><td><span class="pill ok">일치</span></td></tr>
+    <tr><td>persistScanRoots를 <code>persistConfigKeys({scanRoots:roots})</code> 위임으로 보존(시그니처 호환)</td><td>현 시그니처 <code>persistScanRoots(roots, ctx)</code> 유지 가능 — 위임 래핑이 호출부(addRoots 등) 무파괴</td><td><span class="pill ok">일치</span></td></tr>
+  </table>
+  <div class="ok-box"><b>해소 판정:</b> 1회차 권고("키-범용 일반화 또는 read-merge 보존 writer 명시")를 §3.5가 의사코드+적용 1단락으로 정확히 충족. §10 tree도 folders.js 주석을 "persistScanRoots를 persistConfigKeys(키-범용)로 일반화(기존 시그니처 위임 보존, P2-1)"로 갱신. §11 보안표에도 "기존 키 read-merge 보존 후 원자적 쓰기"로 부분 갱신을 명문화. <b>구현자 표류 위험 제거됨.</b> ui-state.json도 별도 <code>uiStateStore.write</code>(전체 상태 원자적 쓰기)로 분리 명시 — 두 writer 모두 0600 원자적 보장.</div>
+  <p class="note"><b>경미 관찰(블로커 아님):</b> §3.5 의사코드의 <code>readExistingConfigObject</code>·<code>atomicWrite0600</code>은 명명상 신규 헬퍼처럼 보이나 실체는 persistScanRoots 본문(line 177-206)의 추출이다. 구현 시 "persistScanRoots 본문을 추출해 재사용"임을 인지하면 됨 — §3.5가 "(또는 folders.js)"로 위치를 열어두어 추출 출처가 명확하다. 동작 영향 없음.</p>
+</section>
+
+<section>
+  <h2>2. P2-2 — 종료↔dispose 순서 / 단일 경로 해소 확인 (실측 정합)</h2>
+  <p><b>1회차 지적:</b> 트레이 '종료'→onQuit가 <code>app.quit()</code>을 부르면 before-quit이 먼저 발화→disposeResources가 즉시 실행 → 이후 Q4 '취소' 시 scanController가 이미 dispose된 불일치. rev.2가 §9.2·ADR-M6-4에서 <b>doFinalQuit 단일 종료 경로</b>로 재설계했다. 실측 main.js 종료 경로와 대조해 변경의 필요성·정합을 확인했다.</p>
+  <table>
+    <tr><th style="width:160px;">경로</th><th>실측 main.js (현행)</th><th>rev.2 §9.2 델타</th><th style="width:60px;">정합/해소</th></tr>
+    <tr><td><code>before-quit</code></td><td>line 208 <code>app.on('before-quit', disposeResources)</code> — 즉시 dispose</td><td><code>isQuitting=true</code> 가드만(dispose 제거). doFinalQuit 멱등 의존</td><td><span class="pill resolved">해소</span></td></tr>
+    <tr><td><code>window-all-closed</code></td><td>line 210-213 dispose+quit</td><td>no-op(트레이 상주). 완전 종료는 onQuit→close→doFinalQuit</td><td><span class="pill ok">일치</span></td></tr>
+    <tr><td><code>win.on('close')</code></td><td>line 180-193: scanning/finalizing이면 Q4, choice===0이면 destroy(quit 안 함)</td><td><code>!isQuitting</code>→preventDefault+hide / isQuitting 경로에서만 Q4 → choice===0 <code>doFinalQuit()</code>+destroy / else <code>isQuitting=false</code></td><td><span class="pill ok">일치</span></td></tr>
+    <tr><td>onQuit (트레이)</td><td>현행 트레이 없음 — 신규</td><td><code>isQuitting=true; win? win.close(): doFinalQuit()</code> — app.quit() 직접 호출 안 함</td><td><span class="pill resolved">단일 경로</span></td></tr>
+    <tr><td>doFinalQuit</td><td>현행 없음 — disposeResources(204)만</td><td><code>disposeResources(); tray.destroy(); app.exit(0)</code> 1지점 — dispose는 여기서만</td><td><span class="pill resolved">신설</span></td></tr>
+  </table>
+  <div class="ok-box"><b>해소 판정:</b> 1회차 권고(②안 "onQuit를 win.close() 트리거→close 핸들러에서 Q4 통과 후에만 destroy+quit 단일 경로")를 §9.2가 그대로 채택. <b>Q4 '취소' 시 <code>isQuitting=false</code>로 복귀하고 scanController는 dispose되지 않은 정상 상태로 스캔 지속</b>(§9.2 표·코드 line 492 주석·ADR-M6-4 결과)으로 1회차가 짚은 "취소했는데 자원 이미 정리됨" 불일치가 제거됨. before-quit dispose 제거 + doFinalQuit 멱등 설계로 외부 OS 종료(로그오프) 경로도 안전. SVG 그림1 범례에도 "dispose는 Q4 확정 후 doFinalQuit 1지점만(P2-2)" 반영.</div>
+  <p class="warn-box"><b>경미 관찰(권고 아님·구현 주의):</b> doFinalQuit이 <code>app.exit(0)</code>을 쓰면 before-quit/will-quit 이벤트를 건너뛴다(즉시 종료). 현행 dispose가 doFinalQuit 안으로 이동했으므로 이벤트 스킵이 자원 누수를 만들진 않으나, <b>before-quit에 다른 정리 로직이 추가될 경우 app.exit(0)이 이를 건너뛸 수 있음</b>을 구현 시 유의. 현 설계 범위에서는 문제 없음(dispose가 doFinalQuit 내부 단일 지점). 동작 영향 없는 미래 주의사항.</p>
+</section>
+
+<section>
+  <h2>3. 보안 반영 회귀 점검 — 백로그 5기능 충족 유지 (회귀 없음)</h2>
+  <p>rev.2 보안 시정 6종이 백로그 5기능(경로지정·열기·복사·드래그·즐겨찾기·트레이)을 깨지 않는지 기능별로 역추적했다. <b>특히 args 제거가 'VS Code로 열기'(R-12)를 깨는지 집중 검증.</b></p>
+  <table>
+    <tr><th style="width:140px;">보안 시정</th><th>기능 영향 분석</th><th style="width:70px;">회귀</th></tr>
+    <tr><td>args 전면 제거 (M6-H-2)</td><td><b>핵심 점검.</b> 실측 actions.openInVsCode는 원래 사용자 args를 받지 않는다 — rev.2 §6.2 코드도 <code>exec(r.bin, [real], ...)</code>로 인자가 <b>검증된 프로젝트 경로 1개 고정</b>. 'VS Code로 열기'의 동작은 <code>code &lt;projectPath&gt;</code>이며 이는 args 제거 전후 동일. tools 스키마에서 삭제된 args는 <b>설계 단계에서만 존재했던 미구현 필드</b>라 기존 기능 손실 없음. R-18 '경로지정'도 path/label만으로 충족(인자 커스터마이즈는 백로그 요구 아님 — ref.md는 "경로 직접 지정"만 요구)</td><td><span class="pill ok">없음</span></td></tr>
+    <tr><td>toolId 화이트리스트 (M6-M-1)</td><td>open 미지정 시 <code>'code'</code> 폴백(§4.1·§6.2 line 344) → 기존 '열기' 무변경. MVP <code>KNOWN_TOOL_IDS={code}</code>라 현 기능 그대로. 새 툴은 데이터+코드 등록 필요(의도된 트레이드오프, ADR-M6-2). '열기' 기능 자체는 정상</td><td><span class="pill ok">없음</span></td></tr>
+    <tr><td>force 재검증 (M6-H-1)</td><td>실측 safeExec.js:77 <code>if(!opts.force && _binCache.has(name))</code> — force=true면 캐시 우회 fs 재확인. resolveTool이 매 실행 <code>{force:true}</code> 호출. 정상 경로는 fs.statSync 1회 추가일 뿐 결과 동일 → '열기' 동작 보존. 등록 후 교체 시에만 재검증으로 거부(보안 강화이지 기능 회귀 아님)</td><td><span class="pill ok">없음</span></td></tr>
+    <tr><td>dialog 재검증 (M6-M-2)</td><td>pickToolExecutable이 dialog 반환 경로를 setToolPath와 동일 재검증. 정상 .exe 선택은 통과 → '경로지정' 정상. .lnk/.bat은 거부되나 §14 리스크에서 "한국어 안내+실제 .exe 지정" 가이드로 UX 보완</td><td><span class="pill ok">없음</span></td></tr>
+    <tr><td>second-instance argv 무시 (M6-M-3)</td><td>실측 main.js:75-80은 이미 restore+focus만 하고 argv 미사용. rev.2는 <code>+win.show()</code> 추가(트레이 숨김 복원). argv 무시는 현행 동작 유지 + 트레이 복원 보강 → '트레이' 기능 정상. 회귀 아니라 필수 보완</td><td><span class="pill ok">없음</span></td></tr>
+    <tr><td>ui-state DoS 가드 (M6-M-4)</td><td>정상 크기 파일(수 KB)은 1MB 상한·_safeParse 통과 → '드래그'(order)·'즐겨찾기'(favorites) 정상 로드. 손상/거대 파일만 빈 상태 폴백(graceful, 기존 config 패턴 동일). 정상 사용 회귀 없음</td><td><span class="pill ok">없음</span></td></tr>
+  </table>
+  <div class="ok-box"><b>회귀 판정:</b> 6종 시정 전부 <b>비정상/악의 입력만 차단하고 정상 사용 경로는 보존</b>. 'VS Code로 열기'의 인자 <code>[projectPath]</code> 고정은 args 제거 전후 동일하므로 깨지지 않음을 확인. 백로그 5기능(경로지정·열기·복사·드래그·즐겨찾기·트레이) 전부 §5~§9에 충족 설계로 유지. <b>기능 회귀 0건.</b></p>
+</section>
+
+<section>
+  <h2>4. IPC 계약 rev.2 일관·완결성 (PASS)</h2>
+  <p>rev.2 §4.1 표를 채널별로 재검증했다. args 제거·재검증·거부 코드가 요청/응답 shape·preload 노출과 일관한지 확인.</p>
+  <table>
+    <tr><th style="width:150px;">채널</th><th>일관성 점검</th><th style="width:60px;">결과</th></tr>
+    <tr><td><code>getTools</code></td><td>요청 "—"·응답 <code>{id,label,path,resolved,source}</code>에 <b>args 없음</b>(§4.1). preload <code>getTools:()=>invoke(...)</code> 인자 없음. resolved 산출은 "설정 드로어 오픈 시에만·resolveTool 1회"로 P3-3 비용 부기 반영. 일관</td><td><span class="pill ok">✔</span></td></tr>
+    <tr><td><code>setToolPath</code></td><td>요청 <code>{id,path}</code> — args 인자 명시 부재(§4.1·preload line 257 주석 "args 없음"). toolId 화이트리스트 멤버 검증·<code>resolveBin(path,{force:true})</code>·성공 시 캐시 무효화→<code>persistConfigKeys({tools})</code>. 실패 code 4종 명시. P2-1·P3-2 연동 일관</td><td><span class="pill ok">✔</span></td></tr>
+    <tr><td><code>pickToolExecutable</code></td><td>dialog 반환 경로도 setToolPath와 동일 재검증(M6-M-2)·force. CANCELLED/NOT_EXECUTABLE 코드. register.js:271 dialog·win 주입 명시. 일관</td><td><span class="pill ok">✔</span></td></tr>
+    <tr><td><code>openInVsCode</code></td><td>toolId 미지정→'code' 하위호환(§6.2 line 344). 응답 기존+TOOL_NOT_FOUND. inflightKey <code>'open:'+toolId+':'+id</code>(P3-1 명시). 실행 인자 [real] 고정. 기존 계약 비파괴</td><td><span class="pill ok">✔</span></td></tr>
+    <tr><td><code>copyText</code></td><td>len&gt;8192 <b>초과 시 명시 거부(INVALID_TEXT)</b>로 단일화(§4.1·L-1) — 1회차 권고대로 절단 안 함. string 강제·경로검증 없음. 응답 ok/INVALID_TEXT 일관</td><td><span class="pill ok">✔</span></td></tr>
+    <tr><td>setFavorite/setOrder/setSortMode/getUiState</td><td>id 형식·Boolean·개수 상한·중복 제거·화이트리스트(auto|manual). 응답 shape·실패 code 명시. register.js:272-275 guard 등록. 일관·완결</td><td><span class="pill ok">✔</span></td></tr>
+  </table>
+  <div class="note"><b>완결성:</b> 신규 8채널 + openInVsCode 확장 + tray push 전부 ① 요청 shape ② main 재검증 ③ 응답 shape ④ 실패 code가 §4.1에 명시. 전부 guard() 경유(senderFrame·try/catch·FORBIDDEN/INTERNAL). preload 채널명 하드코딩·범용 invoke 비노출 유지. <b>P3-1(inflightKey 형식)·P3-2(캐시 무효화)·P3-3(getTools 비용)가 §4.1·§6.1·§6.2·각주에 모두 반영</b>되어 1회차 P3 권고 4건 중 3건 해소(나머지 P3-4는 §5 참조).</div>
+</section>
+
+<section>
+  <h2>5. §14 상태 갱신 · 미해결 0 (P3-4 해소) — PASS</h2>
+  <p>1회차 P3-4("§14가 여전히 '미해결 질문' 제목 → '확정'으로 갱신"). rev.2 §14 제목이 <b>"확정된 결정 (PM 확정 · rev.2 — 검증 게이트 반영)"</b>으로 변경되고, 본문에 <b>"잔여 미해결 없음"</b> 명시. MQ-1~5 + SQ-1~3 전부 <span class="pill resolved">확정</span> pill로 상태 표기.</p>
+  <table>
+    <tr><th style="width:80px;">항목</th><th>확정 반영 위치</th><th style="width:70px;">상태</th></tr>
+    <tr><td>SQ-1</td><td>tools.args 전면 제거·인자 [real] 고정 (§3.2·§6·ADR-M6-2)</td><td><span class="pill resolved">확정</span></td></tr>
+    <tr><td>SQ-2</td><td>위치 제한 없이 검증 통과분만 저장·spawn 직전 force 재검증 (§3.2·§6.3)</td><td><span class="pill resolved">확정</span></td></tr>
+    <tr><td>SQ-3</td><td>toolId KNOWN_TOOL_IDS 멤버로만 제한 (§6.1·§6.2)</td><td><span class="pill resolved">확정</span></td></tr>
+    <tr><td>MQ-1~5</td><td>절대경로 복사·code 기본·graceful skip·트레이 풍선·오버레이 (§5·§6.3·§3.3·ADR-M6-4/5)</td><td><span class="pill resolved">확정</span></td></tr>
+  </table>
+  <p>신규 §0(검증 게이트 반영) 절이 1·2회차 검증 항목(M6-H-1/H-2·M6-M-1~4·P2-1/2·P3·L-1~3·SQ-1~3)과 반영 위치를 추적 표로 정리 — 추적성 우수. <b>잔여 미해결 0 확인.</b></p>
+</section>
+
+<section>
+  <h2>6. 회귀 점검 — 1회차 PASS 항목 유지 (역행 없음)</h2>
+  <p>rev.2 변경이 1회차에 PASS였던 항목을 역행시키지 않았는지 확인.</p>
+  <table>
+    <tr><th style="width:220px;">1회차 PASS 항목</th><th>rev.2 후 상태</th><th style="width:60px;">유지</th></tr>
+    <tr><td>백로그 5기능 커버리지</td><td>§5~§9 불변 + 보안 시정이 기능 보존(§3)</td><td><span class="pill ok">✔</span></td></tr>
+    <tr><td>resolveBin 재사용(safeExec.js:82)</td><td>force 분기(line 77)도 실측 확인 — 무수정 재사용 주장 유효, 오히려 강화</td><td><span class="pill ok">✔</span></td></tr>
+    <tr><td>openInVsCode 전진호환</td><td>toolId 미지정→'code' 폴백 유지(§6.2). 기존 호출 무변경</td><td><span class="pill ok">✔</span></td></tr>
+    <tr><td>close-to-tray 생명주기 정합</td><td>doFinalQuit 단일 경로로 더 견고해짐(역행 아님)</td><td><span class="pill ok">✔</span></td></tr>
+    <tr><td>데이터 모델 분리(ADR-M6-3)</td><td>불변 + persistConfigKeys로 영속 명세 보강</td><td><span class="pill ok">✔</span></td></tr>
+    <tr><td>sortMode 2모드</td><td>§3.2·§7 불변</td><td><span class="pill ok">✔</span></td></tr>
+    <tr><td>추적성(§12)</td><td>R-18 행에 force·args없음·dialog재검증·화이트리스트 보안 게이트 추가 보강</td><td><span class="pill ok">✔</span></td></tr>
+  </table>
+  <div class="ok-box"><b>회귀 판정:</b> rev.2의 모든 변경은 <b>추가·보강·치환</b>이며 1회차 PASS 항목을 역행시키지 않음. 도메인 로직 재작성 없음. SVG 그림1/그림2·ADR 5건·추적성 표 모두 rev.2 내용과 일관 갱신됨(문서 내부 모순 없음).</div>
+</section>
+
+<section>
+  <h2>7. 반영 항목 (생산자 전달용)</h2>
+  <p><b>블로커 없음. 신규 FAIL 사유 없음.</b> 아래는 동작 영향 없는 구현 시 주의사항(권고도 아닌 참고).</p>
+  <table>
+    <tr><th style="width:70px;">구분</th><th style="width:200px;">무엇 / 위치</th><th>내용</th></tr>
+    <tr><td><span class="pill p3">참고</span></td><td>§3.5 readExistingConfigObject/atomicWrite0600 명명 / §3.5·§10</td><td>신규 헬퍼명처럼 보이나 실체는 persistScanRoots 본문(folders.js:177-206) 추출. 구현 시 "추출 재사용"으로 인지(설계 의도 명확, 문제 아님).</td></tr>
+    <tr><td><span class="pill p3">참고</span></td><td>doFinalQuit의 app.exit(0) / §9.2</td><td>app.exit(0)은 will-quit/before-quit 스킵. 현 dispose가 doFinalQuit 내부 단일 지점이라 무해하나, 향후 before-quit에 다른 정리가 추가되면 스킵 유의.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>8. 확인 필요 (사용자/PM 판단)</h2>
+  <p><b>중대 쟁점 없음 — AskUserQuestion 상정 불필요.</b> PM 확정 SQ-1~3·MQ-1~5가 본문에 정합 반영되었고, 권고 전건이 해소되었으며, 보안 반영의 기능 회귀가 없음을 확인했다. 구현 착수 가능.</p>
+</section>
+
+<footer>
+  Project-SPIP — M6 설계 델타(R-17~R-21) 재검증 보고 #2 · 독립 검증 담당 · 2026-06-21 · 판정 <b>PASS</b>(1회차 권고 P2/P3 전건 해소 · 보안 반영 회귀 없음 · 실측 정합) · 보안 상세는 security-reviewer 소관(본 보고는 추적성·정합·회귀만)
+</footer>
+
+</main>
+</body>
+</html>

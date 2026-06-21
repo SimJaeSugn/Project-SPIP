@@ -42,12 +42,12 @@
 
   <h1>Project-SPIP — 진행 현황판</h1>
   <p class="sub">PC 내 흩어진 VS Code 프로젝트를 스캔해 인사이트를 보여주는 로컬 대시보드</p>
-  <p class="meta">기준일 2026-06-21 · 현재 단계: <span class="badge done">Electron 데스크톱 전환 완료 · 막바지 버그픽스·빌드 도구 반영 · 실 GUI 동작 확인</span> · 다음: 후속/백로그(비차단) + 남은 사용자 PC 1회 확인(메뉴 클릭·VS Code 열기) · v1.0.1</p>
+  <p class="meta">기준일 2026-06-21 · 현재 단계: <span class="badge done">M6 백로그 5기능(R-17~R-21) 구현 완료 · 검증 통과</span> · 다음: 후속/백로그(비차단) + 사용자 PC 1회 수동 확인(트레이·DnD·다이얼로그·클립보드·슬라이더·Q4) · v1.0.1</p>
 
   <!-- 핵심 지표 -->
   <h2>핵심 지표</h2>
   <div class="grid kpis">
-    <div class="kpi"><div class="v">306</div><div class="l">테스트 통과 / 0 실패</div></div>
+    <div class="kpi"><div class="v">416</div><div class="l">테스트 통과 / 0 실패</div></div>
     <div class="kpi"><div class="v">100%</div><div class="l">탐지율 (게이트 ≥95%)</div></div>
     <div class="kpi"><div class="v">0.154ms</div><div class="l">필터 (게이트 200ms)</div></div>
     <div class="kpi"><div class="v">0</div><div class="l">외부 의존성</div></div>
@@ -83,15 +83,20 @@
         <text x="565" y="74" fill="#e2e8f0">구현+검증</text>
         <text x="565" y="92" fill="#64748b" font-size="10.5">MVP 출시</text>
 
-        <circle cx="730" cy="40" r="13" fill="#064e3b" stroke="#34d399" stroke-width="2"/>
-        <text x="730" y="44" fill="#34d399" font-size="13" font-weight="700">✓</text>
-        <text x="730" y="74" fill="#e2e8f0">M4 후속</text>
-        <text x="730" y="92" fill="#64748b" font-size="10.5">완료</text>
+        <circle cx="700" cy="40" r="13" fill="#064e3b" stroke="#34d399" stroke-width="2"/>
+        <text x="700" y="44" fill="#34d399" font-size="13" font-weight="700">✓</text>
+        <text x="700" y="74" fill="#e2e8f0">M4 후속</text>
+        <text x="700" y="92" fill="#64748b" font-size="10.5">완료</text>
+
+        <circle cx="820" cy="40" r="13" fill="#064e3b" stroke="#34d399" stroke-width="2"/>
+        <text x="820" y="44" fill="#34d399" font-size="13" font-weight="700">✓</text>
+        <text x="820" y="74" fill="#e2e8f0">데스크톱 전환</text>
+        <text x="820" y="92" fill="#64748b" font-size="10.5">Electron·실 GUI</text>
 
         <circle cx="930" cy="40" r="13" fill="#064e3b" stroke="#34d399" stroke-width="2"/>
         <text x="930" y="44" fill="#34d399" font-size="13" font-weight="700">✓</text>
-        <text x="930" y="74" fill="#e2e8f0">데스크톱 전환</text>
-        <text x="930" y="92" fill="#64748b" font-size="10.5">Electron·실 GUI 확인</text>
+        <text x="930" y="74" fill="#e2e8f0">M6 백로그</text>
+        <text x="930" y="92" fill="#64748b" font-size="10.5">5기능·검증 통과</text>
       </g>
     </svg>
   </div>
@@ -138,6 +143,25 @@
     </div>
   </div>
 
+  <!-- M6 백로그 5기능 -->
+  <h2>M6 백로그 5기능 (R-17~R-21) — 구현 완료 · 검증 통과</h2>
+  <div class="panel">
+    <p style="margin:0 0 10px;font-size:13.5px;color:#cbd5e1;">사용자 백로그(<code>docs/ref.md</code>)의 5기능을 Electron IPC 위에 구현했다. 도메인 로직은 <code>(args,ctx)→result</code> 순수 함수로 분리(<code>lib/common/{toolRegistry,uiStateStore}.js</code>)해 헤드리스 단위테스트하고, 트레이·생명주기 등 GUI/OS 통합은 사용자 PC 1회 수동 확인으로 분리한다. 설계 정본: <span class="links"><a href="../architecture/m6-design.html">m6-design.html</a></span>(rev.2). 설계 2회 검증 PASS·구현 다면검증(보안 PASS·코드 P1 0·QA 통합가능)·전체 <b>416 테스트 통과</b>·P2-3 수정 반영.</p>
+    <table>
+      <thead><tr><th>ID</th><th>기능</th><th>구현(실제)</th><th>상태</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">R-17</td><td>프로젝트 경로 복사</td><td><code>electron/ipc/clipboard.js</code> <code>spip:copyText{text}</code> → main <code>clipboard.writeText</code>(텍스트만·실행/경로해석 없음)·길이 상한 8192 초과 시 <code>INVALID_TEXT</code> 명시 거부(절단 안 함). renderer 복사 버튼·토스트(<code>buildCopyText</code>)</td><td><span class="badge done">완료</span></td></tr>
+        <tr><td class="mono">R-18</td><td>외부 툴 경로 설정(확장형)</td><td><code>lib/common/toolRegistry.js</code>(<code>KNOWN_TOOL_IDS</code> 화이트리스트·MVP <code>code</code>·확장형) + <code>electron/ipc/tools.js</code>(<code>getTools</code>·<code>setToolPath</code>·<code>pickToolExecutable</code>). 사용자 지정 경로 우선→PATH 폴백, 매 실행 <code>resolveBin(.,{force:true})</code>로 캐시 우회 재검증(M6-H-1)·<code>.exe</code>만·<code>args</code> 필드 없음(M6-H-2). 설정 UI에 PATH 안내(미해결 시)·경로 직접 입력·파일 선택(.exe)·지정 해제. <code>actions.openInVsCode</code>가 <code>toolId</code> 수용(기본 <code>code</code> 하위호환)</td><td><span class="badge done">완료</span></td></tr>
+        <tr><td class="mono">R-19</td><td>카드 드래그 순서변경(+키보드)</td><td><code>electron/ipc/uiState.js</code> <code>spip:setOrder{ids}</code>(<code>sortMode='manual'</code> 전환)·<code>spip:setSortMode</code>(<code>auto↔manual</code>). <code>lib/common/uiStateStore.js</code> <code>ui-state.json.order</code> 0600 원자적 영속. renderer 순수함수 <code>applyOrder</code>/<code>moveInOrder</code>/<code>nextSortMode</code>·드래그→manual 자동전환·키보드 대체(N-07)·수동순서 해제 토글</td><td><span class="badge done">완료</span></td></tr>
+        <tr><td class="mono">R-20</td><td>즐겨찾기</td><td><code>spip:setFavorite{id,on}</code> → <code>ui-state.json.favorites</code> 집합 add/remove(상한 512). '즐겨찾기만' 필터(<code>matchesFavoritesFilter</code>, 기존 필터/검색과 AND)·<code>aria-pressed</code> 토글. id는 형식 검증(<code>^[0-9a-f]{1,64}$</code>)·실행/경로 미사용</td><td><span class="badge done">완료</span></td></tr>
+        <tr><td class="mono">R-21</td><td>트레이 상주</td><td><code>electron/tray.js</code>(<code>createTray</code>·메뉴 대시보드 열기/즐겨찾기/종료·action 화이트리스트 M6-M-3) + <code>electron/main.js</code> close-to-tray(X→<code>win.hide()</code>·최초 1회 풍선 안내·완전 종료는 트레이 '종료'만·종료 1지점 <code>doFinalQuit</code>). 트레이 '즐겨찾기'→<code>spip:tray:favorites</code> push→즐겨찾기 슬라이더 오버레이(좌우 래핑). 완전 종료 시 스캔 중이면 Q4 확인 다이얼로그</td><td><span class="badge done">완료</span></td></tr>
+      </tbody>
+    </table>
+    <div class="note">
+      <b>헤드리스 한계 — 사용자 PC 1회 수동 확인 필요(추측 PASS 아님).</b> 코드·정책 정합 PASS이나 GUI/OS 상호작용은 헤드리스에서 실증 불가라 분리한다(QA U-1~U-6). <b>U-1</b> 카드 HTML5 드래그앤드롭→manual 전환·재시작 후 순서 유지 · <b>U-2</b> <code>pickToolExecutable</code> 네이티브 파일 다이얼로그 표시·실 <code>code.exe</code> 지정·<code>.bat/.lnk</code> 거부 · <b>U-3</b> 실 클립보드 붙여넣기 결과 · <b>U-4</b> 트레이 아이콘 표시·메뉴 클릭(대시보드/즐겨찾기/종료)·더블클릭 복원·풍선 1회 · <b>U-5</b> 즐겨찾기 슬라이더 오버레이 시각/키보드 래핑 · <b>Q4</b> 스캔 진행 중 종료 확인 다이얼로그 분기.
+    </div>
+  </div>
+
   <!-- 검증 게이트 -->
   <h2>검증 게이트 이력 (전부 PASS)</h2>
   <table>
@@ -161,6 +185,11 @@
       <tr><td>Electron 코드 품질</td><td>code-reviewer</td><td>1회 (P1 해소·P2 잔여 비차단)</td><td><span class="badge pass">PASS</span></td><td class="links"><a href="../reviews/electron_code_review_1.html">electron_code_review_1</a></td></tr>
       <tr><td>Electron 동작·통합(다면)</td><td>qa-engineer</td><td>2회 (블로커 2건→해소)</td><td><span class="badge pass">PASS</span></td><td class="links"><a href="../reviews/electron_qa_2.html">electron_qa_2</a></td></tr>
       <tr><td>막바지 버그픽스 (스캔 전환·패키징 크래시)</td><td>개발·실 GUI 스모크</td><td>1회</td><td><span class="badge pass">PASS</span></td><td>회귀 <code>test/scanController-onprogress.test.js</code> · <b>실 GUI 창 표시·동작 확인</b></td></tr>
+      <tr><td>M6 설계 (R-17~R-21)</td><td>reviewer</td><td>2회 (1회→반영→PASS)</td><td><span class="badge pass">PASS</span></td><td class="links"><a href="../reviews/m6_design_review_2.html">m6_design_review_2</a></td></tr>
+      <tr><td>M6 설계 보안</td><td>security-reviewer</td><td>2회</td><td><span class="badge pass">PASS</span></td><td class="links"><a href="../reviews/m6_design_security_review_2.html">m6_design_security_review_2</a></td></tr>
+      <tr><td>M6 구현 보안 게이트</td><td>security-reviewer</td><td>1회 (치명·높음 0)</td><td><span class="badge pass">PASS</span></td><td class="links"><a href="../reviews/m6_security_review_1.html">m6_security_review_1</a></td></tr>
+      <tr><td>M6 코드 품질</td><td>code-reviewer</td><td>1회 (P1=0·P2 5·P3 7, P2-3 시정 반영)</td><td><span class="badge pass">PASS</span></td><td class="links"><a href="../reviews/m6_code_review_1.html">m6_code_review_1</a></td></tr>
+      <tr><td>M6 동작·통합(다면)</td><td>qa-engineer</td><td>1회 (416 통과·통합 가능)</td><td><span class="badge pass">통합 가능</span></td><td class="links"><a href="../reviews/m6_qa_1.html">m6_qa_1</a> · U-1~U-6 사용자 PC 확인</td></tr>
     </tbody>
   </table>
 
@@ -168,8 +197,8 @@
   <h2>요구 진척</h2>
   <div class="panel">
     <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px;">
-      <span><b style="color:#34d399;">23건 구현 완료</b> (MVP 17 = 기능 11 + 비기능 5 + 품질 N-01, M4 후속 6)</span>
-      <span class="mono">23 / 23 (100%)</span>
+      <span><b style="color:#34d399;">28건 구현 완료</b> (MVP 17 = 기능 11 + 비기능 5 + 품질 N-01, M4 후속 6, M6 백로그 5)</span>
+      <span class="mono">28 / 28 (100%)</span>
     </div>
     <div class="barwrap"><div class="bar" style="width:100%;"></div></div>
     <table style="margin-top:14px;">
@@ -178,6 +207,7 @@
         <tr><td>MVP 기능</td><td class="mono">R-01·02·04·06·07·08·10·11·12·13·14</td><td><span class="badge done">구현 완료</span></td></tr>
         <tr><td>MVP 비기능</td><td class="mono">N-02·03·04·05·06 (+N-01 품질)</td><td><span class="badge done">구현 완료</span></td></tr>
         <tr><td>M4 후속</td><td class="mono">R-03·05·09·15·16 · N-07</td><td><span class="badge done">구현 완료</span></td></tr>
+        <tr><td>M6 백로그</td><td class="mono">R-17·18·19·20·21</td><td><span class="badge done">구현 완료</span></td></tr>
       </tbody>
     </table>
     <p class="meta" style="margin-top:8px;">상세: <span class="links"><a href="traceability.html">traceability.html</a></span> (요구→설계→구현→검증 추적, 빈 칸 0)</p>
@@ -229,13 +259,13 @@
     <b>기획</b>
     <ul><li><a href="../PRD.html">PRD.html</a> (§12 마일스톤·M4 정의)</li><li><a href="../FeatureSpec.html">FeatureSpec.html</a></li><li><a href="../UserStories.html">UserStories.html</a></li></ul>
     <b>설계</b>
-    <ul><li><a href="../architecture/architecture.html">architecture.html</a></li><li><a href="../architecture/m4-design.html">m4-design.html</a> (M4 후속 6건 설계)</li><li><a href="../architecture/electron-migration.html">electron-migration.html</a> (v1.1 · 데스크톱 전환 · §4 IPC 계약·§6 보안)</li><li><a href="../architecture/adr.html">adr.html</a> (ADR 6건)</li></ul>
+    <ul><li><a href="../architecture/architecture.html">architecture.html</a></li><li><a href="../architecture/m4-design.html">m4-design.html</a> (M4 후속 6건 설계)</li><li><a href="../architecture/electron-migration.html">electron-migration.html</a> (v1.1 · 데스크톱 전환 · §4 IPC 계약·§6 보안)</li><li><a href="../architecture/m6-design.html">m6-design.html</a> (rev.2 · 백로그 5기능 R-17~R-21 설계)</li><li><a href="../architecture/adr.html">adr.html</a> (ADR 6건)</li></ul>
     <b>계획·계약·추적</b>
     <ul><li><a href="../roadmap.html">roadmap.html</a> (S0~S7)</li><li><a href="../api-contract.md">api-contract.md</a></li><li><a href="../traceability.html">traceability.html</a></li></ul>
     <b>디자인</b>
     <ul><li><a href="../design/대시보드.dc.html">대시보드.dc.html</a> (Claude Design 시안)</li></ul>
     <b>실행</b>
-    <ul><li><code>npm start</code> (=<code>electron .</code>) / <code>run.bat</code>(더블클릭, 빌드 없이 실행) — <b>데스크톱 앱 실행</b>(네이티브 폴더 선택·인앱 재스캔·VS Code 열기)</li><li><code>build.bat</code>(더블클릭) / <code>build.ps1</code>(<code>-Portable</code> 옵션) / <code>npm run build</code> · <code>build:portable</code> — 설치본 빌드(Windows NSIS + portable, 미서명)</li><li><code>add-defender-exclusion.bat</code> — 반복 빌드 시 Defender가 app.asar를 잠가 빌드 실패하는 것 방지(1회 관리자 실행)</li><li><code>npm run scan</code> / <code>spip --roots ...</code> — 자동화용 스캔만(<code>--with-size</code>·<code>--all-drives</code>·<code>--depth</code>)</li><li><code>npm run start:web</code> — 과도기 HTTP 서버(127.0.0.1:7421, 제거 예정)</li><li><code>npm test</code> — 테스트 306건</li></ul>
+    <ul><li><code>npm start</code> (=<code>electron .</code>) / <code>run.bat</code>(더블클릭, 빌드 없이 실행) — <b>데스크톱 앱 실행</b>(네이티브 폴더 선택·인앱 재스캔·VS Code 열기)</li><li><code>build.bat</code>(더블클릭) / <code>build.ps1</code>(<code>-Portable</code> 옵션) / <code>npm run build</code> · <code>build:portable</code> — 설치본 빌드(Windows NSIS + portable, 미서명)</li><li><code>add-defender-exclusion.bat</code> — 반복 빌드 시 Defender가 app.asar를 잠가 빌드 실패하는 것 방지(1회 관리자 실행)</li><li><code>npm run scan</code> / <code>spip --roots ...</code> — 자동화용 스캔만(<code>--with-size</code>·<code>--all-drives</code>·<code>--depth</code>)</li><li><code>npm run start:web</code> — 과도기 HTTP 서버(127.0.0.1:7421, 제거 예정)</li><li><code>npm test</code> — 테스트 416건</li></ul>
   </div>
 
   <footer>

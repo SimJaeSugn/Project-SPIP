@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project-SPIP — M6 설계 델타 보안 재검증 (R-17~R-21, 2회차)</title>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#1e293b; --text:#e2e8f0; --sub:#94a3b8;
+    --accent:#34d399; --ref:#38bdf8; --line:#334155; --warn:#fbbf24; --danger:#f87171;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:"Segoe UI","Malgun Gothic",system-ui,sans-serif;line-height:1.7;}
+  header{padding:48px 32px 36px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#13203b,#0f172a);}
+  header h1{margin:0 0 8px;font-size:27px;}
+  header .tag{display:inline-block;background:rgba(52,211,153,.12);color:var(--accent);
+    border:1px solid rgba(52,211,153,.4);border-radius:999px;padding:3px 12px;font-size:13px;margin-right:8px;}
+  header p{margin:14px 0 0;color:var(--sub);max-width:990px;}
+  .meta{margin-top:16px;font-size:13px;color:var(--sub);}
+  main{max-width:1160px;margin:0 auto;padding:32px;}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:24px 28px;margin:22px 0;}
+  h2{margin:0 0 16px;font-size:21px;color:var(--accent);border-left:4px solid var(--accent);padding-left:12px;}
+  h3{font-size:16px;color:var(--ref);margin:22px 0 10px;}
+  h4{font-size:14px;color:var(--text);margin:16px 0 6px;}
+  p{margin:8px 0;}
+  ul,ol{margin:8px 0;padding-left:22px;}li{margin:5px 0;}
+  code{background:#0b1220;color:var(--ref);padding:1px 6px;border-radius:5px;font-size:13px;font-family:Consolas,monospace;}
+  pre{background:#0b1220;border:1px solid var(--line);border-radius:8px;padding:14px 16px;
+    overflow-x:auto;font-size:12.5px;color:#cbd5e1;font-family:Consolas,monospace;line-height:1.55;}
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13.5px;}
+  th,td{border:1px solid var(--line);padding:9px 11px;text-align:left;vertical-align:top;}
+  th{background:#142035;color:var(--accent);}
+  tr:nth-child(even) td{background:rgba(255,255,255,.02);}
+  .fid{font-family:Consolas,monospace;font-weight:700;white-space:nowrap;color:var(--warn);}
+  .sev{font-size:11px;font-weight:700;padding:2px 9px;border-radius:6px;white-space:nowrap;display:inline-block;}
+  .crit{background:rgba(248,113,113,.18);color:#fecaca;border:1px solid rgba(248,113,113,.6);}
+  .high{background:rgba(251,146,60,.16);color:#fdba74;border:1px solid rgba(251,146,60,.55);}
+  .med{background:rgba(251,191,36,.14);color:#fcd34d;border:1px solid rgba(251,191,36,.5);}
+  .low{background:rgba(56,189,248,.14);color:#7dd3fc;border:1px solid rgba(56,189,248,.5);}
+  .pass{background:rgba(52,211,153,.16);color:#6ee7b7;border:1px solid rgba(52,211,153,.5);}
+  .resolved{background:rgba(52,211,153,.16);color:#6ee7b7;border:1px solid rgba(52,211,153,.5);}
+  .verdict{display:inline-block;border-radius:999px;padding:6px 22px;font-size:18px;font-weight:800;}
+  .v-pass{background:rgba(52,211,153,.16);color:#6ee7b7;border:1px solid rgba(52,211,153,.6);}
+  .v-cond{background:rgba(251,191,36,.16);color:#fde68a;border:1px solid rgba(251,191,36,.6);}
+  .v-fail{background:rgba(248,113,113,.18);color:#fecaca;border:1px solid rgba(248,113,113,.6);}
+  .note{background:rgba(56,189,248,.08);border:1px solid rgba(56,189,248,.3);border-radius:8px;
+    padding:12px 16px;font-size:13.5px;color:#bae6fd;margin:10px 0;}
+  .warn-box{background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.3);border-radius:8px;
+    padding:12px 16px;font-size:13.5px;color:#fde68a;margin:10px 0;}
+  .danger-box{background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.35);border-radius:8px;
+    padding:12px 16px;font-size:13.5px;color:#fecaca;margin:10px 0;}
+  .ok-box{background:rgba(52,211,153,.08);border:1px solid rgba(52,211,153,.3);border-radius:8px;
+    padding:12px 16px;font-size:13.5px;color:#bbf7d0;margin:10px 0;}
+  figure{margin:18px 0;background:#0b1220;border:1px solid var(--line);border-radius:10px;padding:18px;}
+  figcaption{color:var(--sub);font-size:12.5px;margin-top:10px;text-align:center;}
+  .legend{display:flex;gap:18px;flex-wrap:wrap;font-size:12.5px;color:var(--sub);margin-top:10px;justify-content:center;}
+  .legend span{display:inline-flex;align-items:center;gap:6px;}
+  .dot{width:11px;height:11px;border-radius:3px;display:inline-block;}
+  footer{text-align:center;color:var(--sub);font-size:12.5px;padding:30px;border-top:1px solid var(--line);}
+  .scorecard{display:flex;gap:14px;flex-wrap:wrap;margin:16px 0;}
+  .scard{flex:1;min-width:104px;background:#0b1220;border:1px solid var(--line);border-radius:10px;padding:14px;text-align:center;}
+  .scard .n{font-size:28px;font-weight:800;}
+  .scard .l{font-size:12px;color:var(--sub);margin-top:4px;}
+  .mono{font-family:Consolas,monospace;}
+  .stride{font-family:Consolas,monospace;font-size:11px;color:#c4b5fd;}
+  .arrow{color:var(--accent);font-weight:700;}
+</style>
+</head>
+<body>
+<header>
+  <span class="tag">M6 설계 보안 게이트</span><span class="tag">STRIDE 재검증</span><span class="tag">R-17~R-21 · 2회차</span>
+  <h1>Project-SPIP — M6 설계 델타 보안 재검증 보고서 (2회차)</h1>
+  <p>1회차(<code>m6_design_security_review_1.html</code>) 조건부 PASS의 게이트 조건 <b>높음 2건</b>(M6-H-1 resolveBin 캐시 TOCTOU · M6-H-2 사용자 args 무기화)에 대한 아키텍트의 rev.2 수정을 적대적 관점으로 재검증한다. 핵심 입장은 1회차와 동일: <b>"renderer XSS(RC-2)가 이미 성립했다"</b>는 가정 아래, 신규 표면이 임의 코드 실행/권한 상승으로 번지는지를 본다. 본 회차는 ① 높음 2건의 <b>구조적 해소</b> 여부 ② 설계 명세와 <b>실측 코드의 정합</b>(safeExec force 분기·spawn 재검증·register guard) ③ 보통/낮음 시정 반영 ④ 보존 통제 회귀 ⑤ rev.2가 만든 <b>신규 위협</b> 유무를 확인한다.</p>
+  <div class="meta">검증자: Security Reviewer · 일자: 2026-06-21 · 대상: docs/architecture/m6-design.html(rev.2, 749줄) · 기준: m6_design_security_review_1 게이트 조건 + electron_design_security_review_2/electron_security_review_1(EC-1~6) + 실측 코드(lib/common/safeExec.js·electron/ipc/register.js) · 방법: 게이트 조건 해소 추적 → 설계↔실코드 정합 확인 → 신규 위협 재도출 → 종합 판정 · docs/Development 부재 → 표준 보안 체크리스트 적용 · 본 검증은 설계(구현 전) 게이트이며 코드를 직접 수정하지 않음</div>
+</header>
+
+<main>
+
+<!-- ===================== 판정 ===================== -->
+<section id="verdict">
+  <h2>0. 종합 판정</h2>
+  <p style="font-size:16px;">판정: <span class="verdict v-pass">PASS (승격)</span> <span style="color:#94a3b8;font-size:13px;">— 1회차 조건부 PASS → 2회차 PASS</span></p>
+  <div class="scorecard">
+    <div class="scard"><div class="n" style="color:#fecaca;">0</div><div class="l">치명 (Critical)</div></div>
+    <div class="scard"><div class="n" style="color:#fdba74;">0</div><div class="l">높음 (잔여)</div></div>
+    <div class="scard"><div class="n" style="color:#6ee7b7;">2</div><div class="l">높음 해소</div></div>
+    <div class="scard"><div class="n" style="color:#6ee7b7;">4</div><div class="l">보통 해소</div></div>
+    <div class="scard"><div class="n" style="color:#6ee7b7;">3</div><div class="l">낮음 반영</div></div>
+    <div class="scard"><div class="n" style="color:#6ee7b7;">8</div><div class="l">보존 PASS</div></div>
+  </div>
+  <div class="ok-box"><b>요약:</b> 게이트 조건 <b>높음 2건이 구조적으로 해소</b>됐고, 설계 명세는 실측 코드와 정합한다. <b>M6-H-2</b>는 PM 확정으로 <code>tools.args</code> 필드를 스키마에서 전면 삭제하고 실행 인자를 <code>[projectPath]</code> 단일 고정으로 못박아 — 사용자가 인자를 주입할 경로 자체가 부재하므로 LOLBin 무기화 표면을 <b>원천 제거</b>했다(완화가 아니라 제거). <b>M6-H-1</b>은 spawn 직전 <code>resolveBin(path,{force:true})</code> 캐시 우회 강제 재검증을 <code>resolveTool</code>·open 흐름에 명세했고, 실측 <code>safeExec.js:75~91</code>에 <code>opts.force</code> 분기·<code>_clearBinCache</code>(:116)·spawn 직전 <code>.exe</code> 재검증(:146~152)이 모두 실재해 설계 주장이 코드 접지된다 — "등록 후 파일 교체→재검증 없이 spawn"되는 TOCTOU 창이 닫혔다. 보통 4(M6-M-1~4)·낮음 3(L-1~3)도 본문에 반영. rev.2가 만든 신규 위협은 없다(트레이/close-to-tray·persistConfigKeys 일반화·DoS 가드 모두 신뢰 경계 보존). 치명·높음 0 → <b>보안 게이트 통과(PASS)</b>.</div>
+  <div class="note"><b>잔여 권고(게이트 비차단):</b> 본 PASS는 <b>설계</b>에 대한 것이다. 구현 단계에서 ① <code>setToolPath</code> 성공 시 캐시 무효화(<code>_clearBinCache</code> 또는 해당 키 force 재해석)의 실제 호출 ② <code>resolveTool</code>이 <b>매 open마다</b> force 호출하는지 ③ <code>normalizeTools</code>가 입력 <code>args</code> 키를 실제로 drop하는지 ④ <code>uiStateStore.read</code>의 1MB 크기 가드 ⑤ second-instance argv 미파싱을 코드 리뷰(<code>m6 security_review</code> 구현 회차)에서 실측 확인할 것. 설계는 충분하나 구현이 명세를 이탈하면 H-1/H-2가 재발할 수 있다.</div>
+</section>
+
+<!-- ===================== 게이트 조건 해소 ===================== -->
+<section id="gate">
+  <h2>1. 1회차 게이트 조건 해소 검증 (높음 2건)</h2>
+
+  <h3>1.1 M6-H-1 — resolveBin 캐시 TOCTOU / 재검증 누락</h3>
+  <table>
+    <tr><th style="width:150px;">검증 항목</th><th>1회차 요구</th><th>rev.2 반영 / 실코드 정합</th><th style="width:70px;">판정</th></tr>
+    <tr>
+      <td>spawn 직전 캐시 우회 강제 재검증</td>
+      <td>사용자 지정 경로는 <code>resolveTool</code>/spawn 직전 캐시 우회(force) 재검증을 명세</td>
+      <td>§6.1 <code>resolveTool</code> 의사코드: <code>const abs = rb(tool.path, { force: true })</code>(절대·존재·.exe·realpath). §6.2 open 흐름이 spawn 직전 <code>resolveTool</code> 호출. <b>실코드 정합:</b> <code>safeExec.js:77</code> <code>if (!opts.force &amp;&amp; _binCache.has(name)) return ...</code> → force=true면 캐시 우회·fs 재확인(:82~90). 설계 주장과 정확히 일치.</td>
+      <td><span class="sev resolved">해소</span></td>
+    </tr>
+    <tr>
+      <td>setToolPath 시 캐시 무효화</td>
+      <td>등록 시점 검증 + 캐시 폐기</td>
+      <td>§4.1 setToolPath: "성공 시 캐시 무효화(<code>_clearBinCache</code> 또는 force) 후 영속". §6.1 warn-box(P3-2) 캐시 무효화 정책 명문. <b>실코드 정합:</b> <code>safeExec.js:116~118</code> <code>_clearBinCache()</code> export 실재(:264).</td>
+      <td><span class="sev resolved">해소</span></td>
+    </tr>
+    <tr>
+      <td>등록 후 파일 교체→재검증 없이 실행되는 창</td>
+      <td>고전 TOCTOU·캐시 신뢰 제거</td>
+      <td>매 open마다 force 재해석 명세 → 등록 후 악성 교체(예 <code>%LOCALAPPDATA%</code> 쓰기)돼도 spawn 직전 최신 fs 상태(존재·.exe·실행파일)로 재검증. §11 보안표·§14 리스크에 명문. <b>잔여 미세 TOCTOU</b>(force 재검증과 실제 spawn 사이 나노초 간격)는 OS 레벨이며 본 아키텍처로는 종결 불가 — 그러나 1회차가 지적한 <b>"영구 캐시로 인한 무재검증"</b>이라는 구조적 결함은 닫힘.</td>
+      <td><span class="sev resolved">해소</span></td>
+    </tr>
+  </table>
+  <div class="ok-box"><b>M6-H-1 종결:</b> 설계가 <code>{force:true}</code> 캐시 우회를 <code>resolveTool</code>·setToolPath·getTools resolved 산출 모든 경로에 일관 적용하도록 명세했고, 그 force 의미(캐시 무시 재해석)가 실측 <code>safeExec.resolveBin</code>(:75~91)에 이미 구현돼 있어 설계가 허구 위에 서지 않는다. 1회차의 "name-캐시가 실행 시점 검증을 무력화" 시나리오는 더 이상 성립하지 않는다.</div>
+
+  <h3>1.2 M6-H-2 — 사용자 args 무기화 / LOLBin</h3>
+  <table>
+    <tr><th style="width:150px;">검증 항목</th><th>1회차 요구</th><th>rev.2 반영 / 실코드 정합</th><th style="width:70px;">판정</th></tr>
+    <tr>
+      <td>tools 스키마에서 args 필드 완전 제거</td>
+      <td>args 기본 차단/화이트리스트, 또는 MVP 보류</td>
+      <td><b>PM 확정 — 전면 제거(SQ-1).</b> §3.2 스키마 표는 <code>{path, label}</code>만(args 행 없음). danger-box: "이전 rev의 <code>tools.&lt;id&gt;.args</code> 필드를 전면 삭제". §6.1 <code>normalizeTools</code> 주석 "v.args는 읽지 않음". 화이트리스트보다 강한 <b>표면 원천 제거</b>.</td>
+      <td><span class="sev resolved">해소</span></td>
+    </tr>
+    <tr>
+      <td>실행 인자 [projectPath] 단일 고정</td>
+      <td>real 경로 마지막 위치 고정 명문화</td>
+      <td>§6.2 open 의사코드: <code>await exec(r.bin, [real], {...})</code> — 사용자 args 참조 제거, 단일 고정 인자. §11 보안표 "실행 인자는 main이 구성하는 <code>[real]</code> 1개 고정". §4.1 setToolPath/preload에 args 인자 부재.</td>
+      <td><span class="sev resolved">해소</span></td>
+    </tr>
+    <tr>
+      <td>사용자가 임의 플래그를 주입할 경로 부재</td>
+      <td>어떤 경로로도 위험 플래그 주입 불가</td>
+      <td>인자 주입 경로(스키마·IPC·preload·open) 전 계층에서 args 입력 표면이 제거됨. <code>--install-extension</code>·<code>--no-sandbox</code> 등 무기화 플래그를 renderer가 spawn에 도달시킬 통로가 구조적으로 없음. normalizeTools가 입력 args 키를 drop해 영속도 안 됨.</td>
+      <td><span class="sev resolved">해소</span></td>
+    </tr>
+  </table>
+  <div class="ok-box"><b>M6-H-2 종결:</b> 1회차 권고는 "화이트리스트 또는 보류"였으나 PM은 <b>가장 안전한 안(전면 제거)</b>을 확정했다. 사용자 정의 인자라는 부분신뢰 입력 자체가 사라져 LOLBin 무기화 위협이 잔존하지 않는다. 단, 구현 회차에서 <code>normalizeTools</code>가 레거시 config의 <code>args</code> 키를 실제로 무시(drop)하는지를 실측 확인할 것(설계 명세는 정확).</div>
+</section>
+
+<!-- ===================== 보통/낮음 ===================== -->
+<section id="medlow">
+  <h2>2. 보통 · 낮음 시정 반영 확인</h2>
+  <table>
+    <tr><th style="width:80px;">ID</th><th style="width:180px;">1회차 지적</th><th>rev.2 반영 위치 / 평가</th><th style="width:70px;">판정</th></tr>
+    <tr><td class="fid">M6-M-1<br>SQ-3</td><td>toolId 일반화 PATH 폴백 RCE 표면</td><td>§6.1 <code>KNOWN_TOOL_IDS</code> Set(MVP <code>code</code>), <code>normalizeTools</code>가 known id만 채택(:311), <code>resolveTool</code>이 비멤버 즉시 거부(:323), PATH 폴백도 <code>rb(toolId,{force:true})</code>가 화이트리스트 멤버 한정. §6.2 open이 <code>isKnownToolId</code> 게이트(:345). 임의 PATH 바이너리 이름 호출 경로 차단.</td><td><span class="sev resolved">해소</span></td></tr>
+    <tr><td class="fid">M6-M-2</td><td>pickToolExecutable dialog 필터는 신뢰 근거 아님</td><td>§4.1/§6.3: "dialog의 .exe 필터는 표시용일 뿐 신뢰 근거 아님 — 반환 경로도 setToolPath와 동일 main 재검증(절대·존재·.exe·realpath·force)". <code>.lnk/.bat</code> 자동 거부 명문. 검증 누락 구현 유발 소지 제거.</td><td><span class="sev resolved">해소</span></td></tr>
+    <tr><td class="fid">M6-M-3</td><td>second-instance argv 비신뢰·트레이 push 화이트리스트</td><td>§9.2 의사코드 주석(:501) "argv/cwd payload는 비신뢰 — 절대 파싱·경로 사용·실행 안 함, win.show 트리거로만". §9.2 표에 불변식 명문. 트레이 push action <code>dashboard|favorites</code> 고정 화이트리스트·단방향·메인 win.webContents 한정.</td><td><span class="sev resolved">해소</span></td></tr>
+    <tr><td class="fid">M6-M-4</td><td>ui-state.json 크기/파싱 상한 부재 DoS</td><td>§3.4 <code>uiStateStore.read</code> 가드: <code>MAX_UISTATE_BYTES=1MB</code> statSync 선검사 + readFileSync 후 길이 재확인(symlink/경합 대비) + <code>_safeParse</code>(H-3 깊이 가드) + <code>normalizeState</code>(배열 상한·id 형식·중복 제거·schemaVersion 폴백). 어떤 실패도 graceful 빈 상태·0600 유지.</td><td><span class="sev resolved">해소</span></td></tr>
+    <tr><td class="fid">M6-L-1</td><td>copyText 길이 거부 vs slice 모순</td><td>§4.1: "초과 시 명시 거부(절단 안 함, L-1 단일화)" <code>INVALID_TEXT</code>. 모순 제거.</td><td><span class="sev resolved">반영</span></td></tr>
+    <tr><td class="fid">M6-L-2</td><td>label 제어/방향제어문자 sanitize 미명세</td><td>§3.2: "제어문자·방향제어문자(U+202E 등) 제거·인쇄가능 문자만·≤64". §6.1 <code>sanitizeLabel</code>. UI 스푸핑 여지 제거.</td><td><span class="sev resolved">반영</span></td></tr>
+    <tr><td class="fid">M6-L-3</td><td>실패 code가 경로 존재 oracle</td><td>§4.1: 실패 code는 고정 토큰만(절대경로·스택 미동봉, L-3 유지). 사용자 설정 UI 특성상 NOT_FOUND/NOT_EXECUTABLE 구분 수용. 게이트 비차단.</td><td><span class="sev resolved">반영</span></td></tr>
+  </table>
+  <div class="note"><b>P2/P3/SQ:</b> P2-1(persistConfigKeys 키-범용 부분 갱신, §3.5)·P2-2(doFinalQuit 단일 종료 경로·Q4 취소 시 미dispose 정상 복귀, §9.2)·P3-1(inflightKey 형식)·P3-2(캐시 무효화)·SQ-1~3(전부 확정)이 본문 §0 게이트 추적표·§14 확정표에 반영됨. 미해결 질문 0.</div>
+</section>
+
+<!-- ===================== 신규 위협 ===================== -->
+<section id="newthreat">
+  <h2>3. rev.2 변경이 만든 신규 위협 재도출 (STRIDE)</h2>
+  <p>게이트 시정으로 추가된 구조(<code>persistConfigKeys</code> 일반화·close-to-tray 생명주기·DoS 가드·<code>KNOWN_TOOL_IDS</code>)에 새 위협이 들어왔는지 적대적으로 재검토했다.</p>
+  <table>
+    <tr><th style="width:200px;">변경 / STRIDE</th><th>위협 검토</th><th style="width:80px;">결과</th></tr>
+    <tr><td>persistConfigKeys 키-범용화<br><span class="stride">Tampering</span></td><td>scanRoots 전용 writer를 범용화하면 임의 키 주입 위험? — <code>patch</code>는 main 내부 코드가 구성(<code>{tools}</code>·<code>{scanRoots}</code>)이며 renderer가 임의 키-값을 넘기는 경로가 없음. read-merge로 기존 키 보존·0600 원자적 쓰기 유지. setToolPath는 정규화된 tools 맵만 patch로 전달.</td><td><span class="sev pass">신규 없음</span></td></tr>
+    <tr><td>close-to-tray 상주<br><span class="stride">DoS / Spoofing</span></td><td>백그라운드 상주가 second-instance·트레이 push 표면을 키우나, §9.2가 argv 비신뢰·push action 화이트리스트·단방향을 명문화. doFinalQuit 멱등·dispose 단일 경로(P2-2)로 Q4 취소 시 조기 dispose 불일치(자원 상태 손상) 제거. window-all-closed no-op은 의도된 동작.</td><td><span class="sev pass">신규 없음</span></td></tr>
+    <tr><td>uiStateStore DoS 가드<br><span class="stride">DoS</span></td><td>가드 추가가 새 표면을 만들지 않음. id가 실행·경로에 미사용(표시·정렬 메타 한정)이라 오염 영향 극소. 1MB 상한·_safeParse·normalizeState 재적용으로 거대/깊은 JSON 방어.</td><td><span class="sev pass">신규 없음</span></td></tr>
+    <tr><td>KNOWN_TOOL_IDS 코드 화이트리스트<br><span class="stride">Elevation</span></td><td>데이터(config)만으로 임의 toolId 추가 불가 — 코드 등록 필요. 의도된 보안 트레이드오프(공격자 config 조작으로 새 실행 대상 못 만듦). MVP <code>code</code> 단일. 표면 축소 방향.</td><td><span class="sev pass">신규 없음</span></td></tr>
+    <tr><td>즐겨찾기 오버레이(R-21)<br><span class="stride">Elevation</span></td><td>1회차 PASS 유지 — ADR-M6-5가 별도 BrowserWindow 아닌 메인창 내 <code>position:fixed</code> 오버레이로 확정. 신규 webPreferences·preload·CSP·senderFrame 구성 0. 기존 메인창 보안 컨텍스트 그대로. 트레이는 OS 위젯(렌더 컨텍스트 없음).</td><td><span class="sev pass">표면 0 유지</span></td></tr>
+  </table>
+</section>
+
+<!-- ===================== 보존 통제 ===================== -->
+<section id="preserved">
+  <h2>4. 보존 통제 회귀 — PASS 명시</h2>
+  <table>
+    <tr><th style="width:250px;">통제 (베이스라인)</th><th style="width:70px;">판정</th><th>M6 rev.2 보존 근거</th></tr>
+    <tr><td>신규 IPC 전부 register.guard 경유(senderFrame·재검증)</td><td><span class="sev pass">PASS</span></td><td>§4.2가 신규 8채널 전부 <code>guard()</code> 등록. 실측 <code>register.js:89~102</code> guard가 <code>isTrustedSender</code>(app:// 정확 일치, EI-L-1 URL 파싱·host '..' 거부 :52~63)·try/catch→고정 FORBIDDEN/INTERNAL 자동 적용. 신규 채널도 동일 게이트.</td></tr>
+    <tr><td>contextIsolation·sandbox·nodeIntegration:false</td><td><span class="sev pass">PASS</span></td><td>§11 표 불변 명시. 신규 기능 모두 main 로직 + preload contextBridge만(sandbox 호환).</td></tr>
+    <tr><td>preload 최소 allowlist(채널명 하드코딩·invoke 비노출)</td><td><span class="sev pass">PASS</span></td><td>§4.1 preload 의사코드가 채널명 하드코딩·인자 String/Boolean 강제. <code>ipcRenderer</code> 원본·범용 invoke 비노출(MUST) 유지. setToolPath에 args 인자 없음(H-2).</td></tr>
+    <tr><td>전 채널 main 재검증(EM-H-1) / CSP / textContent(L-1)</td><td><span class="sev pass">PASS</span></td><td>§4.1 표 "main 재검증" 열·§11. CSP 메타·세션 헤더 불변(인라인/외부 링크 0, PATH 안내 정적 텍스트·shell.openExternal 미사용). 신규 표시 문자열 전부 textContent.</td></tr>
+    <tr><td>safeExec H-2(shell:false·.exe 한정·인자배열·in-flight) + force 재검증</td><td><span class="sev pass">PASS</span></td><td>실측 <code>safeExec.js</code>: shell:false(:185)·windowsHide·spawn 직전 .exe 재검증(:146~152)·인자 전부 string(:155)·in-flight 상한(:167~172)·.bat/.cmd 거부(:30,64~66 PATHEXT RCE 차단). R-18 open이 이 체인 + force 재검증(:77) 재사용.</td></tr>
+    <tr><td>pathGuard H-1(canonicalize+isAllowed)</td><td><span class="sev pass">PASS</span></td><td>§6.2 의사코드가 toolId 일반화 후에도 <code>pg.canonicalize</code>+<code>isAllowed(getAllowKeySet())</code> 유지(:349~351). 실행 인자 real은 화이트리스트 통과분만 — 사용자 입력 경로(text)와 실행 대상(real) 미혼동.</td></tr>
+    <tr><td>0600/0700 원자적 쓰기(M-2) + 부분 갱신(P2-1)</td><td><span class="sev pass">PASS</span></td><td>§3.5 <code>persistConfigKeys</code>가 persistScanRoots의 read-merge→임시파일→fsync→rename→0600 패턴 일반화(scanRoots/기타 키 유실 없음). uiStateStore.write 동일 패턴. paths.appDir/ensureDirFor 무수정 재사용.</td></tr>
+    <tr><td>즐겨찾기 오버레이 신규 창/preload/CSP 0</td><td><span class="sev pass">PASS</span></td><td>ADR-M6-5·§9.3·§11: 메인창 내 오버레이 확정 → 신규 BrowserWindow·preload·CSP·senderFrame 0. 보안 컨텍스트 1개 유지.</td></tr>
+  </table>
+  <div class="note"><b>EC-1~6 / H-1·H-2·H-3 회귀:</b> EC-1(재검증)·EC-5(senderFrame)·H-1(pathGuard)·H-2(safeExec .exe·shell:false)·H-3(_safeParse JSON 깊이 가드, §3.4 ui-state 읽기에 재사용)이 M6 신규 채널·데이터·생명주기 변경 후에도 전부 유지·확장 적용됨을 확인. M6는 신규 통제를 기존 베이스라인에 편입했을 뿐 약화시키지 않았다.</div>
+</section>
+
+<!-- ===================== 결론 ===================== -->
+<section id="conclusion">
+  <h2>5. 결론 · 게이트 처리</h2>
+  <p>판정: <span class="verdict v-pass">PASS</span> — 치명 0, 높음 0(잔여), 1회차 높음 2건 구조적 해소, 보통 4·낮음 3 반영, 보존 8 PASS, 신규 위협 0.</p>
+  <div class="ok-box">
+    <b>게이트 통과 근거:</b>
+    <ol>
+      <li><b>M6-H-1 해소</b>: spawn 직전 <code>resolveBin(.,{force:true})</code> 캐시 우회 강제 재검증을 resolveTool·setToolPath·getTools 전 경로에 명세 — 실측 safeExec의 force 분기(:77)·_clearBinCache(:116)·spawn .exe 재검증(:146)과 정합. 영구 캐시로 인한 무재검증 TOCTOU 창 폐쇄.</li>
+      <li><b>M6-H-2 해소</b>: PM 확정으로 tools.args 스키마 전면 삭제·실행 인자 <code>[projectPath]</code> 고정 — 사용자 인자 주입 경로 원천 부재(완화가 아닌 제거).</li>
+      <li>보통 4·낮음 3 전부 본문 반영, rev.2 신규 구조에 신규 위협 없음, 보존 통제(guard·CSP·contextIsolation·H-1/H-2/H-3·EC-1~6·오버레이 표면 0) 회귀 없음.</li>
+    </ol>
+    치명·높음이 0이므로 <b>보안 게이트 통과(PASS)</b>. M6 구현 착수 가능.
+  </div>
+  <div class="warn-box"><b>구현 회차로 이관(게이트 비차단, 코드 리뷰 필수 확인 항목):</b> 본 PASS는 설계 명세 기준이다. 구현 시 ① resolveTool이 <b>매 open마다</b> force 호출 ② setToolPath 성공 시 캐시 무효화 실호출 ③ normalizeTools가 레거시 <code>args</code> 키 drop ④ uiStateStore.read 1MB 가드·_safeParse 경유 ⑤ second-instance argv 미파싱 ⑥ doFinalQuit 멱등·dispose 단일 경로를 <b>실측 코드로 재확인</b>해야 한다. 설계가 정확해도 구현이 이탈하면 H-1/H-2가 재발할 수 있어 구현 보안 검증에서 회귀 테스트로 못박을 것.</div>
+  <p>M6 설계 델타 rev.2는 1회차 게이트 조건을 정공법으로 해소했다 — 특히 args 전면 제거는 화이트리스트보다 강한 결정이며, force 재검증은 실코드 능력에 정확히 접지된다. 코드는 직접 수정하지 않으며, 위 구현 확인 항목을 담당 아키텍트/개발자에게 이관한다.</p>
+</section>
+
+<footer>
+  Project-SPIP — M6 설계 델타 보안 재검증(R-17~R-21) 2회차 · Security Reviewer · 2026-06-21 · PASS(1회차 조건부 PASS → 높음 2 구조적 해소·신규 위협 0) · 본 보고서는 설계 게이트이며 구현 코드를 수정하지 않는다 · 저장: docs/reviews/m6_design_security_review_2.html
+</footer>
+
+</main>
+</body>
+</html>

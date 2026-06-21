@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project-SPIP — M6 구현 최종 보안 게이트 (1회차)</title>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#1e293b; --text:#e2e8f0; --sub:#94a3b8;
+    --accent:#34d399; --ref:#38bdf8; --line:#334155; --warn:#fbbf24; --danger:#f87171;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:"Segoe UI","Malgun Gothic",system-ui,sans-serif;line-height:1.7;}
+  header{padding:48px 32px 36px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#13203b,#0f172a);}
+  header h1{margin:0 0 8px;font-size:27px;}
+  header .tag{display:inline-block;background:rgba(52,211,153,.12);color:var(--accent);
+    border:1px solid rgba(52,211,153,.4);border-radius:999px;padding:3px 12px;font-size:13px;margin-right:8px;}
+  header p{margin:14px 0 0;color:var(--sub);max-width:990px;}
+  .meta{margin-top:16px;font-size:13px;color:var(--sub);}
+  main{max-width:1160px;margin:0 auto;padding:32px;}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:24px 28px;margin:22px 0;}
+  h2{margin:0 0 16px;font-size:21px;color:var(--accent);border-left:4px solid var(--accent);padding-left:12px;}
+  h3{font-size:16px;color:var(--ref);margin:22px 0 10px;}
+  h4{font-size:14px;color:var(--text);margin:16px 0 6px;}
+  p{margin:8px 0;}
+  ul,ol{margin:8px 0;padding-left:22px;}li{margin:5px 0;}
+  code{background:#0b1220;color:var(--ref);padding:1px 6px;border-radius:5px;font-size:13px;font-family:Consolas,monospace;}
+  pre{background:#0b1220;border:1px solid var(--line);border-radius:8px;padding:14px 16px;
+    overflow-x:auto;font-size:12.5px;color:#cbd5e1;font-family:Consolas,monospace;line-height:1.55;}
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13.5px;}
+  th,td{border:1px solid var(--line);padding:9px 11px;text-align:left;vertical-align:top;}
+  th{background:#142035;color:var(--accent);}
+  tr:nth-child(even) td{background:rgba(255,255,255,.02);}
+  .fid{font-family:Consolas,monospace;font-weight:700;white-space:nowrap;color:var(--warn);}
+  .sev{font-size:11px;font-weight:700;padding:2px 9px;border-radius:6px;white-space:nowrap;display:inline-block;}
+  .crit{background:rgba(248,113,113,.18);color:#fecaca;border:1px solid rgba(248,113,113,.6);}
+  .high{background:rgba(251,146,60,.16);color:#fdba74;border:1px solid rgba(251,146,60,.55);}
+  .med{background:rgba(251,191,36,.14);color:#fcd34d;border:1px solid rgba(251,191,36,.5);}
+  .low{background:rgba(56,189,248,.14);color:#7dd3fc;border:1px solid rgba(56,189,248,.5);}
+  .pass{background:rgba(52,211,153,.16);color:#6ee7b7;border:1px solid rgba(52,211,153,.5);}
+  .resolved{background:rgba(52,211,153,.16);color:#6ee7b7;border:1px solid rgba(52,211,153,.5);}
+  .verdict{display:inline-block;border-radius:999px;padding:6px 22px;font-size:18px;font-weight:800;}
+  .v-pass{background:rgba(52,211,153,.16);color:#6ee7b7;border:1px solid rgba(52,211,153,.6);}
+  .v-cond{background:rgba(251,191,36,.16);color:#fde68a;border:1px solid rgba(251,191,36,.6);}
+  .v-fail{background:rgba(248,113,113,.18);color:#fecaca;border:1px solid rgba(248,113,113,.6);}
+  .note{background:rgba(56,189,248,.08);border:1px solid rgba(56,189,248,.3);border-radius:8px;
+    padding:12px 16px;font-size:13.5px;color:#bae6fd;margin:10px 0;}
+  .warn-box{background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.3);border-radius:8px;
+    padding:12px 16px;font-size:13.5px;color:#fde68a;margin:10px 0;}
+  .danger-box{background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.35);border-radius:8px;
+    padding:12px 16px;font-size:13.5px;color:#fecaca;margin:10px 0;}
+  .ok-box{background:rgba(52,211,153,.08);border:1px solid rgba(52,211,153,.3);border-radius:8px;
+    padding:12px 16px;font-size:13.5px;color:#bbf7d0;margin:10px 0;}
+  figure{margin:18px 0;background:#0b1220;border:1px solid var(--line);border-radius:10px;padding:18px;}
+  figcaption{color:var(--sub);font-size:12.5px;margin-top:10px;text-align:center;}
+  .legend{display:flex;gap:18px;flex-wrap:wrap;font-size:12.5px;color:var(--sub);margin-top:10px;justify-content:center;}
+  .legend span{display:inline-flex;align-items:center;gap:6px;}
+  .dot{width:11px;height:11px;border-radius:3px;display:inline-block;}
+  footer{text-align:center;color:var(--sub);font-size:12.5px;padding:30px;border-top:1px solid var(--line);}
+  .scorecard{display:flex;gap:14px;flex-wrap:wrap;margin:16px 0;}
+  .scard{flex:1;min-width:104px;background:#0b1220;border:1px solid var(--line);border-radius:10px;padding:14px;text-align:center;}
+  .scard .n{font-size:28px;font-weight:800;}
+  .scard .l{font-size:12px;color:var(--sub);margin-top:4px;}
+  .mono{font-family:Consolas,monospace;}
+  .stride{font-family:Consolas,monospace;font-size:11px;color:#c4b5fd;}
+  .arrow{color:var(--accent);font-weight:700;}
+  .probe{background:#0b1220;border:1px solid var(--line);border-radius:8px;padding:12px 14px;font-family:Consolas,monospace;font-size:12px;color:#a7f3d0;overflow-x:auto;white-space:pre;}
+</style>
+</head>
+<body>
+<header>
+  <span class="tag">M6 구현 보안 게이트</span><span class="tag">코드 실측 + 동작 프로브</span><span class="tag">R-17~R-21 · 1회차</span>
+  <h1>Project-SPIP — M6 구현 최종 보안 검증 보고서 (1회차)</h1>
+  <p>설계 보안 게이트(<code>m6_design_security_review_2.html</code>) PASS가 <b>구현 회차로 이관한 6개 게이트 항목</b>이 실제 코드에 구현됐는지를 적대적 관점에서 실측한다. 입장은 설계 회차와 동일: <b>"renderer XSS가 이미 성립했다"</b>는 가정 아래, 신규 표면(클립보드·툴 레지스트리·UI 상태·트레이/생명주기)이 임의 코드 실행/권한 상승으로 번지는지를 본다. 본 회차는 ① 6개 구현 게이트를 <b>코드 실재 + 동작 프로브</b>로 확인 ② R-18 핵심 거부 시나리오(.bat/.cmd/상대/비존재/디렉터리·토큰 외 toolId)를 라이브 프로브 ③ 추가 통제(화이트리스트·realpath 재검증·copyText 쓰기전용·register guard) ④ 보존 통제(contextIsolation·sandbox·CSP·H-1/H-2/H-3·EC-1~6) 회귀 ⑤ 시크릿·런타임 의존성을 본다.</p>
+  <div class="meta">검증자: Security Reviewer · 일자: 2026-06-21 · 대상: lib/common/{toolRegistry,uiStateStore,config,paths,safeExec}.js · electron/ipc/{tools,clipboard,uiState,actions,register}.js · electron/{main,tray,security}.js · electron/preload.js · 기준: m6_design_security_review_2(이관 6항목·M6-H/M/L) · 방법: 전 대상 정독 → <code>node --test</code> 416건 → 직접 프로브 Bash 다수 → 시크릿/의존성 스캔 · docs/Development 부재 → 표준 보안 체크리스트 적용 · 본 검증자는 코드를 직접 수정하지 않는다</div>
+</header>
+
+<main>
+
+<!-- ===================== 판정 ===================== -->
+<section id="verdict">
+  <h2>0. 종합 판정</h2>
+  <p style="font-size:16px;">판정: <span class="verdict v-pass">PASS</span> <span style="color:#94a3b8;font-size:13px;">— 치명 0 · 높음 0 → 보안 게이트 통과</span></p>
+  <div class="scorecard">
+    <div class="scard"><div class="n" style="color:#fecaca;">0</div><div class="l">치명 (Critical)</div></div>
+    <div class="scard"><div class="n" style="color:#fdba74;">0</div><div class="l">높음 (High)</div></div>
+    <div class="scard"><div class="n" style="color:#fcd34d;">0</div><div class="l">보통 (Medium)</div></div>
+    <div class="scard"><div class="n" style="color:#7dd3fc;">1</div><div class="l">낮음 (정보)</div></div>
+    <div class="scard"><div class="n" style="color:#6ee7b7;">6/6</div><div class="l">구현 게이트 통과</div></div>
+    <div class="scard"><div class="n" style="color:#6ee7b7;">416</div><div class="l">테스트 통과</div></div>
+  </div>
+  <div class="ok-box"><b>요약:</b> 설계 게이트가 이관한 <b>6개 구현 항목이 전부 코드에 실재하고 동작 프로브로 입증</b>됐다. ① <code>resolveTool</code>은 사용자 경로·PATH 폴백 양쪽 모두 <code>resolveBin(.,{force:true})</code>로 캐시를 우회 — 등록 후 파일 삭제 시 재실행이 <code>{bin:null}</code>로 재검증됨(TOCTOU 창 닫힘). ② <code>setToolPath</code> 성공·<code>path=null</code> 해제 모두 <code>_clearBinCache</code> 1회 실호출(프로브 확인). ③ <code>normalizeTools</code>는 입력 <code>args</code>·<code>extra</code> 키를 drop하고 출력은 <code>{path,label}</code>만. ④ <code>uiStateStore.read</code>는 1MB 초과·깊은 JSON·손상 입력 모두 graceful 빈 상태 폴백, write는 0600 원자적. ⑤ second-instance는 argv/cwd 미참조·<code>win.show/focus</code>만(정적+테스트). ⑥ <code>doFinalQuit</code>/<code>disposeResources</code>는 <code>_disposed</code> 멱등 가드, close-to-tray 평소 X는 dispose 안 함. R-18 거부 시나리오(.bat/.cmd/상대/비존재/디렉터리·토큰 외 toolId open)는 전부 거부됨. 신규 8 IPC 채널은 <code>register.guard</code>(senderFrame 정확 비교) 경유, copyText는 <code>writeText</code>만 export(읽기 미노출), favorites/order id는 실행·경로 미사용. CSP <code>default-src 'none'</code> 무약화, 런타임 의존성 0·시크릿 0·취약점 0. 치명·높음 0 → <b>PASS</b>.</div>
+  <div class="note"><b>낮음(게이트 비차단) 1건:</b> <b>M6-L-4</b> — 트레이 <code>onShowDashboard</code>는 <code>spip:tray:dashboard</code>를 webContents로 보내지 않으나(win.show/focus만) preload <code>onTray</code>는 <code>dashboard</code> 채널을 구독한다. <b>보안상 무해</b>(표면 축소 방향, 데드 채널은 공격 통로 아님)이나 기능 정합 차원에서 개발자에게 정보 전달. 게이트를 막지 않는다.</div>
+</section>
+
+<!-- ===================== 신뢰 경계 SVG ===================== -->
+<section id="boundary">
+  <h2>1. 신뢰 경계 · M6 신규 데이터 흐름</h2>
+  <figure>
+    <svg viewBox="0 0 1080 420" width="100%" role="img" aria-label="M6 신뢰 경계 다이어그램">
+      <defs>
+        <marker id="ar" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+          <path d="M0,0 L8,3 L0,6 Z" fill="#34d399"/>
+        </marker>
+      </defs>
+      <!-- renderer zone -->
+      <rect x="20" y="40" width="300" height="340" rx="10" fill="#1e293b" stroke="#f87171" stroke-dasharray="5 4"/>
+      <text x="40" y="66" fill="#fca5a5" font-size="13" font-family="Consolas">비신뢰 영역 (renderer / XSS 가정)</text>
+      <rect x="44" y="84" width="252" height="40" rx="6" fill="#0b1220" stroke="#334155"/>
+      <text x="56" y="109" fill="#e2e8f0" font-size="12">window.spip.* (preload allowlist)</text>
+      <text x="56" y="150" fill="#94a3b8" font-size="11.5" font-family="Consolas">copyText / setToolPath</text>
+      <text x="56" y="170" fill="#94a3b8" font-size="11.5" font-family="Consolas">pickToolExecutable / open</text>
+      <text x="56" y="190" fill="#94a3b8" font-size="11.5" font-family="Consolas">setFavorite / setOrder ...</text>
+      <text x="56" y="225" fill="#fca5a5" font-size="11">하드코딩 채널명 · String/Boolean 강제</text>
+      <text x="56" y="245" fill="#fca5a5" font-size="11">ipcRenderer 원본·generic invoke 비노출</text>
+
+      <!-- boundary line -->
+      <line x1="360" y1="30" x2="360" y2="390" stroke="#fbbf24" stroke-width="2" stroke-dasharray="3 5"/>
+      <text x="368" y="28" fill="#fde68a" font-size="11.5">IPC 경계 (register.guard: senderFrame app:// 정확 비교)</text>
+
+      <!-- main zone -->
+      <rect x="400" y="40" width="340" height="340" rx="10" fill="#1e293b" stroke="#34d399"/>
+      <text x="420" y="66" fill="#6ee7b7" font-size="13" font-family="Consolas">신뢰 영역 (main / 재검증 지점)</text>
+      <rect x="424" y="84" width="292" height="56" rx="6" fill="#0b1220" stroke="#334155"/>
+      <text x="436" y="106" fill="#e2e8f0" font-size="12">toolId 화이트리스트 (KNOWN_TOOL_IDS)</text>
+      <text x="436" y="126" fill="#94a3b8" font-size="11">절대·.exe·존재·realpath force 재검증</text>
+      <rect x="424" y="156" width="292" height="40" rx="6" fill="#0b1220" stroke="#334155"/>
+      <text x="436" y="181" fill="#e2e8f0" font-size="12">pathGuard canonicalize + isAllowed (H-1)</text>
+      <rect x="424" y="212" width="292" height="40" rx="6" fill="#0b1220" stroke="#334155"/>
+      <text x="436" y="237" fill="#e2e8f0" font-size="12">safeExec shell:false · [real] 1개 고정</text>
+      <rect x="424" y="268" width="292" height="40" rx="6" fill="#0b1220" stroke="#334155"/>
+      <text x="436" y="293" fill="#e2e8f0" font-size="12">uiStateStore 1MB·깊이 가드 · 0600</text>
+
+      <!-- OS / FS zone -->
+      <rect x="800" y="40" width="260" height="340" rx="10" fill="#1e293b" stroke="#38bdf8"/>
+      <text x="820" y="66" fill="#7dd3fc" font-size="13" font-family="Consolas">OS / 파일시스템</text>
+      <rect x="824" y="92" width="212" height="40" rx="6" fill="#0b1220" stroke="#334155"/>
+      <text x="836" y="117" fill="#e2e8f0" font-size="12">spawn(.exe, [real])</text>
+      <rect x="824" y="150" width="212" height="40" rx="6" fill="#0b1220" stroke="#334155"/>
+      <text x="836" y="175" fill="#e2e8f0" font-size="12">config / ui-state (0600)</text>
+      <rect x="824" y="208" width="212" height="40" rx="6" fill="#0b1220" stroke="#334155"/>
+      <text x="836" y="233" fill="#e2e8f0" font-size="12">clipboard.writeText (쓰기전용)</text>
+
+      <line x1="300" y1="104" x2="398" y2="104" stroke="#34d399" stroke-width="2" marker-end="url(#ar)"/>
+      <line x1="718" y1="112" x2="822" y2="112" stroke="#34d399" stroke-width="2" marker-end="url(#ar)"/>
+      <line x1="718" y1="176" x2="822" y2="170" stroke="#34d399" stroke-width="2" marker-end="url(#ar)"/>
+      <line x1="718" y1="232" x2="822" y2="228" stroke="#34d399" stroke-width="2" marker-end="url(#ar)"/>
+    </svg>
+    <figcaption>비신뢰 renderer → register.guard(senderFrame) → main 재검증(화이트리스트·force·pathGuard) → OS. 신뢰 입력은 main에서만 검증되며 실행 인자는 <code>[real]</code> 1개로 고정된다.</figcaption>
+    <div class="legend">
+      <span><span class="dot" style="background:#f87171;"></span>비신뢰</span>
+      <span><span class="dot" style="background:#fbbf24;"></span>신뢰 경계</span>
+      <span><span class="dot" style="background:#34d399;"></span>신뢰(재검증)</span>
+      <span><span class="dot" style="background:#38bdf8;"></span>OS/FS</span>
+    </div>
+  </figure>
+</section>
+
+<!-- ===================== 6개 구현 게이트 ===================== -->
+<section id="gates">
+  <h2>2. 구현 게이트 6항목 — 코드 실재 + 동작 실측</h2>
+  <table>
+    <tr><th style="width:40px;">#</th><th style="width:230px;">게이트 (이관 항목)</th><th>코드 근거 + 프로브 결과</th><th style="width:70px;">판정</th></tr>
+    <tr>
+      <td>1</td>
+      <td>resolveTool 매 open <b>force 재검증</b> (M6-H-1, TOCTOU)</td>
+      <td><code>toolRegistry.js:113</code> 사용자 경로 <code>rb(tool.path,{force:true})</code> · <code>:117</code> PATH 폴백 <code>rb(toolId,{force:true})</code> — <b>양쪽 모두 force</b>. <code>actions.openInVsCode</code>가 매 open <code>resolveTool</code> 호출. <code>safeExec.js:77</code> <code>if(!opts.force&amp;&amp;_binCache.has)…</code> → force=true면 캐시 우회·fs 재확인(:82~91). <b>프로브:</b> 등록 후 .exe 삭제→재실행 <code>{bin:null,source:'none'}</code>(캐시 무시 재검증). 테스트 <code>① open … force:true 호출</code> 통과.</td>
+      <td><span class="sev resolved">통과</span></td>
+    </tr>
+    <tr>
+      <td>2</td>
+      <td>setToolPath 성공 시 <b>_clearBinCache 실호출</b> (null 해제 포함)</td>
+      <td><code>tools.js:111</code> <code>applyToolPath</code>가 <code>d.clearBinCache()</code> 호출 — setToolPath 성공·<code>path=null</code> 해제 공통 경로. <b>프로브:</b> 성공 시 호출수 1, null 해제 후 누적 2 — 두 경로 모두 무효화 확인.</td>
+      <td><span class="sev resolved">통과</span></td>
+    </tr>
+    <tr>
+      <td>3</td>
+      <td>normalizeTools <b>args drop</b> (출력 {path,label}만)</td>
+      <td><code>toolRegistry.js:87~91</code> 출력 객체에 <code>path,label</code>만 구성, <code>v.args</code> 미참조. <b>프로브:</b> 입력 <code>{path,label,args:[...],extra:1}</code> → 출력 키 <code>["path","label"]</code>, args/extra 소실. 실행 인자는 <code>actions.js:113</code> <code>[real]</code> 고정(프로브 args=<code>["…/proj"]</code>).</td>
+      <td><span class="sev resolved">통과</span></td>
+    </tr>
+    <tr>
+      <td>4</td>
+      <td>ui-state <b>1MB 가드 + _safeParse + graceful</b> + 0600</td>
+      <td><code>uiStateStore.js:114</code> statSync 1MB 선검사 · <code>:116</code> raw 길이 재확인 · <code>:117</code> <code>_safeParse</code>(깊이 32 가드) · <code>:119</code> normalizeState. <b>프로브:</b> 1MB+10B·깊이60·손상JSON 모두 <code>{favorites:[],order:[],sortMode:'auto'}</code>. write 0600 원자적(roundtrip 테스트 0600 확인, openSync wx FILE_MODE).</td>
+      <td><span class="sev resolved">통과</span></td>
+    </tr>
+    <tr>
+      <td>5</td>
+      <td>second-instance <b>argv 미파싱</b> (win.show만)</td>
+      <td><code>main.js:83~89</code> 핸들러는 <code>_argv,_cwd</code>(미사용 표기) 수신 후 <code>win.show()/restore()/focus()</code>만. argv/cwd 본문 미참조. 테스트 <code>⑤ second-instance … 파싱·사용하지 않음</code> 정규식 정적분석 통과.</td>
+      <td><span class="sev resolved">통과</span></td>
+    </tr>
+    <tr>
+      <td>6</td>
+      <td>doFinalQuit <b>멱등 + dispose 가드</b> (평소 X는 미dispose)</td>
+      <td><code>main.js:252~257</code> <code>_disposed</code> early-return 멱등 · <code>:260~264</code> <code>doFinalQuit</code>가 유일 dispose 지점 · <code>:212~223</code> close-to-tray(!isQuitting)는 <code>preventDefault+hide</code>(dispose 안 함) · <code>:236</code> Q4 취소 시 <code>isQuitting=false</code> 정상 복귀 · <code>:268</code> before-quit은 isQuitting 가드만 · <code>:271</code> window-all-closed no-op. 테스트 <code>⑥ doFinalQuit 멱등</code> 통과.</td>
+      <td><span class="sev resolved">통과</span></td>
+    </tr>
+  </table>
+
+  <h3>2.1 R-18 핵심 거부 시나리오 — 라이브 프로브</h3>
+  <p>실제 <code>tools.validateToolPath</code>/<code>setToolPath</code>/<code>actions.openInVsCode</code>를 임시 파일시스템에 대고 실행한 결과(요약):</p>
+  <div class="probe">.bat 거부            {"ok":false,"code":"NOT_EXECUTABLE"}
+.cmd 거부            {"ok":false,"code":"NOT_EXECUTABLE"}
+상대경로 거부          {"ok":false,"code":"NOT_ABSOLUTE"}
+비존재 거부           {"ok":false,"code":"NOT_EXECUTABLE"}
+디렉터리 거부          {"ok":false,"code":"NOT_EXECUTABLE"}
+양성 .exe 통과        {"ok":true,"real":"…\Code.exe"}
+빈문자열 / 4097자초과   {"ok":false,"code":"NOT_ABSOLUTE"}
+setToolPath unknown toolId(cursor)   {"ok":false,"code":"INVALID_TOOL_ID"}
+setToolPath 형식위반 toolId(../../x)  {"ok":false,"code":"INVALID_TOOL_ID"}
+setToolPath code + .bat              {"ok":false,"code":"NOT_EXECUTABLE"}
+open known code (양성)               {"ok":true,"code":"OPENING"} args=["…\proj"]
+open unknown toolId(cursor)          {"ok":false,"code":"TOOL_NOT_FOUND"}
+open path-traversal toolId(../../evil){"ok":false,"code":"TOOL_NOT_FOUND"}
+copyText 8193자                      {"ok":false,"code":"INVALID_TEXT"} (clipboard 미기록)</div>
+  <div class="ok-box"><b>판정:</b> PATHEXT 기반 <code>.bat/.cmd</code> RCE 표면은 <code>winCandidates</code>(safeExec.js:62~67)와 spawn 직전 <code>.exe</code> 재검증(:146~152)으로 이중 차단됨. 디렉터리는 <code>isExecutableFile</code>의 <code>st.isFile()</code>로 거부. 양성 .exe 등록 후에도 토큰 외 toolId로의 open은 <code>TOOL_NOT_FOUND</code>로 거부 — 데이터(config)만으로 새 실행 대상을 만들 수 없다(코드 화이트리스트 필요).</div>
+</section>
+
+<!-- ===================== 추가 보안 ===================== -->
+<section id="addsec">
+  <h2>3. 추가 보안 통제 실측</h2>
+  <table>
+    <tr><th style="width:230px;">통제</th><th>근거</th><th style="width:70px;">판정</th></tr>
+    <tr><td>toolId 화이트리스트(KNOWN_TOOL_IDS)</td><td><code>toolRegistry.js:21</code> <code>Set(['code'])</code> · <code>isKnownToolId</code>(형식+멤버십, :43) · normalizeTools(:80~81)·resolveTool(:105)·actions.sanitizeToolId(:62~64) 전부 게이트. 프로브로 cursor/형식위반 모두 거부.</td><td><span class="sev pass">PASS</span></td></tr>
+    <tr><td>setToolPath 절대·.exe·realpath force 재검증</td><td><code>tools.js:74~83</code> validateToolPath: 절대(:78)→<code>resolveBin(.,{force:true})</code>(:80, 존재·.exe·realpath는 resolveBin 내부). 저장은 입력 경로(포터블, SQ-2), 실행은 매번 force 재해석.</td><td><span class="sev pass">PASS</span></td></tr>
+    <tr><td>pickToolExecutable 결과도 main 재검증</td><td><code>tools.js:164</code> dialog 반환 <code>picked</code>를 동일 <code>validateToolPath</code> 통과(M6-M-2). dialog .exe 필터를 신뢰 근거로 쓰지 않음.</td><td><span class="sev pass">PASS</span></td></tr>
+    <tr><td>copyText writeText만(읽기 미노출)</td><td><code>clipboard.js:31</code> <code>clipboard.writeText(text)</code>만, readText/이미지/포맷 미사용. export는 <code>{copyText,MAX_TEXT_LEN}</code>뿐(프로브 확인). 8192 초과 거부(절단 안 함, L-1).</td><td><span class="sev pass">PASS</span></td></tr>
+    <tr><td>favorites/order id 실행·경로 미사용</td><td><code>uiStateStore ID_RE=^[0-9a-f]{1,64}$</code> 형식·중복·개수 상한만. id는 표시·정렬 메타 한정 — spawn/경로 해석에 미사용. uiState.js 핸들러도 id를 fs/exec에 안 넘김.</td><td><span class="sev pass">PASS</span></td></tr>
+    <tr><td>신규 IPC 8채널 register.guard·senderFrame 경유</td><td><code>register.js:130~144</code> 신규 8채널 전부 <code>guard()</code> 등록 — <code>isTrustedSender</code>(app:// 정확 비교·host '..'/슬래시 거부 :55~66)+try/catch→FORBIDDEN/INTERNAL. 테스트 <code>비신뢰 발신자 FORBIDDEN</code> 통과(evil origin copyText → FORBIDDEN).</td><td><span class="sev pass">PASS</span></td></tr>
+    <tr><td>persistConfigKeys 키-범용·read-merge·0600</td><td><code>config.js:249~289</code> patch는 main 내부 구성(<code>{tools}</code>)만 — renderer 임의 키 주입 경로 없음. read-merge로 scanRoots/기타 키 보존, 임시→fsync→rename→0600.</td><td><span class="sev pass">PASS</span></td></tr>
+  </table>
+</section>
+
+<!-- ===================== 보존 통제 ===================== -->
+<section id="preserved">
+  <h2>4. 보존 통제 회귀 — PASS</h2>
+  <table>
+    <tr><th style="width:280px;">통제 (베이스라인)</th><th style="width:70px;">판정</th><th>실측 근거</th></tr>
+    <tr><td>contextIsolation·sandbox·nodeIntegration:false</td><td><span class="sev pass">PASS</span></td><td><code>main.js:140~146</code> contextIsolation:true·nodeIntegration:false·sandbox:true·webSecurity:true.</td></tr>
+    <tr><td>preload 최소 allowlist·generic invoke 비노출</td><td><span class="sev pass">PASS</span></td><td><code>preload.js</code> 채널명 하드코딩·인자 String/Boolean 강제·ipcRenderer 원본 미노출. 테스트 <code>generic invoke 비노출</code> 통과.</td></tr>
+    <tr><td>CSP default-src 'none' 무약화</td><td><span class="sev pass">PASS</span></td><td><code>security.js:18~29</code> <code>default-src 'none'</code>·<code>script-src 'self'</code>·<code>connect-src 'none'</code>·<code>object-src 'none'</code> — unsafe-inline 없음. M6 신규 표시 문자열 전부 textContent(L-1).</td></tr>
+    <tr><td>H-1 pathGuard(canonicalize+isAllowed)</td><td><span class="sev pass">PASS</span></td><td><code>actions.js:99~103</code> open이 canonicalize→isAllowed 유지. 실행 인자 real은 화이트리스트 통과분.</td></tr>
+    <tr><td>H-2 safeExec(shell:false·.exe·인자배열·in-flight)</td><td><span class="sev pass">PASS</span></td><td><code>safeExec.js:148</code> .exe 한정·<code>:155</code> 인자 string·<code>:168</code> in-flight 상한·<code>:185</code> shell:false·windowsHide.</td></tr>
+    <tr><td>H-3 _safeParse JSON 깊이 가드</td><td><span class="sev pass">PASS</span></td><td><code>uiStateStore.js:41~70</code> depthWithinLimit(스택 기반, 상한 32)→_safeParse. 프로브 깊이60 → null→빈상태.</td></tr>
+    <tr><td>EC-1~6(재검증·senderFrame·CSP·하드닝·RUN_AS_NODE)</td><td><span class="sev pass">PASS</span></td><td>register.guard senderFrame(EC-5)·main 재검증(EC-1)·<code>main.js:19~22</code> ELECTRON_RUN_AS_NODE 즉시 종료·applyCspHeaders/hardenWebContents 호출(:151~152).</td></tr>
+    <tr><td>시크릿 0 · 런타임 의존성 0 · 취약점 0</td><td><span class="sev pass">PASS</span></td><td>electron 소스 시크릿 리터럴 0(grep). <code>package.json</code> dependencies <code>{}</code>. <code>npm audit --omit=dev</code> 취약점 0(critical/high/moderate/low 모두 0).</td></tr>
+  </table>
+</section>
+
+<!-- ===================== 발견 항목 ===================== -->
+<section id="findings">
+  <h2>5. 발견 항목</h2>
+  <table>
+    <tr><th style="width:80px;">ID</th><th>취약점 / 위치 / STRIDE / 심각도 / 시나리오 / 권고</th></tr>
+    <tr>
+      <td class="fid">M6-L-4<br><span class="sev low">낮음(정보)</span></td>
+      <td>
+        <b>취약점:</b> 트레이 <code>onShowDashboard</code> 콜백이 <code>spip:tray:dashboard</code>를 renderer로 send하지 않는데 preload <code>onTray</code>는 <code>dashboard</code> 채널을 구독(데드 채널). <br>
+        <b>위치:</b> <code>electron/main.js:185</code>(onShowDashboard는 win.show/focus만) · <code>electron/preload.js:80~90</code>(dashboard 구독). <br>
+        <b>STRIDE:</b> 해당 없음(기능 정합). <b>심각도:</b> 낮음(정보) · <b>악용 가능성:</b> 없음. <br>
+        <b>시나리오:</b> 공격 시나리오 부재 — 데드 send 채널은 추가 표면이 아니며, push action 화이트리스트(<code>dashboard|favorites</code>)는 main이 단방향으로 보내는 집합으로 그대로 유지된다. 오히려 표면 축소 방향. <br>
+        <b>권고:</b> (선택) 일관성을 위해 onShowDashboard에서 <code>win.webContents.send('spip:tray:dashboard')</code>를 추가하거나, preload onTray의 dashboard 구독을 제거. <b>게이트 비차단.</b>
+      </td>
+    </tr>
+  </table>
+  <div class="ok-box"><b>치명·높음·보통 0건.</b> 이관 6항목·추가 통제·보존 통제 모두 코드 실재 + 동작 실측으로 확인됨.</div>
+</section>
+
+<!-- ===================== 결론 ===================== -->
+<section id="conclusion">
+  <h2>6. 결론 · 게이트 처리</h2>
+  <p>판정: <span class="verdict v-pass">PASS</span> — 치명 0, 높음 0, 보통 0, 낮음(정보) 1. 구현 게이트 6/6 통과, 테스트 416/416 통과, 런타임 의존성·시크릿·취약점 0.</p>
+  <div class="ok-box">
+    <b>게이트 통과 근거:</b>
+    <ol>
+      <li>설계 게이트 이관 6항목(force 재검증·캐시 무효화·args drop·ui-state 가드·argv 미파싱·doFinalQuit 멱등)이 <b>전부 코드에 실재하고 라이브 프로브로 입증</b>됨 — 설계 명세가 구현에서 이탈하지 않음(H-1/H-2 재발 없음).</li>
+      <li>R-18 핵심 거부 시나리오(.bat/.cmd/상대/비존재/디렉터리·토큰 외 toolId open) 전부 거부 확인.</li>
+      <li>추가 통제(화이트리스트·realpath 재검증·pick 결과 재검증·copyText 쓰기전용·id 비실행·register guard·persist 키-범용)와 보존 통제(contextIsolation·sandbox·CSP·H-1/H-2/H-3·EC-1~6) 회귀 없음.</li>
+    </ol>
+    치명·높음이 0이므로 <b>M6 구현 보안 게이트 통과(PASS)</b>. 잔여 낮음(M6-L-4)은 기능 정합 정보로 개발자에게 전달하며 게이트를 막지 않는다.
+  </div>
+  <p>본 검증자는 코드를 직접 수정하지 않는다. 위 낮음 항목과 검증 근거를 담당 개발자/PM에게 이관한다.</p>
+</section>
+
+<footer>
+  Project-SPIP — M6 구현 최종 보안 게이트(R-17~R-21) 1회차 · Security Reviewer · 2026-06-21 · PASS(치명 0·높음 0·구현 게이트 6/6·테스트 416/416) · 본 보고서는 구현 코드를 수정하지 않는다 · 저장: docs/reviews/m6_security_review_1.html
+</footer>
+
+</main>
+</body>
+</html>
