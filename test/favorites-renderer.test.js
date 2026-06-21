@@ -108,7 +108,7 @@ test('favoriteWidgetViewModels: 중복 favorites 첫 등장만', () => {
 
 test('widgetCardVm: 계약 매핑 + name/path/language 폴백', () => {
   const v = fav.widgetCardVm({ id: 'a', name: 'Alpha', path: 'E:\\a', language: { primary: 'Go' } });
-  assert.deepStrictEqual(v, { id: 'a', name: 'Alpha', path: 'E:\\a', language: 'Go' });
+  assert.deepStrictEqual(v, { id: 'a', name: 'Alpha', path: 'E:\\a', language: 'Go', git: '—' });
   const empty = fav.widgetCardVm({ id: 'x' });
   assert.strictEqual(empty.name, '(이름 없음)');
   assert.strictEqual(empty.path, '');
