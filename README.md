@@ -41,6 +41,8 @@ npm install
 npm start          # = electron .  — 데스크톱 앱 창 실행
 ```
 
+Windows에서는 빌드 없이 바로 띄우고 싶다면 **`run.bat` 더블클릭**으로도 됩니다(`node_modules`가 없으면 `npm install`까지 자동 수행한 뒤 `npm start`).
+
 앱 창이 뜨면:
 
 1. 처음에는 스캔 결과가 없으므로 **첫 실행 화면**이 나타납니다.
@@ -51,16 +53,33 @@ npm start          # = electron .  — 데스크톱 앱 창 실행
 
 ## 설치본 빌드 (배포)
 
-`electron-builder`로 Windows용 설치본/포터블을 만듭니다.
+`electron-builder`로 Windows용 설치본/포터블을 만듭니다. 결과물은 **NSIS 설치본 + 포터블 실행 파일**(`dist/`)입니다.
+
+**가장 간단한 방법 (Windows, 더블클릭):**
+
+```text
+build.bat        # 더블클릭 — 의존성 확인 → 이전 dist 정리 → electron-builder 빌드 → dist 폴더 자동 열기
+```
+
+`build.ps1`(PowerShell)도 동일하게 빌드하며 `-Portable` 옵션을 받습니다(포터블만 빌드).
+
+```powershell
+powershell -ExecutionPolicy Bypass -File build.ps1            # NSIS + portable
+powershell -ExecutionPolicy Bypass -File build.ps1 -Portable  # portable만
+```
+
+**npm 스크립트로:**
 
 ```bash
 npm run build            # NSIS 설치 파일 + portable 실행 파일 (electron-builder.yml의 win.target)
 npm run build:portable   # portable 단일 실행 파일만
 ```
 
-- 산출물은 `dist/`에 생성됩니다.
+- 산출물은 `dist/`에 생성됩니다(`.gitignore`로 커밋 제외).
 - **NSIS 설치본** — 설치 마법사로 설치(설치 경로 변경 가능·바탕화면/시작 메뉴 바로 가기 생성). 설치 후 더블클릭으로 실행.
 - **포터블** — 설치 없이 더블클릭으로 바로 실행되는 단일 실행 파일.
+
+> **빌드 실패 흔한 원인 (Windows Defender):** Defender 실시간 검사가 새로 만든 `app.asar`에 핸들을 걸어 이전 빌드 출력(`dist\win-unpacked`) 정리를 막으면 `electron-builder`가 `ERR_ELECTRON_BUILDER_CANNOT_EXECUTE`로 실패할 수 있습니다. 반복 빌드 시 **`add-defender-exclusion.bat`를 1회 관리자 권한으로 실행**해 프로젝트 폴더를 Defender 예외에 등록하면 잠금이 사라집니다(UAC 동의 필요, 1회면 충분).
 
 > **코드 서명 안내(수용된 위험):** 현재 배포본은 **미서명**입니다. Windows에서 처음 실행할 때 SmartScreen이 "Windows의 PC 보호" 경고를 띄울 수 있습니다. 이때 **추가 정보 → 실행**을 누르면 실행됩니다. (PM 위험 수용 확정 사항 — `electron-builder.yml` 주석 참고.)
 
@@ -102,7 +121,7 @@ spip --roots "C:/work,C:/code"
 | `build` | `electron-builder` | 설치본 빌드(Windows NSIS + portable) |
 | `build:portable` | `electron-builder --win portable` | 포터블 빌드만 |
 | `scan` | `node scan.js` | 자동화용 스캔(데이터만 생성, bin: `spip`) |
-| `test` | `node --test "test/**/*.test.js"` | 단위·통합 테스트 (304건) |
+| `test` | `node --test "test/**/*.test.js"` | 단위·통합 테스트 (306건) |
 
 > **과도기 HTTP 서버(`start:web`/`serve:http`):** Electron 전환 이전의 로컬 웹 서버(`server.js`, `127.0.0.1`)가 `npm run start:web`으로 **아직 남아 있습니다.** 전환이 완료되어 더 이상 기본 경로가 아니며, **후속으로 제거 예정**입니다(코드 리뷰 P2-2). 일반 사용에는 `npm start`(Electron)를 사용하세요.
 
@@ -137,7 +156,7 @@ spip --roots "C:/work,C:/code"
 - **자산 서빙** — `app://` 커스텀 프로토콜로 `public/`만 서빙(디렉터리 이탈 차단). 원격 로드·새 창·`webview`·외부 탐색은 전부 차단합니다.
 - **CSP** — `default-src 'none'` 기반 정책을 헤더로 주입(`connect-src 'none'` — IPC만 사용).
 - **발신자 검증** — 모든 IPC 핸들러는 `senderFrame`이 신뢰 origin(`app://`)인지 정확 일치로 검증하고, 아니면 `FORBIDDEN`을 반환합니다.
-- **패키징 하드닝** — `@electron/fuses`로 `RunAsNode` 비활성·`OnlyLoadAppFromAsar`·asar integrity 등을 굽고, `ELECTRON_RUN_AS_NODE` 기동을 즉시 차단합니다.
+- **패키징 하드닝** — `@electron/fuses`(`build/afterPack.js`)로 `RunAsNode` 비활성·`EnableNodeCliInspectArguments` 비활성·`OnlyLoadAppFromAsar` 활성·`EnableNodeOptionsEnvironmentVariable` 비활성을 굽고, `ELECTRON_RUN_AS_NODE` 기동을 즉시 차단합니다. 단 `EnableEmbeddedAsarIntegrityValidation`은 Windows+electron-builder 24.x에서 무결성 리소스가 exe에 자동 주입되지 않아 활성화 시 `FindResource` FATAL로 앱이 즉시 죽는 문제가 있어 **그 항목만 비활성**입니다(나머지 fuse는 유지). 자세한 사유는 `build/afterPack.js` 주석 참고.
 
 ## 디렉터리 구조
 
@@ -157,8 +176,12 @@ Project-SPIP/
 │  └─ server/            # scanController · snapshotStore + (과도기 HTTP: router · apiHandlers …)
 ├─ scan.js               # CLI 스캐너 진입점 (bin: spip)
 ├─ server.js             # 과도기 HTTP 서버 진입점 (npm run start:web — 제거 예정)
+├─ build/                # afterPack.js (electron-builder fuses 적용 훅) · 아이콘
 ├─ electron-builder.yml  # 패키징 설정(NSIS + portable, fuses, asar)
-└─ test/                 # node:test 기반 단위·통합 테스트 (304건)
+├─ build.bat / build.ps1 # Windows 빌드 헬퍼(더블클릭 · -Portable)
+├─ run.bat               # 빌드 없이 앱 실행(= npm start)
+├─ add-defender-exclusion.bat  # 반복 빌드 시 Defender 예외 1회 등록(관리자)
+└─ test/                 # node:test 기반 단위·통합 테스트 (306건)
 ```
 
 ## 동작 방식

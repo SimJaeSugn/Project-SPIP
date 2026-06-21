@@ -68,12 +68,13 @@
 </head>
 <body>
 <header>
-  <span class="tag">추적성 매트릭스</span><span class="tag">v1.2</span><span class="tag">현재 단계: Electron 데스크톱 전환 완료·검증 통과</span>
+  <span class="tag">추적성 매트릭스</span><span class="tag">v1.3</span><span class="tag">현재 단계: Electron 데스크톱 전환 완료·막바지 버그픽스 반영·실 GUI 동작 확인</span>
   <h1>Project-SPIP — 추적성 매트릭스</h1>
   <p>요구가 <b>기획 → 설계 결정/모듈 → 구현 위치 → 검증</b>까지 끊기지 않고 이어지는지를 한 표로 관리하는 1급 산출물.
   PRD의 모든 요구(기능 R-01~R-16, 비기능 N-01~N-07)를 행으로 가지며, 각 요구를 아키텍처 설계서 §14 매핑·본문 §5~§9 모듈/계약/API·§7 디렉터리 트리(구현 위치)와 검증 기록(QA·코드·보안 PASS)에 연결한다.</p>
   <div class="note">
     <b>전송: Electron IPC (과도기 HTTP 보존).</b> 제품이 로컬 웹앱 → <b>Electron 데스크톱 앱</b>으로 이전 완료되어 전송 계층이 <b>HTTP → Electron IPC</b>로 바뀌었다. 사용자 표면(R-04 루트 설정·R-12 열기·R-15 진행·R-16 재스캔)의 구현 위치·검증을 Electron 기준으로 갱신했다(아래 해당 행에 표기). 도메인 로직(walker·detector·collectors·scanController·pathGuard·safeExec)은 전송 무관하게 그대로 재사용된다. IPC 계약 정본: <code>docs/architecture/electron-migration.html</code> §4. 과도기 HTTP 서버(<code>server.js</code>·<code>lib/server/*</code> · <code>npm run start:web</code>)는 <b>아직 보존</b>되며 후속 제거 예정(코드리뷰 P2-2). 요구 상태는 전부 <b>구현 완료</b> 유지.
+    <br><b>막바지 버그픽스 2건 반영(상태 변동 없음, 검증 칸 갱신).</b> ① <b>스캔 후 무한 로딩</b> — <code>scanController.start()</code>가 <code>finalizing</code>/<code>done</code>/<code>error</code> 터미널 phase를 push하지 않아 스캔 완료 후 대시보드 전환이 안 되던 문제(R-15 진행 push·R-16 재스캔 후 갱신 관련) → 터미널 phase emit 추가(세대 가드 유지)·회귀 테스트 <code>test/scanController-onprogress.test.js</code>. ② <b>패키징 앱 실행 크래시</b> — <code>build/afterPack.js</code>의 <code>EnableEmbeddedAsarIntegrityValidation</code> fuse가 Windows+electron-builder 24.x에서 <code>FindResource</code> FATAL을 유발(패키징/배포 관련) → 그 fuse만 비활성(나머지 보안 fuse 유지)·<code>app://</code> 핸들러 fs 직접 읽기(asar-aware)·<code>did-fail-load</code> 시 창 강제 표시. <b>실 GUI에서 창 정상 표시·동작 확인됨.</b> 버전 <code>package.json 1.0.1</code>.
   </div>
   <div class="meta">문서 유형: 추적성 매트릭스 · 작성: 기술 문서 작성자 · 최종 갱신: 2026-06-21 · 현재 단계: <b>전체(MVP+M4) 구현 완료·검증 통과</b> · 입력: PRD v1.0 / architecture.html rev.2 / m4-design.html / adr.html rev.2 / S0~S7 + M4 후속 6건 구현물 / 검증 PASS(MVP S7 QA·코드·보안 + M4 설계 2회·M4 다면검증 QA·코드·보안 + 재검증 2회)</div>
 </header>
@@ -87,7 +88,7 @@
     <div class="card"><div class="k">MVP 집합</div><div class="kpi">16</div><div class="v">기능 11(R-01·02·04·06·07·08·10·11·12·13·14) + 비기능 5(N-02·03·04·05·06)</div></div>
     <div class="card"><div class="k">M4 후속</div><div class="kpi">6</div><div class="v">R-03·R-05·R-09·R-15·R-16 + N-07(접근성) — 전건 <b>구현 완료</b></div></div>
     <div class="card"><div class="k">품질 기준</div><div class="kpi">1</div><div class="v">N-01(성능) — 기능 스토리 아닌 산출물 품질 기준으로 적용</div></div>
-    <div class="card"><div class="k">현재 상태</div><div class="kpi" style="font-size:16px;">Electron 데스크톱 전환 완료·검증 통과</div><div class="v">전송 HTTP→IPC. QA·코드·보안 PASS. 테스트 304/304(전환 후)·탐지율 100%·필터 0.154ms.</div></div>
+    <div class="card"><div class="k">현재 상태</div><div class="kpi" style="font-size:16px;">Electron 데스크톱 전환 완료·검증 통과·실 GUI 동작 확인</div><div class="v">전송 HTTP→IPC. QA·코드·보안 PASS. 테스트 306/306(막바지 버그픽스 반영)·탐지율 100%·필터 0.154ms.</div></div>
   </div>
   <div class="note">
     <b>현재 단계 = 전체(MVP+M4) 구현 완료·검증 통과.</b> S0~S7 구현물 + M4 후속 6건 구현물(<code>scan.js</code>·<code>server.js</code>·<code>lib/server/scanController.js</code>·<code>lib/scan/driveEnum.js</code>·<code>lib/scan/collectors/size.js</code>·<code>lib/scan/walker.js</code>(depthLimit)·<code>public/**</code> 진행/접근성·<code>test/**</code>)이 실재한다. 본 매트릭스의 "구현 위치"는 <b>실제 파일 경로</b>이고, "검증" 칸은 다면 검증의 <b>실측 결과</b>를 반영한다. 통과한 검증: <b>QA(통합·동작) GO · 코드 품질 PASS · 보안 게이트 PASS(치명·높음·중간·낮음 0)</b>. 핵심 실측: <code>node --test</code> <b>213/213</b> 통과(MVP 107 → M4 포함 213) · 탐지율 100%(게이트 ≥95%) · 클라이언트 필터/정렬 5000건 0.154ms(게이트 200ms). M4 후속 6건(R-03·05·09·15·16·N-07)은 모두 <b>구현 완료</b>로 전이했다.
@@ -253,7 +254,7 @@
       <td><span class="pill m4">M4</span></td>
       <td><b>[전송: IPC push]</b> 앱: <code>scanController.start(opts).onProgress</code> 콜백이 매 진행마다 <code>spip:scanProgress</code>로 창에 <b>push</b>(폴링 폐기·R-15 갱신). 초기 동기화·재구독은 <code>spip:getScanStatus</code>(invoke). currentPath는 shortenPath 축약 노출(M4-H-1·L-3). CLI는 onProgress 카운트 주기 출력 유지 · §4.1/§4.3·§5·§14</td>
       <td class="mono">electron/ipc/scan.js(makeProgressSender→spip:scanProgress push·getScanStatus)<br>electron/preload.js(onScanProgress 구독·해제) · lib/scan/scanner.js(onProgress ScanProgress) · lib/server/scanController.js(state·shortenPath·onProgress)<br>public/app.js(scanning 뷰·onScanProgress·aria-live) · scan.js(CLI onProgress)</td>
-      <td>QA PASS — 헤드리스 스모크에서 scanProgress 푸시·구독 라우팅 실측·preload onScanProgress 노출 확인. currentPath 축약·절대경로 미노출(보안 onProgress 통제). <b>304/304</b>. 코드·보안 PASS. test/scanController-onprogress.test.js·ipc-scan</td>
+      <td>QA PASS — 헤드리스 스모크에서 scanProgress 푸시·구독 라우팅 실측·preload onScanProgress 노출 확인. currentPath 축약·절대경로 미노출(보안 onProgress 통제). <b>버그픽스(스캔 후 무한 로딩)</b>: <code>start()</code>가 <code>finalizing</code>/<code>done</code>/<code>error</code> 터미널 phase를 push하도록 emit 추가(세대 가드 유지) → 스캔 완료 후 대시보드 전환 정상. <b>실 GUI 전환 확인됨.</b> <b>306/306</b>. 코드·보안 PASS. test/scanController-onprogress.test.js·ipc-scan</td>
       <td><span class="pill st-design">구현 완료</span></td>
     </tr>
     <tr>
@@ -262,7 +263,7 @@
       <td><span class="pill m4">M4</span></td>
       <td><b>[전송: IPC]</b> <code>spip:rescan { withSize?, allDrives? }</code> IPC → 옵션 sanitize(키 화이트리스트)·scanRoots/allDrives 게이트 → <code>scanController</code> 인프로세스 백그라운드 스캔(전역 단일 락·중복 SCAN_IN_PROGRESS). finalizing 시 writeSnapshot+store.load 무중단 교체. watchdog로 데드락 방지(_forceError 락 강제 해제·scanId 세대 가드). 결과 객체 <code>{ok,code,scanId,startedAt}</code> 반환 · §4.1/§4.2·§9·§14</td>
       <td class="mono">electron/ipc/actions.js(rescan·sanitizeRescanOpts·게이트·락)<br>electron/preload.js(rescan(o)) · lib/server/scanController.js(acquire/start·watchdog·세대 가드)<br>public/app.js(재스캔 버튼·메뉴·triggerRescan→scanning 뷰)</td>
-      <td>QA PASS — 메뉴 payload 정합(P2-1) 해소 재검·rescan→scanning→done 전이 헤드리스 실측. 적대 프로브: rescan opts 프로토타입 오염키·배열·문자열 → 화이트리스트 2키만 산출(보안 1회). 코드 P1-1(watchdog 락 강제 해제) 시정 반영. <b>304/304</b>. 보안 PASS. test/m4-rescan.test.js·ipc-actions·dashboard-menu</td>
+      <td>QA PASS — 메뉴 payload 정합(P2-1) 해소 재검·rescan→scanning→done 전이 헤드리스 실측. 적대 프로브: rescan opts 프로토타입 오염키·배열·문자열 → 화이트리스트 2키만 산출(보안 1회). 코드 P1-1(watchdog 락 강제 해제) 시정 반영. <b>버그픽스(스캔 후 무한 로딩)</b>: 재스캔 완료 시 <code>done</code> phase push로 renderer refetch 트리거되어 목록 갱신 정상(이전엔 scanning 뷰에 갇힘). <b>실 GUI 확인됨.</b> <b>306/306</b>. 보안 PASS. test/m4-rescan.test.js·ipc-actions·dashboard-menu·scanController-onprogress</td>
       <td><span class="pill st-design">구현 완료</span></td>
     </tr>
   </table>
@@ -390,6 +391,7 @@
     <tr><td>Electron 구현 보안 게이트</td><td class="pass">PASS</td><td><code>docs/reviews/electron_security_review_1.html</code> — 치명·높음·중간 0·낮음 1(EI-L-1 권고, <b>코드 해소·반영됨</b>). 테스트 288/288·EC 6/6 실증·적대 프로브 차단. CSP·격리·발신자검증·fuses 정합. GUI/빌드 런타임은 사용자 PC 확인 분리</td></tr>
     <tr><td>Electron 코드 품질 검증</td><td class="pass">PASS</td><td><code>docs/reviews/electron_code_review_1.html</code> — 도메인/전송 분리(ipc/*는 (args,ctx)→result 순수 함수, register.js만 wiring)·헤드리스 61건 PASS. P1 0. 잔여 P2-2(과도기 HTTP 모듈 잔존)는 server 제거로 해소 예정·비차단</td></tr>
     <tr><td>Electron 동작·통합 다면 검증 (재검 2회차)</td><td class="pass">PASS</td><td><code>docs/reviews/electron_qa_2.html</code> — 블로커 2건(open 채널 정합 BUG-1·메뉴 payload 정합 P2-1) 모두 해소 PASS. <b>npm test 304/304</b>(1회 288→+16 정합 회귀)·실 electron.exe 헤드리스 스모크 5항목. 조건: U-1~U-3 GUI/OS 통합은 사용자 PC 1회 확인(헤드리스 구조적 사각, 차단 아님)</td></tr>
+    <tr><td>막바지 버그픽스 (스캔 전환·패키징 크래시)</td><td class="pass">PASS</td><td>전환 후 발견된 블로커 2건 해소. ① 스캔 후 무한 로딩 — <code>scanController.start()</code> 터미널 phase(<code>finalizing</code>/<code>done</code>/<code>error</code>) push 누락 → emit 추가(세대 가드 유지), 회귀 <code>test/scanController-onprogress.test.js</code>. ② 패키징 앱 무반응 — <code>EnableEmbeddedAsarIntegrityValidation</code> fuse(Win+electron-builder 24.x) <code>FindResource</code> FATAL → 그 fuse만 off(나머지 보안 fuse 유지), <code>app://</code> 핸들러 fs 직접 읽기·<code>did-fail-load</code> 창 강제 표시. <b>npm test 306/306</b>. <b>실 GUI에서 앱 실행·창 표시·스캔→대시보드 전환 동작 확인됨.</b> 버전 1.0.1</td></tr>
   </table>
   <div class="note">
     <b>추적 누락 0 확인.</b> PRD 전체 요구 23건(R-01~R-16 16건 + N-01~N-07 7건)이 모두 본 매트릭스에 행으로 존재하며, 각 행의 "설계 결정/모듈"·"구현 위치"·"검증"·"상태" 칸이 모두 채워졌다(빈 칸 없음). MVP 16(R-01·02·04·06·07·08·10·11·12·13·14 + N-02·03·04·05·06)은 S7 QA·코드·보안 3면 PASS로, M4 후속 6(R-03·05·09·15·16·N-07)은 M4 설계 2회·다면검증 QA(GO)·코드·보안 + 재검증 2회로 모두 <b>구현 완료</b>이며, 품질기준 1(N-01)은 측정 완료다. 즉 전체 23건이 <b>구현 완료·검증 통과</b>로 일관된다.
@@ -400,6 +402,6 @@
 </section>
 
 </main>
-<footer>Project-SPIP · 추적성 매트릭스 v1.2 · 요구 23건(R 16 + N 7) · MVP 16 + 품질 1 + M4 6 · 추적 누락 0 · 전송 HTTP→Electron IPC(과도기 HTTP 보존) · 현재 단계: Electron 데스크톱 전환 완료·검증 통과(QA · 코드 · 보안 PASS · 테스트 304/304 · 탐지율 100% · 필터 0.154ms) · 자족형 HTML 산출물</footer>
+<footer>Project-SPIP · 추적성 매트릭스 v1.3 · 요구 23건(R 16 + N 7) · MVP 16 + 품질 1 + M4 6 · 추적 누락 0 · 전송 HTTP→Electron IPC(과도기 HTTP 보존) · 현재 단계: Electron 데스크톱 전환 완료·막바지 버그픽스 반영·실 GUI 동작 확인(QA · 코드 · 보안 PASS · 테스트 306/306 · 탐지율 100% · 필터 0.154ms) · 자족형 HTML 산출물</footer>
 </body>
 </html>
