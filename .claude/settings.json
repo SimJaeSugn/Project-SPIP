@@ -1,0 +1,13 @@
+{
+  "extraKnownMarketplaces": {
+    "lvtlvt-harness": {
+      "source": {
+        "source": "git",
+        "url": "https://github.com/SimJaeSugn/marketplace.git"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "dev-harness-plus@lvtlvt-harness": true
+  }
+}
