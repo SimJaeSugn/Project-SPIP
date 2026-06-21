@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project-SPIP — M4 통합·동작 QA 검증 보고서 (1회차)</title>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#1e293b; --text:#e2e8f0; --sub:#94a3b8;
+    --accent:#34d399; --ref:#38bdf8; --line:#334155; --warn:#fbbf24; --danger:#f87171;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:"Segoe UI","Malgun Gothic",system-ui,sans-serif;line-height:1.7;}
+  header{padding:48px 32px 36px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#13203b,#0f172a);}
+  header h1{margin:0 0 8px;font-size:28px;}
+  header .tag{display:inline-block;background:rgba(52,211,153,.12);color:var(--accent);
+    border:1px solid rgba(52,211,153,.4);border-radius:999px;padding:3px 12px;font-size:13px;margin-right:8px;margin-top:6px;}
+  header p{margin:14px 0 0;color:var(--sub);max-width:940px;}
+  .meta{margin-top:16px;font-size:13px;color:var(--sub);}
+  main{max-width:1120px;margin:0 auto;padding:32px;}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:24px 28px;margin:22px 0;}
+  h2{margin:0 0 16px;font-size:21px;color:var(--accent);border-left:4px solid var(--accent);padding-left:12px;}
+  h3{font-size:16px;color:var(--ref);margin:22px 0 10px;}
+  p{margin:8px 0;}
+  ul,ol{margin:8px 0;padding-left:22px;}li{margin:5px 0;}
+  code{background:#0b1220;color:var(--ref);padding:1px 6px;border-radius:5px;font-size:13px;}
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13.5px;}
+  th,td{border:1px solid var(--line);padding:9px 11px;text-align:left;vertical-align:top;}
+  th{background:#142035;color:var(--accent);}
+  tr:nth-child(even) td{background:rgba(255,255,255,.02);}
+  .rid{font-family:Consolas,monospace;color:var(--accent);font-weight:700;white-space:nowrap;}
+  .nid{font-family:Consolas,monospace;color:var(--warn);font-weight:700;white-space:nowrap;}
+  .verdict{font-size:22px;font-weight:800;padding:6px 18px;border-radius:10px;display:inline-block;}
+  .pass{background:rgba(52,211,153,.16);color:#6ee7b7;border:1px solid rgba(52,211,153,.5);}
+  .cond{background:rgba(251,191,36,.16);color:#fcd34d;border:1px solid rgba(251,191,36,.5);}
+  .fail{background:rgba(248,113,113,.16);color:#fca5a5;border:1px solid rgba(248,113,113,.5);}
+  .sev-block{background:rgba(248,113,113,.16);color:#fca5a5;border:1px solid rgba(248,113,113,.45);font-weight:700;padding:2px 9px;border-radius:6px;white-space:nowrap;font-size:12px;}
+  .sev-high{background:rgba(251,146,60,.16);color:#fdba74;border:1px solid rgba(251,146,60,.45);font-weight:700;padding:2px 9px;border-radius:6px;white-space:nowrap;font-size:12px;}
+  .sev-mid{background:rgba(251,191,36,.16);color:#fcd34d;border:1px solid rgba(251,191,36,.45);font-weight:700;padding:2px 9px;border-radius:6px;white-space:nowrap;font-size:12px;}
+  .sev-low{background:rgba(56,189,248,.14);color:#7dd3fc;border:1px solid rgba(56,189,248,.4);font-weight:700;padding:2px 9px;border-radius:6px;white-space:nowrap;font-size:12px;}
+  .ok{color:#6ee7b7;font-weight:700;}
+  .ng{color:#fca5a5;font-weight:700;}
+  .wk{color:#fcd34d;font-weight:700;}
+  .res{background:rgba(52,211,153,.16);color:#6ee7b7;border:1px solid rgba(52,211,153,.5);font-weight:700;padding:2px 9px;border-radius:6px;white-space:nowrap;font-size:12px;}
+  .resn{background:rgba(248,113,113,.16);color:#fca5a5;border:1px solid rgba(248,113,113,.5);font-weight:700;padding:2px 9px;border-radius:6px;white-space:nowrap;font-size:12px;}
+  .resw{background:rgba(251,191,36,.16);color:#fcd34d;border:1px solid rgba(251,191,36,.5);font-weight:700;padding:2px 9px;border-radius:6px;white-space:nowrap;font-size:12px;}
+  .note{background:rgba(56,189,248,.08);border:1px solid rgba(56,189,248,.3);border-radius:8px;
+    padding:12px 16px;font-size:13.5px;color:#bae6fd;margin:10px 0;}
+  .warn-box{background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.3);border-radius:8px;
+    padding:12px 16px;font-size:13.5px;color:#fde68a;margin:10px 0;}
+  .ok-box{background:rgba(52,211,153,.08);border:1px solid rgba(52,211,153,.3);border-radius:8px;
+    padding:12px 16px;font-size:13.5px;color:#bbf7d0;margin:10px 0;}
+  .find{border-left:3px solid var(--warn);padding:6px 0 6px 14px;margin:18px 0;}
+  .find.blk{border-color:var(--danger);}
+  .find h4{margin:2px 0 8px;font-size:15px;color:var(--text);}
+  .kv{font-size:13px;color:var(--sub);margin:3px 0;}
+  .kv b{color:var(--text);}
+  pre{background:#0b1220;border:1px solid var(--line);border-radius:8px;padding:12px 14px;
+    overflow-x:auto;font-size:12.5px;color:#cbd5e1;}
+  .big{font-size:30px;font-weight:800;color:var(--accent);}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin:14px 0;}
+  .metric{background:#142035;border:1px solid var(--line);border-radius:10px;padding:16px;text-align:center;}
+  .metric .label{font-size:12.5px;color:var(--sub);}
+  footer{text-align:center;color:var(--sub);font-size:12.5px;padding:30px;border-top:1px solid var(--line);}
+  .legend{font-size:12.5px;color:var(--sub);margin-top:8px;}
+</style>
+</head>
+<body>
+<header>
+  <h1>Project-SPIP — M4 통합·동작 QA 검증 보고서 <span style="color:var(--sub);font-size:18px;">(1회차)</span></h1>
+  <div>
+    <span class="tag">QA 엔지니어</span>
+    <span class="tag">M4 확장 기능</span>
+    <span class="tag">동작·통합·성능</span>
+    <span class="tag">실서버 E2E</span>
+  </div>
+  <p>재스캔(R-16)·진행 표시(R-15)·규모/의존성(R-09)·전체드라이브 게이트(R-05)·깊이 클램프(R-03)·접근성(N-07)의
+     <b>경계면 실맞물림</b>을 실서버 E2E와 순수함수 교차로 검증했다. 보안(security-reviewer)·코드품질(code-reviewer)은 범위 외.</p>
+  <div class="meta">
+    검증일: 2026-06-21 · 대상: <code>scan.js</code> · <code>server.js</code> · <code>lib/**</code> · <code>public/**</code> ·
+    기준: <code>docs/api-contract.md</code> · <code>docs/architecture/m4-design.html</code> (rev.2) · <code>docs/PRD.html</code> §3/§12 ·
+    실행환경: Windows 11 / Node &ge;18 · <code>docs/Development/</code> 룰 부재(기획·설계 계약으로 검증)
+  </div>
+</header>
+
+<main>
+
+<section>
+  <h2>0. 종합 판정</h2>
+  <p><span class="verdict cond">조건부 출시 가능 (CONDITIONAL)</span></p>
+  <div class="grid">
+    <div class="metric"><div class="big">201/201</div><div class="label">단위/통합 테스트 (npm test)</div></div>
+    <div class="metric"><div class="big">24/25</div><div class="label">실서버 E2E 시나리오</div></div>
+    <div class="metric"><div class="big">1</div><div class="label">발견 버그 (높음 1)</div></div>
+    <div class="metric"><div class="big">0</div><div class="label">블로커</div></div>
+  </div>
+  <div class="warn-box">
+    <b>조건부 사유 — BUG-M4-01 (높음):</b> 설계 계약(<code>m4-design.html</code> §8.1·R-09 결정)이
+    <b>"deps/devDeps는 size.enabled와 무관하게 항상 수집(저비용)"</b>이라고 명문화했으나,
+    <b>기본 스캔(withSize 미지정)에서는 size 수집기 자체가 로드되지 않아 <code>deps/devDeps</code>가 항상 <code>null</code></b>이다.
+    단위 테스트(<code>m4-scan.test.js</code>)는 <code>size.collect()</code>를 직접 호출해 통과하므로 이 경계 불일치를 잡지 못한다.
+    출시 자체를 막는 런타임 크래시는 아니나(graceful null), <b>의존성 개수 표시 기능이 size opt-in 없이는 동작하지 않는</b>
+    계약 위반이므로 수정 후 출시 권고. 나머지 M4 핵심 흐름(재스캔·진행·size·게이트·깊이·접근성·성능)은 모두 PASS.
+  </div>
+  <div class="ok-box">
+    <b>강점:</b> 재스캔 E2E(202&rarr;scanning&rarr;done&rarr;/api/projects 갱신), 동시성 락(409), 토큰/CT/NO_SCAN_ROOTS 분기,
+    size 실측(ok/partial 승격·stats.totalBytes number 승격), all-drives 강등+note, depthLimit clamp(1..64/24 floor/all-drives 12·24),
+    ScanProgress shape의 서버&harr;프론트 완전 일치, N-07 접근성(키보드·포커스트랩·Esc·복귀·aria-live·focus-visible·색외 텍스트) 모두 실증 확인.
+  </div>
+</section>
+
+<section>
+  <h2>1. 테스트 실행 — <span class="res">PASS</span></h2>
+  <p><code>npm test</code> (<code>node --test "test/**/*.test.js"</code>) 실측:</p>
+  <pre>tests 201 · suites 0 · pass 201 · fail 0 · cancelled 0 · skipped 0 · todo 0 · duration_ms 728</pre>
+  <p>M4 관련 스위트(<code>m4-scan.test.js</code>, <code>m4-rescan.test.js</code>, <code>dashboard-m4.test.js</code>, <code>collectors.test.js</code>,
+     <code>walker.test.js</code>) 포함 전 항목 통과. 단, 단위 테스트는 모듈 단위 호출이라 §6 BUG-M4-01의 레지스트리/스캐너 경계 결함은
+     커버하지 못함 — 본 보고서의 실서버 E2E가 이를 보완 검출.</p>
+</section>
+
+<section>
+  <h2>2. 재스캔 &rarr; 진행 &rarr; 완료 E2E (실서버, R-16/R-15) — <span class="res">PASS</span></h2>
+  <p>합성 scanRoot(프로젝트 3건: alpha[node_modules+deps], beta, gamma) 위에 실제 <code>createServer()</code>를 루프백 기동하고
+     실제 HTTP 요청으로 검증. (테스트 포트가 ephemeral이므로 allowlist를 실포트로 재구성 — 이는 하니스 보정이며 제품 동작 아님.)</p>
+  <table>
+    <tr><th style="width:46%;">시나리오</th><th>기대</th><th>실측</th><th>판정</th></tr>
+    <tr><td>POST <code>/api/rescan</code> (유효 토큰)</td><td>202 <code>SCAN_STARTED</code> + scanId(16hex) + startedAt</td><td>202, scanId 16자, startedAt ISO</td><td><span class="res">PASS</span></td></tr>
+    <tr><td>중복 rescan (in-flight 중)</td><td>409 <code>SCAN_IN_PROGRESS</code></td><td>409, code 일치</td><td><span class="res">PASS</span></td></tr>
+    <tr><td>GET <code>/api/scan-status</code> 폴링 phase 전이</td><td>scanning &rarr; done</td><td>scanning 관측 후 done</td><td><span class="res">PASS</span></td></tr>
+    <tr><td>진행 중 dirs 증가</td><td>dirs &gt; 0</td><td>maxDirs &gt; 0 관측</td><td><span class="res">PASS</span></td></tr>
+    <tr><td>currentPath 축약 (L-3/M4-H-1)</td><td>절대 드라이브경로 미노출(최대 2세그먼트)</td><td>예: <code>x/proj</code> — 드라이브문자/절대경로 미노출</td><td><span class="res">PASS</span></td></tr>
+    <tr><td>완료 scanId == 시작 scanId</td><td>일치</td><td>일치</td><td><span class="res">PASS</span></td></tr>
+    <tr><td>완료 후 <code>/api/projects</code> 갱신</td><td>hasSnapshot:true + projects 3건</td><td>hasSnapshot:true, 3건</td><td><span class="res">PASS</span></td></tr>
+    <tr><td>토큰 누락 rescan</td><td>403 <code>FORBIDDEN_ORIGIN</code></td><td>403, code 일치</td><td><span class="res">PASS</span></td></tr>
+    <tr><td>토큰 누락 scan-status (M4-H-1 읽기게이트)</td><td>403</td><td>403</td><td><span class="res">PASS</span></td></tr>
+    <tr><td>잘못된 Content-Type rescan</td><td>403 (CT 보조검증)</td><td>403</td><td><span class="res">PASS</span></td></tr>
+    <tr><td>scanRoots 미설정 rescan</td><td>409 <code>NO_SCAN_ROOTS</code></td><td>409, code 일치</td><td><span class="res">PASS</span></td></tr>
+  </table>
+  <p class="legend">finalizing&rarr;done 순서: 컨트롤러가 <code>writeSnapshot</code>+<code>store.load()</code> 완료 후에만 done 진입(RM-3) — 재fetch가 항상 새 스냅샷을 받음을 코드/E2E로 확인.</p>
+</section>
+
+<section>
+  <h2>3. R-09 규모/의존성 (실측) — <span class="res">PASS</span> <span class="resw">(단, BUG-M4-01 참조)</span></h2>
+  <table>
+    <tr><th style="width:46%;">시나리오</th><th>기대</th><th>실측</th><th>판정</th></tr>
+    <tr><td>size 미수집(기본) status</td><td><code>skipped</code> + totalBytes <code>null</code></td><td>skipped / null (graceful "미측정")</td><td><span class="res">PASS</span></td></tr>
+    <tr><td>withSize:true 본문으로 켜기 (계약 비대칭)</td><td>config.size.enabled 덮어쓰기</td><td>202 수락 후 측정 수행</td><td><span class="res">PASS</span></td></tr>
+    <tr><td>size 수집 status</td><td><code>ok</code> 또는 <code>partial</code></td><td>ok (totalBytes 77B 실측, alpha)</td><td><span class="res">PASS</span></td></tr>
+    <tr><td>totalBytes 실값</td><td>number &gt; 0</td><td>number, &gt;0</td><td><span class="res">PASS</span></td></tr>
+    <tr><td>nodeModulesBytes 측정</td><td>node_modules 있으면 number</td><td>alpha number&gt;0 · beta(없음) null</td><td><span class="res">PASS</span></td></tr>
+    <tr><td>§4.3 <code>stats.totalBytes</code> 승격</td><td>측정 스냅샷이면 null&rarr;number</td><td>미수집 시 null / 수집 후 number</td><td><span class="res">PASS</span></td></tr>
+    <tr><td>budget 상한 — maxEntries 도달</td><td>data.status=<code>partial</code> / 계약 status=<code>ok</code></td><td>partial / ok (2레이어 분리 정확)</td><td><span class="res">PASS</span></td></tr>
+    <tr><td>budget 상한 — 시간(budgetMs) 다중 디렉터리</td><td>partial</td><td>budgetMs=1, 50 서브디렉터리 &rarr; partial</td><td><span class="res">PASS</span></td></tr>
+    <tr><td><b>deps/devDeps — size 비활성 시</b></td><td><b>항상 수집(저비용)</b> — 계약 §8.1·R-09</td><td><b>기본 스캔에서 null</b> (수집기 미로드)</td><td><span class="resn">FAIL</span></td></tr>
+  </table>
+  <div class="note"><b>2레이어 status 검증:</b> <code>res.status</code>(계약 ok/na/error)와 <code>res.data.status</code>(도메인 ok/partial/skipped/error)가
+    설계 §4.1.1대로 독립적으로 동작함을 직접 확인 — partial 측정 시 계약 status는 ok, 도메인 status는 partial로 분리됨.</div>
+</section>
+
+<section>
+  <h2>4. R-05 / R-03 게이트 — <span class="res">PASS</span></h2>
+  <h3>R-05 all-drives 게이트 (config 전용)</h3>
+  <table>
+    <tr><th style="width:46%;">시나리오</th><th>기대</th><th>실측</th><th>판정</th></tr>
+    <tr><td><code>allowAllDrives=false</code> + body <code>allDrives:true</code></td><td>본문 무시(강등) + note</td><td>202 수락, note="all-drives는 서버 설정에서 비활성"</td><td><span class="res">PASS</span></td></tr>
+    <tr><td>강등 시 실제 전체드라이브 스캔 안 함</td><td>합성 root만 스캔(3건 유지)</td><td>projects 3건 유지(드라이브 열거 미발동)</td><td><span class="res">PASS</span></td></tr>
+  </table>
+  <p class="legend">전체드라이브 실스캔은 비용·환경상 미실행. <code>driveEnum.enumerateRoots()</code>는 외부 명령 0(fs만)·canonicalize 검증 코드 확인. 강등 분기만 실동작 검증.</p>
+  <h3>R-03 depthLimit clamp (walker 강제)</h3>
+  <table>
+    <tr><th style="width:46%;">시나리오 (깊이 30 합성 트리)</th><th>기대</th><th>실측(dirs)</th><th>판정</th></tr>
+    <tr><td>depthLimit 미지정(기본)</td><td>24 floor 적용</td><td>25 (root + 24레벨)</td><td><span class="res">PASS</span></td></tr>
+    <tr><td>depthLimit=1000</td><td>clamp(1,64)=64 — 더 깊이 도달</td><td>31 (&gt; 기본 25)</td><td><span class="res">PASS</span></td></tr>
+    <tr><td>depthLimit=0</td><td>clamp 하한 1</td><td>2 (root + 1레벨)</td><td><span class="res">PASS</span></td></tr>
+    <tr><td>allDrives + depthLimit=1000</td><td>all-drives cap 24로 강등</td><td>25 (기본 이하)</td><td><span class="res">PASS</span></td></tr>
+  </table>
+  <p class="legend">walker 상수: <code>SAFE_MAX_DEPTH=24</code>(기본·MVP floor), <code>ABS_MAX_DEPTH=64</code>(절대상한), all-drives <code>cap=24</code>/<code>default=12</code>. <code>config.js</code>는 양의정수 검증만 하고 clamp는 walker가 강제(약화 불가) — 설계대로.</p>
+</section>
+
+<section>
+  <h2>5. R-15 프론트 흐름 / N-07 접근성 / 경계면 교차 — <span class="res">PASS</span></h2>
+  <h3>R-15 프론트 폴링·뷰 흐름 (정적 + 순수함수 교차)</h3>
+  <ul>
+    <li><code>triggerRescan</code> &rarr; 202 시 <code>ownScanId</code> 보관·scanning 뷰·<code>startPolling</code>(setInterval 1000ms)·즉시 1회 폴 — 코드 확인.</li>
+    <li>비활성 탭 <code>document.hidden</code> 시 fetch 생략(부하 완화), 403 시 폴링 중단, 네트워크 일시오류 시 다음 폴에서 자동복구 — 견고.</li>
+    <li><b>경계면 교차(실증):</b> 실제 <code>ScanController.status()</code> 출력을 프론트 <code>nextPollAction</code>/<code>progressView</code>/<code>classifyRescan</code>에 직접 투입.
+        idle&rarr;continue, scanning&rarr;render, foreign scanId&rarr;foreign, done&rarr;refetch, 202/409/403 모두 정확 매핑.</li>
+    <li>firstRun "스캔 시작"&rarr;<code>triggerRescan('firstRun')</code>, done 후 빈 결과면 firstRun 복귀 — 코드 경로 확인.</li>
+  </ul>
+  <h3>ScanProgress shape 일치 (서버 &harr; 프론트)</h3>
+  <pre>controller.status() keys = counts,currentPath,dirs,elapsedMs,found,note,phase,scanId,startedAt
+계약 ScanProgress    keys = counts,currentPath,dirs,elapsedMs,found,note,phase,scanId,startedAt   ← 완전 일치</pre>
+  <p>불일치=런타임 깨짐 지점 0건. <code>sizeStatusLabel</code>이 계약 4값(ok/partial/error/skipped) 모두 한국어 라벨 매핑(색 외 텍스트 병기).</p>
+  <h3>N-07 접근성 (수동 워크스루 + 코드/정적, Q5 수용)</h3>
+  <table>
+    <tr><th style="width:32%;">항목</th><th>확인 내용</th><th>판정</th></tr>
+    <tr><td>키보드 도달 (2.1.1)</td><td>카드 제목/표 행이 <code>&lt;button type="button"&gt;</code>로 버튼화, 액션 모두 button</td><td><span class="res">PASS</span></td></tr>
+    <tr><td>드로어 포커스 트랩 (1.3.2/2.4.3)</td><td>Tab/Shift+Tab 순환, 초기 포커스=닫기 버튼, getTabbables 가시요소 필터</td><td><span class="res">PASS</span></td></tr>
+    <tr><td>Esc 닫기 + 포커스 복귀</td><td>Escape&rarr;closeDrawer, <code>_drawerOpener</code> 기억 후 복귀(요소 잔존 시)</td><td><span class="res">PASS</span></td></tr>
+    <tr><td>aria-live 진행 (4.1.3)</td><td>scanview <code>role="status" aria-live="polite" aria-atomic="true"</code></td><td><span class="res">PASS</span></td></tr>
+    <tr><td>:focus-visible</td><td>전역 <code>:focus-visible{outline:2px}</code> + 카드/표/검색 개별 스타일</td><td><span class="res">PASS</span></td></tr>
+    <tr><td>색 외 텍스트 병기 (1.4.1)</td><td>Git/size/방치 상태를 배지 텍스트로 병기(색만 의존 아님), skip-link, prefers-reduced-motion</td><td><span class="res">PASS</span></td></tr>
+    <tr><td>CSP / L-1 XSS</td><td>index.html CSP 메타(인라인 스크립트 금지), 모든 스캔유래 문자열 textContent 렌더</td><td><span class="res">PASS</span></td></tr>
+  </table>
+  <p class="legend">자동 접근성 린터 부재로 수동 워크스루+코드 점검으로 대체(Q5 수용 범위). 실제 스크린리더/대비계측기 측정은 비실시 — 색 대비는 다크 팔레트 텍스트/배경 명도차 육안 적정.</p>
+</section>
+
+<section>
+  <h2>6. 발견 버그</h2>
+
+  <div class="find">
+    <h4>BUG-M4-01 <span class="sev-high">높음</span> — deps/devDeps가 기본 스캔에서 항상 null (계약 위반)</h4>
+    <div class="kv"><b>무엇이:</b> 설계 계약은 "deps/devDeps는 size.enabled와 무관하게 항상 수집(저비용)"이나, withSize 없는 기본 스캔에서 <code>deps/devDeps</code>가 항상 <code>null</code>.</div>
+    <div class="kv"><b>어디서:</b> 경계면 = <code>lib/scan/collectors/index.js</code> <code>activeCollectors()</code> ↔ <code>lib/scan/scanner.js:133</code> <code>loadActiveCollectors({includeSize: withSize})</code>. size 수집기는 <code>includeSize===true</code>일 때만 로드되므로, 비활성 시 size.collect()의 deps/devDeps 산출 분기(size.js:111-136)에 도달조차 못 함. <code>buildProject</code>가 <code>skipped</code>+null로 채움.</div>
+    <div class="kv"><b>기대 vs 실제:</b> 기대 <code>{status:'skipped', deps:2, devDeps:1}</code> / 실제 <code>{status:'skipped', deps:null, devDeps:null}</code>.</div>
+    <div class="kv"><b>재현(실측):</b></div>
+    <pre>// 기본 스캔 (withSize off)
+scanner.scan({roots:[root], excludes:[]})
+ &rarr; alpha.size = {"status":"skipped","totalBytes":null,"nodeModulesBytes":null,"deps":null,"devDeps":null}
+// withSize 스캔
+scanner.scan({roots:[root], withSize:true, size:{enabled:true}})
+ &rarr; alpha.size = {"status":"ok","totalBytes":77,"deps":2,"devDeps":1}
+// 그러나 직접 호출은 비활성에서도 채움(단위테스트가 통과하는 이유):
+size.collect(alphaPath, {config:{size:{enabled:false}}})
+ &rarr; data = {"status":"skipped","deps":2,"devDeps":1}   ← 모듈은 맞으나 통합경로에서 미호출</pre>
+    <div class="kv"><b>근본:</b> 계약 의도("저비용이라 항상")와 구현 게이트("opt-in일 때만 로드")의 불일치. 명확한 단일 결함이므로 debugger 회부 불필요 — 수정 방향: (a) size 수집기를 항상 로드하되 용량측정만 enabled 게이트, 또는 (b) deps/devDeps를 size 수집기 밖(language/detector가 이미 package.json 파싱)으로 이관. 설계 §667이 "detector 단계에서 키 개수만 센다"고 적은 것을 보면 (b)가 설계 본의에 더 부합.</div>
+    <div class="kv"><b>심각도:</b> <span class="sev-high">높음</span> — 런타임 크래시 없음(graceful null, UI "미측정"으로 흡수)이나, "의존성 개수"라는 R-09 명시 산출물이 기본 경로에서 미동작하는 계약 위반. 보고 대상: backend-dev.</div>
+  </div>
+
+  <div class="find" style="border-color:var(--ref);">
+    <h4>OBS-M4-02 <span class="sev-low">낮음 (관찰)</span> — size 시간예산이 단일 디렉터리 내부 파일루프에서는 미점검</h4>
+    <div class="kv"><b>무엇이:</b> <code>measureTree</code>의 <code>Date.now() &gt; deadlineTs</code> 체크는 스택 pop(디렉터리 경계)에서만 발생. 단일 디렉터리에 수만 파일이 있으면 그 내부 루프는 시간상한을 넘겨도 끝까지 돈다.</div>
+    <div class="kv"><b>완화 존재:</b> <code>maxEntries</code> 상한은 파일루프 <i>내부</i>에서 매 엔트리 점검되므로 stat 폭주는 항상 제한됨. 다중 디렉터리 트리에서는 시간예산 partial이 정상 동작(실측: budgetMs=1, 50서브디렉터리 &rarr; partial).</div>
+    <div class="kv"><b>심각도:</b> <span class="sev-low">낮음</span> — maxEntries가 진짜 안전망이라 무한정 비용은 없음. 단일 거대 평면 디렉터리(드물다) 한정 시간초과 가능. 출시 비차단, 백로그 메모.</div>
+  </div>
+</section>
+
+<section>
+  <h2>7. 성능 (게이트) — <span class="res">PASS</span></h2>
+  <table>
+    <tr><th style="width:40%;">측정</th><th>결과</th><th>판정</th></tr>
+    <tr><td>size opt-in의 기본 스캔 영향 (N-01 보호)</td><td>기본 스캔은 size 수집기 <b>미로드</b> — 영향 구조적 0. 60프로젝트 합성: default 1520ms</td><td><span class="res">PASS</span></td></tr>
+    <tr><td>withSize 스캔 오버헤드</td><td>동일 60프로젝트(각 node_modules 포함): withSize 1629ms (default 대비 +7%)</td><td><span class="res">PASS</span></td></tr>
+    <tr><td>size 예산 상한 동작</td><td>maxEntries·budgetMs 도달 시 partial로 절단(§3 실측)</td><td><span class="res">PASS</span></td></tr>
+    <tr><td>walker 전역 가드</td><td><code>maxDirs</code>(기본 2,000,000)·<code>timeBudgetMs</code>(5분)·watchdog(10분) 코드 확인</td><td><span class="res">PASS</span></td></tr>
+    <tr><td>폴링 부하</td><td>1초 주기 + 비활성 탭 fetch 생략 — 코드 확인</td><td><span class="res">PASS</span></td></tr>
+  </table>
+  <div class="note"><b>측정 한계 명시:</b> PRD N-01 기준(200프로젝트·콜드캐시·3회 중앙값 &lt;30s)의 정식 벤치는 200규모 실픽스처 부재로 미실시.
+    대체근거: (1) 기본 스캔은 size 미로드라 N-01 예산에 size 비용이 더해질 구조가 아님(설계 의도 충족), (2) 60규모 비례 외삽 시 size 오버헤드 +7%는 30s 예산을 위협하지 않음, (3) 예산·entry 상한이 항상 강제됨.
+    정식 30s 게이트 측정은 US-E4 벤치 스크립트로 별도 수행 권고.</div>
+</section>
+
+<section>
+  <h2>8. 경계면 교차 종합 — 불일치 0건 (BUG-M4-01 제외)</h2>
+  <table>
+    <tr><th>경계면</th><th>서버 측</th><th>프론트 측</th><th>판정</th></tr>
+    <tr><td>scan-status</td><td><code>ScanController.status()</code> 9필드</td><td><code>progressView/nextPollAction</code> 동일 9필드 소비</td><td><span class="res">일치</span></td></tr>
+    <tr><td>rescan 응답</td><td>202/409/403 + code/scanId</td><td><code>classifyRescan</code> 전 코드 매핑</td><td><span class="res">일치</span></td></tr>
+    <tr><td>size shape</td><td>buildProject size{status,totalBytes,nm,deps,devDeps}</td><td><code>toViewModel</code>/<code>sizeStatusLabel</code> 소비</td><td><span class="resw">shape 일치 (값은 BUG-M4-01)</span></td></tr>
+    <tr><td>stats.totalBytes</td><td>null&harr;number 승격</td><td><code>deriveStats</code> number 시 실값/없으면 합산폴백</td><td><span class="res">일치</span></td></tr>
+    <tr><td>currentPath 노출</td><td>shortenPath 2세그먼트 축약</td><td>textContent 렌더(L-1)</td><td><span class="res">일치</span></td></tr>
+    <tr><td>토큰/CT 게이트</td><td>checkStateChange / checkReadAccess</td><td>X-SPIP-Token 헤더 전송</td><td><span class="res">일치</span></td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>9. tech-lead 보고 요약</h2>
+  <ul>
+    <li><b>통과:</b> npm test 201/201 · E2E 24/25 · R-16/R-15/R-09(측정)/R-05(게이트)/R-03(clamp)/N-07/성능 모두 PASS. ScanProgress 경계면 완전 일치.</li>
+    <li><b>실패 1 (높음):</b> BUG-M4-01 — deps/devDeps가 기본 스캔에서 null(계약 위반, backend-dev 회부). 런타임 크래시 아님 → 블로커 아님.</li>
+    <li><b>관찰 1 (낮음):</b> OBS-M4-02 — size 시간예산의 디렉터리내 루프 미점검(maxEntries가 안전망, 백로그).</li>
+    <li><b>미검증:</b> 정식 N-01 30s 벤치(200규모 실픽스처 부재 → US-E4 벤치 권고) · 전체드라이브 실스캔(비용/환경) · 스크린리더 실측.</li>
+    <li><b>통합 리스크:</b> 낮음. BUG-M4-01만 해소하면 M4 출시 가능. debugger 회부 불필요(원인 명확).</li>
+  </ul>
+</section>
+
+<footer>
+  Project-SPIP — M4 통합·동작 QA 검증 보고서 (1회차) · 2026-06-21 · QA 엔지니어<br>
+  근거: npm test 실행 로그 · 실서버 E2E 25시나리오 · 순수함수 경계 교차 · walker/size 직접 실측 · 정적 코드/문서 대조
+</footer>
+
+</main>
+</body>
+</html>

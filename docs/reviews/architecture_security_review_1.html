@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project-SPIP — 아키텍처 보안 검증 보고서 (위협 모델링) 1회차</title>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#1e293b; --text:#e2e8f0; --sub:#94a3b8;
+    --accent:#34d399; --ref:#38bdf8; --line:#334155; --warn:#fbbf24; --danger:#f87171;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:"Segoe UI","Malgun Gothic",system-ui,sans-serif;line-height:1.7;}
+  header{padding:48px 32px 36px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#13203b,#0f172a);}
+  header h1{margin:0 0 8px;font-size:28px;}
+  header .tag{display:inline-block;background:rgba(52,211,153,.12);color:var(--accent);
+    border:1px solid rgba(52,211,153,.4);border-radius:999px;padding:3px 12px;font-size:13px;margin-right:8px;}
+  header p{margin:14px 0 0;color:var(--sub);max-width:960px;}
+  .meta{margin-top:16px;font-size:13px;color:var(--sub);}
+  main{max-width:1120px;margin:0 auto;padding:32px;}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:24px 28px;margin:22px 0;}
+  h2{margin:0 0 16px;font-size:21px;color:var(--accent);border-left:4px solid var(--accent);padding-left:12px;}
+  h3{font-size:16px;color:var(--ref);margin:22px 0 10px;}
+  h4{font-size:14px;color:var(--text);margin:16px 0 6px;}
+  p{margin:8px 0;}
+  ul,ol{margin:8px 0;padding-left:22px;}li{margin:5px 0;}
+  code{background:#0b1220;color:var(--ref);padding:1px 6px;border-radius:5px;font-size:13px;}
+  pre{background:#0b1220;border:1px solid var(--line);border-radius:8px;padding:14px 16px;
+    overflow-x:auto;font-size:13px;color:#cbd5e1;font-family:Consolas,monospace;line-height:1.55;}
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13.5px;}
+  th,td{border:1px solid var(--line);padding:9px 11px;text-align:left;vertical-align:top;}
+  th{background:#142035;color:var(--accent);}
+  tr:nth-child(even) td{background:rgba(255,255,255,.02);}
+  .mono{font-family:Consolas,monospace;font-size:12.5px;}
+  .fid{font-family:Consolas,monospace;font-weight:700;white-space:nowrap;}
+  .sev{font-size:11px;font-weight:700;padding:2px 9px;border-radius:6px;white-space:nowrap;display:inline-block;}
+  .crit{background:rgba(248,113,113,.18);color:#fecaca;border:1px solid rgba(248,113,113,.6);}
+  .high{background:rgba(251,146,60,.16);color:#fdba74;border:1px solid rgba(251,146,60,.55);}
+  .med{background:rgba(251,191,36,.14);color:#fcd34d;border:1px solid rgba(251,191,36,.5);}
+  .low{background:rgba(56,189,248,.14);color:#7dd3fc;border:1px solid rgba(56,189,248,.5);}
+  .pass{background:rgba(52,211,153,.16);color:#6ee7b7;border:1px solid rgba(52,211,153,.5);}
+  .verdict{display:inline-block;border-radius:999px;padding:6px 22px;font-size:18px;font-weight:800;}
+  .v-cond{background:rgba(251,191,36,.16);color:#fcd34d;border:1px solid rgba(251,191,36,.6);}
+  .v-pass{background:rgba(52,211,153,.16);color:#6ee7b7;border:1px solid rgba(52,211,153,.6);}
+  .v-fail{background:rgba(248,113,113,.18);color:#fecaca;border:1px solid rgba(248,113,113,.6);}
+  .note{background:rgba(56,189,248,.08);border:1px solid rgba(56,189,248,.3);border-radius:8px;
+    padding:12px 16px;font-size:13.5px;color:#bae6fd;margin:10px 0;}
+  .warn-box{background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.3);border-radius:8px;
+    padding:12px 16px;font-size:13.5px;color:#fde68a;margin:10px 0;}
+  .danger-box{background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.35);border-radius:8px;
+    padding:12px 16px;font-size:13.5px;color:#fecaca;margin:10px 0;}
+  .ok-box{background:rgba(52,211,153,.08);border:1px solid rgba(52,211,153,.3);border-radius:8px;
+    padding:12px 16px;font-size:13.5px;color:#bbf7d0;margin:10px 0;}
+  figure{margin:18px 0;background:#0b1220;border:1px solid var(--line);border-radius:10px;padding:18px;}
+  figcaption{color:var(--sub);font-size:12.5px;margin-top:10px;text-align:center;}
+  .legend{display:flex;gap:18px;flex-wrap:wrap;font-size:12.5px;color:var(--sub);margin-top:10px;justify-content:center;}
+  .legend span{display:inline-flex;align-items:center;gap:6px;}
+  .dot{width:11px;height:11px;border-radius:3px;display:inline-block;}
+  .finding{border-left:3px solid var(--warn);padding:4px 0 4px 14px;margin:18px 0;}
+  .finding.c{border-color:var(--danger);}
+  .finding.h{border-color:#fb923c;}
+  .finding.m{border-color:var(--warn);}
+  .finding.l{border-color:var(--ref);}
+  .finding h4{margin:0 0 8px;font-size:15px;color:var(--text);}
+  .kv{font-size:13px;margin:3px 0;}
+  .kv b{color:var(--sub);font-weight:600;display:inline-block;min-width:92px;}
+  footer{text-align:center;color:var(--sub);font-size:12.5px;padding:30px;border-top:1px solid var(--line);}
+  .scorecard{display:flex;gap:14px;flex-wrap:wrap;margin:16px 0;}
+  .scard{flex:1;min-width:120px;background:#0b1220;border:1px solid var(--line);border-radius:10px;padding:14px;text-align:center;}
+  .scard .n{font-size:28px;font-weight:800;}
+  .scard .l{font-size:12px;color:var(--sub);margin-top:4px;}
+</style>
+</head>
+<body>
+<header>
+  <span class="tag">보안 검증 보고서</span><span class="tag">위협 모델링 (STRIDE)</span><span class="tag">아키텍처 단계 · 1회차</span>
+  <h1>Project-SPIP — 아키텍처 보안 검증 보고서</h1>
+  <p>로컬 단일 사용자 도구의 아키텍처 설계(<code>architecture.html</code> §11 4중 통제·신뢰경계·pathGuard·safeExec, <code>adr.html</code> ADR-002/004)를 적대적 관점에서 위협 모델링했다. 검증 대상은 <b>설계 청사진</b>이다(구현 코드 없음: <code>lib/</code> 미존재, <code>package.json</code>은 골격, 외부 의존성 0 — 의존성 취약점 스캔 비해당). 따라서 본 보고는 "설계가 위협을 구조적으로 막도록 명세했는가"를 판정하고, 구현 단계에서 반드시 검증할 시정·확인 항목을 산출한다.</p>
+  <div class="meta">검증자: Security Reviewer · 일자: 2026-06-21 · 입력: architecture.html / adr.html / PRD.html(§10·N-02/03/06) / FeatureSpec.html(F-2) · 방법: 자산·신뢰경계 식별 → STRIDE 위협 도출 → 설계 증거 대조 → 등급화</div>
+</header>
+
+<main>
+
+<!-- ===================== 판정 ===================== -->
+<section id="verdict">
+  <h2>0. 종합 판정</h2>
+  <p style="font-size:16px;">판정: <span class="verdict v-cond">조건부 PASS (CONDITIONAL PASS)</span></p>
+  <p>설계의 보안 골격(127.0.0.1 바인딩 · 동일출처 검증 · id 역참조 화이트리스트 · shell:false 인자배열)은 위협 모델의 핵심 축을 <b>방향성으로는 올바르게</b> 잡았고, 경로 순회·셸 인젝션·정적 서빙 노출의 1차 표면은 적절히 차단한다. 그러나 <b>치명 0 / 높음 3 / 중간 4 / 낮음 3</b>의 잔여 위협이 있으며, 특히 <b>심볼릭 링크/실경로(realpath) 정규화 누락</b>, <b>PATH 하이재킹(실행 파일 절대경로 미고정)</b>, <b>스캔 대상 부분신뢰 입력(package.json/.git) 파싱 방어 부재</b>가 높음 등급이다. 치명은 없으나 높음 항목이 존재하므로 무조건 PASS는 불가하다. 아래 H-등급 시정 항목을 <b>설계서에 반영(명세 보강)</b>하고 구현 단계 수용 기준에 못박는 것을 조건으로 다음 게이트를 통과시킨다.</p>
+
+  <div class="scorecard">
+    <div class="scard"><div class="n" style="color:#fecaca">0</div><div class="l">치명 (Critical)</div></div>
+    <div class="scard"><div class="n" style="color:#fdba74">3</div><div class="l">높음 (High)</div></div>
+    <div class="scard"><div class="n" style="color:#fcd34d">4</div><div class="l">중간 (Medium)</div></div>
+    <div class="scard"><div class="n" style="color:#7dd3fc">3</div><div class="l">낮음 (Low)</div></div>
+    <div class="scard"><div class="n" style="color:#6ee7b7">6</div><div class="l">PASS (적절 차단)</div></div>
+  </div>
+
+  <div class="warn-box"><b>게이트 조건:</b> 높음 3건(H-1 심링크/realpath, H-2 PATH 하이재킹, H-3 부분신뢰 입력 파싱)은 <b>설계 반영 필수</b>. 이 3건이 설계서 §11 및 관련 모듈 계약(pathGuard·safeExec·detector/collectors)에 명세로 반영되면 PASS로 상향한다. 중간 4건은 구현 착수 전 설계 보강 권고, 낮음 3건은 구현 시 처리 권고.</div>
+</section>
+
+<!-- ===================== 자산/신뢰경계 ===================== -->
+<section id="assets">
+  <h2>1. 보호 자산 · 신뢰 경계</h2>
+  <h3>1.1 보호 자산</h3>
+  <table>
+    <tr><th style="width:230px;">자산</th><th>민감도</th><th>위협 시 영향</th></tr>
+    <tr><td>사용자 파일시스템 전체(읽기)</td><td>높음</td><td>경로 순회 시 스캔 루트 밖 임의 파일 메타/내용 노출</td></tr>
+    <tr><td>프로세스 실행 권한 (<code>code</code>/<code>git</code> spawn)</td><td>치명</td><td>인젝션/하이재킹 시 사용자 권한 임의 코드 실행(RCE)</td></tr>
+    <tr><td>스냅샷 캐시 JSON (경로·git 상태)</td><td>중간</td><td>프로젝트 경로·디렉터리 구조 등 프라이버시 정보 노출</td></tr>
+    <tr><td>로컬 HTTP API (상태변경 POST)</td><td>높음</td><td>CSRF/리바인딩으로 브라우저를 통해 '열기'·재스캔 트리거</td></tr>
+    <tr><td>가용성(스캔/서버 프로세스)</td><td>낮음~중간</td><td>심링크 루프·거대 파일로 자원 고갈/멈춤(단일 사용자라 영향 한정)</td></tr>
+  </table>
+
+  <h3>1.2 신뢰 경계 및 통제 지점 (SVG)</h3>
+  <figure>
+    <svg viewBox="0 0 1080 470" width="100%" role="img" aria-label="신뢰 경계와 위협 진입점 다이어그램">
+      <defs>
+        <marker id="ar" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 Z" fill="#38bdf8"/></marker>
+        <marker id="arR" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 Z" fill="#f87171"/></marker>
+      </defs>
+
+      <!-- TB1: 브라우저/네트워크 -->
+      <rect x="20" y="40" width="250" height="390" rx="10" fill="#170d0d" stroke="#f87171" stroke-width="1.3" stroke-dasharray="6 5"/>
+      <text x="145" y="62" fill="#f87171" font-size="12" text-anchor="middle" font-weight="bold" font-family="Segoe UI">TB-A: 브라우저 / 네트워크</text>
+      <rect x="45" y="80" width="200" height="52" rx="7" fill="#0b1220" stroke="#f87171"/>
+      <text x="145" y="101" fill="#fecaca" font-size="11" text-anchor="middle" font-family="Segoe UI">악성 웹페이지(CSRF)</text>
+      <text x="145" y="118" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">T-3a</text>
+      <rect x="45" y="142" width="200" height="52" rx="7" fill="#0b1220" stroke="#f87171"/>
+      <text x="145" y="163" fill="#fecaca" font-size="11" text-anchor="middle" font-family="Segoe UI">DNS 리바인딩</text>
+      <text x="145" y="180" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">T-3b</text>
+      <rect x="45" y="204" width="200" height="52" rx="7" fill="#0b1220" stroke="#f87171"/>
+      <text x="145" y="225" fill="#fecaca" font-size="11" text-anchor="middle" font-family="Segoe UI">동일머신 타 사용자/프로세스</text>
+      <text x="145" y="242" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">T-3c</text>
+      <rect x="45" y="266" width="200" height="52" rx="7" fill="#0b1220" stroke="#f87171"/>
+      <text x="145" y="287" fill="#fecaca" font-size="11" text-anchor="middle" font-family="Segoe UI">조작된 요청(id/경로/메서드)</text>
+      <text x="145" y="304" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">T-1</text>
+
+      <!-- 경계 통제 -->
+      <rect x="310" y="60" width="210" height="350" rx="10" fill="#0b1220" stroke="#fbbf24" stroke-width="1.6"/>
+      <text x="415" y="84" fill="#fbbf24" font-size="13" text-anchor="middle" font-weight="bold" font-family="Segoe UI">경계 통제 (server.js)</text>
+      <rect x="328" y="98" width="174" height="46" rx="7" fill="#142035" stroke="#fbbf24"/>
+      <text x="415" y="117" fill="#e2e8f0" font-size="10.5" text-anchor="middle" font-family="Segoe UI">① 127.0.0.1 바인딩</text>
+      <text x="415" y="132" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">PASS-1</text>
+      <rect x="328" y="152" width="174" height="46" rx="7" fill="#142035" stroke="#fbbf24"/>
+      <text x="415" y="171" fill="#e2e8f0" font-size="10.5" text-anchor="middle" font-family="Segoe UI">② Origin/Host + CT 검증</text>
+      <text x="415" y="186" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">PASS-2 / M-1 보강</text>
+      <rect x="328" y="206" width="174" height="46" rx="7" fill="#142035" stroke="#fbbf24"/>
+      <text x="415" y="225" fill="#e2e8f0" font-size="10.5" text-anchor="middle" font-family="Segoe UI">③ pathGuard (id 역참조)</text>
+      <text x="415" y="240" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">PASS-3 / H-1 realpath</text>
+      <rect x="328" y="260" width="174" height="46" rx="7" fill="#142035" stroke="#fbbf24"/>
+      <text x="415" y="279" fill="#e2e8f0" font-size="10.5" text-anchor="middle" font-family="Segoe UI">④ safeExec(shell:false)</text>
+      <text x="415" y="294" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">PASS-4 / H-2 절대경로</text>
+      <rect x="328" y="314" width="174" height="46" rx="7" fill="#142035" stroke="#fbbf24"/>
+      <text x="415" y="333" fill="#e2e8f0" font-size="10.5" text-anchor="middle" font-family="Segoe UI">⑤ staticHandler 격리</text>
+      <text x="415" y="348" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">PASS-5</text>
+      <text x="415" y="384" fill="#64748b" font-size="9" text-anchor="middle" font-family="Segoe UI">※ 입력 파싱 방어 계층 부재 → H-3</text>
+
+      <!-- 신뢰 영역 -->
+      <rect x="560" y="40" width="500" height="390" rx="10" fill="#0d1726" stroke="#34d399" stroke-width="1.3" stroke-dasharray="6 5"/>
+      <text x="810" y="62" fill="#34d399" font-size="12" text-anchor="middle" font-weight="bold" font-family="Segoe UI">신뢰 경계 안 (로컬 런타임)</text>
+      <rect x="585" y="84" width="450" height="50" rx="8" fill="#0b1220" stroke="#34d399"/>
+      <text x="810" y="105" fill="#e2e8f0" font-size="11" text-anchor="middle" font-family="Segoe UI">OS 캐시 JSON (경로·git 요약) — 파일 권한 M-2</text>
+      <text x="810" y="122" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">메타데이터만, 파일 내용 미포함 (PASS-6)</text>
+
+      <!-- TB2: 파일시스템 (부분신뢰) -->
+      <rect x="585" y="150" width="450" height="130" rx="8" fill="#1a1206" stroke="#fbbf24" stroke-width="1.2" stroke-dasharray="5 4"/>
+      <text x="810" y="170" fill="#fbbf24" font-size="11" text-anchor="middle" font-weight="bold" font-family="Segoe UI">TB-B: 스캔 대상 = 부분신뢰 데이터</text>
+      <text x="810" y="190" fill="#cbd5e1" font-size="10" text-anchor="middle" font-family="Segoe UI">package.json · .git · 폴더명 · 심볼릭 링크</text>
+      <text x="810" y="210" fill="#fca5a5" font-size="10" text-anchor="middle" font-family="Segoe UI">→ JSON 폭탄 / ReDoS / 심링크 루프 / name 오염 (H-3·H-1·M-3)</text>
+      <text x="810" y="232" fill="#94a3b8" font-size="9.5" text-anchor="middle" font-family="Segoe UI">walker · detector · collectors가 신뢰 없이 파싱해야 함</text>
+      <text x="810" y="252" fill="#94a3b8" font-size="9.5" text-anchor="middle" font-family="Segoe UI">스캔 페이즈에서 유입된 오염 데이터가</text>
+      <text x="810" y="268" fill="#fca5a5" font-size="9.5" text-anchor="middle" font-family="Segoe UI">서빙 페이즈 응답·UI로 전파(저장형 XSS 표면 L-1)</text>
+
+      <rect x="585" y="296" width="450" height="50" rx="8" fill="#0b1220" stroke="#fbbf24"/>
+      <text x="810" y="317" fill="#e2e8f0" font-size="11" text-anchor="middle" font-family="Segoe UI">code / git 프로세스 (사용자 권한 실행)</text>
+      <text x="810" y="334" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">RCE 영향 자산 — 인자배열+절대경로 필수</text>
+
+      <!-- 화살표 -->
+      <line x1="245" y1="106" x2="306" y2="170" stroke="#f87171" stroke-width="1.5" marker-end="url(#arR)"/>
+      <line x1="245" y1="290" x2="306" y2="225" stroke="#f87171" stroke-width="1.5" marker-end="url(#arR)"/>
+      <line x1="520" y1="230" x2="582" y2="230" stroke="#38bdf8" stroke-width="1.7" marker-end="url(#ar)"/>
+      <text x="528" y="222" fill="#38bdf8" font-size="9" font-family="Segoe UI">검증 통과만</text>
+    </svg>
+    <div class="legend">
+      <span><span class="dot" style="background:#f87171"></span> 미신뢰 진입(차단 대상)</span>
+      <span><span class="dot" style="background:#fbbf24"></span> 경계 통제 / 부분신뢰</span>
+      <span><span class="dot" style="background:#34d399"></span> 신뢰 영역</span>
+      <span><span class="dot" style="background:#38bdf8"></span> 허용 흐름</span>
+    </div>
+    <figcaption>그림 1. 신뢰 경계 2개(TB-A 브라우저/네트워크, TB-B 스캔 대상 파일시스템)와 5개 경계 통제. 설계의 4중 통제는 TB-A를 잘 막으나, TB-B(부분신뢰 입력)에 대한 통제 계층이 명세되지 않은 것이 핵심 갭이다.</figcaption>
+  </figure>
+</section>
+
+<!-- ===================== 발견 요약표 ===================== -->
+<section id="summary">
+  <h2>2. 발견 항목 요약 (체크리스트 매핑)</h2>
+  <table>
+    <tr><th style="width:60px;">ID</th><th>취약점 / 관찰</th><th style="width:160px;">위치</th><th style="width:120px;">STRIDE</th><th style="width:90px;">심각도</th></tr>
+    <tr><td class="fid">H-1</td><td>심볼릭 링크/하드링크/접합점(junction) 미해소 — pathGuard가 realpath 정규화 없이 path.resolve만 사용</td><td>§5 pathGuard · §11.1 · walker</td><td>정보노출 / 권한상승</td><td><span class="sev high">높음</span></td></tr>
+    <tr><td class="fid">H-2</td><td>실행 파일 절대경로 미고정 — PATH 하이재킹/실행파일 위장(code.exe, git.exe)으로 RCE 가능</td><td>§5 safeExec · §11.2 · ADR-002</td><td>위장 / 권한상승</td><td><span class="sev high">높음</span></td></tr>
+    <tr><td class="fid">H-3</td><td>부분신뢰 입력(package.json/.git) 파싱 방어 부재 — JSON 폭탄·크기 상한·ReDoS·바이트 한도 미명세</td><td>§6 detector · collectors · serializer</td><td>서비스거부 / 변조</td><td><span class="sev high">높음</span></td></tr>
+    <tr><td class="fid">M-1</td><td>동일출처 검증의 우회 여지 — Origin 부재 요청 처리·Host 신뢰·null Origin 정책 미명세</td><td>§9 · §11.3 actionHandlers</td><td>위장 / 변조</td><td><span class="sev med">중간</span></td></tr>
+    <tr><td class="fid">M-2</td><td>캐시 JSON 파일 권한 미명세 — 멀티유저 OS에서 타 사용자 읽기 가능(경로 프라이버시 노출)</td><td>§8 · §11.4 · serializer/paths</td><td>정보노출</td><td><span class="sev med">중간</span></td></tr>
+    <tr><td class="fid">M-3</td><td>심링크 루프/과도 깊이로 인한 스캔 DoS — depthLimit가 M4·미강제, 방문 inode 추적 부재</td><td>§6 walker · R-03(M4) · §8.2 depthLimit</td><td>서비스거부</td><td><span class="sev med">중간</span></td></tr>
+    <tr><td class="fid">M-4</td><td>spawn 프로세스 타임아웃·동시 실행 상한 부재(open 액션) — 자원 고갈/행</td><td>§5 safeExec · §6.2 actionHandlers</td><td>서비스거부</td><td><span class="sev med">중간</span></td></tr>
+    <tr><td class="fid">L-1</td><td>대시보드 저장형 XSS 표면 — 오염된 name/description/branch가 DOM 삽입될 때 이스케이프 명세 없음</td><td>§6.3 app.js view</td><td>정보노출 / 변조</td><td><span class="sev low">낮음</span></td></tr>
+    <tr><td class="fid">L-2</td><td>설정 파일(spip.config.json) 신뢰 — scanRoots/excludes 검증·정규화 명세 약함(경로 주입)</td><td>§8.2 · common/config</td><td>변조</td><td><span class="sev low">낮음</span></td></tr>
+    <tr><td class="fid">L-3</td><td>에러 응답에 내부 경로/스택 노출 가능성 — 표준 에러 코드는 있으나 message 정제 정책 미명세</td><td>§9 오류 응답 계약</td><td>정보노출</td><td><span class="sev low">낮음</span></td></tr>
+  </table>
+
+  <h3>2.1 적절히 차단된 항목 (PASS 인정)</h3>
+  <table>
+    <tr><th style="width:70px;">ID</th><th>통제</th><th>근거 (설계 위치)</th></tr>
+    <tr><td class="fid"><span class="sev pass">PASS-1</span></td><td>로컬 바인딩</td><td><code>listen(port,'127.0.0.1')</code> 명시, <code>0.0.0.0</code> 금지 — 외부 네트워크 진입 1차 차단 (§11.3 / N-02)</td></tr>
+    <tr><td class="fid"><span class="sev pass">PASS-2</span></td><td>CSRF 기본 방어</td><td>상태변경 POST에 Origin/Host 동일출처 + <code>Content-Type: application/json</code> 요구 → 단순 폼 CSRF 차단 (§11.3) — 단 M-1 보강 필요</td></tr>
+    <tr><td class="fid"><span class="sev pass">PASS-3</span></td><td>경로 조작 표면 축소</td><td>클라가 경로 대신 <code>id</code> 전송 → 서버가 스냅샷에서 역참조, 화이트리스트 정확 일치(접두사 부분일치/<code>../</code> 거부) (§5 / §11.1) — 단 H-1 보강 필요</td></tr>
+    <tr><td class="fid"><span class="sev pass">PASS-4</span></td><td>셸 인젝션 방지</td><td>모든 외부 호출 <code>spawn(cmd,args,{shell:false})</code>, 사용자 입력을 셸 문자열로 연결 안 함, 실행파일명 고정 상수 (§11.2 / ADR-002 / N-03) — 단 H-2 보강 필요</td></tr>
+    <tr><td class="fid"><span class="sev pass">PASS-5</span></td><td>정적 서빙 격리</td><td><code>staticHandler</code>가 <code>public/</code> 절대경로 하위로 정규화·이탈 시 404, 프로젝트 폴더 서빙 금지 (§6.2 / §11.1)</td></tr>
+    <tr><td class="fid"><span class="sev pass">PASS-6</span></td><td>데이터 최소 수집</td><td>스냅샷에 파일 <b>내용</b> 미포함, 메타데이터만 보관, 외부 전송 0 (§11.4 / N-06) → 노출 시 영향 최소화</td></tr>
+  </table>
+</section>
+
+<!-- ===================== 위협별 상세 (체크리스트 1~6) ===================== -->
+<section id="threats">
+  <h2>3. 체크리스트별 위협 분석</h2>
+
+  <h3>3.1 경로 순회 / 화이트리스트 우회</h3>
+  <div class="ok-box"><b>부분 PASS:</b> id 역참조 + <code>path.resolve</code> 정규화 + 정확 일치 + staticHandler public 격리 설계는 <code>../</code> 순회·접두사 부분일치·클라이언트 경로 조작을 막는다(PASS-3/5).</div>
+
+  <div class="finding h">
+    <h4>H-1. 심볼릭 링크/접합점/하드링크가 화이트리스트를 우회할 수 있다</h4>
+    <div class="kv"><b>위치</b> §5 pathGuard 계약(<code>isAllowed</code>), §11.1, walker</div>
+    <div class="kv"><b>STRIDE</b> 정보노출(I) · 권한상승(E)</div>
+    <div class="kv"><b>심각도</b> <span class="sev high">높음</span> · 악용 가능성: 중</div>
+    <div class="kv"><b>시나리오</b> 설계는 "<code>path.resolve</code>로 정규화 후 등록 경로와 정확 일치"라고만 명세한다. <code>path.resolve</code>는 <code>../</code>는 접어주지만 <b>심볼릭 링크/Windows 디렉터리 접합점(junction)을 해소하지 않는다</b>. 등록된 화이트리스트 경로(스캔 루트 안) 자체가 심링크이거나 그 하위에 외부를 가리키는 링크가 있으면, "정확히 일치"하는 등록 경로로도 <code>code</code>가 실제로는 스캔 루트 밖 디렉터리를 열게 된다. 또한 스캔 시 walker가 심링크를 따라가면 루트 밖 경로가 화이트리스트에 등록되어, 검증을 "통과"하면서도 경계를 벗어난다(TOCTOU 포함: 스캔 후 경로를 심링크로 교체).</div>
+    <div class="kv"><b>권고</b> ① pathGuard와 walker 등록 시점 모두 <code>fs.realpathSync</code>(실경로)로 해소한 결과를 기준으로 화이트리스트를 구성·대조한다. ② walker는 기본적으로 심링크를 따라가지 않거나(<code>fs.lstat</code>로 링크 판별 후 정책 적용), 따라갈 경우 실경로가 스캔 루트 실경로의 하위인지 재확인한다. ③ 대소문자 비민감 파일시스템(Windows/macOS)과 유니코드 정규화(NFC/NFD) 차이를 일치 비교에 반영한다. ④ UNC 경로(<code>\\server\share</code>)·드라이브 상대경로(<code>C:foo</code>)·확장 경로(<code>\\?\</code>)를 정규화/거부 규칙에 포함한다. 이 항목들을 §11.1과 pathGuard 계약에 명세로 추가할 것.</div>
+  </div>
+
+  <h3>3.2 셸 / 명령 인젝션</h3>
+  <div class="ok-box"><b>부분 PASS:</b> <code>shell:false</code> + 인자 배열 + 사용자 입력 셸 비연결 + 실행파일명 고정 상수는 고전적 명령/인자 인젝션을 구조적으로 차단한다(PASS-4). 경로의 공백/한글/특수문자도 인자 배열로 안전 처리(F-2 엣지 정합).</div>
+
+  <div class="finding h">
+    <h4>H-2. 실행 파일 절대경로 미고정 → PATH 하이재킹 / 실행파일 위장으로 RCE</h4>
+    <div class="kv"><b>위치</b> §5 safeExec, §11.2(실행파일명을 고정 상수 <code>'code'</code>/<code>'git'</code>로 허용), ADR-002</div>
+    <div class="kv"><b>STRIDE</b> 위장(S) · 권한상승(E) → 임의 코드 실행</div>
+    <div class="kv"><b>심각도</b> <span class="sev high">높음</span> · 악용 가능성: 중(Windows에서 특히)</div>
+    <div class="kv"><b>시나리오</b> 설계는 "실행 파일명을 고정 상수 <code>'code'</code>/<code>'git'</code>만 허용"한다고 하지만, 이는 <b>파일명만 고정</b>일 뿐 <b>경로 해석을 PATH에 위임</b>한다. Windows에서 <code>spawn('code',...,{shell:false})</code>는 현재 작업 디렉터리/PATH 우선순위에 따라 공격자가 심어둔 <code>code.exe</code>·<code>code.bat</code>를 실행할 수 있다(특히 git collector는 <code>cwd: projectPath</code>로 실행 — 스캔 대상 프로젝트 폴더 안의 위장 <code>git.exe</code>/<code>git.bat</code>가 우선될 위험). 스캔 대상은 부분신뢰(TB-B)이므로, 악성 리포를 클론해 둔 사용자는 스캔/열기만으로 임의 코드가 실행될 수 있다.</div>
+    <div class="kv"><b>권고</b> ① 가능하면 실행 파일의 <b>절대경로를 1회 해석(resolve)</b>해 고정하고(예: <code>where/which</code> 결과를 신뢰 PATH 기준으로 검증), 이후 그 절대경로로 spawn한다. ② <code>spawn</code> 옵션에서 <code>cwd</code>를 신뢰 경로로 두거나, git 호출 시 <code>cwd</code>를 프로젝트로 두더라도 실행 파일은 절대경로로 지정해 cwd의 위장 바이너리가 선택되지 않게 한다. ③ Windows에서 <code>.bat/.cmd</code> 자동 실행 위험을 인지하고 PATHEXT 기반 확장 해석을 막는다. ④ 이를 safeExec 계약과 §11.2에 명세할 것.</div>
+  </div>
+
+  <h3>3.3 로컬 HTTP 노출 (멀티유저 / 리바인딩 / CSRF)</h3>
+  <div class="ok-box"><b>부분 PASS:</b> 127.0.0.1 바인딩(PASS-1) + 동일출처/CT 검증(PASS-2)은 (a) 외부 네트워크 접근과 (b) 단순 폼 CSRF의 1차 표면을 차단한다.</div>
+
+  <div class="finding m">
+    <h4>M-1. 동일출처 검증 우회 여지 (DNS 리바인딩 / Origin 부재 / Host 신뢰)</h4>
+    <div class="kv"><b>위치</b> §9, §11.3 (Origin/Host + Content-Type 검증)</div>
+    <div class="kv"><b>STRIDE</b> 위장(S) · 변조(T)</div>
+    <div class="kv"><b>심각도</b> <span class="sev med">중간</span> · 악용 가능성: 낮~중</div>
+    <div class="kv"><b>시나리오</b> (b) <b>DNS 리바인딩</b>: 공격 페이지가 자신의 도메인을 127.0.0.1로 재바인딩하면 브라우저는 그 도메인을 "동일 출처"로 보낼 수 있어 Origin 검증만으로는 부족하다 → <code>Host</code> 헤더가 기대 <code>127.0.0.1:&lt;port&gt;</code>/<code>localhost:&lt;port&gt;</code>인지 <b>화이트리스트 검증</b>(allowlist)이 필수. (a) <b>Origin 부재 요청</b>(일부 클라이언트/리바인딩) 처리 정책 미명세 — "Origin이 없거나 불일치면 거부"를 명시해야 함. <code>application/json</code> 요구는 좋으나 fetch는 이를 우회 가능하므로 보조 수단일 뿐.</div>
+    <div class="kv"><b>권고</b> §11.3에 다음을 명세: Host 헤더를 기대 호스트:포트 allowlist와 정확 비교, Origin 부재/불일치 시 거부(폐쇄적 기본값), 상태변경은 POST+JSON 강제 + (저비용 강화책) 서버 기동 시 1회 생성하는 세션 토큰을 index.html에 주입해 POST에 동봉 검증. 멀티유저 OS(c)에 대해서는 캐시 권한(M-2)으로 보완.</div>
+  </div>
+
+  <div class="finding l">
+    <h4>(참고) T-3c 동일 머신 타 사용자/프로세스</h4>
+    <div class="kv"><b>판정</b> 127.0.0.1은 동일 머신의 다른 로컬 사용자/프로세스에게는 도달 가능하다(루프백은 사용자 격리를 하지 않음). 단일 사용자 PC 가정상 영향은 낮으나, 멀티유저 환경에서는 타 사용자가 <code>/api/projects</code>로 경로 목록을, <code>/api/open</code>으로 액션을 호출할 수 있다. M-1 토큰 + M-2 파일 권한으로 완화. 위험 수용 결정 후보(아래 §5).</div>
+  </div>
+
+  <h3>3.4 민감정보 노출</h3>
+  <div class="ok-box"><b>부분 PASS:</b> 스냅샷은 파일 내용 미포함·메타데이터만·외부 전송 0(PASS-6) — 노출 영향 최소화 설계는 적절.</div>
+
+  <div class="finding m">
+    <h4>M-2. 캐시/설정 JSON 파일 권한 미명세</h4>
+    <div class="kv"><b>위치</b> §8, §11.4, serializer / common/paths</div>
+    <div class="kv"><b>STRIDE</b> 정보노출(I)</div>
+    <div class="kv"><b>심각도</b> <span class="sev med">중간</span></div>
+    <div class="kv"><b>시나리오</b> <code>projects.json</code>은 사용자의 전체 프로젝트 절대경로·디렉터리 구조·git 브랜치 등 프라이버시 정보를 담는다. 저장 위치(<code>%LOCALAPPDATA%</code> 등)는 명시됐으나 <b>파일 권한</b>이 미명세다. 기본 umask/상속 권한에 따라 멀티유저 OS에서 타 사용자가 읽을 수 있다. 원자적 쓰기의 임시 파일 권한·정리(누수)도 명세 필요.</div>
+    <div class="kv"><b>권고</b> serializer가 캐시/설정 파일을 소유자 전용 권한(POSIX <code>0600</code>, 디렉터리 <code>0700</code>; Windows는 사용자 ACL)으로 생성하도록 §11.4/serializer 계약에 명세. 임시 파일도 동일 권한·동일 디렉터리(rename 원자성 보장)·실패 시 정리.</div>
+  </div>
+
+  <h3>3.5 부분 신뢰 입력 (package.json / .git / 폴더명)</h3>
+  <div class="danger-box"><b>핵심 갭:</b> 설계는 환경 부재·손상 파일에 대한 <b>graceful 격리(견고성)</b>는 잘 명세했으나(R-13/N-05), <b>적대적 입력</b>(고의로 만든 악성 파일)에 대한 방어는 명세되지 않았다. 스캔 대상은 신뢰 경계 밖(TB-B)이다.</div>
+
+  <div class="finding h">
+    <h4>H-3. 부분신뢰 입력 파싱 방어 부재 (JSON 폭탄 · 크기 상한 · ReDoS)</h4>
+    <div class="kv"><b>위치</b> §6 detector, collectors/language·git·freshness, serializer</div>
+    <div class="kv"><b>STRIDE</b> 서비스거부(D) · 변조(T)</div>
+    <div class="kv"><b>심각도</b> <span class="sev high">높음</span> · 악용 가능성: 중</div>
+    <div class="kv"><b>시나리오</b> language collector는 <code>package.json</code>을 파싱한다. 공격자(또는 무심코 클론한 악성 리포)가 ① <b>수백 MB의 거대 package.json</b> → 메모리 고갈, ② <b>깊게 중첩된 JSON</b> → 파서 부하, ③ deps 키에 <b>제어문자/거대 문자열</b>을 넣어 직렬화/렌더 폭증, ④ 확장자 비율 계산·언어 추정에서 <b>비효율 정규식(ReDoS)</b>을 트리거할 수 있다. 단일 항목 격리(try)는 무한 루프/메모리 폭발을 막지 못한다(프로세스 전체가 죽거나 30초 SLA를 초과).</div>
+    <div class="kv"><b>권고</b> ① 파싱 전 파일 크기 상한(예: package.json 1MB 등 합리적 한도) 검사 후 초과 시 skip+warning. ② <code>JSON.parse</code> 입력 바이트 한도·깊이 가드. ③ 언어 추정 등 모든 정규식은 선형 시간 보장(역추적 폭발 패턴 금지) 또는 입력 길이 제한. ④ 수집한 문자열 필드(name/description/branch)는 길이 절단·제어문자 제거. 이를 collectors 공통 계약과 §6.1/§12 견고성에 "적대적 입력" 항목으로 명세할 것.</div>
+  </div>
+
+  <div class="finding l">
+    <h4>L-1. 대시보드 저장형 XSS 표면 (오염된 메타데이터의 DOM 전파)</h4>
+    <div class="kv"><b>위치</b> §6.3 app.js — view (카드/상세 렌더)</div>
+    <div class="kv"><b>STRIDE</b> 정보노출(I) · 변조(T)</div>
+    <div class="kv"><b>심각도</b> <span class="sev low">낮음</span>(로컬·단일 사용자라 영향 제한, 단 토큰·로컬 API 접근 시 상승)</div>
+    <div class="kv"><b>시나리오</b> 악성 리포의 <code>package.json</code> name/description, git 브랜치명에 <code>&lt;img onerror&gt;</code> 등 페이로드가 들어가면, 스캔→스냅샷→<code>/api/projects</code>→DOM 삽입 경로로 저장형 XSS가 가능하다. 실행 시 그 스크립트가 동일 출처에서 <code>/api/open</code>(M-1 통과)·<code>/api/projects</code>를 호출하면 경로 유출/액션 트리거로 상승한다.</div>
+    <div class="kv"><b>권고</b> view 렌더는 <code>textContent</code>/명시적 이스케이프만 사용하고 <code>innerHTML</code> 직접 결합 금지. CSP 메타(인라인/외부 스크립트 제한)를 index.html에 추가 권고. §6.3 계약에 "모든 동적 텍스트는 이스케이프"를 명시.</div>
+  </div>
+
+  <h3>3.6 DoS / 자원 (전체 드라이브 스캔 · 심링크 루프)</h3>
+  <div class="finding m">
+    <h4>M-3. 심링크 루프 / 과도한 깊이 → 스캔 무한 순회·자원 고갈</h4>
+    <div class="kv"><b>위치</b> §6 walker, R-03(M4), §8.2 depthLimit(M4)</div>
+    <div class="kv"><b>STRIDE</b> 서비스거부(D)</div>
+    <div class="kv"><b>심각도</b> <span class="sev med">중간</span></div>
+    <div class="kv"><b>시나리오</b> FeatureSpec F-1은 순환 심링크/과도 깊이를 깊이 한도에서 중단(R-03)한다고 하나, 설계서는 <b>depthLimit와 심링크 처리를 모두 M4로 미룬다</b>(§8.2 "MVP에서도 안전 상한 권고"는 권고에 그침). MVP에서 전체 드라이브는 아니어도 사용자가 큰 루트나 심링크 루프(<code>a→b→a</code>)를 지정하면 무한 순회/30초 SLA 초과가 발생한다. R-05(전체 드라이브)는 M4지만 MVP 루트 지정만으로도 위험이 성립한다.</div>
+    <div class="kv"><b>권고</b> MVP에서 <b>depthLimit 안전 상한을 강제(기본값)</b>하고, walker가 방문한 실경로(realpath/inode) 집합을 추적해 재방문 시 가지치기. 심링크는 기본 미추적 또는 1회 해소 후 중복 차단. R-03을 "M4 권고"가 아닌 "MVP 필수 안전장치"로 격상해 §6.1/§8.2에 명세.</div>
+  </div>
+
+  <div class="finding m">
+    <h4>M-4. spawn 타임아웃 / 동시 실행 상한 부재</h4>
+    <div class="kv"><b>위치</b> §5 safeExec, §6.2 actionHandlers(/api/open), collectors/git</div>
+    <div class="kv"><b>STRIDE</b> 서비스거부(D)</div>
+    <div class="kv"><b>심각도</b> <span class="sev med">중간</span></div>
+    <div class="kv"><b>시나리오</b> git collector가 행(hang)하거나(손상 리포·거대 리포), '열기' 연타가 서버 측에서 다수 프로세스를 spawn하면 자원이 고갈된다. RA2가 "타임아웃"을 언급하나 safeExec 계약에 타임아웃·kill·동시 실행 상한이 명세되지 않았다(클라 디바운스는 서버 보호가 아님).</div>
+    <div class="kv"><b>권고</b> safeExec에 기본 타임아웃 + 초과 시 강제 종료(kill), 출력 버퍼 상한을 계약으로 명세. /api/open은 서버 측 레이트리밋/in-flight 상한(id별)으로 중복 spawn 차단.</div>
+  </div>
+
+  <div class="finding l">
+    <h4>L-2. 설정 파일(scanRoots/excludes) 입력 검증 약함</h4>
+    <div class="kv"><b>위치</b> §8.2 spip.config.json, common/config</div>
+    <div class="kv"><b>STRIDE</b> 변조(T)</div>
+    <div class="kv"><b>심각도</b> <span class="sev low">낮음</span>(사용자 자신이 작성하는 파일이라 신뢰도 높음)</div>
+    <div class="kv"><b>시나리오</b> config는 "잘못된 값은 경고 후 기본값 폴백"이라 견고성은 있으나, scanRoots 항목의 경로 타입/존재/정규화 검증과 excludes 패턴의 안전성(거대/악성 glob) 명세가 약하다. 화이트리스트의 원천이 스캔 루트이므로 루트 정규화는 H-1과 연결된다.</div>
+    <div class="kv"><b>권고</b> config 로드 시 scanRoots를 절대경로로 정규화(realpath)·타입/존재 검증, excludes 패턴 길이/개수 상한. H-1 정규화 규칙과 일관 적용.</div>
+  </div>
+
+  <div class="finding l">
+    <h4>L-3. 에러 응답의 내부 정보 노출 정책 미명세</h4>
+    <div class="kv"><b>위치</b> §9 오류 응답 계약</div>
+    <div class="kv"><b>STRIDE</b> 정보노출(I)</div>
+    <div class="kv"><b>심각도</b> <span class="sev low">낮음</span></div>
+    <div class="kv"><b>시나리오</b> 표준 에러 코드(PATH_NOT_ALLOWED 등)는 잘 정의됐으나, <code>message</code> 필드에 원시 예외/스택/내부 절대경로가 그대로 실릴 수 있다(특히 NO_SNAPSHOT/PATH_GONE 경로 에코). 로컬 도구라 위험은 낮으나 XSS(L-1)와 결합 시 정보 수집 표면이 된다.</div>
+    <div class="kv"><b>권고</b> message는 사람이 읽는 고정 안내문만, 원시 예외/스택은 콘솔 로그로만(응답 비노출). 경로 에코 최소화. §9에 "에러 응답에 스택/내부 경로 비노출" 정책 명시.</div>
+  </div>
+</section>
+
+<!-- ===================== 시정 항목 ===================== -->
+<section id="actions">
+  <h2>4. 시정 항목 (설계 반영)</h2>
+  <h3>4.1 게이트 차단 — 설계 반영 필수 (높음)</h3>
+  <table>
+    <tr><th style="width:60px;">ID</th><th>시정 항목 (설계 명세에 추가)</th><th style="width:170px;">반영 위치</th></tr>
+    <tr><td class="fid">H-1</td><td><code>realpath</code> 기반 화이트리스트 구성·대조(스캔 등록 시점 + pathGuard 검증 시점), 심링크 미추적/재확인, 대소문자·유니코드·UNC·드라이브상대·확장경로 정규화 규칙 명세</td><td>§5 pathGuard 계약 · §11.1 · walker</td></tr>
+    <tr><td class="fid">H-2</td><td>실행 파일 절대경로 1회 해석·고정 후 spawn, git의 <code>cwd</code>로 인한 위장 바이너리 선택 차단, Windows <code>.bat/.cmd</code>/PATHEXT 위험 차단을 safeExec 계약에 명세</td><td>§5 safeExec 계약 · §11.2 · ADR-002</td></tr>
+    <tr><td class="fid">H-3</td><td>부분신뢰 입력에 대한 적대적 방어 계층: 파일 크기 상한·JSON 깊이/바이트 가드·선형시간 정규식(ReDoS 금지)·문자열 필드 길이절단/제어문자 제거를 collectors 공통 계약·견고성 절에 명세</td><td>§6.1 collectors 계약 · §12 견고성</td></tr>
+  </table>
+
+  <h3>4.2 구현 착수 전 보강 권고 (중간)</h3>
+  <table>
+    <tr><th style="width:60px;">ID</th><th>시정 항목</th><th style="width:170px;">반영 위치</th></tr>
+    <tr><td class="fid">M-1</td><td>Host allowlist 정확 비교 + Origin 부재/불일치 거부(폐쇄 기본값) + 기동 시 세션 토큰 주입·POST 동봉 검증을 §11.3에 명세</td><td>§9 · §11.3</td></tr>
+    <tr><td class="fid">M-2</td><td>캐시/설정/임시 파일을 소유자 전용 권한(0600/0700·ACL)으로 생성, 임시 파일 정리</td><td>§11.4 · serializer/paths 계약</td></tr>
+    <tr><td class="fid">M-3</td><td>MVP에서 depthLimit 기본 상한 강제 + 방문 실경로 추적으로 심링크 루프 가지치기(R-03을 MVP 안전장치로 격상)</td><td>§6.1 walker · §8.2</td></tr>
+    <tr><td class="fid">M-4</td><td>safeExec 기본 타임아웃·kill·출력버퍼 상한, /api/open 서버측 in-flight 상한/레이트리밋</td><td>§5 safeExec · §6.2 actionHandlers</td></tr>
+  </table>
+
+  <h3>4.3 구현 시 처리 권고 (낮음)</h3>
+  <table>
+    <tr><th style="width:60px;">ID</th><th>시정 항목</th><th style="width:170px;">반영 위치</th></tr>
+    <tr><td class="fid">L-1</td><td>view 렌더 <code>textContent</code>/이스케이프 강제·<code>innerHTML</code> 결합 금지, index.html에 CSP 메타 추가</td><td>§6.3 app.js view</td></tr>
+    <tr><td class="fid">L-2</td><td>config scanRoots realpath 정규화·존재/타입 검증, excludes 패턴 길이/개수 상한(H-1과 일관)</td><td>§8.2 · common/config</td></tr>
+    <tr><td class="fid">L-3</td><td>에러 응답 message 고정 안내문화, 스택/내부경로 응답 비노출(콘솔 로그 한정)</td><td>§9 오류 응답 계약</td></tr>
+  </table>
+</section>
+
+<!-- ===================== 확인 필요 ===================== -->
+<section id="confirm">
+  <h2>5. 확인 필요 (위험 수용 결정 후보)</h2>
+  <div class="warn-box">
+    <p><b>RC-1 (멀티유저 OS / T-3c·M-1·M-2):</b> 제품 가정은 "로컬 단일 사용자 PC"다. 동일 머신에 신뢰할 수 없는 타 로컬 사용자가 존재하는 환경(공용 PC·터미널 서버)을 <b>지원 범위에 포함할지</b> 결정 필요. 포함하지 않는다면 T-3c와 멀티유저 노출은 "가정상 위험 수용"으로 문서화하고, M-1 세션 토큰·M-2 파일 권한은 저비용 심층방어로 여전히 권고한다. 포함한다면 인증 부재(§9.1 Won't) 재검토가 필요하다.</p>
+    <p><b>RC-2 (스캔 대상 신뢰 수준):</b> 사용자가 스캔하는 폴더에 신뢰할 수 없는 외부 클론 리포가 섞일 수 있음을 제품이 명시적으로 인정하는가? 인정한다면 H-2/H-3/L-1은 단순 권고가 아니라 필수 방어로 확정된다(본 보고는 인정 전제로 등급화함).</p>
+    <p>이 두 결정은 제품 위험 수용 범위에 해당하므로 PM/tech-lead 판단이 필요하다. 중대성은 "조건부"이며 게이트 차단 항목(H-1~3)은 결정과 무관하게 반영 필수다.</p>
+  </div>
+</section>
+
+<footer>Project-SPIP · 아키텍처 보안 검증 보고서 (위협 모델링) 1회차 · 판정: 조건부 PASS · 치명 0 / 높음 3 / 중간 4 / 낮음 3 / PASS 6 · 검증 대상: 설계 청사진(구현 코드 없음, 외부 의존성 0) · 자족형 HTML</footer>
+</body>
+</html>

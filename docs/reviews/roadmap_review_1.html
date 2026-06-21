@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project-SPIP — 개발 로드맵 검증 보고서 (1회차)</title>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#1e293b; --text:#e2e8f0; --sub:#94a3b8;
+    --accent:#34d399; --ref:#38bdf8; --line:#334155; --warn:#fbbf24; --danger:#f87171;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:"Segoe UI","Malgun Gothic",system-ui,sans-serif;line-height:1.7;}
+  header{padding:46px 32px 34px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#13203b,#0f172a);}
+  header h1{margin:0 0 8px;font-size:27px;}
+  header .tag{display:inline-block;background:rgba(52,211,153,.12);color:var(--accent);
+    border:1px solid rgba(52,211,153,.4);border-radius:999px;padding:3px 12px;font-size:13px;margin-right:8px;}
+  header p{margin:14px 0 0;color:var(--sub);max-width:960px;}
+  .meta{margin-top:16px;font-size:13px;color:var(--sub);}
+  main{max-width:1180px;margin:0 auto;padding:30px;}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:22px 26px;margin:20px 0;}
+  h2{margin:0 0 14px;font-size:20px;color:var(--accent);border-left:4px solid var(--accent);padding-left:12px;}
+  h3{font-size:15px;color:var(--ref);margin:18px 0 8px;}
+  p{margin:8px 0;}
+  ul,ol{margin:8px 0;padding-left:22px;} li{margin:5px 0;}
+  code{background:#0b1220;color:var(--ref);padding:1px 6px;border-radius:5px;font-size:12.5px;}
+  table{width:100%;border-collapse:collapse;margin:12px 0;font-size:13px;}
+  th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top;}
+  th{background:#142035;color:var(--accent);}
+  tr:nth-child(even) td{background:rgba(255,255,255,.02);}
+  .verdict{font-size:30px;font-weight:800;letter-spacing:1px;}
+  .pass{color:var(--accent);} .fail{color:var(--danger);}
+  .ok{color:var(--accent);font-weight:700;} .no{color:var(--danger);font-weight:700;} .part{color:var(--warn);font-weight:700;}
+  .p1{background:rgba(248,113,113,.16);color:#fca5a5;border:1px solid rgba(248,113,113,.5);}
+  .p2{background:rgba(251,191,36,.16);color:#fcd34d;border:1px solid rgba(251,191,36,.5);}
+  .p3{background:rgba(148,163,184,.16);color:#cbd5e1;border:1px solid rgba(148,163,184,.4);}
+  .pill{font-size:11px;font-weight:700;padding:2px 9px;border-radius:6px;white-space:nowrap;display:inline-block;}
+  .note{background:rgba(56,189,248,.08);border:1px solid rgba(56,189,248,.3);border-radius:8px;padding:12px 16px;font-size:13.5px;color:#bae6fd;}
+  .ok-box{background:rgba(52,211,153,.08);border:1px solid rgba(52,211,153,.35);border-radius:8px;padding:12px 16px;font-size:13.5px;color:#bbf7d0;}
+  .warn-box{background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.3);border-radius:8px;padding:12px 16px;font-size:13.5px;color:#fde68a;}
+  .mono{font-family:Consolas,monospace;font-size:12px;}
+  figure{margin:16px 0;background:#0b1220;border:1px solid var(--line);border-radius:10px;padding:16px;}
+  figcaption{color:var(--sub);font-size:12px;margin-top:8px;text-align:center;}
+  footer{text-align:center;color:var(--sub);font-size:12px;padding:28px;border-top:1px solid var(--line);}
+</style>
+</head>
+<body>
+<header>
+  <span class="tag">검증 보고서</span><span class="tag">개발 로드맵</span><span class="tag">1회차</span><span class="tag">독립 리뷰어</span>
+  <h1>Project-SPIP — 개발 로드맵 검증 보고서 (1회차)</h1>
+  <p>검증 대상 <code>docs/roadmap.html</code>(v1.0, S0~S7)을 설계서(architecture rev.2 §5~§9·§11), PRD §12.1(MVP 16건), traceability, 보안 검증 2회차 보고서와 교차 대조하여 추적성·일관성·완결성·실행가능성을 독립 검증했다. 코드가 아닌 계획·문서 검증이다.</p>
+  <div class="meta">검증자: reviewer(독립) · 검증일: 2026-06-21 · 입력: roadmap.html / architecture.html(rev.2) / PRD.html(§12.1) / traceability.html / architecture_security_review_2.html · 저장: <code>docs/reviews/roadmap_review_1.html</code></div>
+</header>
+
+<main>
+
+<section>
+  <h2>1. 판정 및 요약</h2>
+  <p class="verdict pass">PASS</p>
+  <div class="ok-box"><b>요약:</b> 로드맵은 설계 트리 22개 모듈을 빠짐없이 8단계에 배치하고, MVP 16건 전부를 구현 단계에 매핑하며, 단방향 의존(진입점→도메인→공용) 순서를 위반 없이 지킨다. S4 계약 게이트→S5/S6 병렬 분기, 보안 게이트(H/M/L/V) 배치, 측정 가능한 출시 게이트(95%/30s/200ms) 모두 타당하다. <b>그대로 S0 세부 계획에 착수 가능</b>하다. 다만 실행 정밀도를 높일 <b>경미한 보완 항목(P2 2건·P3 4건)</b>이 있으며, 이는 게이트 차단 사유가 아니다(권고).</div>
+  <table>
+    <tr><th style="width:46px;">#</th><th>검증 항목</th><th style="width:70px;">결과</th><th>핵심 근거</th></tr>
+    <tr><td>1</td><td>설계 정합성 (모듈/파일 ↔ §6 모듈표·§7 트리)</td><td class="ok">PASS</td><td>트리 22개 모듈 전부 단계 배치 확인. common/paths→S0, walker/excludeRules/detector→S1, collectors 4종+safeExec실측→S2, scanner/serializer/scan.js→S3, router/snapshotStore/apiHandlers/pathGuard/actionHandlers/staticHandler/server.js→S5, public/*→S6. 빠진 모듈 0.</td></tr>
+    <tr><td>2</td><td>단계 순서·의존성 / S4 게이트 분기</td><td class="ok">PASS</td><td>S0→S1→S2→S3 직렬, S4(코드 없음, PM 중재 게이트)→S5·S6 병렬→S7 통합. 후행이 선행을 거른 사례 없음. 프론트 목 데이터 선행→S7 실서버 통합 합리적.</td></tr>
+    <tr><td>3</td><td>요구 커버리지 (MVP 16건 / M4 비혼입)</td><td class="ok">PASS</td><td>R-01·02·04·06·07·08·10·11·12·13·14 + N-02·03·04·05·06 전부 구현 단계 배치(§8 추적표 일치). M4 6건(R-03·05·09·15·16·N-07)은 모두 "자리만/비대상"으로 명시, MVP 구현 대상에 혼입 없음. R-09(size.js)는 S2에서 status='skipped' 계약만.</td></tr>
+    <tr><td>4</td><td>완료 기준(DoD) 측정가능성 / 출시 게이트</td><td class="part">PASS(보완)</td><td>각 단계 DoD가 검증 가능한 동작·계측으로 기술됨. S7 출시 게이트(탐지율≥95%·스캔&lt;30s 3회 중앙값·필터≤200ms performance.now)는 PRD §10 측정법과 정합. 일부 정량 기준의 추적성 보강 권고(R2-1).</td></tr>
+    <tr><td>5</td><td>보안 게이트 배치 / 블로커 규칙</td><td class="ok">PASS</td><td>H-1·H-2·H-3·M-1~4·L-1~3·V-1·V-2 전부 구현·검증 단계 배치(§5 표). "치명/높음 미해결 시 검증 2회 한도 무관 PM 즉시 블로커" 명시. 보안 2회차가 추적 항목으로 이월한 V-1·V-2를 로드맵은 출시 차단 게이트로 격상(더 엄격, 정합).</td></tr>
+    <tr><td>6</td><td>테스트 전략 실행가능성 (의존성 0)</td><td class="part">PASS(보완)</td><td>node:test+assert 채택은 ADR-001·N-04 정합. Node 16 실험 플래그 리스크를 S0 실측+순수 assert 폴백으로 합리적 대비. 보안 픽스처 11종이 V-1·V-2를 충실히 커버. 폴백 트리거 기준 명문화 권고(R3-2).</td></tr>
+    <tr><td>7</td><td>실행가능성 (S0 착수 가능 여부)</td><td class="ok">PASS</td><td>단계별 파일·구현 내용·요구/통제·DoD·검증자가 모두 적시되어 개발팀이 즉시 S0 세부 계획에 착수 가능.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>2. 교차 대조 근거 (정합 확인)</h2>
+  <figure>
+    <svg viewBox="0 0 1040 220" width="100%" role="img" aria-label="로드맵-설계-PRD 정합 흐름">
+      <defs><marker id="a" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 Z" fill="#34d399"/></marker></defs>
+      <rect x="30" y="40" width="200" height="60" rx="9" fill="#0b1220" stroke="#38bdf8" stroke-width="1.5"/>
+      <text x="130" y="66" fill="#7dd3fc" font-size="12" text-anchor="middle" font-weight="bold">PRD §12.1</text>
+      <text x="130" y="84" fill="#94a3b8" font-size="10" text-anchor="middle">MVP 16건 단일집합</text>
+      <rect x="300" y="40" width="220" height="60" rx="9" fill="#0b1220" stroke="#38bdf8" stroke-width="1.5"/>
+      <text x="410" y="66" fill="#7dd3fc" font-size="12" text-anchor="middle" font-weight="bold">architecture rev.2</text>
+      <text x="410" y="84" fill="#94a3b8" font-size="10" text-anchor="middle">§6 모듈표·§7 트리·§11 보안</text>
+      <rect x="590" y="40" width="220" height="60" rx="9" fill="#0b1220" stroke="#34d399" stroke-width="1.8"/>
+      <text x="700" y="66" fill="#34d399" font-size="12" text-anchor="middle" font-weight="bold">roadmap S0~S7</text>
+      <text x="700" y="84" fill="#94a3b8" font-size="10" text-anchor="middle">8단계 분해 · 검증 대상</text>
+      <rect x="870" y="40" width="150" height="60" rx="9" fill="#170d0d" stroke="#f87171" stroke-width="1.6"/>
+      <text x="945" y="66" fill="#fca5a5" font-size="12" text-anchor="middle" font-weight="bold">보안검증 2회</text>
+      <text x="945" y="84" fill="#94a3b8" font-size="10" text-anchor="middle">V-1·V-2 이월</text>
+      <line x1="230" y1="70" x2="298" y2="70" stroke="#34d399" stroke-width="1.5" marker-end="url(#a)"/>
+      <line x1="520" y1="70" x2="588" y2="70" stroke="#34d399" stroke-width="1.5" marker-end="url(#a)"/>
+      <line x1="868" y1="70" x2="812" y2="70" stroke="#f87171" stroke-width="1.5" marker-end="url(#a)"/>
+      <text x="130" y="140" fill="#6ee7b7" font-size="10.5" text-anchor="middle">16/16 단계 배치 ✓</text>
+      <text x="410" y="140" fill="#6ee7b7" font-size="10.5" text-anchor="middle">22/22 모듈 배치 ✓</text>
+      <text x="700" y="140" fill="#6ee7b7" font-size="10.5" text-anchor="middle">의존순서 위반 0 ✓</text>
+      <text x="945" y="140" fill="#fca5a5" font-size="10.5" text-anchor="middle">출시게이트 격상 ✓</text>
+    </svg>
+    <figcaption>그림 1. 로드맵이 상류 산출물(PRD·설계·보안검증)을 모두 무손실로 추적·반영함을 확인.</figcaption>
+  </figure>
+  <h3>2.1 설계 트리 모듈 ↔ 단계 배치 (전수 확인)</h3>
+  <table>
+    <tr><th style="width:90px;">단계</th><th>설계 §7 트리 모듈</th><th style="width:60px;">상태</th></tr>
+    <tr><td>S0</td><td>common/paths·config·logger·safeExec(골격)·test 하니스</td><td class="ok">✓</td></tr>
+    <tr><td>S1</td><td>scan/walker·excludeRules·detector</td><td class="ok">✓</td></tr>
+    <tr><td>S2</td><td>collectors/index·language·freshness·git·size(자리)·safeExec(실측)</td><td class="ok">✓</td></tr>
+    <tr><td>S3</td><td>scan/scanner·serializer·scan.js</td><td class="ok">✓</td></tr>
+    <tr><td>S5</td><td>server.js·router·snapshotStore·apiHandlers·pathGuard·actionHandlers·staticHandler</td><td class="ok">✓</td></tr>
+    <tr><td>S6</td><td>public/index.html·styles.css·app.js(store/view/filter/actions)</td><td class="ok">✓</td></tr>
+  </table>
+  <div class="note">검증 요청에 명시된 잠재 누락 후보 <b>common/paths·snapshotStore·staticHandler·apiHandlers</b> 모두 정상 배치됨(각각 S0·S5·S5·S5). 누락 모듈 0.</div>
+</section>
+
+<section>
+  <h2>3. 반영 항목 (권고 · 게이트 비차단)</h2>
+  <p>아래는 PASS를 뒤집지 않는 <b>정밀도·완결성 보강</b> 권고다. P1(즉시 필수) 항목은 없다. 생산자(테크리드)가 S0 착수와 병행해 반영하면 된다.</p>
+  <table>
+    <tr><th style="width:60px;">우선</th><th style="width:150px;">무엇 / 위치</th><th>문제</th><th>권고</th></tr>
+    <tr>
+      <td><span class="pill p2">P2-1</span></td>
+      <td>R-13 단계 귀속 모호 / §1 요약표 S4행·§8 추적표</td>
+      <td>R-13(graceful)이 §1 요약표에서 S2·S4·S5 세 단계에 모두 표기되나, S4는 "코드 없음" 계약 게이트다. R-13이 S4에서 무엇을 산출하는지(계약상 status/오류코드 명세인지) 불명확해 추적 혼선 소지.</td>
+      <td>S4의 R-13은 "오류·status 계약 명세(코드 아님)"임을 명시하고, 실제 구현 귀속은 S2(수집기 na)·S5(snapshotStore graceful)로 한정해 §8 추적표와 어휘를 통일하라.</td>
+    </tr>
+    <tr>
+      <td><span class="pill p2">P2-2</span></td>
+      <td>safeExec 골격↔실측 책임 분할의 의존성 명시 / §1 요약 S0·S2 및 §4 S2</td>
+      <td>safeExec가 S0(골격)와 S2(실측)로 쪼개져 H-2/M-4가 두 단계에 걸친다. S2 git collector 작성 시 resolveBin 실측이 선행돼야 하는데, S2 내부 작업 순서(safeExec 실측 → git.js)가 단계 내 의존으로만 암시될 뿐 명문 순서가 없다.</td>
+      <td>S2 DoD에 "safeExec 실측 완료가 git.js 통합의 선행"임을 작업 순서로 명시하라(현재 ④ resolveBin 실측이 ② git 시뮬레이션 뒤에 나열돼 순서 오해 가능).</td>
+    </tr>
+    <tr>
+      <td><span class="pill p3">P3-1</span></td>
+      <td>S7 탐지율 벤치의 모집단 정의 / §4 S7·§7.3</td>
+      <td>탐지율 ≥95%는 "실제 N + 미끼 M" 픽스처로 측정한다고만 적혀 N·M 규모와 미끼 구성 기준이 미정. DoD가 측정 가능하려면 분모가 고정돼야 한다.</td>
+      <td>S7 또는 S0 픽스처 정의 시 N·M 최소 규모와 미끼 유형(빈 폴더·node_modules 잔재·중첩 프로젝트 등)을 픽스처 명세로 확정하라(PRD §3 기준과 연결).</td>
+    </tr>
+    <tr>
+      <td><span class="pill p3">P3-2</span></td>
+      <td>Node 16 node:test 폴백 트리거 기준 / §7.1</td>
+      <td>"S0에서 실측, 미흡 시 순수 assert 폴백"은 방향은 옳으나 "미흡"의 판정 기준(어떤 기능 부재·어떤 플래그 동작 시 폴백)이 정성적이다.</td>
+      <td>S0 DoD에 폴백 결정 기준을 명문화하라(예: <code>--test</code> 러너가 Node 16.x에서 플래그 없이 스위트 실행·종료코드 반영에 실패하면 폴백). 결정 시 ADR로 근거 남김.</td>
+    </tr>
+    <tr>
+      <td><span class="pill p3">P3-3</span></td>
+      <td>S5/S6 병렬 시 계약 변경 처리 절차 부재 / §3·§4 S4</td>
+      <td>S4 게이트 통과 후 S5·S6 병렬 진행 중 계약(shape/오류코드)을 부득이 변경해야 할 때의 재합의 절차가 없다. 병렬 단계에서 경계면 드리프트가 재발할 위험.</td>
+      <td>S4 산출물(api-contract.html)에 "버전/변경 시 PM 재중재 + 양측 재합의" 경량 변경관리 한 줄을 추가하라.</td>
+    </tr>
+    <tr>
+      <td><span class="pill p3">P3-4</span></td>
+      <td>N-01 "품질기준" 단계 표기 일관성 / §1 요약표 S7행</td>
+      <td>§1 요약표 S7 구현 요구 ID에 "N-01(품질)"로 표기돼 마치 S7에서 N-01을 신규 구현하는 것처럼 읽힐 수 있으나, 실제 N-01은 S1·S2·S3의 구조적 선택(스캔/서빙 분리·제외 가지치기)의 누적 결과를 S7에서 측정·게이트하는 것이다.</td>
+      <td>S7 요구 표기를 "N-01(측정·게이트)"로 명확화하고, N-01의 구조적 충족 근거가 S1~S3에 분산됨을 §8 추적표 비고로 남기라(현재 §8은 N-01을 S7 단독 배치).</td>
+    </tr>
+  </table>
+</section>
+
+<section>
+  <h2>4. 확인 필요 (사용자/PM 판단)</h2>
+  <ul>
+    <li><b>중대 쟁점 없음.</b> 위 반영 항목은 모두 게이트 비차단 권고로, PM 상신이 필요한 블로커는 발견되지 않았다.</li>
+    <li>참고: 보안 검증 2회차는 V-1·V-2를 "설계 PASS를 막지 않는 추적 항목"으로 분류했으나, 로드맵은 이를 "MVP 출시 차단 게이트"로 강화했다. 이는 더 보수적인 선택으로 모순이 아니며, PM이 출시 리스크 관리 차원에서 의도된 강화임을 한 번 확인해 두면 좋다.</li>
+  </ul>
+</section>
+
+<footer>Project-SPIP · 개발 로드맵 검증 보고서 1회차 · 판정: PASS(권고 보완 P2 2 / P3 4, P1 0) · 모듈 22/22·MVP 16/16 배치·의존순서 위반 0 · 자족형 HTML · 산출물 미수정(판정·반영 항목만)</footer>
+</body>
+</html>

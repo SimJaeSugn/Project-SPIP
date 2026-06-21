@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project-SPIP — M4 구현 최종 보안 게이트 보고서 (1회차)</title>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#1e293b; --text:#e2e8f0; --sub:#94a3b8;
+    --accent:#34d399; --ref:#38bdf8; --line:#334155; --warn:#fbbf24; --danger:#f87171;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:"Segoe UI","Malgun Gothic",system-ui,sans-serif;line-height:1.7;}
+  header{padding:48px 32px 36px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#13203b,#0f172a);}
+  header h1{margin:0 0 8px;font-size:27px;}
+  header .tag{display:inline-block;background:rgba(52,211,153,.12);color:var(--accent);
+    border:1px solid rgba(52,211,153,.4);border-radius:999px;padding:3px 12px;font-size:13px;margin-right:8px;}
+  header p{margin:14px 0 0;color:var(--sub);max-width:1000px;}
+  .meta{margin-top:16px;font-size:13px;color:var(--sub);}
+  main{max-width:1160px;margin:0 auto;padding:32px;}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:24px 28px;margin:22px 0;}
+  h2{margin:0 0 16px;font-size:21px;color:var(--accent);border-left:4px solid var(--accent);padding-left:12px;}
+  h3{font-size:16px;color:var(--ref);margin:22px 0 10px;}
+  p{margin:8px 0;}
+  ul,ol{margin:8px 0;padding-left:22px;}li{margin:5px 0;}
+  code{background:#0b1220;color:var(--ref);padding:1px 6px;border-radius:5px;font-size:13px;font-family:Consolas,monospace;}
+  pre{background:#0b1220;border:1px solid var(--line);border-radius:8px;padding:14px 16px;
+    overflow-x:auto;font-size:12.5px;color:#cbd5e1;font-family:Consolas,monospace;line-height:1.5;}
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13.5px;}
+  th,td{border:1px solid var(--line);padding:9px 11px;text-align:left;vertical-align:top;}
+  th{background:#142035;color:var(--accent);}
+  tr:nth-child(even) td{background:rgba(255,255,255,.02);}
+  .fid{font-family:Consolas,monospace;font-weight:700;white-space:nowrap;}
+  .sev{font-size:11px;font-weight:700;padding:2px 9px;border-radius:6px;white-space:nowrap;display:inline-block;}
+  .crit{background:rgba(248,113,113,.18);color:#fecaca;border:1px solid rgba(248,113,113,.6);}
+  .high{background:rgba(251,146,60,.16);color:#fdba74;border:1px solid rgba(251,146,60,.55);}
+  .med{background:rgba(251,191,36,.14);color:#fcd34d;border:1px solid rgba(251,191,36,.5);}
+  .low{background:rgba(56,189,248,.14);color:#7dd3fc;border:1px solid rgba(56,189,248,.5);}
+  .pass{background:rgba(52,211,153,.16);color:#6ee7b7;border:1px solid rgba(52,211,153,.5);}
+  .verdict{display:inline-block;border-radius:999px;padding:6px 22px;font-size:18px;font-weight:800;}
+  .v-cond{background:rgba(251,191,36,.16);color:#fcd34d;border:1px solid rgba(251,191,36,.6);}
+  .v-pass{background:rgba(52,211,153,.16);color:#6ee7b7;border:1px solid rgba(52,211,153,.6);}
+  .v-fail{background:rgba(248,113,113,.18);color:#fecaca;border:1px solid rgba(248,113,113,.6);}
+  .note{background:rgba(56,189,248,.08);border:1px solid rgba(56,189,248,.3);border-radius:8px;
+    padding:12px 16px;font-size:13.5px;color:#bae6fd;margin:10px 0;}
+  .warn-box{background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.3);border-radius:8px;
+    padding:12px 16px;font-size:13.5px;color:#fde68a;margin:10px 0;}
+  .danger-box{background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.35);border-radius:8px;
+    padding:12px 16px;font-size:13.5px;color:#fecaca;margin:10px 0;}
+  .ok-box{background:rgba(52,211,153,.08);border:1px solid rgba(52,211,153,.3);border-radius:8px;
+    padding:12px 16px;font-size:13.5px;color:#bbf7d0;margin:10px 0;}
+  figure{margin:18px 0;background:#0b1220;border:1px solid var(--line);border-radius:10px;padding:18px;}
+  figcaption{color:var(--sub);font-size:12.5px;margin-top:10px;text-align:center;}
+  .legend{display:flex;gap:18px;flex-wrap:wrap;font-size:12.5px;color:var(--sub);margin-top:10px;justify-content:center;}
+  .legend span{display:inline-flex;align-items:center;gap:6px;}
+  .dot{width:11px;height:11px;border-radius:3px;display:inline-block;}
+  footer{text-align:center;color:var(--sub);font-size:12.5px;padding:30px;border-top:1px solid var(--line);}
+  .scorecard{display:flex;gap:14px;flex-wrap:wrap;margin:16px 0;}
+  .scard{flex:1;min-width:110px;background:#0b1220;border:1px solid var(--line);border-radius:10px;padding:14px;text-align:center;}
+  .scard .n{font-size:28px;font-weight:800;}
+  .scard .l{font-size:12px;color:var(--sub);margin-top:4px;}
+  .arrow{color:var(--accent);font-weight:700;}
+  .mono{font-family:Consolas,monospace;}
+</style>
+</head>
+<body>
+<header>
+  <span class="tag">M4 구현 보안 게이트</span><span class="tag">실측 (npm test + 공격 프로브)</span><span class="tag">1회차</span>
+  <h1>Project-SPIP — M4 구현 최종 보안 게이트 보고서</h1>
+  <p>M4 설계 보안검증은 <b>PASS</b>였고(<code>m4_design_security_review_2.html</code>), 본 검증은 <b>구현 코드</b>가 그 통제를 실제로 구현했는지 + 이월 항목 <b>C-1~C-5</b>·<b>M-1</b>·<b>V-1/V-2</b>·<b>L-1</b>을 <b>실측</b>한다. 추측을 배제하고 (1) 코드를 직접 읽어 통제 실재를 확인하고, (2) <code>npm test</code>(보안 테스트 포함) 201건을 실행하고, (3) 라이브 서버에 직접 공격 프로브(메서드/무토큰/위조 Origin·Host/오토큰/CT)를 던져 차단을 동작으로 입증했으며, (4) ScanController·excludeRules·size 수집기에 적대적 입력을 직접 주입해 락 해제·세그먼트 제외·예산 가드를 측정했다.</p>
+  <div class="meta">검증자: Security Reviewer · 일자: 2026-06-21 · 입력: lib/server/{router,security,scanController,actionHandlers,apiHandlers}.js · lib/scan/{walker,excludeRules,driveEnum,collectors/size}.js · lib/common/{config,pathGuard,safeExec}.js · public/app.js · server.js · test/** · 기준: m4_design_security_review_2.html(C-1~C-5)·m4-design.html §3.4/§5.3·api-contract.md · 방법: 코드 정독 → npm test(201/201 pass) → 라이브 HTTP 공격 프로브 → 컨트롤러/수집기 적대적 주입 → npm audit/시크릿 스캔 · docs/Development/ 부재 → 표준 체크리스트 적용 · 코드 미수정</div>
+</header>
+
+<main>
+
+<!-- ===================== 판정 ===================== -->
+<section id="verdict">
+  <h2>0. 종합 판정</h2>
+  <p style="font-size:16px;">판정: <span class="verdict v-cond">조건부 PASS</span> <span style="color:var(--sub);font-size:13px;">(치명 0 · 높음 0 · 중간 1 · 낮음 1 · 통제 실증 PASS 다수)</span></p>
+  <p><b>치명·높음 잔여 0 → 보안 게이트 통과(차단 사유 없음).</b> 이월 차단 사유였던 C-1·C-2·C-3·C-5·M-1·V-1·V-2·L-1은 코드 실재 + 동작 실측으로 <b>모두 해소 확인</b>했다. 다만 <b>C-4(watchdog 락 해제)</b>에서 설계 의도(M4-M-3: "watchdog 초과 시 락 강제 해제")와 구현 사이에 <b>구조적 간극</b>을 발견했다 — watchdog는 <code>phase='error'</code>로만 전환하고 <b>in-flight 락(<code>running</code>)은 해제하지 않으며</b>, 락 해제는 전적으로 <code>scanner.scan</code> 프로미스가 settle될 때 도는 <code>finally</code>에 의존한다(라이브 프로브로 watchdog 발화 후 ~2초간 <code>running=true</code> 잔존 측정). 이는 <b>가용성(영구 409 데드락) 잔여 위험</b>이나, 실제 무한정 비동기 행(hang) 경로가 좁고(동기 fs 행은 watchdog 타이머 자체도 못 돌게 함, 유일한 async 행인 safeExec은 자체 SIGKILL 타임아웃 보유) <b>적대적 입력으로 트리거되는 권한·기밀 위협이 아니므로 중간(M-1)</b>으로 등급한다. 게이트는 통과시키되, <code>_forceError</code>에서 <code>running=false</code>를 함께 해제하도록 시정 권고한다.</p>
+
+  <div class="scorecard">
+    <div class="scard"><div class="n" style="color:#fecaca">0</div><div class="l">치명</div></div>
+    <div class="scard"><div class="n" style="color:#fdba74">0</div><div class="l">높음</div></div>
+    <div class="scard"><div class="n" style="color:#fcd34d">1</div><div class="l">중간</div></div>
+    <div class="scard"><div class="n" style="color:#7dd3fc">1</div><div class="l">낮음</div></div>
+    <div class="scard"><div class="n" style="color:#6ee7b7">201/201</div><div class="l">npm test</div></div>
+  </div>
+
+  <div class="ok-box"><b>게이트 결과:</b> 치명·높음 잔여 <b>0</b> → <b>보안 게이트 통과</b>. 중간 1건(C-4 watchdog 락 미해제)·낮음 1건(드라이브 루트 basename 노출)은 차단 사유 아님(추적 시정). C-1~C-3·C-5·M-1·V-1/V-2·L-1·시크릿·의존성은 실측 PASS. <b>코드 미수정 — 시정은 담당 개발자.</b></div>
+</section>
+
+<!-- ===================== 통제 실재 + 동작 실측 매트릭스 ===================== -->
+<section id="matrix">
+  <h2>1. 통제 실재 + 동작 실측 매트릭스</h2>
+  <table>
+    <tr><th style="width:78px;">항목</th><th style="width:120px;">통제</th><th>코드 실재(위치)</th><th>동작 실측(근거)</th><th style="width:78px;">판정</th></tr>
+    <tr>
+      <td class="fid">C-1</td><td>라우터 게이트</td>
+      <td><code>router.js:66-85</code> rescan=POST한정+<code>checkStateChange</code>, scan-status=GET한정+<code>checkReadAccess</code>. 메서드 무관 404 폐기(POST/GET 한정 → 그 외 405).</td>
+      <td>라이브 프로브: rescan <code>GET/PUT→405</code>, 무토큰/위조Origin/위조Host/오토큰/잘못CT 모두 <code>→403 FORBIDDEN_ORIGIN</code>. 정상 자격증명 시 핸들러 도달(409 NO_SCAN_ROOTS). scan-status POST<code>→405</code>. npm test m4-rescan 통과.</td>
+      <td><span class="sev pass">PASS</span></td>
+    </tr>
+    <tr>
+      <td class="fid">C-2</td><td>시스템 제외 우회 차단</td>
+      <td><code>excludeRules.isUnderSystemDir</code>: <code>foldForCompare</code>+세그먼트 단위 비교(L155-167). <code>walker.js:112-121</code> canonicalize 직후·push 전 가지치기. <code>buildSystemExcludeKeySet</code>가 canonicalize로 8.3/UNC/확장경로/심링크 흡수.</td>
+      <td>직접 주입: <code>C:\Windows\System32</code>·대소문자변형<code>c:\windows\system32</code>=true, <code>C:\WindowsApps\foo</code>=false(접두 오탐 차단), <code>C:\Program Files</code>·<code>C:\ProgramData</code>=true, 사용자경로=false. all-drives walker 미진입 테스트 통과.</td>
+      <td><span class="sev pass">PASS</span></td>
+    </tr>
+    <tr>
+      <td class="fid">C-3</td><td>currentPath 누설 0</td>
+      <td><code>scanController.shortenPath</code>(최대 2세그먼트)·<code>currentPathAbs</code> 메모리 전용(state에만, status()에서 제외). <code>_merge</code>가 abs를 currentPathAbs로만 보관.</td>
+      <td>직접 주입: abs <code>C:\Users\bob\Secret\deep\project</code> → status.currentPath=<code>"deep/project"</code>. 직렬화 status에 "Users"·"Secret"·"C:" 모두 <b>부재</b>. status 키에 currentPathAbs <b>없음</b>. 로그도 shortenPath만(L-3).</td>
+      <td><span class="sev pass">PASS</span></td>
+    </tr>
+    <tr>
+      <td class="fid">C-4</td><td>watchdog 락 해제</td>
+      <td><code>scanController.start</code> <code>try/finally</code>로 <code>running=false</code>(L150-154). <b>그러나</b> watchdog의 <code>_forceError</code>(L98-102)는 phase만 변경, 락 미해제. 락 해제는 scan promise settle 의존.</td>
+      <td>직접 주입(watchdog=80ms+scan 2000ms): watchdog 발화 후 <code>running=true</code>가 ~2초 잔존, phase=error. scan 완료 후에야 running=false. 예외 경로(scan throw)는 즉시 running=false(정상).</td>
+      <td><span class="sev med">중간</span></td>
+    </tr>
+    <tr>
+      <td class="fid">C-5</td><td>all-drives 자원/N-01</td>
+      <td>size: <code>budgetMs/maxDepth/maxEntries</code> 예산(<code>size.js:138-148, 51-54, 64</code>), 심링크 미추적. walker: <code>maxDirs/timeBudgetMs</code>(<code>walker.js:52-65</code>), depth clamp+all-drives 더 낮은 상한(24/12, <code>walker.js:151-156</code>), ABS 64 클램프.</td>
+      <td>직접 주입: maxEntries=1→data.status=<code>partial</code>, 비활성→<code>skipped/na</code>. depthLimit clamp·ABS 64·all-drives 24 테스트 통과. walker maxDirs 중단 테스트 통과.</td>
+      <td><span class="sev pass">PASS</span></td>
+    </tr>
+    <tr>
+      <td class="fid">M-1</td><td>경계 통제 전체</td>
+      <td><code>security.checkStateChange</code>(Host allowlist 정확비교+Origin 폐쇄기본+토큰 상수시간+CT) / <code>checkReadAccess</code>(1·2·3 공유, CT 면제). <code>safeEqual</code>=<code>timingSafeEqual</code>.</td>
+      <td>라이브 프로브: open 무토큰→403. scan-status 정상(CT없음)→200, 127.0.0.1/localhost 양쪽 통과, X-Forwarded-Host 스푸프 무효(실 Host만 사용). open M-1 테스트 통과.</td>
+      <td><span class="sev pass">PASS</span></td>
+    </tr>
+    <tr>
+      <td class="fid">V-1</td><td>TOCTOU</td>
+      <td>open이 <code>canonicalize(real)</code> 검증한 실경로를 spawn 인자로 전달(<code>actionHandlers.js:97,124</code> realpath~spawn 창 축소). isAllowed=폴드키 정확일치.</td>
+      <td>pathGuard 테스트: ../순회 차단·심링크 실경로 해소·접두부분일치 차단·NFD 정규화. PATH_GONE(소멸) 410 테스트 통과.</td>
+      <td><span class="sev pass">PASS</span></td>
+    </tr>
+    <tr>
+      <td class="fid">V-2</td><td>적대적 입력</td>
+      <td>walker: 심링크 lstat 미추적(<code>walker.js:104-105</code>)·visited 루프 차단·격리(N-05). size: 심링크 미추적(<code>size.js:66</code>)·예산. excludeRules: Set 정확일치(ReDoS 0). safeExec: .bat/.cmd 차단·shell:false·상대경로 거부.</td>
+      <td>심링크 루프 a→b→a 종료·깊이 상한·읽기실패 격리 테스트 통과. .bat 절대경로 거부·위장 git.bat 미실행·비문자열 인자 거부 테스트 통과. size node_modules 거대트리/심링크 H-3/M-3 정합.</td>
+      <td><span class="sev pass">PASS</span></td>
+    </tr>
+    <tr>
+      <td class="fid">L-1</td><td>프론트 렌더</td>
+      <td><code>app.js</code> 전역 <code>innerHTML</code>/<code>outerHTML</code>/<code>insertAdjacentHTML</code> <b>0건</b>. <code>el()</code> 헬퍼 textContent(L511). currentPath/note/toast 모두 textContent(L408,648,655,661,1616).</td>
+      <td>Grep 전수: 동적 innerHTML 결합 0. ScanProgress 문자열 필드 textContent 강제. CSP(동일출처+인라인 스크립트 금지) staticHandler 적용.</td>
+      <td><span class="sev pass">PASS</span></td>
+    </tr>
+    <tr>
+      <td class="fid">시크릿</td><td>토큰/엔트로피</td>
+      <td>세션토큰 <code>randomBytes(32)</code>=256bit. scanId <code>randomBytes(8)</code>=64bit(표시·상관용, 인가 아님). 토큰=meta 주입(URL/로그 미노출, server.js:90 명시 미출력).</td>
+      <td>시크릿 스캔: 하드코딩 키/패스워드/토큰 0. getSessionToken=meta[content] + 플레이스홀더 가드(app.js:499-504).</td>
+      <td><span class="sev pass">PASS</span></td>
+    </tr>
+    <tr>
+      <td class="fid">의존성</td><td>공급망</td>
+      <td>외부 의존성 0(package.json deps 없음, node_modules 부재, lockfile 패키지 0).</td>
+      <td><code>npm audit</code> → <b>found 0 vulnerabilities</b>. 비해당 확인.</td>
+      <td><span class="sev pass">PASS</span></td>
+    </tr>
+  </table>
+</section>
+
+<!-- ===================== 데이터 흐름 SVG ===================== -->
+<section id="flow">
+  <h2>2. 신뢰 경계 · 실측 차단 지점 (SVG)</h2>
+  <p>녹색=실측으로 차단/통과 확인된 게이트, 주황=중간 잔여(C-4). 라이브 HTTP 프로브와 컨트롤러 직접 주입으로 각 경계를 측정했다.</p>
+  <figure>
+    <svg viewBox="0 0 1100 390" width="100%" role="img" aria-label="M4 구현 신뢰 경계 실측">
+      <defs>
+        <marker id="ar" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 Z" fill="#94a3b8"/></marker>
+        <marker id="ag" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 Z" fill="#34d399"/></marker>
+        <marker id="aw" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 Z" fill="#fbbf24"/></marker>
+      </defs>
+      <rect x="18" y="44" width="200" height="300" rx="10" fill="#170d0d" stroke="#f87171" stroke-width="1.3" stroke-dasharray="6 5"/>
+      <text x="118" y="66" fill="#f87171" font-size="12" text-anchor="middle" font-weight="bold" font-family="Segoe UI">TB-A 브라우저(미신뢰)</text>
+      <text x="118" y="90" fill="#cbd5e1" font-size="9.5" text-anchor="middle" font-family="Segoe UI">CSRF·연타·무인증 폴러</text>
+      <text x="118" y="110" fill="#6ee7b7" font-size="9.5" text-anchor="middle" font-family="Segoe UI">프로브: 무토큰/위조→403 ✔</text>
+      <text x="118" y="128" fill="#6ee7b7" font-size="9.5" text-anchor="middle" font-family="Segoe UI">GET·PUT rescan→405 ✔</text>
+      <text x="118" y="146" fill="#6ee7b7" font-size="9.5" text-anchor="middle" font-family="Segoe UI">XFH 스푸프 무효 ✔</text>
+
+      <rect x="260" y="58" width="170" height="130" rx="10" fill="#0b1220" stroke="#34d399" stroke-width="1.5"/>
+      <text x="345" y="82" fill="#34d399" font-size="12" text-anchor="middle" font-weight="bold" font-family="Segoe UI">경계 게이트(M-1)</text>
+      <text x="345" y="104" fill="#cbd5e1" font-size="9" text-anchor="middle" font-family="Segoe UI">POST checkStateChange</text>
+      <text x="345" y="120" fill="#6ee7b7" font-size="9" text-anchor="middle" font-family="Segoe UI">Host정확+Origin+토큰+CT ✔</text>
+      <text x="345" y="140" fill="#cbd5e1" font-size="9" text-anchor="middle" font-family="Segoe UI">GET checkReadAccess</text>
+      <text x="345" y="156" fill="#6ee7b7" font-size="9" text-anchor="middle" font-family="Segoe UI">CT면제 read 게이트 ✔(C-1)</text>
+      <text x="345" y="176" fill="#6ee7b7" font-size="9" text-anchor="middle" font-family="Segoe UI">safeEqual 상수시간 ✔</text>
+
+      <rect x="260" y="208" width="340" height="136" rx="10" fill="#0d1726" stroke="#34d399" stroke-width="1.3" stroke-dasharray="6 5"/>
+      <text x="430" y="230" fill="#34d399" font-size="12" text-anchor="middle" font-weight="bold" font-family="Segoe UI">신뢰 영역(로컬 런타임)</text>
+      <text x="430" y="252" fill="#cbd5e1" font-size="9" text-anchor="middle" font-family="Segoe UI">ScanController 단일 락</text>
+      <text x="430" y="270" fill="#6ee7b7" font-size="9" text-anchor="middle" font-family="Segoe UI">currentPathAbs 메모리전용·status 미노출 ✔(C-3)</text>
+      <text x="430" y="288" fill="#6ee7b7" font-size="9" text-anchor="middle" font-family="Segoe UI">shortenPath basename만 ✔</text>
+      <text x="430" y="308" fill="#fbbf24" font-size="9" text-anchor="middle" font-family="Segoe UI">watchdog phase=error만, 락 미해제 (C-4 중간)</text>
+      <text x="430" y="326" fill="#6ee7b7" font-size="9" text-anchor="middle" font-family="Segoe UI">예외 경로는 finally 즉시 해제 ✔</text>
+
+      <rect x="650" y="44" width="430" height="300" rx="10" fill="#1a1206" stroke="#fbbf24" stroke-width="1.3" stroke-dasharray="6 5"/>
+      <text x="865" y="66" fill="#fbbf24" font-size="12" text-anchor="middle" font-weight="bold" font-family="Segoe UI">TB-B 스캔 대상(부분신뢰)</text>
+      <text x="865" y="92" fill="#cbd5e1" font-size="9.5" text-anchor="middle" font-family="Segoe UI">all-drives 디스크 전체(opt-in 게이트)</text>
+      <text x="865" y="116" fill="#6ee7b7" font-size="9.5" text-anchor="middle" font-family="Segoe UI">isUnderSystemDir 세그먼트+폴드 ✔(C-2)</text>
+      <text x="865" y="134" fill="#6ee7b7" font-size="9.5" text-anchor="middle" font-family="Segoe UI">Windows/Program Files/대소문자 차단 실측 ✔</text>
+      <text x="865" y="152" fill="#6ee7b7" font-size="9.5" text-anchor="middle" font-family="Segoe UI">WindowsApps 접두 오탐 차단 ✔</text>
+      <text x="865" y="176" fill="#6ee7b7" font-size="9.5" text-anchor="middle" font-family="Segoe UI">maxDirs/timeBudgetMs/depth clamp ✔(C-5)</text>
+      <text x="865" y="194" fill="#6ee7b7" font-size="9.5" text-anchor="middle" font-family="Segoe UI">size budget/maxEntries→partial 실측 ✔</text>
+      <text x="865" y="218" fill="#6ee7b7" font-size="9.5" text-anchor="middle" font-family="Segoe UI">심링크 lstat 미추적·visited 루프차단 ✔(V-2)</text>
+      <text x="865" y="236" fill="#6ee7b7" font-size="9.5" text-anchor="middle" font-family="Segoe UI">safeExec shell:false·.bat/.cmd 거부 ✔</text>
+      <text x="865" y="260" fill="#6ee7b7" font-size="9.5" text-anchor="middle" font-family="Segoe UI">canonicalize 실경로 spawn(TOCTOU 축소) ✔(V-1)</text>
+
+      <line x1="218" y1="120" x2="258" y2="120" stroke="#34d399" stroke-width="1.6" marker-end="url(#ag)"/>
+      <line x1="430" y1="188" x2="430" y2="206" stroke="#34d399" stroke-width="1.6" marker-end="url(#ag)"/>
+      <line x1="600" y1="250" x2="648" y2="190" stroke="#34d399" stroke-width="2" marker-end="url(#ag)"/>
+      <text x="606" y="232" fill="#6ee7b7" font-size="9" font-family="Segoe UI">시스템 제외 가지치기</text>
+      <line x1="345" y1="208" x2="220" y2="170" stroke="#34d399" stroke-width="2" marker-end="url(#ag)"/>
+      <text x="160" y="200" fill="#6ee7b7" font-size="9" font-family="Segoe UI">scan-status: basename만</text>
+    </svg>
+    <div class="legend">
+      <span><span class="dot" style="background:#f87171"></span> TB-A 미신뢰</span>
+      <span><span class="dot" style="background:#fbbf24"></span> TB-B 부분신뢰 / 중간 잔여</span>
+      <span><span class="dot" style="background:#34d399"></span> 실측 통과 게이트</span>
+    </div>
+    <figcaption>그림 1. 라이브 HTTP 프로브 + 컨트롤러/수집기 직접 주입으로 측정한 경계별 차단. C-4(watchdog 락 미해제)만 주황 잔여.</figcaption>
+  </figure>
+</section>
+
+<!-- ===================== 발견 항목 ===================== -->
+<section id="findings">
+  <h2>3. 발견 항목</h2>
+
+  <h3>M-1 (중간) — watchdog가 in-flight 락을 강제 해제하지 않음 (C-4 구현 간극)</h3>
+  <table>
+    <tr><td style="width:96px;"><b>위치</b></td><td><code>lib/server/scanController.js</code> <code>_forceError</code>(L98-102) / watchdog 콜백(L117-120) / <code>finally</code>(L150-154)</td></tr>
+    <tr><td><b>위협(STRIDE)</b></td><td>서비스거부(Denial of Service) — 가용성</td></tr>
+    <tr><td><b>심각도</b></td><td><span class="sev med">중간</span> (악용 가능성: 낮음)</td></tr>
+    <tr><td><b>악용 시나리오</b></td><td><code>scanner.scan</code>의 어떤 <b>async</b> await가 무한정 hang되면 watchdog는 <code>phase='error'</code>로만 바꾸고 <code>running</code>은 <code>true</code>로 잔존 → 이후 모든 rescan이 <b>영구 409 SCAN_IN_PROGRESS</b>. 설계 M4-M-3는 "watchdog 초과 시 락 강제 해제로 영구 409 방지"를 명시했으나 구현은 이를 충족하지 않음. <b>완화 요인</b>: (1) 동기 fs(readdirSync/lstatSync)가 죽은 UNC/네트워크 드라이브에서 블록되면 이벤트 루프가 멈춰 watchdog 타이머 자체가 못 돔 → 어차피 watchdog로 못 잡는 경로. (2) 유일한 진짜 async await인 <code>safeExec</code>(git collector)은 자체 SIGKILL 타임아웃 보유. (3) walker는 maxDirs/timeBudgetMs 내부 상한으로 bounded. → 실제 "watchdog는 도는데 finally는 영원히 안 도는" 무한 hang 경로가 좁음. 적대적 입력으로 신뢰성 있게 트리거되는 권한/기밀 위협 아님 → 중간.</td></tr>
+    <tr><td><b>실측 근거</b></td><td>직접 주입(watchdogMs=80, scan 2000ms 모의): watchdog 발화 직후 측정 <code>running=true, phase=error</code>가 ~2초 지속, scan 완료 후에야 <code>running=false</code>. 즉 락 해제는 watchdog가 아니라 scan settle의 finally가 수행. 기존 테스트(<code>m4-rescan.test.js:241</code>)는 작은 실트리가 빨리 끝나 finally가 락을 풀어 <b>watchdog의 락 해제를 입증하지 못함</b>(거짓 안심).</td></tr>
+    <tr><td><b>권고 조치</b></td><td><code>_forceError</code>에서 <code>this.running=false</code>를 함께 해제하고(또는 watchdog 콜백에서 직접), 늦게 settle되는 scan의 <code>finally</code>가 새 스캔(다른 scanId)을 덮어쓰지 않도록 <b>세대 토큰(generation/scanId 일치 확인)</b>으로 가드. <code>watchdogFired</code> 플래그처럼 "이 run이 이미 폐기됨"을 판별해 finally가 running을 건드리지 않게 한다. 회귀 테스트는 <b>실제로 hang하는 scan 모의</b>(영원히 resolve 안 되는 프로미스)로 watchdog 발화 후 즉시 <code>running===false</code> + 재acquire 성공을 단언해야 한다(현 테스트의 거짓 안심 제거).</td></tr>
+  </table>
+
+  <h3>L-1 (낮음) — 드라이브 루트가 currentPath로 basename 노출(드라이브 문자)</h3>
+  <table>
+    <tr><td style="width:96px;"><b>위치</b></td><td><code>lib/server/scanController.js</code> <code>shortenPath</code>(L35-40)</td></tr>
+    <tr><td><b>위협(STRIDE)</b></td><td>정보노출(Information Disclosure) — 경미</td></tr>
+    <tr><td><b>심각도</b></td><td><span class="sev low">낮음</span> (악용 가능성: 매우 낮음)</td></tr>
+    <tr><td><b>악용 시나리오</b></td><td>스캔 루트가 드라이브 루트(예: all-drives에서 <code>C:\</code>)일 때 <code>shortenPath('C:\\')</code>→<code>"C:"</code> 반환 → scan-status 응답에 드라이브 문자가 잠깐 노출. 사용자 경로/디렉터리명은 노출되지 않고 드라이브 문자(이미 사용자가 스캔 대상으로 지정)뿐이며 전이적. C-3의 절대경로 누설 목표는 유지(사용자 경로 0). 정보 가치 미미.</td></tr>
+    <tr><td><b>실측 근거</b></td><td>직접 주입: <code>shortenPath('C:\\')→"C:"</code>. 일반 경로(<code>C:\Users\bob\dev\myproj</code>→<code>dev/myproj</code>)는 드라이브/상위경로 모두 비노출.</td></tr>
+    <tr><td><b>권고 조치</b></td><td>(선택) <code>shortenPath</code>가 세그먼트 1개뿐이고 그것이 드라이브 표기(<code>/^[A-Za-z]:$/</code>)면 일반 라벨(예: "드라이브 루트")로 치환하거나 <code>null</code> 반환. 보안 차단 사유 아님 — 표시 품질 개선 수준.</td></tr>
+  </table>
+
+  <div class="ok-box"><b>그 외 전 항목 발견 0:</b> C-1·C-2·C-3·C-5·M-1(경계)·V-1·V-2·L-1(프론트)·시크릿·의존성은 코드 실재 + 동작 실측에서 결함 미발견. 특히 라이브 HTTP 프로브 15종이 전부 기대 코드(403/405/200)로 응답했고, 직렬화 scan-status에 절대경로·드라이브·사용자경로 문자열이 전무했다.</div>
+</section>
+
+<!-- ===================== 실측 로그 ===================== -->
+<section id="evidence">
+  <h2>4. 실측 근거 (raw)</h2>
+  <h3>4.1 npm test</h3>
+  <pre>node --test "test/**/*.test.js"
+  ...
+  ℹ tests 201   ℹ pass 201   ℹ fail 0   ℹ duration_ms ~700
+  ✔ rescan: 토큰 누락 → 403 / GET → 405 / 진행중 재요청 409
+  ✔ scan-status: 토큰 누락 → 403 / Host 위조 → 403 / 토큰보유(CT없이) → 200 / POST → 405 / currentPath 축약만
+  ✔ ScanController: start 완료 후 락 해제 / watchdog 타임아웃 시 error+락 해제
+  ✔ size: 비활성→na/skipped, budgetMs/maxEntries 상한→partial(C-5)
+  ✔ isUnderSystemDir: 세그먼트 경계 / 대소문자 폴드(C-2) / all-drives walker 미진입
+  ✔ depthLimit: ABS 64 clamp / all-drives 24·12 / 미지정 24
+  ✔ pathGuard: ../순회·심링크 실경로·접두부분일치·NFD 정규화(H-1, V-1)
+  ✔ H-2: cwd 제외 / 위장 git.bat 미실행 / .bat 절대경로 거부</pre>
+
+  <h3>4.2 라이브 HTTP 공격 프로브 (port 고정 = allowlist 일치)</h3>
+  <pre>rescan GET           => 405 METHOD_NOT_ALLOWED
+rescan PUT           => 405 METHOD_NOT_ALLOWED
+rescan POST notoken  => 403 FORBIDDEN_ORIGIN
+rescan POST badOrigin=> 403 FORBIDDEN_ORIGIN
+rescan POST badHost  => 403 FORBIDDEN_ORIGIN
+rescan POST badtoken => 403 FORBIDDEN_ORIGIN
+rescan POST badCT    => 403 FORBIDDEN_ORIGIN
+scanstatus notoken   => 403 FORBIDDEN_ORIGIN
+scanstatus badOrigin => 403 FORBIDDEN_ORIGIN
+scanstatus badHost   => 403 FORBIDDEN_ORIGIN
+scanstatus badtoken  => 403 FORBIDDEN_ORIGIN
+scanstatus POST      => 405 METHOD_NOT_ALLOWED
+scanstatus noOrigin  => 403 FORBIDDEN_ORIGIN
+open notoken         => 403 FORBIDDEN_ORIGIN
+-- 정상 자격증명 --
+scanstatus OK noCT (127.0.0.1)   => 200 {"phase":"idle",...,"currentPath":null,...}
+scanstatus OK (localhost)        => 200
+scanstatus + X-Forwarded-Host:evil => 200 (실 Host만 사용 → 스푸프 무효)
+rescan OK            => 409 NO_SCAN_ROOTS (게이트 통과 후 비즈니스 로직 도달)</pre>
+
+  <h3>4.3 컨트롤러/수집기 직접 주입</h3>
+  <pre>[C-3] shortenPath('C:\Users\bob\dev\myproj') -> "dev/myproj"
+      status.currentPath -> "deep/project"  (입력 abs=C:\Users\bob\Secret\deep\project)
+      serialized status contains "Users"? false  "Secret"? false  "C:"? false
+      status keys: phase,scanId,dirs,found,currentPath,elapsedMs,startedAt,counts,note  (currentPathAbs 없음)
+      [L-1] shortenPath('C:\') -> "C:"   (드라이브 루트 단독 노출 — 낮음)
+
+[C-2] systemKeySet size=7 (win32)
+      C:\Windows\System32     -> true     c:\windows\system32 -> true(폴드)
+      C:\WindowsApps\foo      -> false(접두 오탐 차단)
+      C:\Program Files\App    -> true     C:\ProgramData\x -> true
+      C:\Users\me\proj        -> false
+
+[C-4] scan throw       -> running=false, phase=error, 재acquire=true (정상)
+      watchdog 80ms + scan 2000ms -> 발화 후 running=TRUE/phase=error 약 2초 잔존  <-- 간극
+                                     scan 완료 후에야 running=false
+
+[C-5] size budgetMs=0  -> data.status=ok(즉시) ; maxEntries=1 -> data.status=partial
+      disabled         -> data.status=skipped / contract.status=na
+
+[의존성] npm audit -> found 0 vulnerabilities ; node_modules 부재 ; lockfile 패키지 0
+[시크릿] 하드코딩 키/패스워드/private-key 0 ; 토큰=meta 주입(URL/콘솔 미노출)</pre>
+</section>
+
+<!-- ===================== 시정/확인 ===================== -->
+<section id="actions">
+  <h2>5. 시정 항목 · 확인 필요</h2>
+  <div class="warn-box"><b>시정 권고(차단 아님, 추적):</b>
+    <ul style="margin:8px 0 0;">
+      <li><b>M-1(중간) C-4:</b> <code>_forceError</code>/watchdog 콜백에서 <code>running=false</code> 함께 해제 + 늦은 scan settle의 finally가 새 스캔을 덮어쓰지 않게 세대(scanId/generation) 가드. <b>실제 hang 모의</b> 회귀 테스트 추가(현 테스트의 거짓 안심 제거).</li>
+      <li><b>L-1(낮음):</b> <code>shortenPath</code>가 드라이브 루트 단독(<code>C:</code>)을 일반 라벨/<code>null</code>로 치환(선택).</li>
+    </ul>
+  </div>
+  <div class="note"><b>PM/확인 필요(위험 수용):</b> C-4는 게이트 차단 사유가 아니나 <b>가용성 잔여 위험</b>이다. (a) M4 릴리스 전 시정 후 재검증, 또는 (b) "watchdog가 즉시 락을 풀지 않는다"를 인지한 위험 수용 — 둘 중 하나를 PM이 결정 권고. 무한 async hang 경로가 좁아 즉시 차단은 아니나, 설계 약속(M4-M-3)과의 정합을 위해 (a)를 권장.</div>
+  <div class="ok-box"><b>게이트 차단 사유:</b> 없음(치명·높음 0). C-1~C-3·C-5·M-1·V-1/V-2·L-1·시크릿·의존성 실측 PASS. <b>보안 게이트 통과(조건부) — 코드 미수정.</b></div>
+</section>
+
+<footer>Project-SPIP · M4 구현 최종 보안 게이트 보고서 1회차 · 판정: <b>조건부 PASS</b> (치명 0 · 높음 0 · 중간 1[C-4 watchdog 락] · 낮음 1[드라이브 루트 노출]) · 게이트: 통과(높음·치명 0) · 근거: npm test 201/201 + 라이브 HTTP 프로브 15종 + 컨트롤러/수집기 직접 주입 + npm audit(0 취약점)/시크릿 스캔 · docs/Development/ 부재 → 표준 체크리스트 · 자족형 HTML · 코드 미수정(시정은 담당 개발자)</footer>
+</body>
+</html>

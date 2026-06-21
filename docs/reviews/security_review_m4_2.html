@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project-SPIP — M4 보안 게이트 재검증 (2회차) C-4·L-1 해소 확인</title>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#1e293b; --text:#e2e8f0; --sub:#94a3b8;
+    --accent:#34d399; --ref:#38bdf8; --line:#334155; --warn:#fbbf24; --danger:#f87171;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:"Segoe UI","Malgun Gothic",system-ui,sans-serif;line-height:1.7;}
+  header{padding:48px 32px 36px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#13203b,#0f172a);}
+  header h1{margin:0 0 8px;font-size:27px;}
+  header .tag{display:inline-block;background:rgba(52,211,153,.12);color:var(--accent);
+    border:1px solid rgba(52,211,153,.4);border-radius:999px;padding:3px 12px;font-size:13px;margin-right:8px;}
+  header p{margin:14px 0 0;color:var(--sub);max-width:1000px;}
+  .meta{margin-top:16px;font-size:13px;color:var(--sub);}
+  main{max-width:1160px;margin:0 auto;padding:32px;}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:24px 28px;margin:22px 0;}
+  h2{margin:0 0 16px;font-size:21px;color:var(--accent);border-left:4px solid var(--accent);padding-left:12px;}
+  h3{font-size:16px;color:var(--ref);margin:22px 0 10px;}
+  p{margin:8px 0;}
+  ul,ol{margin:8px 0;padding-left:22px;}li{margin:5px 0;}
+  code{background:#0b1220;color:var(--ref);padding:1px 6px;border-radius:5px;font-size:13px;font-family:Consolas,monospace;}
+  pre{background:#0b1220;border:1px solid var(--line);border-radius:8px;padding:14px 16px;
+    overflow-x:auto;font-size:12.5px;color:#cbd5e1;font-family:Consolas,monospace;line-height:1.5;}
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13.5px;}
+  th,td{border:1px solid var(--line);padding:9px 11px;text-align:left;vertical-align:top;}
+  th{background:#142035;color:var(--accent);}
+  tr:nth-child(even) td{background:rgba(255,255,255,.02);}
+  .fid{font-family:Consolas,monospace;font-weight:700;white-space:nowrap;}
+  .sev{font-size:11px;font-weight:700;padding:2px 9px;border-radius:6px;white-space:nowrap;display:inline-block;}
+  .crit{background:rgba(248,113,113,.18);color:#fecaca;border:1px solid rgba(248,113,113,.6);}
+  .high{background:rgba(251,146,60,.16);color:#fdba74;border:1px solid rgba(251,146,60,.55);}
+  .med{background:rgba(251,191,36,.14);color:#fcd34d;border:1px solid rgba(251,191,36,.5);}
+  .low{background:rgba(56,189,248,.14);color:#7dd3fc;border:1px solid rgba(56,189,248,.5);}
+  .pass{background:rgba(52,211,153,.16);color:#6ee7b7;border:1px solid rgba(52,211,153,.5);}
+  .verdict{display:inline-block;border-radius:999px;padding:6px 22px;font-size:18px;font-weight:800;}
+  .v-cond{background:rgba(251,191,36,.16);color:#fcd34d;border:1px solid rgba(251,191,36,.6);}
+  .v-pass{background:rgba(52,211,153,.16);color:#6ee7b7;border:1px solid rgba(52,211,153,.6);}
+  .v-fail{background:rgba(248,113,113,.18);color:#fecaca;border:1px solid rgba(248,113,113,.6);}
+  .note{background:rgba(56,189,248,.08);border:1px solid rgba(56,189,248,.3);border-radius:8px;
+    padding:12px 16px;font-size:13.5px;color:#bae6fd;margin:10px 0;}
+  .warn-box{background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.3);border-radius:8px;
+    padding:12px 16px;font-size:13.5px;color:#fde68a;margin:10px 0;}
+  .danger-box{background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.35);border-radius:8px;
+    padding:12px 16px;font-size:13.5px;color:#fecaca;margin:10px 0;}
+  .ok-box{background:rgba(52,211,153,.08);border:1px solid rgba(52,211,153,.3);border-radius:8px;
+    padding:12px 16px;font-size:13.5px;color:#bbf7d0;margin:10px 0;}
+  figure{margin:18px 0;background:#0b1220;border:1px solid var(--line);border-radius:10px;padding:18px;}
+  figcaption{color:var(--sub);font-size:12.5px;margin-top:10px;text-align:center;}
+  .legend{display:flex;gap:18px;flex-wrap:wrap;font-size:12.5px;color:var(--sub);margin-top:10px;justify-content:center;}
+  .legend span{display:inline-flex;align-items:center;gap:6px;}
+  .dot{width:11px;height:11px;border-radius:3px;display:inline-block;}
+  footer{text-align:center;color:var(--sub);font-size:12.5px;padding:30px;border-top:1px solid var(--line);}
+  .scorecard{display:flex;gap:14px;flex-wrap:wrap;margin:16px 0;}
+  .scard{flex:1;min-width:110px;background:#0b1220;border:1px solid var(--line);border-radius:10px;padding:14px;text-align:center;}
+  .scard .n{font-size:28px;font-weight:800;}
+  .scard .l{font-size:12px;color:var(--sub);margin-top:4px;}
+  .arrow{color:var(--accent);font-weight:700;}
+  .mono{font-family:Consolas,monospace;}
+  .delta{font-size:12px;color:var(--sub);}
+</style>
+</head>
+<body>
+<header>
+  <span class="tag">M4 보안 게이트 재검증</span><span class="tag">실측 (npm test 213 + 적대적 프로브)</span><span class="tag">2회차</span>
+  <h1>Project-SPIP — M4 보안 게이트 재검증 보고서 (C-4 · L-1 해소 확인)</h1>
+  <p>1회차(<code>security_review_m4_1.html</code>)는 <b>조건부 PASS</b>로, 중간 1건(<b>C-4 watchdog 락 미해제 → 영구 409 데드락</b>)·낮음 1건(<b>L-1 shortenPath 드라이브 루트 노출</b>)을 냈다. 백엔드가 두 항목을 수정했다. 본 2회차는 (1) C-4·L-1의 <b>실제 해소</b>를 코드·테스트·직접 프로브로 입증하고, (2) 이 수정이 만든 새 코드 경로(<b>세대 scanId 가드</b>, <b>size 항상 로드</b>, <b>all-drives 루트 제외</b>)가 기존 통제(C-1·C-2·C-3·C-5·M-1·V-1/V-2·L-1 프론트)·성능 가드(N-01/H-3)를 <b>약화시키지 않았는지</b> 회귀 점검한다. 추측 배제 — 코드 정독 + <code>npm test</code> 213건 + ScanController/size 적대적 직접 주입 + <code>npm audit</code>/시크릿 스캔으로 실측했다.</p>
+  <div class="meta">검증자: Security Reviewer · 일자: 2026-06-21 · 입력: lib/server/{scanController,actionHandlers}.js · lib/scan/{walker,collectors/size,excludeRules}.js · server.js · test/m4-rescan.test.js · 기준: security_review_m4_1.html(C-4·L-1 원항목)·api-contract.md · 방법: 코드 정독 → npm test(213/213 pass) → ScanController hang/세대가드 직접 주입 → size enabled/disabled·예산 직접 주입 → npm audit/시크릿 스캔 · docs/Development/ 부재 → 표준 체크리스트 적용 · 코드 미수정</div>
+</header>
+
+<main>
+
+<!-- ===================== 판정 ===================== -->
+<section id="verdict">
+  <h2>0. 종합 판정</h2>
+  <p style="font-size:16px;">판정: <span class="verdict v-pass">PASS</span> <span style="color:var(--sub);font-size:13px;">(치명 0 · 높음 0 · 중간 0 · 낮음 0 · 신규 위협 0 · 회귀 0)</span> <span class="delta">— 1회차 조건부 PASS에서 <b>무조건 PASS로 상향</b></span></p>
+  <p><b>C-4(중간)·L-1(낮음) 모두 해소 확인. 신규 위협·회귀 0 → 보안 게이트 전면 통과.</b> C-4는 <code>_forceError</code>가 이제 <code>this.running=false</code>로 <b>락을 즉시 강제 해제</b>(scanController.js L128)하여 영구 409 데드락이 제거됐다. 1회차에서 지적한 "버려진 orphaned 스캔의 늦은 settle 오염" 위험은 <b>세대(scanId) 가드(<code>_isActive</code>)</b>로 봉쇄됐다 — finally·진행 병합(<code>_merge</code>)·finalizing(<code>writeSnapshot</code>/<code>store.load</code>)·done 전이가 모두 <code>_isActive(myScanId)</code> 통과 시에만 상태/락을 건드린다. 1회차가 지적한 <b>거짓 안심 테스트</b>는 영원히 resolve 안 되는 <b>실제 hang scan 모의</b> + <b>세대 가드 오염 테스트</b> 2건으로 대체됐고(테스트 213건, +12), 직접 프로브로 watchdog 발화 후 <code>running===false</code>·후속 acquire 성공·늦은 orphan settle의 무오염을 실측했다. L-1은 <code>shortenPath</code>가 드라이브 루트 단독(<code>/^[A-Za-z]:$/</code>)을 일반 라벨("드라이브 루트")로 치환해 드라이브 문자 노출을 차단한다. 회귀: size 항상 로드(BUG-M4-01)는 저비용 deps 카운트만 추가하고 비용 큰 트리 측정은 <b>여전히 enabled 게이트 + 예산 가드</b> 뒤에 있어 N-01/H-3 무손상. all-drives 루트 제외(P2-4)는 시스템 <b>루트</b>만 추가 차단(드라이브 루트는 세그먼트 길이상 미해당) — C-2 강화일 뿐 약화 아님.</p>
+
+  <div class="scorecard">
+    <div class="scard"><div class="n" style="color:#fecaca">0</div><div class="l">치명</div></div>
+    <div class="scard"><div class="n" style="color:#fdba74">0</div><div class="l">높음</div></div>
+    <div class="scard"><div class="n" style="color:#fcd34d">0</div><div class="l">중간 <span class="delta">(1회차 1)</span></div></div>
+    <div class="scard"><div class="n" style="color:#7dd3fc">0</div><div class="l">낮음 <span class="delta">(1회차 1)</span></div></div>
+    <div class="scard"><div class="n" style="color:#6ee7b7">213/213</div><div class="l">npm test <span class="delta">(+12)</span></div></div>
+  </div>
+
+  <div class="ok-box"><b>게이트 결과:</b> 치명·높음·중간·낮음 잔여 <b>0</b>. C-4·L-1 해소 실증, 회귀·신규 위협 0 → <b>보안 게이트 통과(PASS 상향)</b>. 1회차의 PM 위험 수용 결정(가용성 잔여)은 <b>불요</b>가 됐다(시정안 (a) 채택·완료). <b>코드 미수정 — 검증만.</b></div>
+</section>
+
+<!-- ===================== 해소 확인 매트릭스 ===================== -->
+<section id="resolve">
+  <h2>1. C-4 · L-1 해소 확인 (코드 + 테스트 + 직접 프로브)</h2>
+  <table>
+    <tr><th style="width:70px;">항목</th><th style="width:78px;">1회차</th><th>수정 내용(코드 위치)</th><th>실측 입증(직접 프로브)</th><th style="width:74px;">2회차</th></tr>
+    <tr>
+      <td class="fid">C-4-a<br>락 해제</td><td><span class="sev med">중간</span></td>
+      <td><code>_forceError</code>가 <code>this.running=false</code>를 함께 해제(<code>scanController.js:128</code>). watchdog 콜백이 <code>_isActive(myScanId)</code> 확인 후 <code>_forceError</code> 호출(L149-153). scan settle의 finally를 더 이상 기다리지 않음.</td>
+      <td>프로브 [1]: 영원히 resolve 안 되는 scan 주입(watchdog 40ms) → <b>watchdog 발화 후 running=false, phase=error</b> 측정. finally는 절대 도달 못 하는데도 락 해제됨 → 영구 409 데드락 제거 입증.</td>
+      <td><span class="sev pass">해소</span></td>
+    </tr>
+    <tr>
+      <td class="fid">C-4-b<br>세대 가드</td><td><span class="sev med">(신규권고)</span></td>
+      <td><code>_isActive(scanId)=running&&state.scanId===scanId</code>(L102-104). <code>start</code>가 <code>myScanId</code> 캡처(L143), finally(L196)·_merge(L113)·finalizing/done(L172,183)·catch(L186)가 모두 자기 세대일 때만 상태/락 변경. 버려진 run은 <code>writeSnapshot</code>/<code>store.load</code>도 미실행(L172 early return).</td>
+      <td>프로브 [2][3]: watchdog 강제해제 후 후속 acquire <b>즉시 성공(새 scanId)</b>·정상 done. 이후 버려진 1회차 scan을 늦게 settle → phase=done <b>불변</b>, scanId 불변, <code>store.load</code> 호출 <b>1회 유지</b>(orphan 미실행), counts=후속값(orphan 999 미반영). <b>오염 0</b>.</td>
+      <td><span class="sev pass">해소</span></td>
+    </tr>
+    <tr>
+      <td class="fid">C-4-c<br>회귀 테스트</td><td><span class="sev med">거짓안심</span></td>
+      <td>1회차 거짓 안심(작은 트리 빨리 끝나 finally가 락 해제) 제거. 신규 2건: <code>m4-rescan.test.js:264</code>(영영 hang하는 scan → watchdog 즉시 해제 단언), <code>:293</code>(세대 가드 — 늦은 settle 무오염·load 1회 단언).</td>
+      <td><code>npm test</code> 213/213 pass(1회차 201 → +12). 신규 테스트가 <b>실제 hang</b>을 모의해 watchdog의 락 해제를 직접 단언(finally 의존 제거).</td>
+      <td><span class="sev pass">해소</span></td>
+    </tr>
+    <tr>
+      <td class="fid">L-1<br>드라이브루트</td><td><span class="sev low">낮음</span></td>
+      <td><code>shortenPath</code>가 출력 1세그먼트가 <code>/^[A-Za-z]:$/</code>면 <code>'드라이브 루트'</code> 반환(<code>scanController.js:47-49</code>).</td>
+      <td>프로브 [4]: <code>shortenPath('C:\\')→"드라이브 루트"</code>, <code>'D:\\'→"드라이브 루트"</code>. 일반 경로(<code>...\Windows\System32→"Windows/System32"</code>) 정상. 테스트 <code>:93-94</code> 단언. 드라이브 문자 노출 0.</td>
+      <td><span class="sev pass">해소</span></td>
+    </tr>
+  </table>
+</section>
+
+<!-- ===================== 회귀 점검 매트릭스 ===================== -->
+<section id="regression">
+  <h2>2. 회귀 점검 — 수정이 기존 통제를 약화시켰는가</h2>
+  <p>이번 수정이 만든 3개 신규 경로(세대 scanId 가드 · size 항상 로드 · all-drives 루트 제외)가 1회차 PASS였던 통제를 깨는지 적대적으로 점검했다. <b>약화 0</b>.</p>
+  <table>
+    <tr><th style="width:70px;">통제</th><th>이번 수정과의 접점</th><th>회귀 점검 결과(실측)</th><th style="width:74px;">판정</th></tr>
+    <tr>
+      <td class="fid">C-1</td><td>라우터 게이트(rescan POST한정+checkStateChange, scan-status GET한정). 컨트롤러 변경과 무관.</td>
+      <td>m4-rescan 게이트 테스트(토큰 누락→403, GET→405, POST scan-status→405) 전부 pass. <code>actionHandlers.rescan</code>의 acquire/start 호출부 시그니처 불변(L207·218).</td>
+      <td><span class="sev pass">유지</span></td>
+    </tr>
+    <tr>
+      <td class="fid">C-2</td><td>all-drives 시스템 제외. P2-4로 <b>루트 레벨에도</b> <code>isUnderSystemDir</code> 적용(walker.js:190-193).</td>
+      <td>세그먼트 정확-접두 매칭(<code>excludeRules.js:164</code>): 드라이브 루트는 1세그먼트(<code>c:</code>)라 2세그먼트 시스템키(<code>c:\windows</code>)에 미해당 → <b>드라이브 전체가 통째로 제외되지 않음</b>. 시스템 <b>루트</b>(예: posix <code>/System</code>)만 추가 차단 → C-2 강화. WindowsApps 접두 오탐 차단·대소문자 폴드 테스트 pass.</td>
+      <td><span class="sev pass">강화</span></td>
+    </tr>
+    <tr>
+      <td class="fid">C-3</td><td>currentPath 누설. <code>_merge</code>에 세대 가드 추가, currentPathAbs는 그대로 메모리 전용.</td>
+      <td>프로브 [4]: status 키에 <code>currentPathAbs</code> 부재 유지. <code>_merge</code>는 여전히 abs를 <code>currentPathAbs</code>로만 보관(L116), status는 <code>shortenPath</code>만 노출(L224). 세대 가드는 오히려 orphan의 currentPath 병합도 차단(누설면 축소). m4-rescan C-3 테스트 pass.</td>
+      <td><span class="sev pass">유지</span></td>
+    </tr>
+    <tr>
+      <td class="fid">C-5</td><td>all-drives 자원 예산. size 항상 로드(BUG-M4-01)가 예산을 우회하는지가 핵심.</td>
+      <td>프로브 [size]: <b>disabled</b> → deps=2/devDeps=1 수집되나 <code>totalBytes=null</code>(<b>트리 미순회</b>), status=skipped/na. <b>enabled+maxEntries=1</b> → status=partial(예산 가드 작동). budgetMs 예산도 작동. 항상 로드는 package.json 키 카운트(가드 파서 16KB 상한)뿐 — H-3/N-01 비용 가드 무손상. walker maxDirs/timeBudgetMs/depth clamp 테스트 pass.</td>
+      <td><span class="sev pass">유지</span></td>
+    </tr>
+    <tr>
+      <td class="fid">M-1</td><td>경계 통제(Host/Origin/토큰/CT). 컨트롤러 변경과 독립.</td>
+      <td>open 무토큰→403, scan-status Host 위조→403, 정상 토큰(CT없이)→200 테스트 pass. safeEqual 상수시간 비교 불변.</td>
+      <td><span class="sev pass">유지</span></td>
+    </tr>
+    <tr>
+      <td class="fid">V-1/V-2</td><td>TOCTOU·적대적 입력(심링크·ReDoS·safeExec). size·walker 순회 로직 변경 접점.</td>
+      <td>size <code>measureTree</code> 심링크 미추적(<code>size.js:69</code>) 유지, walker 심링크 lstat 미추적·visited 루프 차단 유지. pathGuard ../순회·NFD·접두 차단, safeExec .bat 거부 테스트 pass. 새 코드에 정규식 백트래킹·동적 spawn 도입 없음.</td>
+      <td><span class="sev pass">유지</span></td>
+    </tr>
+    <tr>
+      <td class="fid">L-1(프론트)</td><td>app.js 렌더(textContent). note "all-drives 비활성" 등 텍스트가 새로 흐를 수 있음.</td>
+      <td>note는 고정 문자열(actionHandlers.js:191)·shortenPath 결과 모두 textContent 경로. 동적 innerHTML 도입 없음(수정 파일은 서버측). XSS 표면 불변.</td>
+      <td><span class="sev pass">유지</span></td>
+    </tr>
+    <tr>
+      <td class="fid">시크릿/의존성</td><td>신규 코드의 비밀·패키지 도입 여부.</td>
+      <td>시크릿 스캔: 하드코딩 키/패스워드/private-key 0. <code>npm audit</code> → <b>found 0 vulnerabilities</b>, deps/devDeps 모두 <code>{}</code>(외부 의존성 0). 수정은 내장 모듈만 사용.</td>
+      <td><span class="sev pass">유지</span></td>
+    </tr>
+  </table>
+</section>
+
+<!-- ===================== SVG ===================== -->
+<section id="flow">
+  <h2>3. 신뢰 경계 · C-4 해소 데이터 흐름 (SVG)</h2>
+  <p>1회차 주황(watchdog 락 미해제)이 녹색으로 전환. 세대 가드가 버려진 run의 늦은 settle을 신뢰 영역 경계에서 차단한다.</p>
+  <figure>
+    <svg viewBox="0 0 1100 360" width="100%" role="img" aria-label="C-4 watchdog 락 해제 + 세대 가드 실측">
+      <defs>
+        <marker id="ag" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 Z" fill="#34d399"/></marker>
+        <marker id="ad" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 Z" fill="#f87171"/></marker>
+      </defs>
+
+      <rect x="18" y="60" width="200" height="240" rx="10" fill="#0b1220" stroke="#34d399" stroke-width="1.4"/>
+      <text x="118" y="84" fill="#34d399" font-size="12" text-anchor="middle" font-weight="bold" font-family="Segoe UI">acquire (scanId=A)</text>
+      <text x="118" y="108" fill="#cbd5e1" font-size="9.5" text-anchor="middle" font-family="Segoe UI">running=true</text>
+      <text x="118" y="126" fill="#cbd5e1" font-size="9.5" text-anchor="middle" font-family="Segoe UI">state.scanId=A</text>
+      <text x="118" y="150" fill="#cbd5e1" font-size="9.5" text-anchor="middle" font-family="Segoe UI">scan() … 무한 hang</text>
+      <text x="118" y="174" fill="#fbbf24" font-size="9.5" text-anchor="middle" font-family="Segoe UI">watchdog 발화</text>
+      <text x="118" y="196" fill="#6ee7b7" font-size="9.5" text-anchor="middle" font-family="Segoe UI">_isActive(A)→true</text>
+      <text x="118" y="214" fill="#6ee7b7" font-size="9.5" text-anchor="middle" font-family="Segoe UI">_forceError:</text>
+      <text x="118" y="230" fill="#6ee7b7" font-size="9.5" text-anchor="middle" font-family="Segoe UI">running=false ✔</text>
+      <text x="118" y="246" fill="#6ee7b7" font-size="9.5" text-anchor="middle" font-family="Segoe UI">phase=error ✔</text>
+      <text x="118" y="270" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">[1] 프로브 실측</text>
+
+      <line x1="218" y1="180" x2="278" y2="180" stroke="#34d399" stroke-width="1.8" marker-end="url(#ag)"/>
+      <text x="248" y="172" fill="#6ee7b7" font-size="8.5" text-anchor="middle" font-family="Segoe UI">락 해제</text>
+
+      <rect x="280" y="60" width="200" height="240" rx="10" fill="#0b1220" stroke="#34d399" stroke-width="1.4"/>
+      <text x="380" y="84" fill="#34d399" font-size="12" text-anchor="middle" font-weight="bold" font-family="Segoe UI">acquire (scanId=B)</text>
+      <text x="380" y="108" fill="#6ee7b7" font-size="9.5" text-anchor="middle" font-family="Segoe UI">즉시 성공(202) ✔</text>
+      <text x="380" y="126" fill="#cbd5e1" font-size="9.5" text-anchor="middle" font-family="Segoe UI">running=true</text>
+      <text x="380" y="144" fill="#cbd5e1" font-size="9.5" text-anchor="middle" font-family="Segoe UI">state.scanId=B</text>
+      <text x="380" y="168" fill="#cbd5e1" font-size="9.5" text-anchor="middle" font-family="Segoe UI">정상 scan→done</text>
+      <text x="380" y="190" fill="#6ee7b7" font-size="9.5" text-anchor="middle" font-family="Segoe UI">writeSnapshot/load ✔</text>
+      <text x="380" y="214" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">영구 409 없음</text>
+      <text x="380" y="232" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">[2] 프로브 실측</text>
+
+      <rect x="560" y="40" width="240" height="120" rx="10" fill="#170d0d" stroke="#f87171" stroke-width="1.3" stroke-dasharray="6 5"/>
+      <text x="680" y="64" fill="#f87171" font-size="12" text-anchor="middle" font-weight="bold" font-family="Segoe UI">버려진 run A 늦은 settle</text>
+      <text x="680" y="88" fill="#cbd5e1" font-size="9.5" text-anchor="middle" font-family="Segoe UI">finally / _merge 도달 시도</text>
+      <text x="680" y="108" fill="#cbd5e1" font-size="9.5" text-anchor="middle" font-family="Segoe UI">counts=999, snapshot 쓰기 시도</text>
+      <text x="680" y="132" fill="#fca5a5" font-size="9.5" text-anchor="middle" font-family="Segoe UI">오염 시도 (state·락·스냅샷)</text>
+
+      <line x1="680" y1="160" x2="680" y2="208" stroke="#f87171" stroke-width="2" marker-end="url(#ad)"/>
+
+      <rect x="540" y="210" width="280" height="120" rx="10" fill="#0d1726" stroke="#34d399" stroke-width="1.6"/>
+      <text x="680" y="234" fill="#34d399" font-size="12" text-anchor="middle" font-weight="bold" font-family="Segoe UI">세대 가드 _isActive(A)</text>
+      <text x="680" y="258" fill="#6ee7b7" font-size="9.5" text-anchor="middle" font-family="Segoe UI">running&&scanId===A → false</text>
+      <text x="680" y="278" fill="#6ee7b7" font-size="9.5" text-anchor="middle" font-family="Segoe UI">finally/merge/finalize 전부 무동작</text>
+      <text x="680" y="298" fill="#6ee7b7" font-size="9.5" text-anchor="middle" font-family="Segoe UI">store.load 1회 유지·counts=B ✔</text>
+      <text x="680" y="316" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">[3] 프로브 실측: 오염 0</text>
+
+      <rect x="860" y="120" width="220" height="120" rx="10" fill="#0b1220" stroke="#34d399" stroke-width="1.3"/>
+      <text x="970" y="146" fill="#34d399" font-size="12" text-anchor="middle" font-weight="bold" font-family="Segoe UI">상태/스냅샷(B 소유)</text>
+      <text x="970" y="170" fill="#6ee7b7" font-size="9.5" text-anchor="middle" font-family="Segoe UI">phase=done 불변 ✔</text>
+      <text x="970" y="188" fill="#6ee7b7" font-size="9.5" text-anchor="middle" font-family="Segoe UI">scanId=B 불변 ✔</text>
+      <text x="970" y="206" fill="#6ee7b7" font-size="9.5" text-anchor="middle" font-family="Segoe UI">counts 미오염(999 차단) ✔</text>
+
+      <line x1="800" y1="270" x2="858" y2="200" stroke="#34d399" stroke-width="1.6" marker-end="url(#ag)"/>
+    </svg>
+    <div class="legend">
+      <span><span class="dot" style="background:#f87171"></span> 차단된 오염 시도</span>
+      <span><span class="dot" style="background:#34d399"></span> 실측 통과 게이트</span>
+    </div>
+    <figcaption>그림 1. watchdog 즉시 락 해제(C-4-a) + 세대 가드가 버려진 run A의 늦은 settle 오염을 신뢰 경계에서 차단(C-4-b). 직접 프로브 [1][2][3]로 실측.</figcaption>
+  </figure>
+</section>
+
+<!-- ===================== 실측 근거 ===================== -->
+<section id="evidence">
+  <h2>4. 실측 근거 (raw)</h2>
+  <h3>4.1 npm test (213/213)</h3>
+  <pre>node --test "test/**/*.test.js"
+  ...
+  ℹ tests 213   ℹ pass 213   ℹ fail 0   ℹ duration_ms ~857   (1회차 201 → +12)
+  ✔ shortenPath: C:\ → "드라이브 루트" / D:\ → "드라이브 루트" (L-1)
+  ✔ ScanController: scan이 hang해도 watchdog가 즉시 락 강제 해제(C-4/P1-1, 거짓안심 제거)
+  ✔ ScanController: watchdog 후 후속 rescan 즉시 202 + 늦은 settle 새 스캔 미오염(C-4 세대가드)
+  ✔ ScanController: start 완료 후 락 항상 해제 / watchdog 타임아웃 시 error+락 해제
+  ✔ rescan 게이트(토큰 누락→403 / GET→405 / 진행중 409) · scan-status 토큰/Host 게이트 · currentPath 축약
+  ✔ size · isUnderSystemDir · depthLimit clamp · pathGuard · H-2 safeExec (회귀 전부 pass)</pre>
+
+  <h3>4.2 ScanController 직접 적대적 프로브 (실제 hang 모의)</h3>
+  <pre>[1] after watchdog: running = false  phase = error            (영영 resolve 안 되는 scan + wd=40ms)
+[2] follow-up acquire = true  newScanId = true                (영구 409 아님 — 즉시 재acquire)
+[2] follow-up done: running = false  phase = done  scanId==a2 = true
+[3] after orphan late-settle: phase = done (unchanged: true)   (버려진 run A를 늦게 settle)
+[3] scanId unchanged = true | store.load count = 1 (orphan added? false)
+[3] counts.projects = {"projects":7} (orphan의 999 미반영 — 오염 0)
+[4] shortenPath("C:\")="드라이브 루트" | shortenPath("D:\")="드라이브 루트"
+[4] status keys = phase,scanId,dirs,found,currentPath,elapsedMs,startedAt,counts,note | currentPathAbs 부재</pre>
+
+  <h3>4.3 size 회귀 프로브 (BUG-M4-01 항상 로드 vs N-01/H-3 예산 가드)</h3>
+  <pre>[disabled] data.status=skipped  contract=na  deps=2 devDeps=1  totalBytes=null   <- 항상 로드(deps)+트리 미순회
+[enabled]  data.status=ok       total>0=true nm>0=true  deps=2
+[budget]   data.status=partial  (maxEntries=1 예산 가드 작동) deps=2
+[time]     data.status=ok/partial (budgetMs 예산 작동, 폭주 없음)</pre>
+
+  <h3>4.4 의존성 · 시크릿</h3>
+  <pre>npm audit            -> found 0 vulnerabilities
+package.json deps    -> {}    devDeps -> {}    (외부 의존성 0)
+시크릿 스캔(lib/**)  -> 하드코딩 key/password/private-key 0</pre>
+</section>
+
+<!-- ===================== 잔여/확인 ===================== -->
+<section id="actions">
+  <h2>5. 잔여 · 확인 필요</h2>
+  <div class="ok-box"><b>잔여 발견: 없음.</b> C-4·L-1 해소 확인, 회귀·신규 위협 0. 게이트 차단 사유 없음.</div>
+  <div class="note"><b>비차단 관찰(정보):</b> <code>run().catch</code> 폴백(scanController.js:200-209)은 <code>run()</code> 본체가 try/finally로 거의 모든 경로를 흡수하므로 이론상 도달 불가지만, 세대 가드(<code>_isActive(myScanId)</code>)를 동일 적용해 방어적으로 안전하다 — 신규 위협 아님. 권고 없음.</div>
+  <div class="note"><b>PM 확인:</b> 1회차에서 올렸던 가용성 위험 수용 결정((a) 시정 후 재검증 / (b) 인지 수용)은 (a) 채택·완료로 <b>종결</b>. 추가 위험 수용 결정 불요.</div>
+</section>
+
+<footer>Project-SPIP · M4 보안 게이트 재검증 2회차 · 판정: <b>PASS</b> (치명 0 · 높음 0 · 중간 0 · 낮음 0 · 회귀 0 · 신규 위협 0) — 1회차 조건부 PASS에서 상향 · 근거: npm test 213/213(+12) + ScanController 실제 hang/세대가드 직접 프로브 + size enabled/disabled·예산 프로브 + npm audit(0 취약점)/시크릿 스캔 · docs/Development/ 부재 → 표준 체크리스트 · 자족형 HTML · 코드 미수정(검증만)</footer>
+</body>
+</html>

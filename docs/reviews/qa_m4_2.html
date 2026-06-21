@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project-SPIP — M4 QA 회귀·해소 검증 보고서 (2회차)</title>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#1e293b; --text:#e2e8f0; --sub:#94a3b8;
+    --accent:#34d399; --ref:#38bdf8; --line:#334155; --warn:#fbbf24; --danger:#f87171;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:"Segoe UI","Malgun Gothic",system-ui,sans-serif;line-height:1.7;}
+  header{padding:48px 32px 36px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#13203b,#0f172a);}
+  header h1{margin:0 0 8px;font-size:28px;}
+  header .tag{display:inline-block;background:rgba(52,211,153,.12);color:var(--accent);
+    border:1px solid rgba(52,211,153,.4);border-radius:999px;padding:3px 12px;font-size:13px;margin-right:8px;margin-top:6px;}
+  header p{margin:14px 0 0;color:var(--sub);max-width:940px;}
+  .meta{margin-top:16px;font-size:13px;color:var(--sub);}
+  main{max-width:1120px;margin:0 auto;padding:32px;}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:24px 28px;margin:22px 0;}
+  h2{margin:0 0 16px;font-size:21px;color:var(--accent);border-left:4px solid var(--accent);padding-left:12px;}
+  h3{font-size:16px;color:var(--ref);margin:22px 0 10px;}
+  p{margin:8px 0;}
+  ul,ol{margin:8px 0;padding-left:22px;}li{margin:5px 0;}
+  code{background:#0b1220;color:var(--ref);padding:1px 6px;border-radius:5px;font-size:13px;}
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13.5px;}
+  th,td{border:1px solid var(--line);padding:9px 11px;text-align:left;vertical-align:top;}
+  th{background:#142035;color:var(--accent);}
+  tr:nth-child(even) td{background:rgba(255,255,255,.02);}
+  .rid{font-family:Consolas,monospace;color:var(--accent);font-weight:700;white-space:nowrap;}
+  .verdict{font-size:22px;font-weight:800;padding:6px 18px;border-radius:10px;display:inline-block;}
+  .pass{background:rgba(52,211,153,.16);color:#6ee7b7;border:1px solid rgba(52,211,153,.5);}
+  .cond{background:rgba(251,191,36,.16);color:#fcd34d;border:1px solid rgba(251,191,36,.5);}
+  .fail{background:rgba(248,113,113,.16);color:#fca5a5;border:1px solid rgba(248,113,113,.5);}
+  .sev-high{background:rgba(251,146,60,.16);color:#fdba74;border:1px solid rgba(251,146,60,.45);font-weight:700;padding:2px 9px;border-radius:6px;white-space:nowrap;font-size:12px;}
+  .sev-low{background:rgba(56,189,248,.14);color:#7dd3fc;border:1px solid rgba(56,189,248,.4);font-weight:700;padding:2px 9px;border-radius:6px;white-space:nowrap;font-size:12px;}
+  .res{background:rgba(52,211,153,.16);color:#6ee7b7;border:1px solid rgba(52,211,153,.5);font-weight:700;padding:2px 9px;border-radius:6px;white-space:nowrap;font-size:12px;}
+  .resn{background:rgba(248,113,113,.16);color:#fca5a5;border:1px solid rgba(248,113,113,.5);font-weight:700;padding:2px 9px;border-radius:6px;white-space:nowrap;font-size:12px;}
+  .note{background:rgba(56,189,248,.08);border:1px solid rgba(56,189,248,.3);border-radius:8px;
+    padding:12px 16px;font-size:13.5px;color:#bae6fd;margin:10px 0;}
+  .ok-box{background:rgba(52,211,153,.08);border:1px solid rgba(52,211,153,.3);border-radius:8px;
+    padding:12px 16px;font-size:13.5px;color:#bbf7d0;margin:10px 0;}
+  .find{border-left:3px solid var(--accent);padding:6px 0 6px 14px;margin:18px 0;}
+  .find h4{margin:2px 0 8px;font-size:15px;color:var(--text);}
+  .kv{font-size:13px;color:var(--sub);margin:3px 0;}
+  .kv b{color:var(--text);}
+  pre{background:#0b1220;border:1px solid var(--line);border-radius:8px;padding:12px 14px;
+    overflow-x:auto;font-size:12.5px;color:#cbd5e1;}
+  .big{font-size:30px;font-weight:800;color:var(--accent);}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin:14px 0;}
+  .metric{background:#142035;border:1px solid var(--line);border-radius:10px;padding:16px;text-align:center;}
+  .metric .label{font-size:12.5px;color:var(--sub);}
+  footer{text-align:center;color:var(--sub);font-size:12.5px;padding:30px;border-top:1px solid var(--line);}
+  .legend{font-size:12.5px;color:var(--sub);margin-top:8px;}
+</style>
+</head>
+<body>
+<header>
+  <h1>Project-SPIP — M4 QA 회귀·해소 검증 보고서 <span style="color:var(--sub);font-size:18px;">(2회차)</span></h1>
+  <div>
+    <span class="tag">QA 엔지니어</span>
+    <span class="tag">재검증 (재현 기반)</span>
+    <span class="tag">BUG-M4-01 / OBS-M4-02 해소</span>
+    <span class="tag">회귀 0</span>
+  </div>
+  <p>1회차에서 보고한 <b>높음 1건(BUG-M4-01: 기본 스캔에서 deps/devDeps 항상 null — 계약 위반)</b>과
+     <b>낮음 1건(OBS-M4-02: size 단일 디렉터리 내부 파일루프 시간예산 미점검)</b>의 백엔드 수정에 대해
+     <b>실제 스캔 경로(node scan.js·실서버 rescan)</b>로 해소를 확인하고 M4 핵심 흐름·MVP 회귀 부재를 재검증했다.
+     모든 판정은 <b>실행 결과(추측 금지)</b>에 근거한다.</p>
+  <div class="meta">
+    검증일: 2026-06-21 · 대상 수정: <code>lib/scan/collectors/index.js</code> · <code>lib/scan/scanner.js</code> ·
+    <code>lib/scan/collectors/size.js</code> · <code>lib/server/scanController.js</code> ·
+    기준: <code>docs/reviews/qa_m4_1.html</code> · <code>docs/api-contract.md</code> ·
+    실행환경: Windows 11 / Node v24.5.0 · <code>docs/Development/</code> 룰 부재(기획·계약으로 검증)
+  </div>
+</header>
+
+<main>
+
+<section>
+  <h2>0. 종합 판정</h2>
+  <p><span class="verdict pass">출시 가능 (GO)</span></p>
+  <div class="grid">
+    <div class="metric"><div class="big">213/213</div><div class="label">npm test (전부 통과)</div></div>
+    <div class="metric"><div class="big">2/2</div><div class="label">미결 결함 해소</div></div>
+    <div class="metric"><div class="big">0</div><div class="label">회귀</div></div>
+    <div class="metric"><div class="big">0</div><div class="label">신규 결함</div></div>
+  </div>
+  <div class="ok-box">
+    <b>BUG-M4-01 (높음) — 해소.</b> 실제 스캔 경로(<code>node scan.js</code> 및 실서버 <code>POST /api/rescan</code>)에서
+    <b>기본 스캔(withSize 없이) deps/devDeps가 실값으로 채워짐</b>(alpha 2/1·beta 0/0·gamma 3/0)을 확인.
+    용량(<code>totalBytes</code>/<code>nodeModulesBytes</code>)은 여전히 미수집(<code>null</code>·<code>status:'skipped'</code>),
+    <code>stats.totalBytes</code>도 <code>null</code> 유지 → MVP·N-01 성능 보존. withSize 스캔에선 용량까지 <code>ok</code>로 승격.
+    <br><b>OBS-M4-02 (낮음) — 해소.</b> size 단일 평면 디렉터리 파일루프에 <code>Date.now() &gt; deadlineTs</code> 시간예산 점검이
+    추가되어(<code>size.js:67</code>) 매 엔트리마다 동작 — maxEntries 외 시간 안전망 실측 확인.
+    <br><b>watchdog — 재확인.</b> 실서버에서 watchdog 발화(phase=error) 후 후속 rescan이 <b>202(영구 409 아님)</b>로 정상 시작.
+    <br><b>회귀 0.</b> npm test 213/213(1회차 201→+12 신규 회귀 테스트), 서버 size shape ↔ 프론트 분기 경계면 일치.
+    <b>BUG-M4-01 해소 + 회귀 0 → M4 출시 가능.</b>
+  </div>
+</section>
+
+<section>
+  <h2>1. 테스트 실행 — <span class="res">PASS</span></h2>
+  <p><code>npm test</code> (<code>node --test "test/**/*.test.js"</code>) 실측:</p>
+  <pre>tests 213 · suites 0 · pass 213 · fail 0 · cancelled 0 · skipped 0 · todo 0 · duration_ms 884</pre>
+  <p>1회차 201 → 213(+12). 증가분은 수정에 동반된 회귀 테스트(레지스트리 항상로드·size 시간예산·watchdog 세대가드 등)로 보이며 전부 통과.
+     단, 단위 테스트는 모듈 단위 호출이므로 <b>1회차 BUG-M4-01이 들어왔던 통합 경계(레지스트리↔스캐너)는 아래 §2 실스캔/실서버 E2E로 직접 재검증</b>한다.</p>
+</section>
+
+<section>
+  <h2>2. BUG-M4-01 해소 — 실제 스캔 경로 재현 — <span class="res">PASS</span></h2>
+  <p>합성 트리(alpha[deps2/devDeps1+node_modules], beta[deps0], gamma[deps3])를 <code>os.tmpdir()</code>에 생성하고
+     <b>단위 <code>size.collect()</code> 직접호출이 아닌 실제 경로</b>로 검증.</p>
+
+  <h3>2.1 CLI 실스캔 (<code>node scan.js --roots ... [--with-size]</code>) — 스냅샷 파일 실측</h3>
+  <table>
+    <tr><th style="width:18%;">프로젝트</th><th>기본 스캔 (withSize 없이) — <code>cache/projects.json</code></th><th>withSize 스캔 (<code>--with-size</code>)</th></tr>
+    <tr><td>alpha</td><td><code>{status:"skipped", totalBytes:null, nodeModulesBytes:null, <b>deps:2, devDeps:1</b>}</code></td><td><code>{status:"ok", totalBytes:152, nodeModulesBytes:15, deps:2, devDeps:1}</code></td></tr>
+    <tr><td>beta</td><td><code>{status:"skipped", totalBytes:null, nm:null, <b>deps:0, devDeps:0</b>}</code></td><td><code>{status:"ok", totalBytes:19, nm:null, deps:0, devDeps:0}</code></td></tr>
+    <tr><td>gamma</td><td><code>{status:"skipped", totalBytes:null, nm:null, <b>deps:3, devDeps:0</b>}</code></td><td><code>{status:"ok", totalBytes:61, nm:null, deps:3, devDeps:0}</code></td></tr>
+    <tr><td><b>stats.totalBytes</b></td><td><code>null</code> (미측정 유지)</td><td><code>232</code> (number 승격, §4.3)</td></tr>
+  </table>
+
+  <h3>2.2 실서버 E2E (<code>POST /api/rescan</code> → 폴링 → <code>/api/projects</code>·<code>/api/stats</code> 실응답)</h3>
+  <table>
+    <tr><th style="width:46%;">시나리오</th><th>기대</th><th>실측</th><th>판정</th></tr>
+    <tr><td>기본 rescan 시작</td><td>202 <code>SCAN_STARTED</code></td><td>202 / SCAN_STARTED</td><td><span class="res">PASS</span></td></tr>
+    <tr><td>phase 전이 (scanning→done)</td><td>scanning 관측 후 done</td><td>scanning 관측 · done</td><td><span class="res">PASS</span></td></tr>
+    <tr><td>완료 후 <code>/api/projects</code></td><td>hasSnapshot:true · 3건</td><td>true · 3건</td><td><span class="res">PASS</span></td></tr>
+    <tr><td><b>기본 스캔 deps/devDeps (실응답)</b></td><td><b>실값(저비용 항상 수집)</b></td><td><b>alpha 2/1·beta 0/0·gamma 3/0</b></td><td><span class="res">PASS</span></td></tr>
+    <tr><td>기본 스캔 용량 게이트</td><td>totalBytes/nm <code>null</code> · status skipped</td><td>null·null·skipped 전건</td><td><span class="res">PASS</span></td></tr>
+    <tr><td>기본 <code>/api/stats.totalBytes</code></td><td><code>null</code></td><td>null</td><td><span class="res">PASS</span></td></tr>
+    <tr><td>withSize rescan 용량</td><td>status <code>ok</code>/partial · totalBytes number</td><td>ok / 98·19·61(B픽스처)</td><td><span class="res">PASS</span></td></tr>
+    <tr><td>withSize nodeModulesBytes</td><td>node_modules 있으면 number</td><td>alpha 15 · beta/gamma null</td><td><span class="res">PASS</span></td></tr>
+    <tr><td>withSize <code>/api/stats.totalBytes</code></td><td>number 승격</td><td>178 (B픽스처 합)</td><td><span class="res">PASS</span></td></tr>
+  </table>
+  <pre>// 실서버 /api/projects (기본 rescan, withSize 없이) 실응답 발췌
+alpha => {"status":"skipped","totalBytes":null,"nodeModulesBytes":null,"deps":2,"devDeps":1}
+beta  => {"status":"skipped","totalBytes":null,"nodeModulesBytes":null,"deps":0,"devDeps":0}
+gamma => {"status":"skipped","totalBytes":null,"nodeModulesBytes":null,"deps":3,"devDeps":0}
+/api/stats => {"totalBytes":null}            // 미측정 유지
+// 실서버 /api/projects (withSize rescan) 실응답 발췌
+alpha => {"status":"ok","totalBytes":98,"nodeModulesBytes":15,"deps":2,"devDeps":1}
+/api/stats => {"totalBytes":178}             // number 승격</pre>
+  <div class="note"><b>수정 메커니즘 확인:</b> <code>collectors/index.js</code> <code>activeCollectors()</code>가 size 수집기를 <b>항상 로드</b>(registry.slice())하도록 변경.
+    <code>scanner.js:143</code>은 <code>loadActiveCollectors()</code>를 인자 없이 호출(includeSize 게이트 제거). 용량 측정 게이트는 <code>size.collect</code> 내부
+    <code>cfg.enabled</code>(=withSize)가 단일 출처로 담당 → deps/devDeps는 enabled 무관 항상 산출, 용량만 opt-in. 1회차 결함의 정확한 반대.</div>
+</section>
+
+<section>
+  <h2>3. OBS-M4-02 해소 — size 단일 디렉터리 시간예산 — <span class="res">PASS</span></h2>
+  <p><code>measureTree</code>의 파일 엔트리 루프 내부(<code>size.js:67</code>)에 <code>if (Date.now() &gt; budget.deadlineTs) { truncated=true; break; }</code>가 추가됨.
+     단일 평면 디렉터리(서브디렉터리 없음)에 수천 파일을 두고 deadline을 과거로 설정해 직접 실측.</p>
+  <table>
+    <tr><th style="width:50%;">시나리오 (단일 평면 디렉터리)</th><th>기대</th><th>실측</th><th>판정</th></tr>
+    <tr><td>5,000 파일 · deadline 이미 경과</td><td>즉시 절단 · truncated</td><td>entries=0 처리, truncated=true (전건 미순회)</td><td><span class="res">PASS</span></td></tr>
+    <tr><td>20,000 파일 · budgetMs≈5</td><td>전체(20,000) 도달 전 절단</td><td>truncated=true · cutMidLoop=true</td><td><span class="res">PASS</span></td></tr>
+  </table>
+  <div class="note"><b>1회차 대비 변화:</b> 1회차에는 시간 점검이 스택 pop(디렉터리 경계)에서만 발생해 단일 거대 평면 디렉터리는 시간상한을 넘겨도 끝까지 돌았다.
+    이제 매 엔트리마다 점검되어 maxEntries(개수 안전망)와 별개로 시간 안전망이 단일 디렉터리 내부에서도 성립한다. 도메인 status는 <code>partial</code>로 신호됨.</div>
+</section>
+
+<section>
+  <h2>4. watchdog 재확인 (실서버 라이브) — <span class="res">PASS</span></h2>
+  <p>실제 <code>createServer()</code>를 루프백 기동하고, 1회차 scan을 <b>영영 resolve되지 않는 프로미스로 주입</b>(무한 hang 모의)한 뒤
+     watchdogMs=30으로 발화시켰다. 단위 컨트롤러가 아닌 <b>실 HTTP 엔드포인트</b>로 검증.</p>
+  <table>
+    <tr><th style="width:50%;">단계</th><th>기대</th><th>실측</th><th>판정</th></tr>
+    <tr><td>1차 rescan (scan hang)</td><td>202 SCAN_STARTED</td><td>202 / SCAN_STARTED</td><td><span class="res">PASS</span></td></tr>
+    <tr><td>watchdog 발화 후 scan-status</td><td>phase <code>error</code> + 락 강제 해제</td><td>phase=error</td><td><span class="res">PASS</span></td></tr>
+    <tr><td><b>후속 rescan</b></td><td><b>202(영구 409 아님)</b></td><td>202 / SCAN_STARTED</td><td><span class="res">PASS</span></td></tr>
+    <tr><td>후속 스캔 완료</td><td>done</td><td>phase=done</td><td><span class="res">PASS</span></td></tr>
+  </table>
+  <p class="legend"><code>_forceError</code>가 <code>running=false</code>를 즉시 풀고(M4-M-3), 세대(scanId) 가드(<code>_isActive</code>)로 버려진 run의 늦은 settle이 후속 스캔 상태/락을 덮어쓰지 않음을 코드·단위테스트(m4-rescan.test.js:293)·라이브로 3중 확인.</p>
+</section>
+
+<section>
+  <h2>5. 회귀 검증 — <span class="res">PASS (회귀 0)</span></h2>
+  <table>
+    <tr><th style="width:40%;">항목</th><th>확인 방법</th><th>결과</th><th>판정</th></tr>
+    <tr><td>rescan→진행→완료 (R-16/R-15)</td><td>실서버 E2E(§2.2·§4)</td><td>202→scanning→done, /api/projects 갱신</td><td><span class="res">PASS</span></td></tr>
+    <tr><td>currentPath 축약 (L-3)</td><td>npm test shortenPath + scan-status 게이트</td><td>2세그먼트 축약·절대경로 미노출</td><td><span class="res">PASS</span></td></tr>
+    <tr><td>all-drives 강등 (R-05)</td><td>scan.js·config 게이트 코드 + npm test</td><td>본문만으론 못 켬·강등 동작</td><td><span class="res">PASS</span></td></tr>
+    <tr><td>depthLimit clamp (R-03)</td><td>walker.test.js (npm test 내)</td><td>안전 깊이 상한·clamp 통과</td><td><span class="res">PASS</span></td></tr>
+    <tr><td>접근성 (N-07)</td><td>dashboard-m4.test.js + 1회차 워크스루 불변</td><td>코드 미변경(프론트 무수정)</td><td><span class="res">PASS</span></td></tr>
+    <tr><td>MVP 회귀 (스캔·서버·정적·보안)</td><td>npm test 전체</td><td>213/213</td><td><span class="res">PASS</span></td></tr>
+    <tr><td><b>경계면: size shape ↔ 프론트 분기</b></td><td>실서버 출력→<code>toViewModel</code> 투입</td><td>아래 §6</td><td><span class="res">PASS</span></td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>6. 경계면 교차 — size shape ↔ 프론트 "미측정"/실값 분기 — <span class="res">일치</span></h2>
+  <p>실서버 기본 스캔 출력 project(alpha, <code>status:'skipped'</code>+<code>deps:2/devDeps:1</code>+<code>totalBytes:null</code>)를
+     프론트 <code>toViewModel</code>에 직접 투입해 분기를 실측.</p>
+  <pre>vm.sizeStatus = "skipped"   vm.deps = 2   vm.devDeps = 1   vm.totalBytes = null
+sizeStatusLabel(skipped,null) = "미측정"           // 용량은 미측정 라벨
+depsHas (typeof deps==='number'||...) = true       // 의존성 행 렌더 → "2 deps · 1 devDeps"</pre>
+  <div class="note"><b>핵심 정합:</b> 프론트 <code>depsLabel</code>(app.js:1396)은 <code>typeof vm.deps==='number'</code>로 판정하며 <code>sizeStatus</code>와 독립.
+    1회차에는 deps가 null이라 "미측정"으로 떨어졌으나, 이제 실값이 들어와 의존성 행이 정상 표기된다. 동시에 용량(<code>measured = ok|partial</code>)은
+    skipped라 "미측정"·<code>kpi__value--na</code> 유지 → <b>의존성은 표시, 용량은 미측정</b>이라는 계약 의도(api-contract §Project shape "deps/devDeps는 size 비활성이어도 채워질 수 있음")가 경계면 양쪽에서 일치. 프론트 코드 무변경으로 이미 호환.</div>
+  <table>
+    <tr><th>경계면</th><th>서버 측 (실측)</th><th>프론트 측 (실측)</th><th>판정</th></tr>
+    <tr><td>size shape (기본)</td><td><code>{skipped, null, null, deps:N, devDeps:N}</code></td><td>deps 행 렌더 · 용량 "미측정"</td><td><span class="res">일치</span></td></tr>
+    <tr><td>size shape (withSize)</td><td><code>{ok, number, number?, N, N}</code></td><td>용량 실값 · KPI 강조</td><td><span class="res">일치</span></td></tr>
+    <tr><td>stats.totalBytes 승격</td><td>null↔number</td><td><code>deriveStats</code> number 실값/합산 폴백</td><td><span class="res">일치</span></td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>7. 발견 결함 / 미검증</h2>
+  <div class="find">
+    <h4><span class="rid">BUG-M4-01</span> <span class="sev-high">높음</span> → <span class="res">해소 확인</span></h4>
+    <div class="kv"><b>재현(실측):</b> 기본 스캔 deps/devDeps = 실값(CLI 스냅샷·실서버 /api/projects 양쪽), 용량은 null 유지. withSize는 ok 승격.</div>
+    <div class="kv"><b>위치:</b> <code>collectors/index.js activeCollectors()</code>(항상 로드) · <code>scanner.js:143</code>(게이트 분리) · <code>size.js:129</code>(enabled 단일 게이트).</div>
+  </div>
+  <div class="find">
+    <h4><span class="rid">OBS-M4-02</span> <span class="sev-low">낮음</span> → <span class="res">해소 확인</span></h4>
+    <div class="kv"><b>재현(실측):</b> 단일 평면 디렉터리 5,000/20,000 파일 + 짧은 deadline → 전건 도달 전 truncated=true.</div>
+    <div class="kv"><b>위치:</b> <code>size.js:67</code> 파일루프 내부 시간예산 점검 추가.</div>
+  </div>
+  <p><b>신규 결함:</b> 없음. <b>회귀:</b> 없음.</p>
+  <ul>
+    <li><b>미검증(범위 외, 변동 없음):</b> 정식 N-01 30s 벤치(200규모 실픽스처 부재 → US-E4 권고)·전체드라이브 실스캔(비용)·스크린리더 실측. 1회차와 동일하며 이번 수정과 무관.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>8. tech-lead 보고 요약</h2>
+  <ul>
+    <li><b>해소:</b> BUG-M4-01(높음)·OBS-M4-02(낮음) 모두 <b>실스캔·실서버로 해소 확인</b>. 단위 우회 없이 통합 경계에서 재검증.</li>
+    <li><b>watchdog:</b> 발화→후속 rescan 202(영구 409 아님) 라이브 확인. 세대가드 정상.</li>
+    <li><b>회귀:</b> npm test 213/213 · M4 핵심 흐름·MVP 불변 · size↔프론트 경계면 일치. <b>회귀 0·신규결함 0.</b></li>
+    <li><b>판정:</b> <b>출시 가능(GO)</b>. 통합 리스크 낮음. debugger 회부 불필요.</li>
+  </ul>
+</section>
+
+<footer>
+  Project-SPIP — M4 QA 회귀·해소 검증 보고서 (2회차) · 2026-06-21 · QA 엔지니어<br>
+  근거: npm test 213/213 실행 로그 · node scan.js 기본/withSize 스냅샷 실측 · 실서버 rescan E2E(/api/projects·/api/stats 실응답) · size 시간예산 직접 실측 · 실서버 watchdog 라이브 · 프론트 toViewModel 경계 교차
+</footer>
+
+</main>
+</body>
+</html>

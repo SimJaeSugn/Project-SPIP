@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project-SPIP — 개발 로드맵</title>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#1e293b; --text:#e2e8f0; --sub:#94a3b8;
+    --accent:#34d399; --ref:#38bdf8; --line:#334155; --warn:#fbbf24; --danger:#f87171;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:"Segoe UI","Malgun Gothic",system-ui,sans-serif;line-height:1.7;}
+  header{padding:48px 32px 36px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#13203b,#0f172a);}
+  header h1{margin:0 0 8px;font-size:30px;}
+  header .tag{display:inline-block;background:rgba(52,211,153,.12);color:var(--accent);
+    border:1px solid rgba(52,211,153,.4);border-radius:999px;padding:3px 12px;font-size:13px;margin-right:8px;}
+  header p{margin:14px 0 0;color:var(--sub);max-width:940px;}
+  .meta{margin-top:16px;font-size:13px;color:var(--sub);}
+  main{max-width:1180px;margin:0 auto;padding:32px;}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:24px 28px;margin:22px 0;}
+  h2{margin:0 0 16px;font-size:21px;color:var(--accent);border-left:4px solid var(--accent);
+    padding-left:12px;}
+  h3{font-size:16px;color:var(--ref);margin:22px 0 10px;}
+  h4{font-size:14px;color:var(--text);margin:16px 0 6px;}
+  p{margin:8px 0;}
+  ul,ol{margin:8px 0;padding-left:22px;}
+  li{margin:5px 0;}
+  code{background:#0b1220;color:var(--ref);padding:1px 6px;border-radius:5px;font-size:13px;}
+  pre{background:#0b1220;border:1px solid var(--line);border-radius:8px;padding:14px 16px;
+    overflow-x:auto;font-size:13px;color:#cbd5e1;font-family:Consolas,monospace;line-height:1.55;}
+  pre .c{color:#64748b;}
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13.5px;}
+  th,td{border:1px solid var(--line);padding:9px 11px;text-align:left;vertical-align:top;}
+  th{background:#142035;color:var(--accent);}
+  tr:nth-child(even) td{background:rgba(255,255,255,.02);}
+  .rid{font-family:Consolas,monospace;color:var(--accent);font-weight:700;white-space:nowrap;}
+  .nid{font-family:Consolas,monospace;color:var(--warn);font-weight:700;white-space:nowrap;}
+  .hid{font-family:Consolas,monospace;color:var(--danger);font-weight:700;white-space:nowrap;}
+  .mono{font-family:Consolas,monospace;font-size:12.5px;}
+  .pill{font-size:11px;font-weight:700;padding:2px 9px;border-radius:6px;white-space:nowrap;display:inline-block;}
+  .mvp{background:rgba(52,211,153,.16);color:#6ee7b7;border:1px solid rgba(52,211,153,.5);}
+  .m4{background:rgba(148,163,184,.16);color:#cbd5e1;border:1px solid rgba(148,163,184,.4);}
+  .sec{background:rgba(248,113,113,.14);color:#fca5a5;border:1px solid rgba(248,113,113,.45);}
+  .qa{background:rgba(52,211,153,.16);color:#6ee7b7;border:1px solid rgba(52,211,153,.5);}
+  .cr{background:rgba(56,189,248,.16);color:#7dd3fc;border:1px solid rgba(56,189,248,.45);}
+  .sr{background:rgba(248,113,113,.14);color:#fca5a5;border:1px solid rgba(248,113,113,.45);}
+  .role-be{background:rgba(52,211,153,.12);color:#6ee7b7;border:1px solid rgba(52,211,153,.4);}
+  .role-fe{background:rgba(56,189,248,.12);color:#7dd3fc;border:1px solid rgba(56,189,248,.4);}
+  .role-do{background:rgba(251,191,36,.12);color:#fcd34d;border:1px solid rgba(251,191,36,.4);}
+  .role-tl{background:rgba(192,132,252,.14);color:#d8b4fe;border:1px solid rgba(192,132,252,.45);}
+  .note{background:rgba(56,189,248,.08);border:1px solid rgba(56,189,248,.3);border-radius:8px;
+    padding:12px 16px;font-size:13.5px;color:#bae6fd;}
+  .warn-box{background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.3);border-radius:8px;
+    padding:12px 16px;font-size:13.5px;color:#fde68a;}
+  .danger-box{background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.35);border-radius:8px;
+    padding:12px 16px;font-size:13.5px;color:#fecaca;}
+  figure{margin:18px 0;background:#0b1220;border:1px solid var(--line);border-radius:10px;padding:18px;}
+  figcaption{color:var(--sub);font-size:12.5px;margin-top:10px;text-align:center;}
+  .legend{display:flex;gap:18px;flex-wrap:wrap;font-size:12.5px;color:var(--sub);margin-top:10px;justify-content:center;}
+  .legend span{display:inline-flex;align-items:center;gap:6px;}
+  .dot{width:11px;height:11px;border-radius:3px;display:inline-block;}
+  .toc a{color:var(--ref);text-decoration:none;}
+  .toc a:hover{text-decoration:underline;}
+  .toc ol{columns:2;}
+  .stage-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+  .stage-id{font-family:Consolas,monospace;font-weight:800;color:#0f172a;background:var(--accent);
+    border-radius:6px;padding:2px 10px;font-size:14px;}
+  .dod{background:rgba(52,211,153,.06);border-left:3px solid var(--accent);padding:8px 14px;margin:10px 0;font-size:13.5px;}
+  .gate{border-left:3px solid var(--danger);padding-left:12px;margin:10px 0;}
+  footer{text-align:center;color:var(--sub);font-size:12.5px;padding:30px;border-top:1px solid var(--line);}
+</style>
+</head>
+<body>
+<header>
+  <span class="tag">개발 로드맵</span><span class="tag">v1.0</span><span class="tag">MVP 16건</span><span class="tag">외부 의존성 0</span>
+  <h1>Project-SPIP — 개발 로드맵</h1>
+  <p>확정 아키텍처 설계서(rev.2)를 입력으로, MVP 16건(기능 R-01·02·04·06·07·08·10·11·12·13·14 + 비기능 N-02·03·04·05·06)을 의존성 순서를 지킨 8개 구현 단계(S0~S7)로 분해한다. 기술 제약: Node.js 16+ CommonJS, 외부 npm 의존성 0(내장 모듈만), 순수 HTML/CSS/JS, 빌드/프레임워크 없음. M4 후속(R-03·05·09·15·16·N-07)은 본 로드맵의 구현 대상이 아니며 계약·자리만 확보한다.</p>
+  <div class="meta">문서 유형: 개발 로드맵 · 작성: 테크리드 · 최종 갱신: 2026-06-21 · 입력: architecture.html(rev.2) / adr.html(ADR-001~006) / PRD §12.1 / traceability.html / package.json · 저장 경로: <code>docs/roadmap.html</code></div>
+</header>
+
+<main>
+
+<section class="toc">
+  <h2>목차</h2>
+  <ol>
+    <li><a href="#summary">1. 요약 — 단계·의존성 한눈에</a></li>
+    <li><a href="#timeline">2. 구현 타임라인 (SVG)</a></li>
+    <li><a href="#contract">3. API 계약 합의 지점 (PM 중재)</a></li>
+    <li><a href="#stages">4. 단계별 상세 (S0~S7)</a></li>
+    <li><a href="#secgate">5. 보안 게이트 이월 항목 배치</a></li>
+    <li><a href="#verify">6. 검증 배치 (qa / code-reviewer / security-reviewer)</a></li>
+    <li><a href="#test">7. 테스트 전략 (의존성 0 제약)</a></li>
+    <li><a href="#trace">8. 단계 ↔ 요구 ID 추적 매핑</a></li>
+  </ol>
+</section>
+
+<section id="summary">
+  <h2>1. 요약 — 단계·의존성 한눈에</h2>
+  <p>의존성은 설계 §5의 <b>진입점 → 도메인 → 공용 유틸</b> 단방향 흐름과 일치한다. 구현 순서는 <b>골격/공통(S0) → 스캐너 코어(S1) → 수집기(S2) → 직렬화·저장·CLI(S3) → API 계약 합의(S4·게이트) → 서버/API(S5) → 프론트엔드(S6) → 통합·벤치(S7)</b>다. S4는 코드 단계가 아니라 <b>프론트·백엔드 병렬 착수 전 필수 합의 지점</b>이며 PM이 중재한다.</p>
+  <table>
+    <tr>
+      <th style="width:62px;">단계</th><th style="width:160px;">이름</th><th>포함 모듈/파일</th>
+      <th style="width:150px;">구현 요구 ID</th><th style="width:96px;">선행</th><th style="width:90px;">담당 후보</th>
+    </tr>
+    <tr>
+      <td><span class="stage-id">S0</span></td><td>골격 · 공용 유틸</td>
+      <td><code>lib/common/paths.js</code>, <code>config.js</code>, <code>logger.js</code>, <code>safeExec.js</code>(resolveBin/실행은 S2에서 실측) · 폴더 골격 · test 하니스</td>
+      <td><span class="nid">N-04</span> <span class="nid">N-06</span> <span class="rid">R-04</span> · H-2(골격) L-2</td>
+      <td>—</td><td><span class="pill role-be">backend</span> <span class="pill role-do">devops</span></td>
+    </tr>
+    <tr>
+      <td><span class="stage-id">S1</span></td><td>스캐너 코어</td>
+      <td><code>lib/scan/walker.js</code>, <code>excludeRules.js</code>, <code>detector.js</code></td>
+      <td><span class="rid">R-01</span> <span class="rid">R-02</span> <span class="nid">N-05</span> · H-1(등록) M-3</td>
+      <td>S0</td><td><span class="pill role-be">backend</span></td>
+    </tr>
+    <tr>
+      <td><span class="stage-id">S2</span></td><td>인사이트 수집기</td>
+      <td><code>collectors/index.js</code>, <code>language.js</code>, <code>freshness.js</code>, <code>git.js</code> · <code>size.js</code>(자리만) · safeExec 실측</td>
+      <td><span class="rid">R-06</span> <span class="rid">R-07</span> <span class="rid">R-08</span> <span class="rid">R-13</span> · H-2 H-3 M-4</td>
+      <td>S0, S1</td><td><span class="pill role-be">backend</span></td>
+    </tr>
+    <tr>
+      <td><span class="stage-id">S3</span></td><td>직렬화 · 저장 · CLI</td>
+      <td><code>lib/scan/scanner.js</code>, <code>serializer.js</code> · <code>scan.js</code>(진입점)</td>
+      <td><span class="rid">R-14</span> <span class="nid">N-05</span> <span class="nid">N-06</span> · M-2</td>
+      <td>S1, S2</td><td><span class="pill role-be">backend</span></td>
+    </tr>
+    <tr>
+      <td><span class="stage-id">S4</span></td><td><b>API 계약 합의</b> <span class="pill sec">게이트</span></td>
+      <td>설계 §9 계약 확정 문서화(<code>docs/architecture/api-contract.html</code>) — 코드 없음</td>
+      <td><span class="rid">R-10</span> <span class="rid">R-12</span> <span class="rid">R-13</span> · M-1 L-3</td>
+      <td>S3</td><td><span class="pill role-tl">tech-lead</span> + PM</td>
+    </tr>
+    <tr>
+      <td><span class="stage-id">S5</span></td><td>서버 · API</td>
+      <td><code>lib/server/router.js</code>, <code>snapshotStore.js</code>, <code>apiHandlers.js</code>, <code>pathGuard.js</code>, <code>actionHandlers.js</code>, <code>staticHandler.js</code> · <code>server.js</code></td>
+      <td><span class="rid">R-10</span> <span class="rid">R-12</span> <span class="rid">R-13</span> <span class="nid">N-02</span> <span class="nid">N-03</span> · H-1 H-2 M-1 L-1(헤더) L-3</td>
+      <td>S3, S4</td><td><span class="pill role-be">backend</span></td>
+    </tr>
+    <tr>
+      <td><span class="stage-id">S6</span></td><td>프론트엔드 대시보드</td>
+      <td><code>public/index.html</code>, <code>styles.css</code>, <code>app.js</code>(store/view/filter/actions)</td>
+      <td><span class="rid">R-10</span> <span class="rid">R-11</span> <span class="rid">R-12</span> · L-1(XSS·CSP)</td>
+      <td>S4 (계약) · S5와 병렬</td><td><span class="pill role-fe">frontend</span></td>
+    </tr>
+    <tr>
+      <td><span class="stage-id">S7</span></td><td>통합 · 성능 벤치 · 보안 회귀</td>
+      <td>E2E 통합 · <code>test/fixtures/</code> 검증 세트 · 벤치 스크립트 · 보안 회귀 스위트</td>
+      <td><span class="nid">N-01</span>(품질) <span class="rid">R-11</span>(200ms) <span class="rid">R-01</span>(탐지율) · V-1 V-2 전 게이트</td>
+      <td>S5, S6</td><td><span class="pill role-be">backend</span> <span class="pill role-fe">frontend</span> <span class="pill role-do">devops</span></td>
+    </tr>
+  </table>
+  <div class="note"><b>병렬화 포인트:</b> S6(프론트)은 S4 계약 합의가 끝나면 S5(서버)와 <b>병렬</b>로 진행할 수 있다. 프론트는 합의된 응답 shape에 맞춘 목 데이터(<code>/api/projects</code> 등)로 선행 개발하고, S7에서 실제 서버와 통합한다. S0의 safeExec는 인터페이스/골격만 두고, 실제 <code>resolveBin</code>·<code>spawn</code> 실측은 git collector가 호출하는 S2에서 확정한다(V-2).</div>
+</section>
+
+<section id="timeline">
+  <h2>2. 구현 타임라인 (SVG)</h2>
+  <figure>
+    <svg viewBox="0 0 1120 360" width="100%" role="img" aria-label="Project-SPIP 구현 단계 타임라인">
+      <defs>
+        <marker id="arr" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto">
+          <path d="M0,0 L9,4 L0,8 Z" fill="#94a3b8"/>
+        </marker>
+      </defs>
+      <!-- baseline -->
+      <line x1="40" y1="80" x2="1080" y2="80" stroke="#334155" stroke-width="1.4"/>
+
+      <!-- S0 -->
+      <rect x="40" y="56" width="120" height="48" rx="9" fill="#0b1220" stroke="#34d399" stroke-width="1.6"/>
+      <text x="100" y="76" fill="#34d399" font-size="13" text-anchor="middle" font-family="Segoe UI" font-weight="bold">S0 골격·공용</text>
+      <text x="100" y="93" fill="#94a3b8" font-size="9.5" text-anchor="middle" font-family="Segoe UI">paths·config·safeExec</text>
+      <!-- S1 -->
+      <rect x="180" y="56" width="120" height="48" rx="9" fill="#0b1220" stroke="#38bdf8" stroke-width="1.6"/>
+      <text x="240" y="76" fill="#38bdf8" font-size="13" text-anchor="middle" font-family="Segoe UI" font-weight="bold">S1 스캐너코어</text>
+      <text x="240" y="93" fill="#94a3b8" font-size="9.5" text-anchor="middle" font-family="Segoe UI">walker·detector</text>
+      <!-- S2 -->
+      <rect x="320" y="56" width="120" height="48" rx="9" fill="#0b1220" stroke="#38bdf8" stroke-width="1.6"/>
+      <text x="380" y="76" fill="#38bdf8" font-size="13" text-anchor="middle" font-family="Segoe UI" font-weight="bold">S2 수집기</text>
+      <text x="380" y="93" fill="#94a3b8" font-size="9.5" text-anchor="middle" font-family="Segoe UI">lang·fresh·git</text>
+      <!-- S3 -->
+      <rect x="460" y="56" width="120" height="48" rx="9" fill="#0b1220" stroke="#38bdf8" stroke-width="1.6"/>
+      <text x="520" y="76" fill="#38bdf8" font-size="13" text-anchor="middle" font-family="Segoe UI" font-weight="bold">S3 저장·CLI</text>
+      <text x="520" y="93" fill="#94a3b8" font-size="9.5" text-anchor="middle" font-family="Segoe UI">scanner·scan.js</text>
+      <!-- S4 gate -->
+      <rect x="600" y="50" width="120" height="60" rx="9" fill="#170d0d" stroke="#f87171" stroke-width="1.8"/>
+      <text x="660" y="74" fill="#fca5a5" font-size="13" text-anchor="middle" font-family="Segoe UI" font-weight="bold">S4 계약합의</text>
+      <text x="660" y="90" fill="#94a3b8" font-size="9.5" text-anchor="middle" font-family="Segoe UI">API shape 확정</text>
+      <text x="660" y="103" fill="#fbbf24" font-size="9" text-anchor="middle" font-family="Segoe UI">PM 중재 · 게이트</text>
+
+      <!-- branch: S5 / S6 parallel -->
+      <rect x="760" y="20" width="130" height="48" rx="9" fill="#0b1220" stroke="#34d399" stroke-width="1.6"/>
+      <text x="825" y="40" fill="#34d399" font-size="13" text-anchor="middle" font-family="Segoe UI" font-weight="bold">S5 서버·API</text>
+      <text x="825" y="57" fill="#94a3b8" font-size="9.5" text-anchor="middle" font-family="Segoe UI">router·pathGuard·open</text>
+
+      <rect x="760" y="92" width="130" height="48" rx="9" fill="#142035" stroke="#38bdf8" stroke-width="1.6"/>
+      <text x="825" y="112" fill="#38bdf8" font-size="13" text-anchor="middle" font-family="Segoe UI" font-weight="bold">S6 프론트엔드</text>
+      <text x="825" y="129" fill="#94a3b8" font-size="9.5" text-anchor="middle" font-family="Segoe UI">목 데이터로 병렬</text>
+
+      <!-- S7 -->
+      <rect x="930" y="56" width="150" height="48" rx="9" fill="#0b1220" stroke="#fbbf24" stroke-width="1.8"/>
+      <text x="1005" y="76" fill="#fbbf24" font-size="13" text-anchor="middle" font-family="Segoe UI" font-weight="bold">S7 통합·벤치</text>
+      <text x="1005" y="93" fill="#94a3b8" font-size="9.5" text-anchor="middle" font-family="Segoe UI">fixtures·30s·200ms·보안회귀</text>
+
+      <!-- arrows -->
+      <line x1="160" y1="80" x2="178" y2="80" stroke="#94a3b8" stroke-width="1.4" marker-end="url(#arr)"/>
+      <line x1="300" y1="80" x2="318" y2="80" stroke="#94a3b8" stroke-width="1.4" marker-end="url(#arr)"/>
+      <line x1="440" y1="80" x2="458" y2="80" stroke="#94a3b8" stroke-width="1.4" marker-end="url(#arr)"/>
+      <line x1="580" y1="80" x2="598" y2="80" stroke="#94a3b8" stroke-width="1.4" marker-end="url(#arr)"/>
+      <line x1="720" y1="70" x2="758" y2="46" stroke="#94a3b8" stroke-width="1.4" marker-end="url(#arr)"/>
+      <line x1="720" y1="90" x2="758" y2="114" stroke="#94a3b8" stroke-width="1.4" marker-end="url(#arr)"/>
+      <line x1="890" y1="46" x2="945" y2="72" stroke="#94a3b8" stroke-width="1.4" marker-end="url(#arr)"/>
+      <line x1="890" y1="114" x2="945" y2="90" stroke="#94a3b8" stroke-width="1.4" marker-end="url(#arr)"/>
+
+      <!-- security gate markers -->
+      <text x="660" y="135" fill="#f87171" font-size="9.5" text-anchor="middle" font-family="Segoe UI">M-1 계약</text>
+      <text x="240" y="120" fill="#f87171" font-size="9" text-anchor="middle" font-family="Segoe UI">H-1·M-3</text>
+      <text x="380" y="120" fill="#f87171" font-size="9" text-anchor="middle" font-family="Segoe UI">H-2·H-3·M-4</text>
+      <text x="825" y="160" fill="#f87171" font-size="9" text-anchor="middle" font-family="Segoe UI">H-1 검증·L-1</text>
+      <text x="1005" y="120" fill="#f87171" font-size="9" text-anchor="middle" font-family="Segoe UI">V-1·V-2 회귀</text>
+
+      <!-- legend row -->
+      <text x="40" y="200" fill="#94a3b8" font-size="11" font-family="Segoe UI" font-weight="bold">검증 게이트 (각 단계 완료 시)</text>
+      <text x="40" y="222" fill="#6ee7b7" font-size="10.5" font-family="Segoe UI">● qa-engineer: 동작·경계·수용기준 — 전 단계</text>
+      <text x="40" y="240" fill="#7dd3fc" font-size="10.5" font-family="Segoe UI">● code-reviewer: 품질·중복·결함 — 코드 변경 전 단계</text>
+      <text x="40" y="258" fill="#fca5a5" font-size="10.5" font-family="Segoe UI">● security-reviewer: 보안 게이트 — S0·S1·S2·S4·S5·S6·S7(외부경계 변경 시 필수)</text>
+      <text x="40" y="276" fill="#fbbf24" font-size="10.5" font-family="Segoe UI">● debugger: 원인불명·간헐 버그 발생 시 투입(예: 심링크 루프·TOCTOU 재현)</text>
+    </svg>
+    <figcaption>그림 1. S0→S3 직렬 → S4 계약 게이트 → S5/S6 병렬 → S7 통합. 보안 게이트(H/M/V)는 해당 통제가 구현되는 단계에 배치된다.</figcaption>
+  </figure>
+</section>
+
+<section id="contract">
+  <h2>3. API 계약 합의 지점 (S4 · PM 중재)</h2>
+  <p>프론트(<code>public/</code>)와 백엔드(<code>server.js</code>) 경계의 엔드포인트·요청/응답 shape는 <b>S5/S6 병렬 착수 전에 반드시 확정</b>한다(안티패턴: 계약 합의 전 병렬 착수 = 경계면 불일치 주원인). 합의 결과는 <code>docs/architecture/api-contract.html</code>에 자족형 HTML로 기록하고 PM이 합의를 중재한다. 기준은 설계 §9이며, 아래 표가 합의 체크리스트다.</p>
+  <table>
+    <tr><th style="width:70px;">메서드</th><th style="width:150px;">경로</th><th>요청 shape</th><th>응답 shape (성공)</th><th style="width:120px;">합의 포인트</th></tr>
+    <tr><td><span class="pill cr">GET</span></td><td><code>/</code></td><td>—</td><td><code>public/index.html</code></td><td>P1-1 URL 규약</td></tr>
+    <tr><td><span class="pill cr">GET</span></td><td><code>/static/&lt;asset&gt;</code></td><td>—</td><td><code>public/&lt;asset&gt;</code> + MIME + CSP 헤더</td><td>자산 참조 경로</td></tr>
+    <tr><td><span class="pill cr">GET</span></td><td><code>/api/projects</code></td><td>—</td><td><code>{ schemaVersion, generatedAt, hasSnapshot:boolean, projects: Project[] }</code></td><td>Project 필드(§8.1) 합의</td></tr>
+    <tr><td><span class="pill cr">GET</span></td><td><code>/api/stats</code></td><td>—</td><td><code>{ total, byLanguage:{...}, staleCount, totalBytes:null, generatedAt }</code></td><td>totalBytes=null(P2-2)</td></tr>
+    <tr><td><span class="pill cr">GET</span></td><td><code>/api/health</code></td><td>—</td><td><code>{ ok:true, hasSnapshot, codeCli:boolean, git:boolean }</code></td><td>CLI 가용성 노출</td></tr>
+    <tr><td><span class="pill sr">POST</span></td><td><code>/api/open</code></td><td><code>{ id: string }</code> + 세션토큰</td><td><code>{ ok:true, code:"OPENING", message }</code></td><td>id 기반·M-1 헤더(P2-3)</td></tr>
+    <tr><td><span class="pill m4">POST</span></td><td><code>/api/rescan</code></td><td>—</td><td>MVP: 미마운트 → <code>404 NOT_FOUND</code></td><td>M4 자리만(P3-3)</td></tr>
+  </table>
+  <h4>오류 응답 계약 (합의 필수 · L-3)</h4>
+  <ul>
+    <li><code>200 + ok:false</code>: <code>CODE_CLI_NOT_FOUND</code> | <code>PATH_GONE</code> (R-13 graceful)</li>
+    <li><code>403</code>: <code>PATH_NOT_ALLOWED</code>(화이트리스트 밖) · <code>FORBIDDEN_ORIGIN</code>(Host/Origin/토큰, M-1)</li>
+    <li><code>404</code>: <code>ID_NOT_FOUND</code>(P2-3) · <code>NOT_FOUND</code>(미존재 자산/rescan@MVP)</li>
+    <li>스냅샷 부재/손상: <b>503 아님</b> → <code>200 + hasSnapshot:false + projects:[]</code>(P2-5 통일, 503 폐기)</li>
+    <li><b>L-3:</b> 모든 <code>message</code>는 고정 안내문만. 원시 예외·스택·내부 절대경로는 응답 금지(콘솔 로그만).</li>
+  </ul>
+  <div class="warn-box"><b>합의 산출물 DoD:</b> 위 모든 엔드포인트의 요청/응답 shape, Project 필드 타입, 오류 코드 집합, 세션토큰 전달 방식(헤더명/주입 위치), CSP 정책 문자열이 <code>api-contract.html</code>에 명문화되고 frontend·backend·tech-lead·PM가 합의 서명(체크). 이 게이트 통과 전 S5·S6의 경계 코드는 착수 금지.</div>
+</section>
+
+<section id="stages">
+  <h2>4. 단계별 상세 (S0~S7)</h2>
+
+  <!-- S0 -->
+  <h3><span class="stage-head"><span class="stage-id">S0</span> 골격 · 공용 유틸 · 테스트 하니스</span></h3>
+  <p><b>목표:</b> 두 진입점이 공유할 <code>lib/common/</code> 토대와 OS 앱 데이터 경로 해석을 확정해, 이후 모든 단계가 단방향 의존(진입점→도메인→공용)으로 쌓이게 한다. 외부 의존성 0·CommonJS 규약을 코드로 못박는다.</p>
+  <table>
+    <tr><th style="width:200px;">파일/모듈</th><th>구현 내용</th><th style="width:130px;">요구/통제</th></tr>
+    <tr><td><code>lib/common/paths.js</code></td><td><code>appDir()</code>/<code>configPath()</code>/<code>cachePath()</code> — Win <code>%APPDATA%\spip\</code>, macOS, Linux 단일 해석(P1-2). 디렉터리 0700 생성</td><td><span class="nid">N-06</span> M-2</td></tr>
+    <tr><td><code>lib/common/config.js</code></td><td>CLI인자→파일→기본값 병합·검증. <code>scanRoots</code> realpath 정규화·타입/존재 검증, <code>excludes</code> 패턴 길이·개수 상한, 잘못된 값 경고 후 폴백</td><td><span class="rid">R-04</span> <span class="rid">R-07</span> L-2</td></tr>
+    <tr><td><code>lib/common/logger.js</code></td><td>콘솔 로깅 + warnings[] 수집기. 에러 메시지에 내부 경로 비노출(L-3 토대)</td><td><span class="nid">N-05</span> L-3</td></tr>
+    <tr><td><code>lib/common/safeExec.js</code></td><td><b>인터페이스/골격만:</b> <code>resolveBin(name)</code>, <code>safeExec(absBin,args,opts)</code> 시그니처·shell:false·timeout/maxBuffer 옵션 구조. 실제 spawn 실측은 S2</td><td>H-2 M-4(골격)</td></tr>
+    <tr><td>폴더 골격 · <code>test/</code></td><td><code>lib/scan</code>·<code>lib/server</code>·<code>public</code>·<code>test/fixtures</code> 골격, <code>node:test</code> 러너 하니스·실행 스크립트</td><td><span class="nid">N-04</span></td></tr>
+  </table>
+  <div class="dod"><b>DoD:</b> ① <code>node -e "require('./lib/common/paths')"</code> 등 무오류 로드 · ② 외부 의존성 0 확인(<code>package.json</code> deps 비어있음, require가 내장 모듈만) · ③ paths가 3개 OS 분기 단위 테스트 통과 · ④ config 병합·폴백·scanRoots 정규화 단위 테스트 통과 · ⑤ node:test 하니스로 빈 스위트 실행 성공.</div>
+  <div class="gate"><b>검증:</b> <span class="pill qa">qa</span> config 폴백/경계 · <span class="pill cr">code-reviewer</span> 모듈 경계·순환의존 없음 · <span class="pill sr">security-reviewer</span> L-2(config 검증)·M-2(권한) 골격 점검.</div>
+
+  <!-- S1 -->
+  <h3><span class="stage-head"><span class="stage-id">S1</span> 스캐너 코어 (순회·제외·탐지)</span></h3>
+  <p><b>목표:</b> 루트부터 DFS로 후보 디렉터리를 스트리밍하고, 제외 규칙으로 가지치며, 프로젝트를 판별한다. 화이트리스트 등록 시점의 realpath 정규화(H-1)와 무한재귀/심링크 루프 차단(M-3)을 코어에 내장한다.</p>
+  <table>
+    <tr><th style="width:200px;">파일/모듈</th><th>구현 내용</th><th style="width:130px;">요구/통제</th></tr>
+    <tr><td><code>lib/scan/walker.js</code></td><td>DFS 순회 <code>AsyncIterable&lt;candidateDir&gt;</code>. <b>내장 안전 깊이 상한(하드코딩)</b>·방문 realpath 집합 추적 재방문 가지치기·심링크 기본 미추적(lstat). 등록 경로 canonicalize(realpath)</td><td><span class="rid">R-02</span> <span class="nid">N-05</span> H-1 M-3</td></tr>
+    <tr><td><code>lib/scan/excludeRules.js</code></td><td><code>node_modules</code>·<code>.git</code> 내부·<code>dist/build/.cache</code>·OS 시스템 폴더 판정 함수. config.excludes 병합</td><td><span class="rid">R-02</span></td></tr>
+    <tr><td><code>lib/scan/detector.js</code></td><td><code>.git</code>/<code>package.json</code>/<code>.vscode</code> 신호로 프로젝트 판별. 중첩 시 최상위 1건 집계</td><td><span class="rid">R-01</span></td></tr>
+  </table>
+  <div class="dod"><b>DoD:</b> ① 픽스처 트리에서 제외 폴더 하위 재귀 미진입 검증 · ② 중첩 프로젝트 최상위 1건 집계 검증 · ③ <b>심링크 루프(a→b→a) 픽스처에서 무한루프 없이 종료</b>(M-3) · ④ 안전 깊이 상한 초과 시 경고 후 중단 · ⑤ 등록 경로가 realpath로 정규화됨(심링크 경유 경로 해소 확인).</div>
+  <div class="gate"><b>검증:</b> <span class="pill qa">qa</span> 탐지·제외·중첩 경계 · <span class="pill cr">code-reviewer</span> 순회 로직·자원 누수 · <span class="pill sr">security-reviewer</span> <b>H-1 등록 정규화 + M-3 루프차단(필수 게이트)</b>. 간헐/재현난항 시 <span class="pill" style="background:rgba(251,191,36,.14);color:#fcd34d;border:1px solid rgba(251,191,36,.4)">debugger</span> 투입.</div>
+
+  <!-- S2 -->
+  <h3><span class="stage-head"><span class="stage-id">S2</span> 인사이트 수집기 (공통 계약)</span></h3>
+  <p><b>목표:</b> 교체 가능·격리된 수집기 3종(language·freshness·git)을 공통 계약(<code>collect()→{ok,data,status,note}</code>)으로 구현한다. 부분신뢰 입력(TB-B) 방어(H-3)를 격리보다 앞단에 두고, git 호출의 실행파일 절대경로 고정(H-2)·자원 통제(M-4)를 safeExec 실측으로 확정한다.</p>
+  <table>
+    <tr><th style="width:200px;">파일/모듈</th><th>구현 내용</th><th style="width:130px;">요구/통제</th></tr>
+    <tr><td><code>collectors/index.js</code></td><td>수집기 레지스트리(MVP/M4 플래그). <code>limits</code> 공통 기본값(maxFileBytes·maxReadBytes·maxJsonDepth·maxStringField)</td><td>H-3</td></tr>
+    <tr><td><code>collectors/language.js</code></td><td>deps+확장자 비율 추정, 불명 "Unknown". <b>파싱 전 fs.stat 크기상한·JSON 깊이/바이트 가드·ReDoS-free 정규식·문자열 길이절단/제어문자 제거</b></td><td><span class="rid">R-06</span> H-3 L-1(정제)</td></tr>
+    <tr><td><code>collectors/freshness.js</code></td><td>최종 수정일+(가능시)최근 커밋 시각, stale 90일 판정(config.staleDays)</td><td><span class="rid">R-07</span></td></tr>
+    <tr><td><code>collectors/git.js</code></td><td>저장소여부·브랜치·dirty·ahead/behind. <code>safeExec</code>로 <b>절대경로 git</b> 호출, <code>git -C &lt;path&gt;</code>로 cwd 의존 제거. 부재 시 status='na'. 타임아웃·출력버퍼 상한</td><td><span class="rid">R-08</span> <span class="rid">R-13</span> H-2 M-4</td></tr>
+    <tr><td><code>common/safeExec.js</code>(실측)</td><td>S0 골격 위에 <code>resolveBin</code>(where/which·알려진 경로) 실해석, Windows .bat/.cmd 자동확장 금지·.exe만, spawn shell:false 실동작</td><td>H-2 M-4</td></tr>
+    <tr><td><code>collectors/size.js</code> <span class="pill m4">M4</span></td><td>계약 시그니처만 — MVP status='skipped' 자리 확보</td><td><span class="rid">R-09</span></td></tr>
+  </table>
+  <div class="dod"><b>DoD:</b> ① 각 수집기 실패가 throw 아닌 status로 격리됨 · ② git 미설치 환경 시뮬레이션에서 status='na', 크래시 0(R-13) · ③ <b>H-3 적대적 입력 픽스처</b>(1MB+ package.json·깊은중첩 JSON·제어문자 name) skip/절단 처리 · ④ <b>resolveBin 절대경로 실측</b>(where/which) 및 cwd 위장 바이너리 미선택 검증(H-2) · ⑤ git collector 타임아웃 동작(M-4).</div>
+  <div class="gate"><b>검증:</b> <span class="pill qa">qa</span> 수집 정확·graceful · <span class="pill cr">code-reviewer</span> 계약 준수·중복 · <span class="pill sr">security-reviewer</span> <b>H-2 resolveBin 실측 + H-3 입력가드 + M-4 자원통제(필수 게이트)</b>. ReDoS/메모리폭발 의심 시 <span class="pill" style="background:rgba(251,191,36,.14);color:#fcd34d;border:1px solid rgba(251,191,36,.4)">debugger</span>.</div>
+
+  <!-- S3 -->
+  <h3><span class="stage-head"><span class="stage-id">S3</span> 오케스트레이션 · 직렬화 · CLI 진입점</span></h3>
+  <p><b>목표:</b> walker→detector→collectors→serializer를 묶어 항목 단위 격리·경고 누적으로 전체 스캔을 완주시키고, 스냅샷을 OS 캐시에 원자적·소유자전용 권한으로 쓰며, <code>spip</code> CLI로 실행·요약 출력한다.</p>
+  <table>
+    <tr><th style="width:200px;">파일/모듈</th><th>구현 내용</th><th style="width:130px;">요구/통제</th></tr>
+    <tr><td><code>lib/scan/scanner.js</code></td><td>오케스트레이션. 항목 try 격리·warnings[] 누적·counts 집계. 화이트리스트는 canonicalize 경로로 구성</td><td><span class="rid">R-14</span> <span class="nid">N-05</span> H-1</td></tr>
+    <tr><td><code>lib/scan/serializer.js</code></td><td>§8.1 스키마(schemaVersion·generatedAt·scanRoots·counts·warnings·projects[])대로 직렬화. <b>임시파일→rename 원자적 쓰기, 0600/ACL 권한, 실패 시 정리</b></td><td><span class="nid">N-06</span> M-2</td></tr>
+    <tr><td><code>scan.js</code> (진입점)</td><td>옵션 파싱(<code>spip</code> bin). scanRoots 비면 안내 후 종료(자동 스캔 안 함). 스캔 실행·콘솔 요약 출력</td><td><span class="rid">R-14</span> <span class="rid">R-04</span></td></tr>
+  </table>
+  <div class="dod"><b>DoD:</b> ① <code>spip</code>(=node scan.js)로 지정 루트 스캔→<code>cache/projects.json</code> 생성+콘솔 요약 · ② scanRoots 빈 배열 시 안내 후 종료(크래시·자동스캔 0) · ③ 권한없는 폴더/손상 package.json/비-UTF8 항목 격리 후 전체 완주(N-05) · ④ <b>스냅샷 파일 0600/ACL 권한 + 원자적 쓰기 검증</b>(M-2) · ⑤ §8.1 스키마 정합(schemaVersion=1).</div>
+  <div class="gate"><b>검증:</b> <span class="pill qa">qa</span> CLI 동작·견고성·요약 · <span class="pill cr">code-reviewer</span> 오케스트레이션·격리 · <span class="pill sr">security-reviewer</span> <b>M-2 파일권한·원자적 쓰기(필수 게이트)</b>.</div>
+
+  <!-- S4 -->
+  <h3><span class="stage-head"><span class="stage-id">S4</span> API 계약 합의 <span class="pill sec">게이트 · 코드 없음</span></span></h3>
+  <p><b>목표:</b> S5·S6 병렬 착수 전 §3의 모든 엔드포인트·shape·오류코드·세션토큰·CSP를 확정·문서화한다. PM이 중재하며 frontend·backend 양측 합의가 게이트다. 상세 체크리스트는 <a href="#contract">§3</a>.</p>
+  <div class="dod"><b>DoD:</b> <code>docs/architecture/api-contract.html</code>에 §3 표 전체 + 오류 계약 + M-1(Host allowlist/Origin/세션토큰 전달 방식) + L-3(메시지 정책) + CSP 정책 문자열이 명문화되고 4자(FE/BE/TL/PM) 합의 확인. <b>이 게이트 통과 전 S5·S6 경계 코드 착수 금지.</b></div>
+  <div class="gate"><b>검증:</b> <span class="pill sr">security-reviewer</span> M-1·L-3·CSP 계약 적정성(필수) · <span class="pill cr">code-reviewer</span> shape 일관·타입 명세 완전성 · reviewer 설계 정합성. <b>미합의 시 PM 블로커로 즉시 상신.</b></div>
+
+  <!-- S5 -->
+  <h3><span class="stage-head"><span class="stage-id">S5</span> 서버 · API · 액션</span></h3>
+  <p><b>목표:</b> 127.0.0.1 루프백 전용 HTTP 서버를 내장 <code>http</code>로 조립한다. 스냅샷 메모리 적재(realpath 화이트리스트)·데이터 API·정적 서빙·realpath pathGuard·safeExec 절대경로 액션·M-1 노출통제를 구현한다.</p>
+  <table>
+    <tr><th style="width:200px;">파일/모듈</th><th>구현 내용</th><th style="width:130px;">요구/통제</th></tr>
+    <tr><td><code>server.js</code> (진입점)</td><td><code>listen(port,'127.0.0.1')</code> 루프백 전용. EADDRINUSE 안내. 기동 시 resolveBin·세션토큰 1회 생성·콘솔 URL 출력(자동오픈 없음)</td><td><span class="nid">N-02</span> H-2 M-1</td></tr>
+    <tr><td><code>lib/server/router.js</code></td><td>메서드·경로 디스패치. <code>/api/*</code>→API, 그 외 GET→정적</td><td><span class="rid">R-10</span></td></tr>
+    <tr><td><code>lib/server/snapshotStore.js</code></td><td>기동 시 projects.json 적재 + <b>realpath 화이트리스트</b> 구성. 부재/손상 시 <code>hasSnapshot:false</code> graceful(P2-5)</td><td><span class="rid">R-10</span> <span class="rid">R-13</span> H-1 P2-5</td></tr>
+    <tr><td><code>lib/server/apiHandlers.js</code></td><td><code>/api/projects</code>·<code>/api/stats</code>·<code>/api/health</code>. stats totalBytes=null(P2-2)</td><td><span class="rid">R-10</span> <span class="rid">R-13</span></td></tr>
+    <tr><td><code>lib/server/pathGuard.js</code></td><td><code>canonicalize</code>+<code>isAllowed</code>. id 역참조→realpath 정확일치. 403/404/PATH_GONE 분기</td><td><span class="nid">N-03</span> H-1</td></tr>
+    <tr><td><code>lib/server/actionHandlers.js</code></td><td><code>POST /api/open</code>: Host allowlist+Origin+세션토큰 선통과(M-1)→pathGuard→safeExec 절대경로 spawn(H-2)→피드백. id별 in-flight 상한(M-4). rescan 미마운트(404)</td><td><span class="rid">R-12</span> <span class="nid">N-03</span> H-2 M-1 M-4 L-3</td></tr>
+    <tr><td><code>lib/server/staticHandler.js</code></td><td><code>/</code>→index.html, <code>/static/&lt;asset&gt;</code>→public/ 매핑. public 절대경로 하위 정규화·이탈 시 404·CSP 헤더</td><td><span class="rid">R-10</span> <span class="nid">N-03</span> L-1</td></tr>
+  </table>
+  <div class="dod"><b>DoD:</b> ① <code>npm run start</code>로 127.0.0.1:&lt;port&gt; 바인딩·URL 출력 · ② 스냅샷 없이 기동→<code>/api/projects</code> 200+hasSnapshot:false(P2-5) · ③ 화이트리스트 밖 id→403 PATH_NOT_ALLOWED, 미존재 id→404, 소멸→PATH_GONE · ④ <b>Host/Origin/토큰 불일치 POST→403 FORBIDDEN_ORIGIN</b>(M-1) · ⑤ <code>/api/open</code> 성공→OPENING·code 미설치→CODE_CLI_NOT_FOUND(R-13) · ⑥ staticHandler public 이탈 차단·CSP 헤더 부여 · ⑦ 오류 message 고정문(L-3).</div>
+  <div class="gate"><b>검증:</b> <span class="pill qa">qa</span> 엔드포인트 계약·graceful·2초 피드백(R-12) · <span class="pill cr">code-reviewer</span> 라우팅·핸들러 품질 · <span class="pill sr">security-reviewer</span> <b>H-1 검증경로·H-2 액션·M-1 노출통제·M-4·L-1 헤더·L-3(필수 게이트, 외부경계 전면)</b>.</div>
+
+  <!-- S6 -->
+  <h3><span class="stage-head"><span class="stage-id">S6</span> 프론트엔드 대시보드 (S5와 병렬)</span></h3>
+  <p><b>목표:</b> 빌드/프레임워크 없는 순수 HTML/CSS/JS로 목록·통계·필터·검색·열기 액션을 구현한다. 200개 로드 상태에서 필터 재렌더 ≤200ms(R-11), 저장형 XSS 전면 차단(L-1: textContent/이스케이프만, innerHTML 결합 금지)·CSP 메타·세션토큰 동봉.</p>
+  <table>
+    <tr><th style="width:200px;">파일/모듈</th><th>구현 내용</th><th style="width:130px;">요구/통제</th></tr>
+    <tr><td><code>public/index.html</code></td><td>통계요약+필터컨트롤+카드그리드+빈상태/상세 패널 골격. <code>/static/*</code> 자산 참조·<b>CSP 메타</b>·세션토큰 주입(M-1)</td><td><span class="rid">R-10</span> L-1</td></tr>
+    <tr><td><code>public/styles.css</code></td><td>다크테마·카드·배지. 색상+텍스트 라벨 병기(N-07 권고)·적정 대비</td><td><span class="rid">R-10</span></td></tr>
+    <tr><td><code>app.js — store</code></td><td><code>/api/projects</code> 1회 fetch 메모리 단일출처. hasSnapshot:false 시 빈상태(P2-5)</td><td><span class="rid">R-10</span> <span class="rid">R-13</span></td></tr>
+    <tr><td><code>app.js — view</code></td><td>카드/통계/상세 렌더. <b>모든 동적 텍스트 textContent/명시 이스케이프, innerHTML 결합 금지</b>(L-1 필수). 긴 경로 말줄임</td><td><span class="rid">R-10</span> L-1</td></tr>
+    <tr><td><code>app.js — filter</code></td><td>필터(AND)→검색(리터럴 부분일치)→정렬 메모리 처리·디바운스. MVP 정렬키=이름·최종수정. 결측 말단</td><td><span class="rid">R-11</span></td></tr>
+    <tr><td><code>app.js — actions</code></td><td>'열기'→<code>POST /api/open</code>(토큰 동봉)→피드백. 연타 방지(디바운스/일시 비활성)</td><td><span class="rid">R-12</span></td></tr>
+  </table>
+  <div class="dod"><b>DoD:</b> ① 목록·통계·카드·빈상태 렌더(0건 빈상태 안내) · ② 필터 AND·검색·정렬 동작, <b>200개 로드 시 입력→DOM 재렌더 performance.now() 중앙값 ≤200ms</b>(R-11) · ③ '열기' 2초내 피드백(R-12) · ④ <b>악성 name/description/branch 페이로드(&lt;img onerror&gt;) 주입 픽스처에서 스크립트 미실행</b>(L-1) · ⑤ CSP 메타로 인라인 스크립트 차단 · ⑥ S5 미완 시 목 데이터로 독립 동작.</div>
+  <div class="gate"><b>검증:</b> <span class="pill qa">qa</span> 필터/검색/정렬 동작·200ms 계측·빈상태 · <span class="pill cr">code-reviewer</span> view 렌더·이스케이프 일관 · <span class="pill sr">security-reviewer</span> <b>L-1 저장형 XSS·CSP(필수 게이트, 출력경계)</b>.</div>
+
+  <!-- S7 -->
+  <h3><span class="stage-head"><span class="stage-id">S7</span> 통합 · 성능 벤치 · 보안 회귀</span></h3>
+  <p><b>목표:</b> S5 서버와 S6 프론트를 E2E 통합하고 경계면 불일치를 잡는다. <code>test/fixtures/</code> 검증 세트로 탐지율·스캔시간·필터응답 정량 게이트를 자동 측정하고, 보안 회귀 스위트(V-1·V-2)로 게이트 항목의 재발을 막는다. = <b>MVP 출시 판정</b>.</p>
+  <table>
+    <tr><th style="width:230px;">작업</th><th>내용</th><th style="width:120px;">요구/통제</th></tr>
+    <tr><td>E2E 통합</td><td>scan→server→browser 전 경로 통합. 계약 shape 실측 일치 확인(목→실서버 전환)</td><td><span class="rid">R-10~14</span></td></tr>
+    <tr><td>탐지율 벤치</td><td>fixtures(실제 N+미끼 M) 스캔→탐지율 ≥95%·false negative ≤5% 자동 측정(회귀)</td><td>PRD §3 <span class="rid">R-01</span></td></tr>
+    <tr><td>스캔시간 벤치</td><td>~200 프로젝트 등가 픽스처 콜드캐시 3회 중앙값 &lt;30s(wall-clock)</td><td><span class="nid">N-01</span></td></tr>
+    <tr><td>필터 응답 벤치</td><td>200개 로드 입력→재렌더 performance.now() 중앙값 ≤200ms</td><td><span class="rid">R-11</span></td></tr>
+    <tr><td><b>V-1 보안 회귀</b></td><td><b>realpath/TOCTOU 픽스처 회귀 테스트</b>: 심링크 경유 화이트리스트 우회·등록후 경로교체(TOCTOU)·접두사 부분일치가 모두 차단됨을 고정 픽스처로 회귀</td><td>H-1</td></tr>
+    <tr><td><b>V-2 보안 회귀</b></td><td><b>적대적 입력 가드·resolveBin·git -C 실측</b>: JSON 폭탄·과중첩·ReDoS·1MB+·제어문자·cwd 위장 git.exe/.bat·UNC/대소문자/NFD 경로를 회귀 픽스처로 검증</td><td>H-2 H-3 M-3 M-4</td></tr>
+  </table>
+  <div class="dod"><b>DoD:</b> ① E2E happy path(스캔→대시보드→필터→열기) 통과·경계 불일치 0 · ② 탐지율 ≥95%·스캔 &lt;30s·필터 ≤200ms 자동 측정 통과 · ③ <b>V-1·V-2 보안 회귀 스위트 전건 통과</b> · ④ 전 단계 보안 게이트(H-1·H-2·H-3·M-1~4·L-1~3) 미해결 0 · ⑤ <code>npm run dev</code> 일괄 실행 검증.</div>
+  <div class="gate"><b>검증:</b> <span class="pill qa">qa</span> E2E·정량 벤치 게이트 · <span class="pill cr">code-reviewer</span> 통합 결함·잔여 중복 · <span class="pill sr">security-reviewer</span> <b>V-1·V-2 전 보안 게이트 최종 확인(MVP 출시 차단 게이트)</b>. 재현난항 보안버그 시 <span class="pill" style="background:rgba(251,191,36,.14);color:#fcd34d;border:1px solid rgba(251,191,36,.4)">debugger</span>.</div>
+</section>
+
+<section id="secgate">
+  <h2>5. 보안 게이트 이월 항목 배치</h2>
+  <p>설계 §11의 보안 검증 1회차 시정 항목(H×3·M×4·L×3)과 회귀 검증 항목(V-1·V-2)을 구현·검증 단계에 명시 배치한다. <b>치명/높음(H·V) 항목은 미해결 시 다음 단계로 넘기지 않고 PM에 즉시 보고</b>한다(검증 2회 한도와 무관).</p>
+  <table>
+    <tr><th style="width:90px;">통제 ID</th><th>내용</th><th style="width:120px;">구현 단계</th><th style="width:120px;">검증 단계</th><th style="width:80px;">등급</th></tr>
+    <tr><td><span class="hid">H-1</span></td><td>pathGuard.canonicalize — realpath 등록·검증 동일규칙(화이트리스트)</td><td>S1(등록) · S5(검증)</td><td>S1·S5 + <b>S7 V-1</b></td><td><span class="pill sec">높음</span></td></tr>
+    <tr><td><span class="hid">H-2</span></td><td>safeExec.resolveBin — 실행파일 절대경로 고정·cwd 위장 차단</td><td>S0(골격)·S2(실측)</td><td>S2 + <b>S7 V-2</b></td><td><span class="pill sec">높음</span></td></tr>
+    <tr><td><span class="hid">H-3</span></td><td>collectors limits — 크기/깊이/바이트 가드·ReDoS-free·문자열 정제</td><td>S2</td><td>S2 + <b>S7 V-2</b></td><td><span class="pill sec">높음</span></td></tr>
+    <tr><td><span class="nid">M-1</span></td><td>Host allowlist + Origin + 세션토큰(상태변경 POST)</td><td>S4(계약)·S5(구현)</td><td>S4·S5</td><td><span class="pill" style="background:rgba(251,191,36,.16);color:#fcd34d;border:1px solid rgba(251,191,36,.45)">중간</span></td></tr>
+    <tr><td><span class="nid">M-2</span></td><td>캐시/설정 파일 0600/ACL·원자적 쓰기</td><td>S0(디렉터리)·S3(파일)</td><td>S3</td><td><span class="pill" style="background:rgba(251,191,36,.16);color:#fcd34d;border:1px solid rgba(251,191,36,.45)">중간</span></td></tr>
+    <tr><td><span class="nid">M-3</span></td><td>walker 심링크 루프 방지·방문 realpath 추적·안전 깊이 상한</td><td>S1</td><td>S1 + <b>S7 V-1/V-2</b></td><td><span class="pill" style="background:rgba(251,191,36,.16);color:#fcd34d;border:1px solid rgba(251,191,36,.45)">중간</span></td></tr>
+    <tr><td><span class="nid">M-4</span></td><td>safeExec 타임아웃·출력버퍼 상한·in-flight 상한</td><td>S2(collector)·S5(open)</td><td>S2·S5 + S7 V-2</td><td><span class="pill" style="background:rgba(251,191,36,.16);color:#fcd34d;border:1px solid rgba(251,191,36,.45)">중간</span></td></tr>
+    <tr><td><span class="ref" style="color:#7dd3fc;font-family:Consolas;font-weight:700">L-1</span></td><td>출력 이스케이프(textContent/innerHTML 금지)+CSP</td><td>S2(정제)·S5(헤더)·S6(view)</td><td>S6 + S7</td><td><span class="pill cr">낮음</span></td></tr>
+    <tr><td><span class="ref" style="color:#7dd3fc;font-family:Consolas;font-weight:700">L-2</span></td><td>config 검증(scanRoots 정규화·패턴 상한)</td><td>S0</td><td>S0</td><td><span class="pill cr">낮음</span></td></tr>
+    <tr><td><span class="ref" style="color:#7dd3fc;font-family:Consolas;font-weight:700">L-3</span></td><td>에러 메시지 정책(고정 안내문·경로 비에코)</td><td>S0(logger)·S4(계약)·S5</td><td>S5</td><td><span class="pill cr">낮음</span></td></tr>
+    <tr style="background:rgba(248,113,113,.06)"><td><span class="hid">V-1</span></td><td><b>realpath/TOCTOU 픽스처 회귀 테스트</b></td><td>S7</td><td><b>S7(출시 게이트)</b></td><td><span class="pill sec">회귀</span></td></tr>
+    <tr style="background:rgba(248,113,113,.06)"><td><span class="hid">V-2</span></td><td><b>적대적 입력 가드·resolveBin·git -C 실측</b></td><td>S7</td><td><b>S7(출시 게이트)</b></td><td><span class="pill sec">회귀</span></td></tr>
+  </table>
+  <div class="danger-box"><b>게이트 정책:</b> H-1·H-2·H-3 및 V-1·V-2의 치명/높음 미해결 항목은 해당 단계를 통과시키지 않으며, 검증 2회 반복 한도와 무관하게 미해결 시 PM에 즉시 블로커로 보고한다(설계 §11·로드맵 조율 원칙). 외부 경계(인증/입력/시크릿/외부프로세스)를 건드리는 S0·S1·S2·S4·S5·S6·S7은 security-reviewer 검증을 필수로 거친다.</div>
+</section>
+
+<section id="verify">
+  <h2>6. 검증 배치 (단계별 검증자·검증 내용)</h2>
+  <p>각 단계 완료 즉시 점진 검증한다(전체 완성까지 미루지 않음). 코드 변경이 있는 모든 단계는 code-reviewer, 동작/수용기준은 qa-engineer가 항상, 외부 경계 변경 단계는 security-reviewer가 필수다. 다면 검증은 <b>병렬</b>로 돌린다.</p>
+  <table>
+    <tr><th style="width:60px;">단계</th><th style="width:33%;">qa-engineer (동작·경계·수용기준)</th><th style="width:33%;">code-reviewer (품질·중복·결함)</th><th>security-reviewer (보안 게이트)</th></tr>
+    <tr><td><b>S0</b></td><td>config 병합/폴백/경계·paths OS분기</td><td>모듈 경계·순환의존·의존성 0</td><td>L-2 config검증·M-2 권한 골격</td></tr>
+    <tr><td><b>S1</b></td><td>탐지·제외·중첩·깊이상한·심링크종료</td><td>순회 로직·자원 누수</td><td><b>H-1 등록정규화·M-3 루프차단(필수)</b></td></tr>
+    <tr><td><b>S2</b></td><td>수집 정확·graceful na·stale90</td><td>계약 준수·수집기 중복</td><td><b>H-2 resolveBin·H-3 입력가드·M-4(필수)</b></td></tr>
+    <tr><td><b>S3</b></td><td>CLI 동작·견고성·빈루트 안내·요약</td><td>오케스트레이션·격리·스키마</td><td><b>M-2 파일권한·원자적쓰기(필수)</b></td></tr>
+    <tr><td><b>S4</b></td><td>(계약 완전성·예시 응답 검토)</td><td>shape 일관·타입 명세 완전성</td><td><b>M-1·L-3·CSP 계약 적정성(필수)</b></td></tr>
+    <tr><td><b>S5</b></td><td>엔드포인트 계약·graceful·2초피드백</td><td>라우팅·핸들러 품질·중복</td><td><b>H-1검증·H-2액션·M-1·M-4·L-1헤더·L-3(필수,경계전면)</b></td></tr>
+    <tr><td><b>S6</b></td><td>필터/검색/정렬·200ms·빈상태·열기</td><td>view 렌더·이스케이프 일관</td><td><b>L-1 저장형XSS·CSP(필수,출력경계)</b></td></tr>
+    <tr><td><b>S7</b></td><td>E2E·탐지율95%·30s·200ms 벤치</td><td>통합 결함·잔여 중복</td><td><b>V-1·V-2 전 게이트 최종(출시 차단)</b></td></tr>
+  </table>
+  <div class="note"><b>debugger 투입 기준:</b> qa가 버그를 찾았으나 원인 불분명·간헐적일 때 담당 개발자를 헤매게 두지 않고 debugger에 근본원인 규명을 맡긴다. 우선 후보 — S1 심링크 루프/무한재귀, S5 TOCTOU 경로검증, S2 ReDoS/메모리폭발, S7 벤치 변동성. <b>tech-writer:</b> S7 출시 직전 README(설치·spip·start·트러블슈팅) 문서화.</div>
+</section>
+
+<section id="test">
+  <h2>7. 테스트 전략 (외부 의존성 0 제약)</h2>
+  <h3>7.1 러너 선정 — Node 내장 <code>node:test</code> + <code>assert</code></h3>
+  <p>ADR-001(외부 의존성 0)·기술스택 §10·N-04에 따라 <b>Jest/Mocha/Vitest 등 외부 프레임워크를 도입하지 않는다.</b> Node 16+에 내장된 <code>node:test</code>(test runner)와 <code>node:assert</code>로 단위·통합·벤치를 모두 작성한다.</p>
+  <div class="note"><b>근거(ADR 정합):</b> ① 외부 의존성 0 유지(ADR-001·N-04) — 별도 설치/번들 없음 · ② Node 16의 <code>node:test</code>는 안정 사용 가능(실험 플래그 가능성은 S0에서 실측, 미흡 시 <b>순수 <code>assert</code> 기반 러너로 폴백</b> — 그래도 의존성 0 유지) · ③ <code>--test</code> 러너로 회귀·벤치 자동화 가능(§10 테이블 "Node 내장 node:test + assert"). 외부 러너가 꼭 필요하면 별도 ADR로 근거·번들 영향을 남긴다(§10 의존성 추가 정책).</div>
+  <h3>7.2 테스트 계층</h3>
+  <table>
+    <tr><th style="width:130px;">계층</th><th>대상</th><th>단계</th></tr>
+    <tr><td>단위</td><td>paths·config·excludeRules·detector·각 collector·pathGuard·serializer</td><td>S0~S5 각 단계</td></tr>
+    <tr><td>통합</td><td>scanner 파이프라인·서버 라우팅·E2E(scan→server→fetch)</td><td>S3·S5·S7</td></tr>
+    <tr><td>성능 벤치</td><td>탐지율≥95%·스캔&lt;30s·필터≤200ms(performance.now)</td><td>S7</td></tr>
+    <tr><td>보안 회귀</td><td>V-1·V-2 픽스처(아래)</td><td>S7(전 게이트)</td></tr>
+  </table>
+  <h3>7.3 보안 픽스처 (회귀 — <code>test/fixtures/</code>에 고정)</h3>
+  <ul>
+    <li><b>심링크 루프</b>: a→b→a 순환 링크 → walker 무한루프 없이 종료(M-3)</li>
+    <li><b>심링크 화이트리스트 우회</b>: 루트 하위 링크가 외부를 가리킴 → realpath 등록으로 차단(H-1/V-1)</li>
+    <li><b>TOCTOU</b>: 등록 후 경로 교체 시 검증 시점 realpath 재해소로 불일치 차단(V-1)</li>
+    <li><b>UNC / 드라이브상대 / 확장경로(<code>\\?\</code>)</b>: 정규화 또는 거부(H-1)</li>
+    <li><b>대소문자(Windows/macOS) · 유니코드 NFC/NFD</b>: 폴드·NFC 정규화로 우회 차단(H-1/V-2)</li>
+    <li><b>JSON 폭탄 / 과중첩 / 1MB+ package.json</b>: fs.stat 크기상한·깊이/바이트 가드 skip(H-3/V-2)</li>
+    <li><b>ReDoS 입력</b>: 언어추정 정규식 선형시간·입력 길이제한(H-3/V-2)</li>
+    <li><b>제어문자/거대 문자열 name·description·branch</b>: 길이절단·제어문자 제거(H-3·L-1)</li>
+    <li><b>cwd 위장 <code>git.exe</code>/<code>git.bat</code></b>: 절대경로 resolveBin으로 미선택, .bat/.cmd 자동확장 금지(H-2/V-2)</li>
+    <li><b>저장형 XSS 페이로드</b>(<code>&lt;img onerror&gt;</code> in name): view textContent/CSP로 미실행(L-1)</li>
+    <li><b>검증용 프로젝트 세트</b>: 실제 프로젝트 N개 + 미끼 폴더 M개 → 탐지율≥95% 자동 측정(PRD §3)</li>
+  </ul>
+</section>
+
+<section id="trace">
+  <h2>8. 단계 ↔ 요구 ID 추적 매핑</h2>
+  <table>
+    <tr><th style="width:130px;">요구 ID</th><th>설계 요소(§참조)</th><th style="width:90px;">구현 단계</th></tr>
+    <tr><td><span class="rid">R-01</span></td><td>detector.js · Project.signals (§6.1)</td><td>S1 (벤치 S7)</td></tr>
+    <tr><td><span class="rid">R-02</span></td><td>walker+excludeRules · config.excludes (§6.1)</td><td>S1</td></tr>
+    <tr><td><span class="rid">R-04</span></td><td>config.js · scanRoots 빈배열 안내종료 (§8.2)</td><td>S0 · S3</td></tr>
+    <tr><td><span class="rid">R-06</span></td><td>collectors/language · /api/stats byLanguage</td><td>S2</td></tr>
+    <tr><td><span class="rid">R-07</span></td><td>collectors/freshness · staleDays=90</td><td>S2</td></tr>
+    <tr><td><span class="rid">R-08</span></td><td>collectors/git via safeExec · Project.git</td><td>S2</td></tr>
+    <tr><td><span class="rid">R-10</span></td><td>public/* + apiHandlers · /api/projects·stats (§6.3·§9)</td><td>S5 · S6</td></tr>
+    <tr><td><span class="rid">R-11</span></td><td>app.js—filter 클라이언트 처리 (§9·§12)</td><td>S6 (벤치 S7)</td></tr>
+    <tr><td><span class="rid">R-12</span></td><td>actionHandlers POST /api/open + pathGuard + safeExec</td><td>S5 · S6</td></tr>
+    <tr><td><span class="rid">R-13</span></td><td>수집기 status='na' · /api/health · snapshotStore graceful</td><td>S2 · S5</td></tr>
+    <tr><td><span class="rid">R-14</span></td><td>scan.js + scanner.js · bin spip · 콘솔 요약</td><td>S3</td></tr>
+    <tr><td><span class="nid">N-01</span></td><td>스캔/서빙 분리·제외 가지치기·클라 필터 · fixtures 벤치 (품질)</td><td>S7</td></tr>
+    <tr><td><span class="nid">N-02</span></td><td>listen(port,'127.0.0.1') · 외부 전송 0 (§11.3)</td><td>S5</td></tr>
+    <tr><td><span class="nid">N-03</span></td><td>pathGuard(H-1)+safeExec(H-2)+staticHandler (§11.1·11.2)</td><td>S5 (회귀 S7)</td></tr>
+    <tr><td><span class="nid">N-04</span></td><td>외부 의존성 0·내장 모듈·순수 HTML/CSS/JS (§10)</td><td>S0 전반</td></tr>
+    <tr><td><span class="nid">N-05</span></td><td>scanner 항목 격리·warnings[] (§12)</td><td>S1 · S3</td></tr>
+    <tr><td><span class="nid">N-06</span></td><td>common/paths OS캐시·serializer 원자적쓰기 (§8)</td><td>S0 · S3</td></tr>
+    <tr><td colspan="3" style="background:#142035;color:#94a3b8;"><b>M4 후속(본 로드맵 구현 비대상 · 계약·자리만):</b> <span class="rid">R-03</span> walker depthLimit · <span class="rid">R-05</span> --all-drives · <span class="rid">R-09</span> collectors/size · <span class="rid">R-15</span> 진행표시 · <span class="rid">R-16</span> /api/rescan · <span class="nid">N-07</span> 접근성</td></tr>
+  </table>
+</section>
+
+</main>
+<footer>Project-SPIP · 개발 로드맵 v1.0 · 8단계(S0~S7) · MVP 16건 · 외부 의존성 0 · 입력: architecture rev.2 / adr / PRD §12.1 / traceability · 자족형 HTML · 본 문서는 로드맵이며 구현 코드 미포함</footer>
+</body>
+</html>

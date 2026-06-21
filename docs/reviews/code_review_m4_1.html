@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Project-SPIP — M4 코드 품질 리뷰 1회차</title>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#1e293b; --panel2:#243044; --text:#e2e8f0; --muted:#94a3b8;
+    --accent:#34d399; --ref:#38bdf8; --warn:#fbbf24; --danger:#f87171; --border:#334155;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:"Segoe UI","Malgun Gothic",system-ui,sans-serif;line-height:1.6;font-size:15px;}
+  header{background:linear-gradient(135deg,#1e293b,#0f172a);padding:32px 40px;border-bottom:2px solid var(--accent);}
+  header h1{margin:0 0 6px;font-size:25px;}
+  header .sub{color:var(--muted);font-size:13.5px;}
+  main{max-width:1180px;margin:0 auto;padding:24px 40px 80px;}
+  section{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:22px 26px;margin:20px 0;}
+  h2{color:var(--accent);font-size:20px;margin-top:0;border-bottom:1px solid var(--border);padding-bottom:10px;}
+  h3{color:var(--ref);font-size:16px;margin-top:24px;}
+  a{color:var(--ref);}
+  code{background:#0b1220;color:#7dd3fc;padding:1px 6px;border-radius:5px;font-family:Consolas,monospace;font-size:12.5px;}
+  pre{background:#0b1220;border:1px solid var(--border);border-radius:8px;padding:12px 14px;overflow-x:auto;
+    color:#cbd5e1;font-family:Consolas,monospace;font-size:12.5px;line-height:1.5;}
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13px;}
+  th,td{border:1px solid var(--border);padding:8px 10px;text-align:left;vertical-align:top;}
+  th{background:var(--panel2);color:#e2e8f0;}
+  tr:nth-child(even) td{background:#1a2536;}
+  .sev{display:inline-block;padding:1px 9px;border-radius:10px;font-size:11.5px;font-weight:700;white-space:nowrap;}
+  .p1{background:#3a0b0b;color:#fca5a5;border:1px solid #f87171;}
+  .p2{background:#3a2a0b;color:#fcd34d;border:1px solid #fbbf24;}
+  .p3{background:#0b2a3a;color:#7dd3fc;border:1px solid #38bdf8;}
+  .verdict{font-size:22px;font-weight:800;}
+  .pass{color:var(--accent);}
+  .fail{color:var(--danger);}
+  .loc{color:var(--muted);font-family:Consolas,monospace;font-size:12px;}
+  .note{background:#0b2a3a;border-left:4px solid var(--ref);padding:10px 14px;border-radius:0 8px 8px 0;margin:12px 0;font-size:13px;}
+  .ok-box{background:#0b2a1f;border-left:4px solid var(--accent);padding:10px 14px;border-radius:0 8px 8px 0;margin:12px 0;font-size:13px;}
+  .warn-box{background:#3a2a0b;border-left:4px solid var(--warn);padding:10px 14px;border-radius:0 8px 8px 0;margin:12px 0;font-size:13px;}
+  .danger-box{background:#3a0b0b;border-left:4px solid var(--danger);padding:10px 14px;border-radius:0 8px 8px 0;margin:12px 0;font-size:13px;}
+  ul.tight{margin:6px 0;} li{margin:3px 0;}
+  .summary-grid{display:flex;gap:16px;flex-wrap:wrap;margin-top:14px;}
+  .stat{background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:14px 20px;min-width:120px;}
+  .stat .n{font-size:28px;font-weight:800;}
+  .stat .l{color:var(--muted);font-size:12px;}
+  svg{background:#0b1220;border:1px solid var(--border);border-radius:10px;width:100%;height:auto;}
+  .file{color:var(--accent);font-weight:600;}
+</style>
+</head>
+<body>
+<header>
+  <h1>Project-SPIP — M4 변경분 코드 품질 리뷰 (1회차)</h1>
+  <div class="sub">대상: R-16 재스캔 · R-15 진행 폴링 · R-09 size · R-05 all-drives · R-03 depthLimit · N-07 a11y &nbsp;|&nbsp; 2026-06-21 &nbsp;|&nbsp; 리뷰어: code-reviewer &nbsp;|&nbsp; 기준: docs/architecture/m4-design.html(§2~§10), docs/api-contract.md &nbsp;|&nbsp; 범위: 코드 품질만(동작=qa / 보안위협=security 별도)</div>
+</header>
+<main>
+
+<section id="verdict">
+  <h2>0. 종합 판정</h2>
+  <p class="verdict pass">판정: PASS (조건부)</p>
+  <p>M4 변경분은 설계 델타(rev.2)에 충실히 정합한다. 신규/수정 17개 파일 + 테스트 3종(70개)을 검토했고, 테스트는 전부 통과한다(<code>node --test</code> 실측). <b>실행 전 보이는 정확성 결함(P1)은 1건</b>으로, 이 1건은 "기능 오동작"이 아니라 <b>설계가 약속한 watchdog 안전망이 실제로는 작동하지 않는 가용성 결함</b>이다 — 정상 경로 동작에는 영향이 없어 PASS로 두되, RM-6/M4-M-3의 안전 보증을 실제로 성립시키려면 <b>다음 회차 전 수정 권고(P1)</b>다. 나머지는 P2 6건·P3 5건으로, 신호 대 잡음을 지켜 핵심만 보고한다.</p>
+
+  <div class="summary-grid">
+    <div class="stat"><div class="n" style="color:var(--danger)">1</div><div class="l">P1 정확성 결함</div></div>
+    <div class="stat"><div class="n" style="color:var(--warn)">6</div><div class="l">P2 개선</div></div>
+    <div class="stat"><div class="n" style="color:var(--ref)">5</div><div class="l">P3 사소</div></div>
+    <div class="stat"><div class="n" style="color:var(--accent)">70/70</div><div class="l">테스트 통과</div></div>
+  </div>
+
+  <div class="ok-box"><b>강점(잘 쓰인 부분):</b>
+    <ul class="tight">
+      <li><b>모듈 경계 명료.</b> scanController(동시성/진행) ↔ actionHandlers(게이트/응답) ↔ scanner(순회) ↔ walker(가지치기)의 책임이 깨끗이 분리. 의존 방향(server→scan) 불변, 순환 없음.</li>
+      <li><b>락 finally 보장.</b> <code>scanController.start</code>의 <code>try/finally</code> + 래퍼 <code>run().catch()</code> 이중 안전망으로 정상·예외 경로 모두 <code>running=false</code> 해제. 데드락(영구 409) 1차 방어는 견고.</li>
+      <li><b>size 2레이어 status 분리 명확.</b> 계약 status(<code>res.status</code> = ok/na/error)와 도메인 status(<code>res.data.status</code> = ok/partial/skipped/error)를 §4.1.1대로 분리, 주석으로 의도 명문화. <code>scanner.js:60</code> 병합과 충돌 없음.</li>
+      <li><b>경계 처리 정확.</b> walker <code>maxDirs</code>·size <code>maxEntries</code> 상한 비교에 off-by-one 없음(실측 확인).</li>
+      <li><b>onDir 격리.</b> 콜백 throw를 try로 흡수해 순회를 막지 않음(N-05). 테스트로 검증됨.</li>
+      <li><b>전진 호환.</b> withSize opt-in 미지정 시 size=skipped로 MVP 회귀 0(테스트 회귀 케이스 존재).</li>
+    </ul>
+  </div>
+</section>
+
+<section id="p1">
+  <h2>1. P1 — 정확성 결함</h2>
+
+  <h3><span class="sev p1">P1-1</span> watchdog 타임아웃이 락을 "강제 해제"하지 못한다 — 설계 보증 미성립</h3>
+  <table>
+    <tr><th style="width:90px;">항목</th><th>내용</th></tr>
+    <tr><td>무엇</td><td>watchdog 발화 시 <code>_forceError()</code>로 <b>phase='error'만</b> 설정하고, <b><code>running</code>은 풀지 않으며 진행 중인 <code>scanner.scan()</code>도 중단시키지 않는다.</b> 실제 락 해제는 <code>scanner.scan()</code>이 자연 완료되어 <code>finally</code>에 도달해야 일어난다.</td></tr>
+    <tr><td>위치</td><td><span class="loc">lib/server/scanController.js:97-102 (_forceError), 108-165 (start/run)</span></td></tr>
+    <tr><td>왜 문제</td><td>설계 §2.1·§2.5·§3.3·RM-6은 "watchdog 초과 시 스캔을 <b>강제 종료 신호</b> + phase=error + <b>락 강제 해제</b>"를 명시한다. 그러나 코드의 watchdog는 타이머 콜백이 phase만 바꾸고, 락 해제와 스캔 중단을 못 한다. <b>watchdog가 막으려던 시나리오(무한 순회·블로킹으로 background가 죽음)에서는 <code>scanner.scan()</code>이 끝나지 않으므로 <code>finally</code>에 영영 도달하지 못해 <code>running</code>이 영구 true로 남는다</b> — 즉 watchdog는 정확히 그 시나리오에서 무력하다. 더구나 walker/scanner 순회 루프는 동기 제너레이터를 <code>for...of</code>로 소비하는 구간이 길어 <code>await</code> 양보가 드물고, 진짜 블로킹이면 setTimeout 콜백(watchdog) 실행 자체가 지연될 수 있다. 결과적으로 RM-6의 "영구 409 데드락 방지" 보증이 코드에서 성립하지 않는다.</td></tr>
+    <tr><td>왜 PASS</td><td>정상/유한 트리에서는 <code>maxDirs</code>·<code>timeBudgetMs</code> 전역 상한(M4-M-2)이 순회를 유한 시간에 끝내므로 락은 결국 풀린다. 일반 기능 동작에는 결함이 드러나지 않는다(테스트 watchdog 케이스도 작은 트리라 scanner가 곧 끝나 통과 — 즉 <b>테스트가 강제 해제를 실제로 검증하지 못함</b>). 안전망이 "있는 것처럼 보이나 실제로는 1차 finally에만 의존"하는 상태.</td></tr>
+    <tr><td>권고</td><td>(1) watchdog 발화 시 <code>this.running=false</code>를 <b>즉시</b> 풀어 후속 재스캔(409 영구거부)을 막거나, (2) scanner에 협조적 취소(cancel token/AbortSignal류 또는 watchdog가 set하는 <code>cancelled</code> 플래그를 walker 루프가 <code>maxDirs</code>처럼 체크)로 순회를 실제 중단시킬 것. 최소한 watchdog 콜백에서 락을 푸는 것이 설계 의도(가용성 우선)에 부합. 동반: watchdog 강제해제를 <b>실제로 발화시키는 테스트</b>(scanner가 끝나기 전 watchdog가 running을 푸는지)를 추가. <span class="loc">scanController.js:117-120</span> 참고.</td></tr>
+  </table>
+  <pre>// 현재(scanController.js) — watchdog는 phase만 바꿈, running/scan은 그대로
+this._wd = setTimeout(() => {
+  watchdogFired = true;
+  this._forceError('WATCHDOG_TIMEOUT');   // ← phase='error'만. running=true 유지
+}, watchdogMs);
+// ...scanner.scan()이 끝나야 finally 도달 → 그게 안 끝나는 게 watchdog가 막으려던 상황
+</pre>
+  <div class="note"><b>설계 인용:</b> m4-design.html §2.5 의사코드는 <code>this._forceError('WATCHDOG_TIMEOUT')</code>로만 적혀 있어 <b>설계 자체가 "락 강제 해제"를 산문으로만 주장하고 의사코드엔 누락</b>했다. 즉 구현은 설계 의사코드에 충실하나, 설계 산문(§2.5 "강제 종료 신호 + 락 강제 해제", RM-6)과는 어긋난다. 구현·설계 동시 정정이 필요한 항목 — tech-lead 판단 권고.</div>
+</section>
+
+<section id="p2">
+  <h2>2. P2 — 개선 (정확성에 직접 영향은 없으나 잠재 결함·중복·복잡도)</h2>
+
+  <h3><span class="sev p2">P2-1</span> size: nodeModulesBytes 주석-코드 불일치 + entry 카운터 공유로 측정 누락</h3>
+  <table>
+    <tr><td style="width:90px;">무엇</td><td>주석은 "node_modules 측정분을 totalBytes에 가산"이라 하나 <b>실제 코드는 가산하지 않는다</b>. 또한 <code>measureNodeModules</code>가 <code>budget.state</code>(entry 카운터)를 <b>공유</b>하므로, 앞선 <code>measureTree(projectPath)</code>가 maxEntries를 거의 소진하면 nodeModulesBytes는 0에 가깝게 측정된다(아무 안내 없이).</td></tr>
+    <tr><td>위치</td><td><span class="loc">lib/scan/collectors/size.js:152-170, 86-98</span></td></tr>
+    <tr><td>왜 문제</td><td>(1) 주석이 실제 동작과 달라 유지보수자가 오해(<code>size.js:161-162</code> "가산" 문구). (2) <code>measureTree(projectPath)</code>는 walker excludeRules를 거치지 않아 node_modules도 포함 측정하므로 totalBytes에 이미 포함됨 → nodeModulesBytes는 순수 "표시용 부분집합". 그러나 entry 예산을 본문 측정이 다 써버리면 nodeModulesBytes가 실제보다 크게 과소측정되며 partial 플래그만으로는 "어느 값이 부분인지" 구분 불가. UI는 nodeModulesBytes를 비중 표시에 쓰는데 신뢰도가 들쭉날쭉.</td></tr>
+    <tr><td>권고</td><td>주석을 실제 동작(가산 안 함, 표시용 부분집합)에 맞게 수정. node_modules 측정에 별도 entry 예산을 두거나, 본문/nm 측정 순서·예산 배분을 명시적으로 문서화. 정확성은 깨지지 않으므로 P2.</td></tr>
+  </table>
+
+  <h3><span class="sev p2">P2-2</span> 재스캔 finalizing 시 writeSnapshot·store.load가 cachePath를 전달하지 않음</h3>
+  <table>
+    <tr><td style="width:90px;">무엇</td><td><code>start()</code>가 <code>serializer.writeSnapshot(snap, { logger })</code>와 <code>opts.store.load({ logger })</code>를 <b>cachePath 없이</b> 호출 → 둘 다 <code>paths.cachePath()</code> 기본 경로 사용.</td></tr>
+    <tr><td>위치</td><td><span class="loc">lib/server/scanController.js:141-144</span> · 대비 <span class="loc">server.js:40</span>(store.load에 opts.cachePath 주입)</td></tr>
+    <tr><td>왜 문제</td><td>운영(기본 경로)에서는 writeSnapshot/load/초기 load가 모두 기본 경로라 일관 — 결함 없음. 그러나 <b>커스텀 cachePath로 기동한 경우</b>(테스트·다중 인스턴스) 초기 적재는 커스텀 경로, 재스캔의 write/load는 기본 경로로 갈려 재스캔 결과가 보이지 않는 비일관이 발생한다. 현재 ScanController는 cachePath를 모르므로 구조적으로 ctx의 cachePath를 전파할 길이 없다.</td></tr>
+    <tr><td>권고</td><td>ctx/start opts에 cachePath를 전달해 write/load 양쪽에 넘길 것. 또는 createServer가 cachePath를 config/ctx에 보관해 scanController.start가 참조. 단일 사용자 운영 기본값에선 무해하므로 P2.</td></tr>
+  </table>
+
+  <h3><span class="sev p2">P2-3</span> security: checkStateChange / checkReadAccess 1·2·3요소 중복</h3>
+  <table>
+    <tr><td style="width:90px;">무엇</td><td><code>checkReadAccess</code>가 <code>checkStateChange</code>의 Host·Origin·토큰 3블록을 <b>그대로 복붙</b>하고 CT 검증만 뺀 형태(약 20줄 중복).</td></tr>
+    <tr><td>위치</td><td><span class="loc">lib/server/security.js:68-96 vs 107-130</span></td></tr>
+    <tr><td>왜 문제</td><td>두 함수가 공유하는 검증 규칙이 한쪽만 바뀌면 보안 게이트 비대칭이 silently 생긴다(예: Host 비교 강화 시 한쪽 누락). 설계 §3.4도 "1·2·3요소 공유"라고 명시 — 공유가 의도이므로 공통 헬퍼로 추출하는 게 옳다.</td></tr>
+    <tr><td>권고</td><td>공통 <code>checkOrigin3(req, ctx)</code>(Host+Origin+토큰)를 추출하고 checkStateChange는 그 뒤 CT만 추가. DRY + 단일 출처. 동작 동일하므로 회귀 위험 낮음.</td></tr>
+  </table>
+
+  <h3><span class="sev p2">P2-4</span> driveEnum/excludeRules에 시스템 제외 가지치기 미연동(현재 walker 진입 전 제외가 루트엔 미적용)</h3>
+  <table>
+    <tr><td style="width:90px;">무엇</td><td>시스템 제외(<code>isUnderSystemDir</code>)는 walker가 <b>자식</b>을 canonicalize한 뒤에만 적용된다(<code>walker.js:119</code>). all-drives에서 <code>driveEnum</code>이 반환한 <b>루트 자체</b>(예: POSIX <code>/</code>)는 제외 판정을 거치지 않고 <code>walkRoot</code>에 바로 들어가, 루트 직하 첫 레벨에서 비로소 자식 단위로 걸러진다.</td></tr>
+    <tr><td>위치</td><td><span class="loc">lib/scan/walker.js:178-186 (루트 루프), 119-121 (자식만 제외)</span></td></tr>
+    <tr><td>왜 문제</td><td>기능상 자식 단위 제외로 시스템 디렉터리 진입은 차단되므로 보안/정확성 결함은 아니다(security 영역). 다만 루트가 곧 시스템 경로인 경우(예: <code>/</code> 직하의 <code>/proc</code>) 첫 yield로 루트 자신은 후보가 되며, detector가 무의미한 루트를 한 번 본다. 설계 §5.3은 "진입 전 앞단 가지치기"를 강조 — 루트 레벨엔 그 원칙이 적용 안 됨. 일관성/명료성 개선 여지.</td></tr>
+    <tr><td>권고</td><td>all-drives일 때 루트 루프에서도 <code>isUnderSystemDir(rootCanonical)</code> 1회 체크. 또는 설계상 "루트는 driveEnum이 마운트 루트만 주므로 시스템 루트 자체는 없음"을 주석으로 명시해 의도 확정.</td></tr>
+  </table>
+
+  <h3><span class="sev p2">P2-5</span> idle 응답에 폴링이 무한 continue될 수 있는 좁은 경쟁</h3>
+  <table>
+    <tr><td style="width:90px;">무엇</td><td>프론트 폴링이 <code>phase:'idle'</code>를 받으면 <code>continue</code>(무한 폴링). 정상 흐름은 acquire 직후 phase='scanning'이라 거의 안 일어나나, 락이 풀린(done 후 누군가 reset) 또는 acquire 이전 타이밍의 폴링에서 idle continue가 종료 조건 없이 반복될 수 있다.</td></tr>
+    <tr><td>위치</td><td><span class="loc">public/app.js:1490-1522 (pollOnce), 364-387 (nextPollAction)</span></td></tr>
+    <tr><td>왜 문제</td><td>리소스 누수(타이머가 안 멈춤) 잠재. 단, <code>document.hidden</code> 시 네트워크 생략·1초 주기라 영향은 작다. 자기 scanId 발급 후 시작하므로 실사용 경로에선 거의 무해.</td></tr>
+    <tr><td>권고</td><td>idle continue에 안전 카운터(예: 연속 idle N회 또는 시작 후 X초 경과 시 stopPolling)를 둘 것. RM-4 "idle 시 폴링 중단"과 정합.</td></tr>
+  </table>
+
+  <h3><span class="sev p2">P2-6</span> scanner: onProgress 객체 생성 코드가 onDir와 프로젝트확정 두 곳에 중복</h3>
+  <table>
+    <tr><td style="width:90px;">무엇</td><td><code>{ phase:'scanning', dirs, found: projects.length, currentPath }</code> 객체 조립 + try/catch 호출이 <code>emitProgress()</code>(스로틀)와 프로젝트 확정 블록(<code>scanner.js:195-199</code>)에 각각 존재.</td></tr>
+    <tr><td>위치</td><td><span class="loc">lib/scan/scanner.js:149-157, 194-199</span></td></tr>
+    <tr><td>왜 문제</td><td>ScanProgress shape가 바뀌면 두 곳을 동기화해야 함. 프로젝트 확정 블록은 스로틀(250ms)을 우회해 매 프로젝트마다 호출 — 의도일 수 있으나 onDir 경로와 빈도 정책이 갈려 currentPath/dirs가 호출마다 의미가 미묘하게 다르다.</td></tr>
+    <tr><td>권고</td><td>단일 <code>emit(extra)</code> 헬퍼로 통일하고 스로틀 정책을 한 곳에서 결정. 동작 동일하게 리팩터 가능.</td></tr>
+  </table>
+</section>
+
+<section id="p3">
+  <h2>3. P3 — 사소 (네이밍·죽은 코드·주석·일관성)</h2>
+  <table>
+    <tr><th style="width:80px;">ID</th><th>무엇 / 위치 / 권고</th></tr>
+    <tr><td><span class="sev p3">P3-1</span></td><td><b>죽은/오해 주석.</b> <code>actionHandlers.js:6</code> "POST /api/rescan → MVP 404 NOT_FOUND(미마운트)"는 더 이상 사실이 아님(202/409로 승격). 파일 상단 docstring 갱신. <span class="loc">actionHandlers.js:6</span></td></tr>
+    <tr><td><span class="sev p3">P3-2</span></td><td><b>핫패스 require.</b> <code>actionHandlers.rescan</code>이 요청마다 <code>require('../scan/driveEnum')</code>를 함수 내부에서 호출(<code>:198</code>). 다른 모듈은 상단 require 일관 — 상단으로 올려 일관성 + 캐시. (require 캐시라 비용은 작음 → P3) <span class="loc">actionHandlers.js:198</span></td></tr>
+    <tr><td><span class="sev p3">P3-3</span></td><td><b>주석 시그니처 불일치.</b> <code>scanner.scan</code> JSDoc은 <code>options { roots, excludes, staleDays, port, logger }</code>로 적혀 있으나 실제로 withSize·allDrives·size·maxDirs·timeBudgetMs·depthLimit·onProgress를 받는다. <code>port</code>는 미사용. JSDoc 갱신. <span class="loc">scanner.js:116-118</span></td></tr>
+    <tr><td><span class="sev p3">P3-4</span></td><td><b>parseArgs 주석 미갱신.</b> <code>scan.js:25</code> "지원: --roots --stale-days --config --quiet --help"에 <code>--depth/--with-size/--all-drives</code> 누락(실제 지원·printHelp엔 있음). 주석만 보강. <span class="loc">scan.js:25</span></td></tr>
+    <tr><td><span class="sev p3">P3-5</span></td><td><b>collectors/index 계약 주석 협소.</b> <code>index.js:6</code> "status: 'ok'|'na'|'skipped'"는 §4.1.1 2레이어(계약 ok/na/error, 도메인 ok/partial/skipped/error)를 반영 못 함. size 도입으로 계약에 'error'가 실제 쓰임. 주석 갱신. <span class="loc">collectors/index.js:5-7</span></td></tr>
+  </table>
+</section>
+
+<section id="checklist">
+  <h2>4. 점검 항목별 결과</h2>
+  <table>
+    <tr><th style="width:200px;">점검(과제 지시)</th><th>결과</th></tr>
+    <tr><td>락 finally / 예외 시 락 해제</td><td><b>정상</b> — try/finally + run().catch() 이중 보장. <b>단 watchdog 강제해제는 P1-1</b>.</td></tr>
+    <tr><td>watchdog 경쟁조건</td><td><b>P1-1</b> — phase만 바꾸고 락/스캔을 강제 종료 못 함.</td></tr>
+    <tr><td>폴링 상태머신 경계</td><td>정상 — nextPollAction 전이(scanning/finalizing/done/error/foreign/continue) 명확, scanId 대조. <b>idle 무한 continue는 P2-5</b>.</td></tr>
+    <tr><td>size 예산 상한 off-by-one</td><td><b>정상</b> — maxEntries/maxDirs 비교 off-by-one 없음(실측). 측정 누락 비일관은 P2-1.</td></tr>
+    <tr><td>all-drives 드라이브 열거 권한오류</td><td>정상 — driveEnum statSync/readdirSync try 격리, canonicalize null 스킵. 루트 레벨 제외 미적용 P2-4.</td></tr>
+    <tr><td>onDir 콜백 throw 격리</td><td><b>정상</b> — walker.js:77-79 try 격리, 테스트 검증.</td></tr>
+    <tr><td>비동기 미await / 미처리 reject</td><td>정상 — start의 백그라운드 미await는 의도(202 즉시). run().catch()로 reject 처리. readJsonBody resolve-only(reject 없음).</td></tr>
+    <tr><td>리소스 누수(타이머/핸들/child)</td><td>정상 — watchdog clearTimeout(finally+catch), serializer fd close/unlink, 프론트 clearInterval. idle 폴링 누수 잠재 P2-5.</td></tr>
+    <tr><td>M-1 검증 중복(checkStateChange vs checkReadAccess)</td><td><b>P2-3</b> — 3요소 복붙 중복.</td></tr>
+    <tr><td>경로 정규화 재사용</td><td><b>우수</b> — canonicalize/foldForCompare 단일 출처(pathGuard) 재사용. 시스템 제외도 동일 규칙.</td></tr>
+    <tr><td>모듈 경계/책임 분리</td><td><b>우수</b> — controller/handler/scanner/walker 책임 분리, 의존 방향·순환 무결.</td></tr>
+    <tr><td>size 2레이어 status 명료성</td><td><b>우수</b> — 계약/도메인 분리 명확, 주석·테스트 정합.</td></tr>
+    <tr><td>죽은 코드·네이밍·CommonJS·주석</td><td>죽은 코드 없음. 주석 노후 P3-1·3·4·5.</td></tr>
+    <tr><td>테스트 품질</td><td>아래 §5.</td></tr>
+  </table>
+</section>
+
+<section id="tests">
+  <h2>5. 테스트 품질 평가</h2>
+  <p>3개 스위트 70 테스트 전부 통과(<code>node --test</code> 실측). 락·폴링전이·축약·시스템제외·예산을 <b>대체로 의미있게</b> 검증한다.</p>
+  <table>
+    <tr><th style="width:160px;">검증 대상</th><th>평가</th></tr>
+    <tr><td>락 / 409 SCAN_IN_PROGRESS</td><td><b>충분</b> — acquire 직접 점유 후 409·scanId 일치 검증.</td></tr>
+    <tr><td>watchdog 강제해제</td><td><b>불충분</b> — watchdogMs=1 케이스가 작은 트리라 scanner가 곧 끝나 finally로 락이 풀린다. <b>watchdog가 scanner보다 먼저 락을 푸는지(P1-1)를 검증하지 못함</b>. 강제해제 보증을 실증하려면 scanner를 인위적으로 지연시키는 스텁 필요.</td></tr>
+    <tr><td>폴링 전이</td><td><b>충분</b> — scanning→finalizing→done 시퀀스, foreign(scanId 불일치), null graceful 모두 케이스화.</td></tr>
+    <tr><td>currentPath 축약(C-3)</td><td><b>충분</b> — shortenPath 단위 + 직렬화에 'secret'/'E:' 미포함 단언.</td></tr>
+    <tr><td>시스템 제외 세그먼트(C-2)</td><td><b>대체로 충분</b> — WindowsApps prefix 우회 차단·대소문자 폴드. 단 <b>walker 통합 실차단은 isUnderSystemDir 단위로만 모사</b>(테스트 주석도 인정: systemKeySet 주입 불가). walker가 buildSystemExcludeKeySet을 실제로 쓰는 end-to-end 경로는 미검증.</td></tr>
+    <tr><td>size 예산/partial(C-5)</td><td><b>충분</b> — budgetMs/maxEntries 양쪽 partial 유발, 계약/도메인 status 분리 단언.</td></tr>
+    <tr><td>축약·MVP 회귀</td><td><b>충분</b> — withSize 미지정 skipped + totalBytes null 회귀 케이스 존재.</td></tr>
+  </table>
+  <div class="warn-box"><b>테스트 보강 권고:</b> (1) <b>watchdog 강제해제 실증</b>(P1-1 직결) — scanner를 지연 스텁으로 두고 watchdog가 running을 먼저 푸는지. (2) <b>all-drives 시스템 제외 end-to-end</b> — walker에 platform 주입 + 실디렉터리로 시스템키가 실제 가지치기하는지(현재는 단위 모사). (3) P2-2 cachePath 비일관 — 커스텀 cachePath 재스캔 후 그 경로에 써지는지.</div>
+</section>
+
+<section id="flow">
+  <h2>6. P1-1 결함 흐름 (watchdog vs 실제 락 해제)</h2>
+  <figure>
+    <svg viewBox="0 0 1040 280" role="img" aria-label="watchdog 발화 시 락이 즉시 풀리지 않는 흐름">
+      <g font-family="Segoe UI" font-size="12.5" fill="#e2e8f0">
+        <rect x="20" y="20" width="240" height="46" rx="8" fill="#243044" stroke="#334155"/>
+        <text x="140" y="40" text-anchor="middle">watchdog 타이머 발화</text>
+        <text x="140" y="58" text-anchor="middle" fill="#94a3b8" font-size="10.5">setTimeout(watchdogMs)</text>
+
+        <rect x="300" y="20" width="300" height="46" rx="8" fill="#3a0b0b" stroke="#f87171"/>
+        <text x="450" y="40" text-anchor="middle" fill="#fca5a5">_forceError(): phase='error'</text>
+        <text x="450" y="58" text-anchor="middle" fill="#fca5a5" font-size="10.5">running 그대로 true · scan 미중단</text>
+
+        <rect x="640" y="20" width="380" height="46" rx="8" fill="#243044" stroke="#334155"/>
+        <text x="830" y="40" text-anchor="middle">scanner.scan() 여전히 실행 중</text>
+        <text x="830" y="58" text-anchor="middle" fill="#94a3b8" font-size="10.5">동기 for...of 소비 — await 양보 드묾</text>
+
+        <rect x="300" y="110" width="720" height="46" rx="8" fill="#0b2a1f" stroke="#34d399"/>
+        <text x="660" y="130" text-anchor="middle" fill="#6ee7b7">유한 트리: maxDirs/timeBudgetMs 도달 → scan 종료 → finally → running=false (정상)</text>
+        <text x="660" y="148" text-anchor="middle" fill="#94a3b8" font-size="10.5">정상 경로 — 결함 안 드러남(PASS 근거)</text>
+
+        <rect x="300" y="180" width="720" height="56" rx="8" fill="#3a0b0b" stroke="#f87171"/>
+        <text x="660" y="202" text-anchor="middle" fill="#fca5a5">블로킹/무한: scan이 finally에 영영 도달 못 함 → running 영구 true</text>
+        <text x="660" y="222" text-anchor="middle" fill="#fca5a5" font-size="10.5">★ watchdog가 막으려던 바로 그 상황에서 영구 409 데드락 — RM-6 보증 미성립</text>
+
+        <line x1="260" y1="43" x2="298" y2="43" stroke="#94a3b8" marker-end="url(#a)"/>
+        <line x1="600" y1="43" x2="638" y2="43" stroke="#94a3b8" marker-end="url(#a)"/>
+        <line x1="660" y1="66" x2="660" y2="108" stroke="#34d399" marker-end="url(#a)"/>
+        <line x1="660" y1="156" x2="660" y2="178" stroke="#f87171" marker-end="url(#a)"/>
+      </g>
+      <defs><marker id="a" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#94a3b8"/></marker></defs>
+    </svg>
+    <figcaption>그림 1. watchdog는 phase만 바꾸고 락/스캔을 강제 종료하지 못한다. 유한 트리에선 전역 상한이 결국 락을 풀어 결함이 가려지나, watchdog가 본래 막으려던 블로킹/무한 상황에선 무력하다.</figcaption>
+  </figure>
+</section>
+
+<section id="confirm">
+  <h2>7. 확인 필요 (설계 의도)</h2>
+  <ul class="tight">
+    <li><b>watchdog 강제해제(P1-1):</b> 설계 산문(RM-6)과 의사코드(§2.5)가 어긋난다. "watchdog는 phase 표시만, 락 해제는 finally에 위임"이 의도라면 RM-6 문구를 약화해야 하고, "강제 해제가 진짜 필요"라면 코드 수정 필요. <b>tech-lead/설계자 확정 요망.</b></li>
+    <li><b>size nodeModulesBytes 의미(P2-1):</b> totalBytes에 포함된 부분집합(표시용)인지, 가산 대상인지 — 주석/코드 중 어느 쪽이 의도인지 확정.</li>
+    <li><b>커스텀 cachePath 재스캔(P2-2):</b> 다중 인스턴스/테스트에서 cachePath 분리 운영을 지원할지, "기본 경로 단일"만 보장할지.</li>
+  </ul>
+</section>
+
+<section id="footer">
+  <h2>8. 마무리</h2>
+  <p><b>판정: PASS(조건부).</b> P1 1건은 기능 오동작이 아니라 안전망(watchdog 강제해제) 미성립이며 정상 경로에는 영향이 없어 통과시키되, 다음 회차 전 수정(또는 설계 문구 정정)을 권고한다. P2 6건·P3 5건은 품질 개선 항목이다. 코드는 직접 수정하지 않았다.</p>
+  <p class="loc">보고서: E:\03.프로젝트\Project-SPIP\docs\reviews\code_review_m4_1.html</p>
+</section>
+
+</main>
+</body>
+</html>

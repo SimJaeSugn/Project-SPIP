@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project-SPIP — 아키텍처 설계 재검증 보고서 (2회차)</title>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#1e293b; --text:#e2e8f0; --sub:#94a3b8;
+    --accent:#34d399; --ref:#38bdf8; --line:#334155; --warn:#fbbf24; --danger:#f87171;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:"Segoe UI","Malgun Gothic",system-ui,sans-serif;line-height:1.7;}
+  header{padding:48px 32px 36px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#13203b,#0f172a);}
+  header h1{margin:0 0 8px;font-size:28px;}
+  header .tag{display:inline-block;background:rgba(52,211,153,.12);color:var(--accent);
+    border:1px solid rgba(52,211,153,.4);border-radius:999px;padding:3px 12px;font-size:13px;margin-right:8px;}
+  header p{margin:14px 0 0;color:var(--sub);max-width:940px;}
+  .meta{margin-top:16px;font-size:13px;color:var(--sub);}
+  main{max-width:1100px;margin:0 auto;padding:32px;}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:24px 28px;margin:22px 0;}
+  h2{margin:0 0 16px;font-size:21px;color:var(--accent);border-left:4px solid var(--accent);padding-left:12px;}
+  h3{font-size:16px;color:var(--ref);margin:22px 0 10px;}
+  p{margin:8px 0;}
+  ul,ol{margin:8px 0;padding-left:22px;}li{margin:5px 0;}
+  code{background:#0b1220;color:var(--ref);padding:1px 6px;border-radius:5px;font-size:13px;}
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13.5px;}
+  th,td{border:1px solid var(--line);padding:9px 11px;text-align:left;vertical-align:top;}
+  th{background:#142035;color:var(--accent);}
+  tr:nth-child(even) td{background:rgba(255,255,255,.02);}
+  .rid{font-family:Consolas,monospace;color:var(--accent);font-weight:700;white-space:nowrap;}
+  .nid{font-family:Consolas,monospace;color:var(--warn);font-weight:700;white-space:nowrap;}
+  .verdict{font-size:22px;font-weight:800;padding:6px 18px;border-radius:10px;display:inline-block;}
+  .pass{background:rgba(52,211,153,.16);color:#6ee7b7;border:1px solid rgba(52,211,153,.5);}
+  .cond{background:rgba(251,191,36,.16);color:#fcd34d;border:1px solid rgba(251,191,36,.5);}
+  .fail{background:rgba(248,113,113,.16);color:#fca5a5;border:1px solid rgba(248,113,113,.5);}
+  .p1{background:rgba(248,113,113,.16);color:#fca5a5;border:1px solid rgba(248,113,113,.45);font-weight:700;padding:2px 9px;border-radius:6px;white-space:nowrap;font-size:12px;}
+  .p2{background:rgba(251,191,36,.16);color:#fcd34d;border:1px solid rgba(251,191,36,.45);font-weight:700;padding:2px 9px;border-radius:6px;white-space:nowrap;font-size:12px;}
+  .res{background:rgba(52,211,153,.16);color:#6ee7b7;border:1px solid rgba(52,211,153,.5);font-weight:700;padding:2px 9px;border-radius:6px;white-space:nowrap;font-size:12px;}
+  .ok{color:#6ee7b7;font-weight:700;}
+  .ng{color:#fca5a5;font-weight:700;}
+  .wk{color:#fcd34d;font-weight:700;}
+  .note{background:rgba(56,189,248,.08);border:1px solid rgba(56,189,248,.3);border-radius:8px;
+    padding:12px 16px;font-size:13.5px;color:#bae6fd;margin:10px 0;}
+  .warn-box{background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.3);border-radius:8px;
+    padding:12px 16px;font-size:13.5px;color:#fde68a;margin:10px 0;}
+  .ok-box{background:rgba(52,211,153,.08);border:1px solid rgba(52,211,153,.3);border-radius:8px;
+    padding:12px 16px;font-size:13.5px;color:#bbf7d0;margin:10px 0;}
+  .find{border-left:3px solid var(--accent);padding:4px 0 4px 14px;margin:16px 0;}
+  .find h4{margin:2px 0 8px;font-size:15px;color:var(--text);}
+  .kv{font-size:13px;color:var(--sub);margin:3px 0;}
+  .kv b{color:var(--text);}
+  footer{text-align:center;color:var(--sub);font-size:12.5px;padding:30px;border-top:1px solid var(--line);}
+  .legend{font-size:12.5px;color:var(--sub);margin-top:8px;}
+</style>
+</head>
+<body>
+<header>
+  <span class="tag">아키텍처 검증 보고서</span><span class="tag">2회차 (재검증)</span><span class="tag">독립 검증(Reviewer)</span>
+  <h1>Project-SPIP — 아키텍처 설계 재검증 보고서</h1>
+  <p>검증 대상: <code>docs/architecture/architecture.html</code> (rev.2) · <code>docs/architecture/adr.html</code> (rev.2). 1회차 조건부 PASS 시 제기한 <b>P1 2건 + P2 5건</b>의 해소 여부와, 보안 검증 1회차 반영(§5·§11 대폭 수정)으로 인한 추적성·정합 <b>회귀</b>를 집중 대조한다. 코드 동작/품질은 qa-engineer·code-reviewer, 상세 보안 적정성은 security-reviewer 소관이다.</p>
+  <div class="meta">검증자: 독립 리뷰어 · 검증일: 2026-06-21 · 회차: 2 · 1회차 보고서: <code>docs/reviews/architecture_review_1.html</code> (CONDITIONAL PASS)</div>
+</header>
+
+<main>
+
+<section>
+  <h2>판정 및 요약</h2>
+  <p><span class="verdict pass">PASS (통과)</span></p>
+  <p>1회차에서 제기한 <b>P1 2건이 모두 해소</b>됐다. P1-1(정적 자산 URL 규약)은 <code>GET /</code>→<code>public/index.html</code>, <code>GET /static/&lt;asset&gt;</code>→<code>public/&lt;asset&gt;</code> 단일 규약으로 §4·§6.2·§7·§9·§11.1·§11.6·index.html 자산 참조·ADR-004 전반에 일관 통일되어 자기모순이 실제로 사라졌다. P1-2(설정 파일 위치)는 단일 OS 앱 데이터 디렉터리(<code>%APPDATA%\spip\</code> 등) 하위 <code>config/</code>·<code>cache/</code> 분리로 확정되고 <code>paths.js</code>(appDir/configPath/cachePath) 계약·§7·§8.2·§11.4·ADR-003에 일관 반영, §15 미해결 질문에서 명시적으로 내려졌다.</p>
+  <p><b>P2 5건도 모두 반영</b>됐으며, 보안 반영(§5·§11 대폭 수정, ADR-006 신설)으로 인한 <b>추적성·정합 회귀는 없다.</b> §14 MVP 요구↔설계 매핑은 여전히 누락 0건이고, 새로 도입된 모듈/계약(<code>canonicalize</code>·<code>resolveBin</code>·<code>limits</code>)이 §7 디렉터리 구조·요구ID/보안ID와 정합한다. 구현 착수를 막는 잔여 블로커는 없다.</p>
+  <table>
+    <tr><th style="width:90px;">분류</th><th style="width:80px;">1회차</th><th style="width:90px;">2회차 상태</th><th>판정 근거</th></tr>
+    <tr><td><span class="p1">P1</span></td><td>2건</td><td class="ok">해소 2/2</td><td>P1-1 URL 규약 통일, P1-2 설정 위치 확정 — 둘 다 전 절 일관</td></tr>
+    <tr><td><span class="p2">P2</span></td><td>5건</td><td class="ok">반영 5/5</td><td>정렬키·totalBytes·ID_NOT_FOUND·walker 2단·스냅샷 200통일 모두 명시</td></tr>
+    <tr><td>회귀</td><td>—</td><td class="ok">없음</td><td>§14 누락 0 유지, 신규 보안 모듈이 §7·요구ID와 정합</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>1. P1 해소 확인 (핵심)</h2>
+
+  <div class="find">
+    <h4><span class="res">P1-1 해소</span> 정적 자산 URL 규약 통일 — 자기모순 제거 확인</h4>
+    <p class="kv"><b>요구했던 것:</b> <code>GET /</code>→public/index.html, <code>GET /static/&lt;asset&gt;</code>→public/&lt;asset&gt; 단일 규약을 §6.2·§7·§9·§11.1·index.html 자산 참조에서 일관시킬 것.</p>
+    <p class="kv"><b>대조 결과 (일관 확인):</b></p>
+    <table>
+      <tr><th style="width:130px;">위치</th><th>확인 내용</th><th style="width:60px;">정합</th></tr>
+      <tr><td>§4 액션/표시</td><td>표시 페이즈 GET /api/projects·/stats만 명시(정적 충돌 없음)</td><td class="ok">OK</td></tr>
+      <tr><td>§6.2 staticHandler</td><td>"[P1-1 통일 규약] GET / → public/index.html, GET /static/&lt;asset&gt; → public/&lt;asset&gt; 매핑, public 절대경로 하위 정규화, 이탈 시 404"</td><td class="ok">OK</td></tr>
+      <tr><td>§6.3 index.html</td><td>"자산은 /static/&lt;asset&gt;로 참조(P1-1 규약)"</td><td class="ok">OK</td></tr>
+      <tr><td>§7 트리(485~488)</td><td>"URL 규약(P1-1): GET / → index.html, GET /static/&lt;asset&gt; → public/&lt;asset&gt;"; styles.css/app.js 주석에 GET /static/* 명시</td><td class="ok">OK</td></tr>
+      <tr><td>§9 API 표(551~552)</td><td><code>/</code>→public/index.html, <code>/static/&lt;asset&gt;</code>→public/&lt;asset&gt;, "/api/* 외 GET은 모두 staticHandler가 처리"</td><td class="ok">OK</td></tr>
+      <tr><td>§11.1 / §11.6</td><td>staticHandler P1-1 규약 재확인 + CSP "자산은 동일 출처 /static/*에서만 로드"</td><td class="ok">OK</td></tr>
+      <tr><td>ADR-004</td><td>결정·근거·결과에 "/static/*→public/ 단일 규약 통일, index.html은 /static/*로 참조, 구현 분기 제거" 명시(rev.2)</td><td class="ok">OK</td></tr>
+    </table>
+    <p class="kv ok"><b>판정:</b> 1회차 지적했던 "§9는 /static/* 인데 §6.2/§7/§11.1은 /(public 매핑)인지 불명" 충돌이 단일 규약으로 봉합됨. index.html이 참조할 자산 경로 규약(/static/*)도 명시 확정. 구현 임의해석 여지 제거. <b>해소.</b></p>
+  </div>
+
+  <div class="find">
+    <h4><span class="res">P1-2 해소</span> 설정 파일 위치 확정 — paths.js 계약 결정 확인</h4>
+    <p class="kv"><b>요구했던 것:</b> <code>%APPDATA%\spip\</code> 하위 config/cache 분리를 paths.js(appDir/configPath/cachePath) 계약·§7·§8·§15·ADR-003에 단일 확정값으로 못박을 것.</p>
+    <p class="kv"><b>대조 결과 (일관 확인):</b></p>
+    <table>
+      <tr><th style="width:130px;">위치</th><th>확인 내용</th><th style="width:60px;">정합</th></tr>
+      <tr><td>§8.2 위치 확정</td><td>"단일 OS 앱 데이터 디렉터리(%APPDATA%\spip\ / ~/Library/Application Support/spip/ / $XDG_CONFIG_HOME/spip/) 하위, 설정=config/spip.config.json, 스냅샷=cache/projects.json. paths.js가 appDir()/configPath()/cachePath()로 단일 해석. N-06은 결과 JSON만 규정하므로 본 절에서 확정"</td><td class="ok">OK</td></tr>
+      <tr><td>§7 트리(495~501)</td><td>"P1-2 확정: 단일 OS 앱 데이터 디렉터리"; config/spip.config.json·cache/projects.json·"paths.js가 appDir()/configPath()/cachePath()로 단일 해석"</td><td class="ok">OK</td></tr>
+      <tr><td>§5 그림/공용유틸</td><td>paths "appDir/config·cache 하위" 명시</td><td class="ok">OK</td></tr>
+      <tr><td>§11.4 / 그림3</td><td>"OS 앱 데이터 폴더(config/·cache/)에만 저장", "앱 폴더 JSON (config/·cache/) 0600/ACL"</td><td class="ok">OK</td></tr>
+      <tr><td>§15 미해결 질문</td><td>"[해소됨 — P1-2] 설정 파일 위치는 단일 OS 앱 데이터 디렉터리 하위로 확정 … 본 항목은 미해결에서 내림"</td><td class="ok">OK</td></tr>
+      <tr><td>ADR-003</td><td>"A 채택(P1-2 확정)" — A(단일 앱 폴더) vs A'(설정·캐시 베이스 분리) 대안 비교·선택 근거·paths.js 계약(appDir/configPath/cachePath) 명시(rev.2)</td><td class="ok">OK</td></tr>
+    </table>
+    <p class="kv ok"><b>판정:</b> "구현팀 결정으로 미룸"이 사라지고, paths.js 시그니처(appDir/configPath/cachePath)가 결정됨. A vs A' 대안까지 ADR에 기록되어 결정 근거가 추적 가능. 1회차 권고였던 "단일 확정값으로 못박기"를 충족. <b>해소.</b></p>
+  </div>
+</section>
+
+<section>
+  <h2>2. P2 5건 반영 확인</h2>
+  <table>
+    <tr><th style="width:60px;">항목</th><th>1회차 지적</th><th>반영 위치·내용</th><th style="width:70px;">상태</th></tr>
+    <tr><td><span class="p2">P2-1</span></td><td>용량 정렬키 MVP/M4 경계 미표기</td><td>§6.3 filter: "MVP 정렬 키 = 이름·최종수정(stale); 용량 정렬은 size 수집(R-09/M4) 도입 시 활성" 명시</td><td class="ok">반영</td></tr>
+    <tr><td><span class="p2">P2-2</span></td><td>totalBytes null 규약 / 표시 미정</td><td>§9 /api/stats: "totalBytes:null … MVP에서 totalBytes는 항상 null(size=M4), UI는 '미측정'으로 표시"</td><td class="ok">반영</td></tr>
+    <tr><td><span class="p2">P2-3</span></td><td>ID 미존재 응답·"성공" 정의 부재</td><td>§9 오류표: 404 <code>ID_NOT_FOUND</code> 행 추가; §6.2 pathGuard도 동일; /api/open "성공=spawn 시작 성공(=실행 중), 실제 창 오픈 확인 비범위" 정의</td><td class="ok">반영</td></tr>
+    <tr><td><span class="p2">P2-4</span></td><td>walker 순회 전략 용어 흔들림·깊이 상한 MVP/M4 모호</td><td>§4·§6.1·§5 계약 모두 DFS로 용어 통일; walker 2단 분리(MVP 내장 안전상한+realpath 루프차단 / M4 사용자 depthLimit·심링크 정책); §8.2 depthLimit M4 명시</td><td class="ok">반영</td></tr>
+    <tr><td><span class="p2">P2-5</span></td><td>스냅샷 부재/손상 503 vs 200 엇갈림</td><td>§9 "503 폐기 — 200+hasSnapshot:false+빈배열로 통일", §6.2 snapshotStore·§5·§13·ADR-005 모두 200+hasSnapshot:false로 일관; 프런트 트리거를 hasSnapshot 플래그로 고정</td><td class="ok">반영</td></tr>
+  </table>
+  <p class="ok">P2 5건 전부 반영 확인. P2-3은 pathGuard 책임(§6.2)과 오류표(§9)·계약 양쪽에, P2-5는 데이터 조회 엔드포인트 전반에 일관 처리되어 1회차 권고 이상으로 단일화됨.</p>
+</section>
+
+<section>
+  <h2>3. 회귀 검증 (보안 반영 §5·§11 대폭 수정의 부작용)</h2>
+
+  <h3>3.1 MVP 요구 ↔ 설계 매핑(§14) — 누락 0 유지</h3>
+  <p>보안 반영으로 §14에 보안ID(H-1~3·M-1~4·L-1~3·RC-1) 시정 매핑 행이 추가됐으나, <b>기존 MVP 요구 행은 모두 보존</b>됐고 새 요구ID 누락은 없다.</p>
+  <table>
+    <tr><th>MVP 요구</th><th style="width:60px;">매핑</th><th>대응 설계 요소(§14)</th></tr>
+    <tr><td><span class="rid">R-01·02·04·06·07·08·10·11·12·13·14</span></td><td class="ok">OK</td><td>detector/walker+excludeRules/config/collectors(language·freshness·git)/public+apiHandlers/app.js—filter/actionHandlers/snapshotStore graceful/scan.js+scanner — 11건 전부 존재</td></tr>
+    <tr><td><span class="nid">N-01·02·03·04·05·06</span></td><td class="ok">OK</td><td>분리·벤치 / 127.0.0.1 / pathGuard+safeExec+staticHandler / 의존성0 / 항목격리 / paths.js OS캐시 — 6건 전부 존재. N-01 품질기준 유지</td></tr>
+    <tr><td>M4 후속(R-03·05·09·15·16, N-07)</td><td class="ok">OK</td><td>§2 경계박스 + §14 M4 행에 분리 표기 — MVP 혼입 없음</td></tr>
+  </table>
+  <p class="ok">추적성 회귀 없음. MVP 16건(품질 N-01 포함) 누락 0건 유지.</p>
+
+  <h3>3.2 신규 모듈/계약의 §7·요구ID 정합</h3>
+  <table>
+    <tr><th style="width:130px;">신규 요소</th><th>정의 위치</th><th>§7 디렉터리 반영</th><th style="width:60px;">정합</th></tr>
+    <tr><td><code>canonicalize()</code></td><td>§5 pathGuard 계약·§11.1 (H-1)</td><td><code>pathGuard.js</code>(canonicalize realpath 화이트리스트, N-03·H-1) + walker realpath 등록</td><td class="ok">OK</td></tr>
+    <tr><td><code>resolveBin()</code></td><td>§5 safeExec 계약·§11.2 (H-2)·ADR-002·ADR-006</td><td><code>safeExec.js</code>(resolveBin 절대경로+shell:false+타임아웃, N-03·H-2·M-4)</td><td class="ok">OK</td></tr>
+    <tr><td><code>limits</code>(수집기 가드)</td><td>§5 Collector 계약(maxFileBytes/maxReadBytes/maxJsonDepth/maxStringField)·§11.5 (H-3)</td><td><code>collectors/language.js</code> 등 주석에 크기/깊이/ReDoS 가드·문자열정제(R-06·H-3·L-1)</td><td class="ok">OK</td></tr>
+    <tr><td>세션토큰·Host allowlist</td><td>§11.3 (M-1)·ADR-004</td><td><code>actionHandlers.js</code>(Host allowlist+Origin+세션토큰), <code>index.html</code> 세션토큰 주입</td><td class="ok">OK</td></tr>
+    <tr><td><code>hasSnapshot</code> 플래그</td><td>§9·§6.2 snapshotStore (P2-5)</td><td><code>snapshotStore.js</code>(hasSnapshot, R-10·R-13·H-1·P2-5)</td><td class="ok">OK</td></tr>
+  </table>
+  <p class="ok">신규 보안 모듈/계약이 모두 §7 트리 파일에 위치를 갖고, 요구ID·보안ID와 양방향 추적된다. 디렉터리 구조 추가는 기존 3-레이어(진입점→도메인→공용유틸) 단방향 의존을 깨지 않는다(canonicalize/resolveBin은 pathGuard/safeExec 내부, 공용유틸 safeExec는 상위 미참조 유지).</p>
+
+  <h3>3.3 ADR 정합</h3>
+  <p>ADR-002(git 절대경로 H-2)·ADR-003(설정 위치 P1-2/M-2)·ADR-004(서버 M-1/L-1/P1-1)·ADR-005(스냅샷 200 P2-5)가 rev.2로 갱신되고, ADR-006(부분신뢰 입력 방어)이 신설됐다. 모든 ADR이 "맥락→대안→결정→근거→결과" 형식을 유지하며, ADR-006은 대안 3안(입력게이트/격리만/샌드박스) 비교·RC-2 인정과의 정합을 갖췄다. 과설계(샌드박스 C)를 명시 배제해 N-04(의존성0) 정신과 충돌하지 않는다. ADR 품질 회귀 없음.</p>
+
+  <div class="ok-box"><b>회귀 결론:</b> 보안 반영은 기존 추적성·모듈 경계·ADR 품질을 훼손하지 않고 <b>가산적(additive)</b>으로 적용됐다. P1·P2 해소와 보안 시정이 서로 모순되는 지점(예: P1-1 정적 규약 ↔ §11.6 CSP "동일 출처 /static/*", P1-2 위치 ↔ §11.4 권한)도 상호 정합한다.</p>
+</section>
+
+<section>
+  <h2>4. 잔여 관찰 (블로커 아님 · 참고)</h2>
+  <p>판정에 영향을 주지 않는 경미 사항만 기록한다. 모두 1회차 P3 수준이거나 그 이하로, 구현·후속 단계에서 자연 해소된다.</p>
+  <ul>
+    <li><b>포트 기본값·언어 가중치:</b> §15 미해결 질문에 잔존(예시 7421). 1회차에서 "블로커 아님" 동의한 항목이며 여전히 타당. 탐지율 ≥95% 벤치(test/fixtures)로 튜닝 대상.</li>
+    <li><b>%APPDATA% 로밍 소지:</b> ADR-003 결과에 "캐시만 %LOCALAPPDATA%로 옮기는 것은 M4 재검토 여지"로 트레이드오프가 정직하게 기록됨 — 현 규모 무시 가능, 결정 추적성 양호.</li>
+    <li><b>UserStories 정합:</b> 1회차 P3-1과 동일하게 본 검증 범위 밖. 로드맵/세부계획 검증 단계에서 스프린트 매핑과 함께 확인 권고(현 판정 무영향).</li>
+    <li><b>보안 상세 적정성(realpath/TOCTOU·CSP 우회·세션토큰 강도 등):</b> security-reviewer 소관. 설계서가 §11에 명시적으로 그 위임을 표기 — 적절.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>5. 결론</h2>
+  <p><span class="verdict pass">PASS</span></p>
+  <p>1회차 조건부 PASS의 전환 조건이었던 <b>P1 2건(정적 URL 규약 통일·설정 위치 확정)이 모두 해소</b>됐고, P2 5건도 전부 반영됐다. 보안 검증 1회차 반영(§5·§11 대폭 수정, ADR-006 신설)으로 인한 <b>추적성·정합 회귀는 없으며</b>, §14 MVP 매핑 누락 0건이 유지되고 신규 모듈/계약이 디렉터리 구조·요구ID와 정합한다.</p>
+  <p>아키텍처 설계서·ADR은 추적성·기획 정합·모듈 경계·ADR 품질·디렉터리 일관성·보안 신뢰경계 모델에서 착수 가능한 완성도에 도달했다. <b>별도 재검증 없이 개발 로드맵/세부계획 단계로 진행 가능</b>하다. 상세 보안 적정성은 security-reviewer, 빌드/실행 검증은 qa-engineer에게 넘긴다.</p>
+</section>
+
+</main>
+<footer>Project-SPIP · 아키텍처 재검증 보고서 2회차 · 판정: PASS (P1×2 해소·P2×5 반영·회귀 없음) · 독립 검증(Reviewer) · 자족형 HTML · 산출물 직접 수정 없음</footer>
+</body>
+</html>

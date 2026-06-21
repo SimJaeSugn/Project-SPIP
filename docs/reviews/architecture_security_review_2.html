@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project-SPIP — 아키텍처 보안 검증 보고서 (위협 모델링) 2회차 재검증</title>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#1e293b; --text:#e2e8f0; --sub:#94a3b8;
+    --accent:#34d399; --ref:#38bdf8; --line:#334155; --warn:#fbbf24; --danger:#f87171;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:"Segoe UI","Malgun Gothic",system-ui,sans-serif;line-height:1.7;}
+  header{padding:48px 32px 36px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#13203b,#0f172a);}
+  header h1{margin:0 0 8px;font-size:28px;}
+  header .tag{display:inline-block;background:rgba(52,211,153,.12);color:var(--accent);
+    border:1px solid rgba(52,211,153,.4);border-radius:999px;padding:3px 12px;font-size:13px;margin-right:8px;}
+  header p{margin:14px 0 0;color:var(--sub);max-width:960px;}
+  .meta{margin-top:16px;font-size:13px;color:var(--sub);}
+  main{max-width:1120px;margin:0 auto;padding:32px;}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:24px 28px;margin:22px 0;}
+  h2{margin:0 0 16px;font-size:21px;color:var(--accent);border-left:4px solid var(--accent);padding-left:12px;}
+  h3{font-size:16px;color:var(--ref);margin:22px 0 10px;}
+  h4{font-size:14px;color:var(--text);margin:16px 0 6px;}
+  p{margin:8px 0;}
+  ul,ol{margin:8px 0;padding-left:22px;}li{margin:5px 0;}
+  code{background:#0b1220;color:var(--ref);padding:1px 6px;border-radius:5px;font-size:13px;}
+  pre{background:#0b1220;border:1px solid var(--line);border-radius:8px;padding:14px 16px;
+    overflow-x:auto;font-size:13px;color:#cbd5e1;font-family:Consolas,monospace;line-height:1.55;}
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13.5px;}
+  th,td{border:1px solid var(--line);padding:9px 11px;text-align:left;vertical-align:top;}
+  th{background:#142035;color:var(--accent);}
+  tr:nth-child(even) td{background:rgba(255,255,255,.02);}
+  .mono{font-family:Consolas,monospace;font-size:12.5px;}
+  .fid{font-family:Consolas,monospace;font-weight:700;white-space:nowrap;}
+  .sev{font-size:11px;font-weight:700;padding:2px 9px;border-radius:6px;white-space:nowrap;display:inline-block;}
+  .crit{background:rgba(248,113,113,.18);color:#fecaca;border:1px solid rgba(248,113,113,.6);}
+  .high{background:rgba(251,146,60,.16);color:#fdba74;border:1px solid rgba(251,146,60,.55);}
+  .med{background:rgba(251,191,36,.14);color:#fcd34d;border:1px solid rgba(251,191,36,.5);}
+  .low{background:rgba(56,189,248,.14);color:#7dd3fc;border:1px solid rgba(56,189,248,.5);}
+  .pass{background:rgba(52,211,153,.16);color:#6ee7b7;border:1px solid rgba(52,211,153,.5);}
+  .resolved{background:rgba(52,211,153,.16);color:#6ee7b7;border:1px solid rgba(52,211,153,.5);}
+  .verdict{display:inline-block;border-radius:999px;padding:6px 22px;font-size:18px;font-weight:800;}
+  .v-cond{background:rgba(251,191,36,.16);color:#fcd34d;border:1px solid rgba(251,191,36,.6);}
+  .v-pass{background:rgba(52,211,153,.16);color:#6ee7b7;border:1px solid rgba(52,211,153,.6);}
+  .v-fail{background:rgba(248,113,113,.18);color:#fecaca;border:1px solid rgba(248,113,113,.6);}
+  .note{background:rgba(56,189,248,.08);border:1px solid rgba(56,189,248,.3);border-radius:8px;
+    padding:12px 16px;font-size:13.5px;color:#bae6fd;margin:10px 0;}
+  .warn-box{background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.3);border-radius:8px;
+    padding:12px 16px;font-size:13.5px;color:#fde68a;margin:10px 0;}
+  .danger-box{background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.35);border-radius:8px;
+    padding:12px 16px;font-size:13.5px;color:#fecaca;margin:10px 0;}
+  .ok-box{background:rgba(52,211,153,.08);border:1px solid rgba(52,211,153,.3);border-radius:8px;
+    padding:12px 16px;font-size:13.5px;color:#bbf7d0;margin:10px 0;}
+  figure{margin:18px 0;background:#0b1220;border:1px solid var(--line);border-radius:10px;padding:18px;}
+  figcaption{color:var(--sub);font-size:12.5px;margin-top:10px;text-align:center;}
+  .legend{display:flex;gap:18px;flex-wrap:wrap;font-size:12.5px;color:var(--sub);margin-top:10px;justify-content:center;}
+  .legend span{display:inline-flex;align-items:center;gap:6px;}
+  .dot{width:11px;height:11px;border-radius:3px;display:inline-block;}
+  .finding{border-left:3px solid var(--accent);padding:4px 0 4px 14px;margin:18px 0;}
+  .finding h4{margin:0 0 8px;font-size:15px;color:var(--text);}
+  .kv{font-size:13px;margin:3px 0;}
+  .kv b{color:var(--sub);font-weight:600;display:inline-block;min-width:92px;}
+  footer{text-align:center;color:var(--sub);font-size:12.5px;padding:30px;border-top:1px solid var(--line);}
+  .scorecard{display:flex;gap:14px;flex-wrap:wrap;margin:16px 0;}
+  .scard{flex:1;min-width:120px;background:#0b1220;border:1px solid var(--line);border-radius:10px;padding:14px;text-align:center;}
+  .scard .n{font-size:28px;font-weight:800;}
+  .scard .l{font-size:12px;color:var(--sub);margin-top:4px;}
+</style>
+</head>
+<body>
+<header>
+  <span class="tag">보안 검증 보고서</span><span class="tag">위협 모델링 (STRIDE)</span><span class="tag">아키텍처 단계 · 2회차 재검증</span>
+  <h1>Project-SPIP — 아키텍처 보안 재검증 보고서</h1>
+  <p>1회차 조건부 PASS(치명 0 / 높음 3 / 중간 4 / 낮음 3)에서 게이트 차단으로 지정한 높음 3건(H-1 realpath 화이트리스트, H-2 PATH 하이재킹, H-3 부분신뢰 입력 파싱)이 아키텍트의 rev.2 수정으로 <b>설계에 구조적으로 반영·해소</b>되었는지 적대적 관점에서 재검증했다. 중간 4건·낮음 3건의 반영과 PM 위험 수용(RC-1·RC-2)의 설계 명시, 신뢰경계 SVG의 TB-B 통제 추가 여부도 함께 확인했다. 검증 대상은 여전히 <b>설계 청사진</b>이다(구현 코드 없음: <code>lib/</code> 미존재, <code>package.json</code> 골격, 외부 npm 의존성 0 — 의존성 취약점/시크릿 스캔 비해당).</p>
+  <div class="meta">검증자: Security Reviewer · 일자: 2026-06-21 · 입력: architecture.html(rev.2 §5·§9·§11·신뢰경계 SVG) / adr.html(ADR-002·003·004·006) / architecture_security_review_1.html · 방법: 1회차 발견 항목별 해소 증거 대조 → 잔여/신규 위협 재도출 → 등급화 → 종합 판정</div>
+</header>
+
+<main>
+
+<!-- ===================== 판정 ===================== -->
+<section id="verdict">
+  <h2>0. 종합 판정</h2>
+  <p style="font-size:16px;">판정: <span class="verdict v-pass">PASS</span> <span style="color:var(--sub);font-size:13px;">(1회차 조건부 PASS → 상향)</span></p>
+  <p>게이트 차단 항목이던 <b>높음 3건이 모두 구조적으로 해소</b>되었다. 단순 문구 추가가 아니라, ① <code>canonicalize()</code>/<code>isAllowed()</code> 계약(§5)에 realpath 정규화 규칙을 명세하고 등록·검증 양 시점을 동일 규칙으로 못박았으며(H-1), ② <code>resolveBin()</code>+<code>safeExec()</code> 계약에 실행 파일 절대경로 1회 해석·cwd 의존 제거·PATHEXT 차단을 명세하고 ADR-002/006으로 결정을 추적했고(H-2), ③ collectors 공통 계약의 <code>limits{}</code>에 크기·바이트·깊이 가드와 선형시간 정규식·문자열 정제를 명세하며 "격리보다 앞단"을 명시했다(H-3). 중간 4건·낮음 3건도 해당 모듈 계약·§11 하위절·§9 오류계약에 반영됐고, RC-1(멀티유저 비목표+M-2/M-1 심층방어)·RC-2(부분신뢰 인정→필수 방어 승격)가 §11.7·ADR-006·§1 핵심전제에 명시됐다. 신뢰경계 SVG도 TB-A/TB-B 2경계 + 8중 통제로 갱신되어 TB-B 통제(⑤~⑧)가 추가됐다. <b>치명/높음 잔여 0건</b>이므로 보안 게이트를 통과시킨다.</p>
+
+  <div class="scorecard">
+    <div class="scard"><div class="n" style="color:#6ee7b7">3/3</div><div class="l">높음 해소</div></div>
+    <div class="scard"><div class="n" style="color:#6ee7b7">4/4</div><div class="l">중간 해소</div></div>
+    <div class="scard"><div class="n" style="color:#6ee7b7">3/3</div><div class="l">낮음 해소</div></div>
+    <div class="scard"><div class="n" style="color:#fecaca">0</div><div class="l">잔여 치명/높음</div></div>
+    <div class="scard"><div class="n" style="color:#fcd34d">2</div><div class="l">구현 검증 조건(V)</div></div>
+  </div>
+
+  <div class="ok-box"><b>게이트 결과:</b> 1회차 게이트 조건(H-1·H-2·H-3 설계 반영)이 충족되어 <b>PASS로 상향</b>한다. 다만 본 판정은 <b>설계(청사진) 수준 PASS</b>이며, 아래 §4의 구현 단계 검증 조건(V-1·V-2)을 구현·코드 보안 검증 게이트에서 반드시 확인할 것을 부대조건으로 남긴다(게이트 차단 아님, 추적 항목).</div>
+</section>
+
+<!-- ===================== 높음 해소 대조 ===================== -->
+<section id="high">
+  <h2>1. 높음 3건 — 해소 대조 (핵심)</h2>
+
+  <div class="finding">
+    <h4>H-1. 심볼릭 링크 / 접합점 / 실경로 정규화 — <span class="sev resolved">해소</span></h4>
+    <div class="kv"><b>STRIDE</b> 정보노출(I) · 권한상승(E)</div>
+    <div class="kv"><b>요구 사항</b> walker 등록 시점·pathGuard 검증 시점 모두 realpath 기준 화이트리스트인가? canonicalize()/isAllowed() 계약이 심링크/접합점/대소문자/유니코드/UNC/드라이브상대/<code>\\?\</code>를 실제로 다루는가?</div>
+    <div class="kv"><b>증거</b> §5 pathGuard 계약(L400~411)에 <code>canonicalize(rawPath)</code> 신설 — (1) <code>path.resolve</code>로 <code>../</code> 접기, (2) <code>fs.realpathSync</code>로 심링크/Windows 접합점(junction) 실경로 해소, (3) 대소문자 비민감 FS 폴드, (4) 유니코드 NFC 정규화, (5) UNC·드라이브상대(<code>C:foo</code>)·확장경로(<code>\\?\</code>) 정규화 또는 거부를 명시. <code>isAllowed()</code>는 "스냅샷 등록 시점 canonicalize 실경로 집합"과 "요청 canonicalize 실경로"의 정확 일치만 허용, 실경로 해소 실패는 false → PATH_GONE/403. §11.1이 등록·검증 동일 규칙을 "단일 진실의 원천"으로 강제하고 TOCTOU 표면 축소를 명시. walker 계약(L386·394~395)·snapshotStore(§6.2)가 등록 경로를 realpath로 정규화하도록 일치. ADR-006 ①과 §1 핵심전제에도 못박힘.</div>
+    <div class="kv"><b>판정</b> 등록·검증 양 시점 동일 규칙, 요청된 정규화 형태(심링크·접합점·대소문자·유니코드·UNC·드라이브상대·확장경로)를 모두 계약에 명세 → <b>구조적 해소</b>.</div>
+  </div>
+
+  <div class="finding">
+    <h4>H-2. PATH 하이재킹 / 실행파일 위장 — <span class="sev resolved">해소</span></h4>
+    <div class="kv"><b>STRIDE</b> 위장(S) · 권한상승(E) → RCE</div>
+    <div class="kv"><b>요구 사항</b> code/git을 절대경로 1회 해석·고정하는가? git collector의 <code>cwd:projectPath</code> 위장 바이너리 RCE가 차단되는가(cwd 의존 제거 등)? Windows PATHEXT 고려?</div>
+    <div class="kv"><b>증거</b> §5 safeExec 계약(L369~378)에 <code>resolveBin(name)->absolutePath</code> 신설 — 기동/스캔 시작 시 1회만 호출해 결과 고정(캐시), 이후 <b>절대경로로만</b> spawn. 주석에 "이름만 고정(name)이 아니라 경로를 고정(H-2)" 명시. <code>safeExec(absoluteBin, args, opts)</code>는 항상 <code>{shell:false}</code>, Windows <code>.bat/.cmd</code> PATHEXT 자동확장 금지(절대경로 <code>.exe</code>만), git collector는 <code>cwd:projectPath</code>여도 절대경로 지정으로 위장 <code>git.exe/.bat</code> 미선택 + 가능 시 <code>git -C &lt;path&gt;</code>로 <b>cwd 의존 제거</b>. §11.2가 동일 내용 명세. ADR-002 rev.2(L107·122·128·137)가 결정·근거·결과로 추적, ADR-006 ②로 게이트 못박음.</div>
+    <div class="kv"><b>판정</b> 절대경로 1회 해석·고정, cwd 위장 바이너리 차단(절대경로 + <code>-C</code>), PATHEXT 차단 모두 명세 → <b>구조적 해소</b>.</div>
+  </div>
+
+  <div class="finding">
+    <h4>H-3. 부분신뢰 입력 파싱 방어 — <span class="sev resolved">해소</span></h4>
+    <div class="kv"><b>STRIDE</b> 서비스거부(D) · 변조(T)</div>
+    <div class="kv"><b>요구 사항</b> 크기/바이트/깊이 가드·선형시간 정규식이 수집기 계약에 명세되고 격리 앞단에 배치됐는가?</div>
+    <div class="kv"><b>증거</b> §5 collectors 공통 계약(L350~366)에 <code>limits{ maxFileBytes, maxReadBytes, maxJsonDepth, maxStringField }</code> 신설. danger-box(L366)에 ① 파싱 전 <code>fs.stat</code> 크기 상한(초과 시 미읽기 skip+warning), ② <code>JSON.parse</code> 바이트 한도·깊이 가드, ③ 모든 정규식 선형시간(ReDoS-free) 또는 입력 길이 선제한, ④ name/description/branch 길이절단·제어문자 제거를 명시하고 <b>"위 가드를 격리보다 앞단에 둔다"</b>를 명문화(try 격리로는 무한루프/메모리폭발 못 막음). §11.5·§6.1 language/git collector·디렉터리 트리 주석에 일관 반영. ADR-006 ③·결과로 추적.</div>
+    <div class="kv"><b>판정</b> 크기·바이트·깊이 가드, 선형시간 정규식, 문자열 정제가 수집기 계약에 명세되고 격리 앞단 배치가 명문화 → <b>구조적 해소</b>.</div>
+  </div>
+</section>
+
+<!-- ===================== 중간/낮음 + 위험수용 ===================== -->
+<section id="midlow">
+  <h2>2. 중간 · 낮음 · 위험 수용 — 반영 대조</h2>
+  <table>
+    <tr><th style="width:60px;">ID</th><th>1회차 지적</th><th>rev.2 반영 증거</th><th style="width:90px;">상태</th></tr>
+    <tr><td class="fid">M-1</td><td>동일출처 검증 우회(DNS 리바인딩·Origin 부재·Host 신뢰)</td><td>§11.3: Host allowlist 정확 비교 + Origin 폐쇄 기본값(부재/불일치 거부 FORBIDDEN_ORIGIN) + 기동 시 세션토큰 주입·POST 동봉 검증. §9 오류계약·ADR-004 rev.2 일치</td><td><span class="sev resolved">해소</span></td></tr>
+    <tr><td class="fid">M-2</td><td>캐시/설정 JSON 파일 권한 미명세</td><td>§11.4 + ADR-003 rev.2 + serializer(§6.1): 캐시·설정·임시 파일 소유자 전용(0600 / 디렉터리 0700 / Windows ACL) 생성, 임시 파일 동일 권한·정리. RC-1 비목표여도 적용 명시</td><td><span class="sev resolved">해소</span></td></tr>
+    <tr><td class="fid">M-3</td><td>심링크 루프/과도 깊이 DoS(depthLimit M4·미강제)</td><td>§5 walker·§6.1·§11.5: MVP 내장 안전 깊이 상한(고정값) <b>항상 강제</b> + 방문 실경로(realpath) 집합 추적 가지치기 + 심링크 기본 미추적. R-03을 "M4 권고"가 아닌 MVP 필수 안전장치로 격상</td><td><span class="sev resolved">해소</span></td></tr>
+    <tr><td class="fid">M-4</td><td>spawn 타임아웃·동시 실행 상한 부재</td><td>§5 safeExec·§11.2: 기본 타임아웃+강제 kill·출력 버퍼 상한. /api/open은 id별 in-flight 상한으로 중복 spawn 차단(§6.2 actionHandlers). ADR-002 rev.2 반영</td><td><span class="sev resolved">해소</span></td></tr>
+    <tr><td class="fid">L-1</td><td>대시보드 저장형 XSS 표면(이스케이프 명세 없음)</td><td>§6.3 view·§11.6: 모든 동적 텍스트 textContent/이스케이프, innerHTML 결합 금지 + index.html CSP 메타(인라인/외부 스크립트 제한). §11.5 문자열 정제와 이중 방어. RA7에도 명시</td><td><span class="sev resolved">해소</span></td></tr>
+    <tr><td class="fid">L-2</td><td>설정 파일(scanRoots/excludes) 검증 약함</td><td>§6.1 common/config·디렉터리 트리: config 로드 시 scanRoots realpath 정규화·검증, H-1 정규화 규칙과 일관 적용</td><td><span class="sev resolved">해소</span></td></tr>
+    <tr><td class="fid">L-3</td><td>에러 응답 내부경로/스택 노출 정책 미명세</td><td>§9 오류계약 [L-3] note: message는 고정 안내문만, 원시 예외·스택·내부 절대경로는 콘솔 로그 한정(응답 비노출), 경로 에코 최소화</td><td><span class="sev resolved">해소</span></td></tr>
+    <tr><td class="fid">RC-1</td><td>멀티유저 OS 격리 — 위험 수용 결정 필요</td><td>§11.7 warn-box + ADR-006 결과: 동일머신 타 사용자 격리 <b>MVP 비목표로 수용</b>, 단 M-2 파일권한·M-1 세션토큰을 심층방어로 적용. 신뢰경계 SVG에 "RC-1 수용(MVP 비목표)" 표기</td><td><span class="sev resolved">명시</span></td></tr>
+    <tr><td class="fid">RC-2</td><td>스캔 대상 신뢰 수준 — 인정 여부 결정 필요</td><td>§1 핵심전제 danger-box + §11(전문)·§11.7 note + ADR-006: 악성 외부 클론 리포 섞일 수 있음 <b>명시 인정</b> → H-2·H-3·L-1을 권고가 아닌 <b>필수 방어로 확정</b>. 신뢰경계 SVG TB-B에 "RC-2 인정" 표기</td><td><span class="sev resolved">명시</span></td></tr>
+  </table>
+
+  <h3>2.1 신뢰경계 SVG — TB-B 통제 추가 확인</h3>
+  <div class="ok-box"><b>확인됨:</b> §11 그림 3 SVG가 2경계 + 8중 통제로 갱신됨. <b>TB-A</b>: ① 127.0.0.1 바인딩, ② Host allowlist+Origin+세션토큰, ③ pathGuard(realpath), ④ safeExec(절대경로·타임아웃). <b>TB-B(신규)</b>: ⑤ 입력 파싱 가드(크기·깊이·ReDoS-free), ⑥ 실행파일 절대경로(resolveBin·cwd 의존제거), ⑦ realpath 등록·루프차단(방문 실경로 추적), ⑧ 출력 이스케이프+CSP. TB-B 위협(거대/중첩 package.json·위장 git.exe·심링크 루프·오염 name)에 각 통제가 차단 화살표로 매핑됨. 1회차 SVG의 "TB-B 통제 계층 미명세" 갭이 해소됨. §14 추적성 표·§12 NFR 표에도 8중 통제가 요약됨.</div>
+</section>
+
+<!-- ===================== 갱신 신뢰경계 ===================== -->
+<section id="boundary">
+  <h2>3. 갱신된 위협 표면 (재검증 관점)</h2>
+  <figure>
+    <svg viewBox="0 0 1040 300" width="100%" role="img" aria-label="2회차 재검증 신뢰경계 통제 요약">
+      <defs>
+        <marker id="ax" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 Z" fill="#34d399"/></marker>
+      </defs>
+      <!-- TB-A -->
+      <rect x="20" y="30" width="300" height="120" rx="10" fill="#170d0d" stroke="#f87171" stroke-width="1.3" stroke-dasharray="6 5"/>
+      <text x="170" y="52" fill="#f87171" font-size="12" text-anchor="middle" font-weight="bold" font-family="Segoe UI">TB-A 브라우저/네트워크</text>
+      <text x="170" y="74" fill="#cbd5e1" font-size="10" text-anchor="middle" font-family="Segoe UI">CSRF · DNS 리바인딩 · 조작요청</text>
+      <text x="170" y="98" fill="#6ee7b7" font-size="10" text-anchor="middle" font-family="Segoe UI">①바인딩 ②Host allowlist+토큰</text>
+      <text x="170" y="116" fill="#6ee7b7" font-size="10" text-anchor="middle" font-family="Segoe UI">③realpath pathGuard ④safeExec</text>
+      <text x="170" y="138" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">M-1 해소 · RC-1 타사용자 수용</text>
+      <!-- TB-B -->
+      <rect x="20" y="166" width="300" height="118" rx="10" fill="#1a1206" stroke="#fbbf24" stroke-width="1.3" stroke-dasharray="6 5"/>
+      <text x="170" y="188" fill="#fbbf24" font-size="12" text-anchor="middle" font-weight="bold" font-family="Segoe UI">TB-B 스캔대상(부분신뢰)</text>
+      <text x="170" y="210" fill="#fca5a5" font-size="10" text-anchor="middle" font-family="Segoe UI">JSON폭탄 · 위장바이너리 · 심링크 · 오염메타</text>
+      <text x="170" y="234" fill="#6ee7b7" font-size="10" text-anchor="middle" font-family="Segoe UI">⑤입력가드 ⑥절대경로 ⑦realpath루프차단</text>
+      <text x="170" y="252" fill="#6ee7b7" font-size="10" text-anchor="middle" font-family="Segoe UI">⑧이스케이프+CSP</text>
+      <text x="170" y="274" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">H-1·H-2·H-3·M-3·L-1 해소 · RC-2 인정</text>
+      <!-- gate -->
+      <rect x="380" y="80" width="200" height="150" rx="10" fill="#0b1220" stroke="#34d399" stroke-width="1.6"/>
+      <text x="480" y="104" fill="#34d399" font-size="13" text-anchor="middle" font-weight="bold" font-family="Segoe UI">8중 통제 게이트</text>
+      <text x="480" y="128" fill="#cbd5e1" font-size="10" text-anchor="middle" font-family="Segoe UI">검증/가드 통과만</text>
+      <text x="480" y="150" fill="#cbd5e1" font-size="10" text-anchor="middle" font-family="Segoe UI">등록=검증 동일규칙</text>
+      <text x="480" y="172" fill="#cbd5e1" font-size="10" text-anchor="middle" font-family="Segoe UI">가드 = 격리 앞단</text>
+      <text x="480" y="200" fill="#6ee7b7" font-size="11" text-anchor="middle" font-weight="bold" font-family="Segoe UI">치명/높음 잔여 0</text>
+      <!-- trusted -->
+      <rect x="640" y="60" width="380" height="190" rx="10" fill="#0d1726" stroke="#34d399" stroke-width="1.3" stroke-dasharray="6 5"/>
+      <text x="830" y="84" fill="#34d399" font-size="12" text-anchor="middle" font-weight="bold" font-family="Segoe UI">신뢰 영역 (로컬 런타임)</text>
+      <text x="830" y="110" fill="#cbd5e1" font-size="10" text-anchor="middle" font-family="Segoe UI">spawn 절대경로(code/git) · 인자배열</text>
+      <text x="830" y="132" fill="#cbd5e1" font-size="10" text-anchor="middle" font-family="Segoe UI">realpath 화이트리스트 집합</text>
+      <text x="830" y="154" fill="#cbd5e1" font-size="10" text-anchor="middle" font-family="Segoe UI">앱폴더 JSON 0600/ACL · 외부전송 0</text>
+      <text x="830" y="176" fill="#cbd5e1" font-size="10" text-anchor="middle" font-family="Segoe UI">대시보드 textContent + CSP</text>
+      <text x="830" y="202" fill="#94a3b8" font-size="9.5" text-anchor="middle" font-family="Segoe UI">파일 내용 미수집(메타데이터만)</text>
+      <text x="830" y="224" fill="#94a3b8" font-size="9.5" text-anchor="middle" font-family="Segoe UI">외부 npm 의존성 0 → 공급망 표면 0</text>
+      <line x1="322" y1="110" x2="378" y2="120" stroke="#34d399" stroke-width="1.6" marker-end="url(#ax)"/>
+      <line x1="322" y1="220" x2="378" y2="180" stroke="#34d399" stroke-width="1.6" marker-end="url(#ax)"/>
+      <line x1="580" y1="150" x2="636" y2="150" stroke="#34d399" stroke-width="1.8" marker-end="url(#ax)"/>
+    </svg>
+    <div class="legend">
+      <span><span class="dot" style="background:#f87171"></span> TB-A 미신뢰</span>
+      <span><span class="dot" style="background:#fbbf24"></span> TB-B 부분신뢰</span>
+      <span><span class="dot" style="background:#34d399"></span> 통제 게이트 / 신뢰 영역</span>
+    </div>
+    <figcaption>그림 1. 2회차 재검증 요약 — 두 신뢰경계의 8중 통제가 모두 설계 계약에 명세되어 치명/높음 잔여 0. 설계서 §11 그림 3을 재검증 관점으로 압축.</figcaption>
+  </figure>
+</section>
+
+<!-- ===================== 구현 검증 조건 ===================== -->
+<section id="actions">
+  <h2>4. 구현 단계 검증 조건 (추적 항목 · 게이트 차단 아님)</h2>
+  <p>높음 3건은 설계 계약에 구조적으로 해소되었다. 다만 이들은 <b>구현 디테일에 효과성이 좌우</b>되므로, 코드 보안 검증 게이트에서 다음을 실증해야 한다(설계 PASS를 막지 않는 추적 항목).</p>
+  <table>
+    <tr><th style="width:60px;">ID</th><th>구현 단계에서 실증할 항목</th><th style="width:170px;">관련</th></tr>
+    <tr><td class="fid">V-1</td><td>realpath 정규화·실행파일 절대경로의 <b>TOCTOU 잔여</b> 확인: canonicalize 검증 시점과 spawn 시점 사이에 경로가 심링크로 교체될 수 있다(설계는 표면 "축소"로 명시). 가능하면 핸들 기반(open 후 fstat) 또는 검증 직후 즉시 실행으로 창을 최소화. test/fixtures에 심링크 교체·junction·UNC·대소문자·NFC/NFD·확장경로 케이스를 포함해 isAllowed가 실제로 거부하는지 회귀 검증</td><td>§5 pathGuard · §11.1 · H-1</td></tr>
+    <tr><td class="fid">V-2</td><td>적대적 입력 가드의 <b>실측</b>: 거대/중첩 package.json·ReDoS 후보 정규식·제어문자/거대 문자열 픽스처로 30초 SLA 내 완주·크래시 0·메모리 상한을 벤치. resolveBin 실패 시 graceful 'na' 경로, Windows에서 .bat/.cmd 미실행, git <code>-C</code> cwd 의존제거가 실제 동작하는지 통합 테스트</td><td>§5 collectors·safeExec · §11.5 · H-2·H-3</td></tr>
+  </table>
+  <div class="note"><b>비고:</b> 본 프로젝트는 외부 npm 의존성 0개(ADR-001) + 구현 코드 부재(<code>lib/</code> 미존재, <code>package.json</code> 골격)이므로 <code>npm audit</code>·시크릿 스캔은 현 단계 비해당이다. 구현 착수 후 의존성이 추가되면(ADR로 근거 필요) 의존성 취약점 스캔을 코드 게이트에 포함할 것.</div>
+</section>
+
+<!-- ===================== 확인 필요 ===================== -->
+<section id="confirm">
+  <h2>5. 확인 필요 (잔여 위험 수용 — 정보 공유)</h2>
+  <div class="warn-box">
+    <p><b>RC-1 재확인(추가 조치 불필요):</b> 동일머신 타 로컬 사용자/프로세스로부터의 격리는 MVP 비목표로 PM이 수용했고 설계(§11.7)에 명시됐다. 127.0.0.1 루프백은 사용자 격리를 하지 않으므로, 공용 PC·터미널 서버를 지원 범위에 넣게 되면 인증 부재(§9.1 Won't) 재검토가 필요하다. 현 단일 사용자 가정 하에서는 M-1 세션토큰·M-2 파일권한 심층방어로 충분하며 본 재검증은 이 수용을 존중한다.</p>
+    <p>위 RC-1·RC-2는 1회차에서 PM이 이미 확정했고 설계에 반영되어, 본 2회차에서 새로 올릴 위험 수용 결정은 없다. V-1·V-2는 구현 게이트로 이월되는 추적 항목이다.</p>
+  </div>
+</section>
+
+<footer>Project-SPIP · 아키텍처 보안 재검증 보고서 (위협 모델링) 2회차 · 판정: PASS (조건부 PASS → 상향) · 높음 3/3·중간 4/4·낮음 3/3 해소 · 잔여 치명/높음 0 · 구현 검증 조건 V-1·V-2 이월 · 검증 대상: 설계 청사진(구현 코드 없음, 외부 의존성 0) · 자족형 HTML</footer>
+</body>
+</html>

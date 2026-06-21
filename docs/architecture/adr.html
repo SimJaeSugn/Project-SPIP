@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project-SPIP — 아키텍처 결정 기록 (ADR)</title>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#1e293b; --text:#e2e8f0; --sub:#94a3b8;
+    --accent:#34d399; --ref:#38bdf8; --line:#334155; --warn:#fbbf24; --danger:#f87171;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:"Segoe UI","Malgun Gothic",system-ui,sans-serif;line-height:1.7;}
+  header{padding:48px 32px 36px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#13203b,#0f172a);}
+  header h1{margin:0 0 8px;font-size:28px;}
+  header .tag{display:inline-block;background:rgba(52,211,153,.12);color:var(--accent);
+    border:1px solid rgba(52,211,153,.4);border-radius:999px;padding:3px 12px;font-size:13px;margin-right:8px;}
+  header p{margin:14px 0 0;color:var(--sub);max-width:920px;}
+  .meta{margin-top:16px;font-size:13px;color:var(--sub);}
+  main{max-width:1080px;margin:0 auto;padding:32px;}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:24px 28px;margin:22px 0;}
+  h2{margin:0 0 6px;font-size:20px;color:var(--accent);border-left:4px solid var(--accent);padding-left:12px;}
+  h3{font-size:15px;color:var(--ref);margin:20px 0 8px;}
+  p{margin:8px 0;}
+  ul,ol{margin:8px 0;padding-left:22px;}li{margin:5px 0;}
+  code{background:#0b1220;color:var(--ref);padding:1px 6px;border-radius:5px;font-size:13px;}
+  table{width:100%;border-collapse:collapse;margin:12px 0;font-size:13.5px;}
+  th,td{border:1px solid var(--line);padding:9px 11px;text-align:left;vertical-align:top;}
+  th{background:#142035;color:var(--accent);}
+  tr:nth-child(even) td{background:rgba(255,255,255,.02);}
+  .rid{font-family:Consolas,monospace;color:var(--accent);font-weight:700;white-space:nowrap;}
+  .nid{font-family:Consolas,monospace;color:var(--warn);font-weight:700;white-space:nowrap;}
+  .status{display:inline-block;border-radius:999px;padding:3px 14px;font-size:13px;font-weight:700;
+    background:rgba(52,211,153,.16);color:#6ee7b7;border:1px solid rgba(52,211,153,.5);}
+  .pick{color:var(--accent);font-weight:700;}
+  .good{color:#6ee7b7;}
+  .bad{color:#fca5a5;}
+  .note{background:rgba(56,189,248,.08);border:1px solid rgba(56,189,248,.3);border-radius:8px;
+    padding:12px 16px;font-size:13.5px;color:#bae6fd;margin:10px 0;}
+  .adr-meta{font-size:12.5px;color:var(--sub);margin:4px 0 14px;}
+  .toc a{color:var(--ref);text-decoration:none;}
+  .toc a:hover{text-decoration:underline;}
+  footer{text-align:center;color:var(--sub);font-size:12.5px;padding:30px;border-top:1px solid var(--line);}
+</style>
+</head>
+<body>
+<header>
+  <span class="tag">ADR</span><span class="tag">아키텍처 결정 기록</span><span class="tag">v1.0</span>
+  <h1>Project-SPIP — 아키텍처 결정 기록</h1>
+  <p>아키텍처 설계서(<code>architecture.html</code>)의 주요 기술 결정을 "맥락 → 대안 → 결정 → 근거 → 결과" 형식으로 남긴다. 모든 결정은 PRD/FeatureSpec의 확정 요구·제약에 추적된다.</p>
+  <div class="meta">작성: 수석 아키텍트 · 최종 갱신: 2026-06-21 (rev.2) · 관련: docs/architecture/architecture.html · 반영: 보안 검증 1회차(H-1·H-2·H-3) + 아키텍처 검증 1회차(P1-2) + PM 위험수용(RC-2)</div>
+</header>
+
+<main>
+
+<section class="toc">
+  <h2>ADR 목록</h2>
+  <ul>
+    <li><a href="#adr1">ADR-001 — 외부 npm 의존성 0개, Node 내장 모듈만 사용</a></li>
+    <li><a href="#adr2">ADR-002 — Git 상태 수집은 git CLI(child_process, shell:false, 절대경로 고정)로</a></li>
+    <li><a href="#adr3">ADR-003 — 데이터/설정 저장은 단일 OS 앱 데이터 폴더의 JSON 파일</a></li>
+    <li><a href="#adr4">ADR-004 — 웹서버·정적 서빙은 내장 http 모듈로 직접 구현</a></li>
+    <li><a href="#adr5">ADR-005 — 스캔(쓰기)과 서빙(읽기)을 별도 프로세스로 분리</a></li>
+    <li><a href="#adr6">ADR-006 — 스캔 대상은 부분신뢰 입력으로 취급하고 적대적 입력을 방어</a></li>
+  </ul>
+</section>
+
+<section id="adr1">
+  <h2>ADR-001 — 외부 npm 의존성 0개, Node 내장 모듈만 사용</h2>
+  <div class="adr-meta">상태: <span class="status">승인</span> · 관련 요구: <span class="nid">N-04</span></div>
+
+  <h3>맥락 (Context)</h3>
+  <p>N-04는 "외부 npm 의존성 최소화(가능하면 Node 표준 모듈 위주), 빌드/프레임워크 없음"을 요구한다. 가벼운 설치·낮은 운영 비용·프라이버시(공급망 위험 최소)가 제품 가치(§2)다. 동시에 디렉터리 순회·git 호출·웹서버·JSON 처리가 필요하다.</p>
+
+  <h3>고려한 대안</h3>
+  <table>
+    <tr><th>대안</th><th>장점</th><th>단점/트레이드오프</th></tr>
+    <tr><td><b>A. 내장 모듈만</b> (fs/path/child_process/http) <span class="pick">← 채택</span></td><td>의존성 0, 공급망 위험 0, 설치 즉시 동작, N-04 완전 충족</td><td>일부 편의(라우팅·glob)를 직접 구현 → 코드량 소폭 증가</td></tr>
+    <tr><td>B. 최소 유틸 몇 개 추가 (express, chalk, fast-glob 등)</td><td>개발 편의·코드량 감소</td><td>의존성 트리 수십 개 유입, 공급망·취약점 표면 증가, N-04 위배 소지</td></tr>
+    <tr><td>C. 번들러/TS 도입</td><td>타입 안전·모듈 관리</td><td>빌드 단계 추가 = 확정 제약("빌드 없음") 정면 위배</td></tr>
+  </table>
+
+  <h3>결정 (Decision)</h3>
+  <p><b>A 채택.</b> 외부 npm 의존성 0개를 목표로 하고 <code>fs</code>·<code>path</code>·<code>child_process</code>·<code>http</code>·<code>os</code>·<code>crypto</code>·<code>node:test</code> 등 내장 모듈만 사용한다. 라우팅·정적 서빙·순회는 <code>lib/</code>에서 직접 구현한다. 의존성 추가가 불가피해지면 개별 ADR로 근거를 남긴다.</p>
+
+  <h3>근거 (Rationale)</h3>
+  <ul>
+    <li>요구 범위(라우트 소수·로컬 전용·정적 UI)가 작아 직접 구현 비용이 의존성 관리 비용보다 낮다.</li>
+    <li>공급망 취약점·라이선스 리스크 0 → 프라이버시 우선 제품 성격과 정합.</li>
+    <li>설치 = clone/link 즉시 동작. <code>node_modules</code> 자체가 본 도구가 경고하는 디스크 잠식 대상이라는 점에서도 일관.</li>
+  </ul>
+
+  <h3>결과 (Consequences)</h3>
+  <ul>
+    <li><span class="good">+</span> 가장 가벼운 설치·실행, 보안 표면 최소.</li>
+    <li><span class="good">+</span> 빌드 파이프라인 부재로 진입 장벽 낮음.</li>
+    <li><span class="bad">−</span> 라우팅·MIME·순회를 직접 구현 → <code>lib/</code> 코드량 증가, 테스트로 품질 보전 필요.</li>
+    <li><span class="bad">−</span> 고급 기능(예: 정교한 glob) 필요 시 직접 작성 부담.</li>
+  </ul>
+</section>
+
+<section id="adr2">
+  <h2>ADR-002 — Git 상태 수집은 git CLI(child_process, shell:false, 절대경로 고정)로</h2>
+  <div class="adr-meta">상태: <span class="status">승인</span> (rev.2 — 보안 H-2 반영) · 관련 요구: <span class="rid">R-08</span> <span class="rid">R-13</span> <span class="nid">N-03</span> <span class="nid">N-04</span> · 보안 H-2·M-4</div>
+
+  <h3>맥락 (Context)</h3>
+  <p>R-08은 저장소 여부·브랜치·미커밋 변경·ahead/behind 수집을 요구한다. 방법은 (1) git CLI 호출, (2) <code>.git</code> 디렉터리 순수 파싱, (3) 외부 git 라이브러리 중 하나다. N-04(의존성 최소)·N-03(인젝션 방지)·R-13(부재 시 graceful)을 동시에 만족해야 한다.</p>
+
+  <h3>고려한 대안</h3>
+  <table>
+    <tr><th>대안</th><th>장점</th><th>단점/트레이드오프</th></tr>
+    <tr><td><b>A. git CLI via child_process.spawn(shell:false)</b> <span class="pick">← 채택</span></td><td>정확·견고(git이 직접 계산), 의존성 0, ahead/behind까지 신뢰성 있게 취득</td><td>git 미설치 시 사용 불가 → 단, R-13 graceful로 'N/A' 처리하면 됨. spawn 호출 비용</td></tr>
+    <tr><td>B. <code>.git</code> 디렉터리 순수 파싱(JS)</td><td>git 미설치여도 동작, 외부 프로세스 0</td><td>packed-refs·인덱스·원격 추적 등 구현 복잡·취약, ahead/behind 정확 계산 난이도 높음, 유지보수 부담 큼</td></tr>
+    <tr><td>C. isomorphic-git 등 라이브러리</td><td>JS만으로 git 동작</td><td>외부 의존성(트리 큼) → N-04 위배, 번들 무게</td></tr>
+  </table>
+
+  <h3>결정 (Decision)</h3>
+  <p><b>A 채택 + 보안 강화(H-2).</b> <code>collectors/git.js</code>가 <code>common/safeExec</code>를 통해 git 상태를 취득한다. 인자는 항상 배열로 전달하고 경로·브랜치명을 셸 문자열로 연결하지 않는다(N-03). git 미설치/비저장소/타임아웃이면 <code>status:'na'</code>로 반환해 전체 스캔을 중단시키지 않는다(R-13).</p>
+  <p><b>H-2 반영(필수):</b> git 실행 파일은 이름만 고정하지 않고 기동/스캔 시작 시 <code>resolveBin('git')</code>으로 <b>절대경로를 1회 해석해 고정</b>한 뒤 그 절대경로로 spawn한다. git collector가 <code>cwd:projectPath</code>(부분신뢰 폴더, TB-B)에서 돌더라도 폴더 내 위장 <code>git.exe</code>/<code>git.bat</code>가 PATH 우선순위로 선택돼 RCE로 이어지는 경로를 막는다. 가능하면 <code>git -C &lt;projectPath&gt;</code> 인자를 써서 <b>cwd 의존을 제거</b>하고, Windows에서는 PATHEXT 기반 <code>.bat/.cmd</code> 자동 실행을 차단한다(절대경로 <code>.exe</code>만). <b>M-4 반영:</b> 호출에 타임아웃+강제 kill·출력 버퍼 상한을 둔다.</p>
+
+  <h3>근거 (Rationale)</h3>
+  <ul>
+    <li>git CLI는 ahead/behind·dirty 판정을 정확하게 제공 — 직접 파싱 대비 정확성·견고성 우위.</li>
+    <li><code>shell:false</code>+인자 배열은 N-03의 인젝션 방지 규칙을 구조적으로 충족(셸 해석 없음).</li>
+    <li><b>절대경로 고정(H-2)</b>은 PATH 하이재킹·위장 바이너리 선택을 차단 — 이름만 고정하면 부분신뢰 cwd에서 RCE 표면이 남기 때문(보안검증 1회차 높음).</li>
+    <li>의존성 0 유지(ADR-001 정합). 부재는 제품 가정상 graceful 처리로 충분(R-13).</li>
+    <li>git 호출은 프로젝트당 1회로 묶어 성능 비용(N-01·RA2) 통제, 타임아웃으로 행(hang) 차단(M-4).</li>
+  </ul>
+
+  <h3>결과 (Consequences)</h3>
+  <ul>
+    <li><span class="good">+</span> 정확한 git 인사이트, 인젝션 안전, 의존성 0.</li>
+    <li><span class="good">+</span> code 실행(R-12)과 동일한 <code>safeExec</code> 경로 재사용 → 보안 통제(절대경로·타임아웃) 일원화.</li>
+    <li><span class="good">+</span> 절대경로 고정으로 부분신뢰 폴더 내 위장 바이너리 RCE 차단(H-2).</li>
+    <li><span class="bad">−</span> 실행 파일 절대경로 해석(resolveBin) 단계가 추가됨(기동/스캔 시작 시 1회) — 해석 실패 시 graceful 'na' 처리 필요.</li>
+    <li><span class="bad">−</span> git 미설치 환경에서는 git 인사이트가 'N/A'(기능 일부 비활성, 단 사용자 안내).</li>
+    <li><span class="bad">−</span> 대량 프로젝트에서 spawn 누적 비용 → 묶음·타임아웃·격리로 완화 필요.</li>
+  </ul>
+</section>
+
+<section id="adr3">
+  <h2>ADR-003 — 데이터/설정 저장은 단일 OS 앱 데이터 폴더의 JSON 파일</h2>
+  <div class="adr-meta">상태: <span class="status">승인</span> (rev.2 — P1-2 위치 확정·M-2 권한) · 관련 요구: <span class="nid">N-06</span> <span class="nid">N-04</span> PRD §10 · 검증 P1-2 · 보안 M-2</div>
+
+  <h3>맥락 (Context)</h3>
+  <p>스캔 결과(~200개 프로젝트 메타데이터)와 사용자 설정을 영속화해 서버/스캐너가 읽어야 한다. N-06은 결과 JSON의 OS 사용자 캐시 폴더 저장·프로젝트 폴더 비오염·단일 사용자·인증 없음을 요구하나, <b>설정 파일 위치는 N-06이 규정하지 않아 본 ADR에서 확정이 필요</b>하다(검증 P1-2). 동시 쓰기 없음(스캔은 단일 프로세스), 읽기 위주다. 스냅샷은 전체 프로젝트 절대경로·디렉터리 구조·git 브랜치 등 프라이버시 정보를 담으므로 파일 권한 결정도 필요하다(보안 M-2).</p>
+
+  <h3>고려한 대안</h3>
+  <table>
+    <tr><th>대안</th><th>장점</th><th>단점/트레이드오프</th></tr>
+    <tr><td><b>A. JSON 파일 + 원자적 쓰기, 단일 앱 데이터 폴더(config/·cache/)</b> <span class="pick">← 채택</span></td><td>의존성 0, 사람이 읽기 쉬움, 서버 1회 로드로 충분, 설정·캐시 위치를 한 폴더로 단순화(paths.js 계약 명료)</td><td>대용량·복잡 쿼리엔 부적합(본 규모엔 무관)</td></tr>
+    <tr><td>A'. 설정은 OS 설정 폴더, 캐시는 OS 캐시 폴더로 분리</td><td>OS 관례에 가장 부합(cache는 비우기 가능 의미)</td><td>경로 베이스가 OS별로 2종씩 → paths.js 분기·문서 표기 증가. 200개 규모엔 이득 미미</td></tr>
+    <tr><td>B. SQLite (내장 모듈 아님)</td><td>쿼리·인덱스·증분 갱신</td><td>외부 의존성 또는 네이티브 바인딩 → N-04 위배, 200개 규모에 과설계</td></tr>
+    <tr><td>C. 프로젝트 폴더에 결과 파일</td><td>경로 단순</td><td>N-06 위배(폴더 오염), 다수 위치 산재</td></tr>
+  </table>
+
+  <h3>결정 (Decision)</h3>
+  <p><b>A 채택 (P1-2 확정).</b> 설정과 캐시를 <b>단일 OS 앱 데이터 디렉터리</b>(Win <code>%APPDATA%\spip\</code> / macOS <code>~/Library/Application Support/spip/</code> / Linux <code>$XDG_CONFIG_HOME/spip/</code>) 아래 용도별 하위로 둔다 — 설정은 <code>config/spip.config.json</code>, 스냅샷은 <code>cache/projects.json</code>. <code>common/paths.js</code>가 <code>appDir()</code>·<code>configPath()</code>·<code>cachePath()</code>로 단일 해석한다. <code>serializer</code>는 임시파일 쓰기 후 <code>rename</code>으로 <b>원자적</b> 교체하고(부분 쓰기 손상 방지), 두 파일과 임시 파일을 <b>소유자 전용 권한</b>(POSIX <code>0600</code>/디렉터리 <code>0700</code>; Windows ACL)으로 생성한다(M-2). 스키마는 <code>schemaVersion</code>을 가진다.</p>
+  <p>A'(설정·캐시 베이스 분리) 대신 A(단일 앱 폴더)를 택한 이유는 paths.js 계약과 문서 표기를 단순화하고 PM 결정(단일 앱 데이터 디렉터리 통일)과 정합하기 위함이다. cache 의미를 보존하려는 A'의 이점은 200개 규모·단일 사용자에서 미미하다.</p>
+
+  <h3>근거 (Rationale)</h3>
+  <ul>
+    <li>200개 메타데이터는 수백 KB 수준 → 서버가 1회 로드해 메모리 보관해도 가볍다(N-01).</li>
+    <li>JSON은 의존성 0·디버깅 용이·스키마 진화 쉬움.</li>
+    <li>원자적 쓰기로 스캔 중단/충돌 시에도 손상 스냅샷 방지 → 서버 graceful과 결합해 견고.</li>
+    <li>필터/검색은 클라이언트 메모리 처리이므로 DB 쿼리가 불필요.</li>
+  </ul>
+
+  <h3>결과 (Consequences)</h3>
+  <ul>
+    <li><span class="good">+</span> 의존성 0, 프로젝트 폴더 비오염, 사람이 검사 가능.</li>
+    <li><span class="good">+</span> 설정·캐시 위치가 단일 앱 폴더로 확정되어 paths.js 계약(appDir/configPath/cachePath)이 명료(P1-2 해소).</li>
+    <li><span class="good">+</span> 소유자 전용 권한(0600/ACL)으로 멀티유저 OS의 경로 프라이버시 노출 표면 축소(M-2, RC-1 심층방어).</li>
+    <li><span class="bad">−</span> <code>%APPDATA%</code>는 동기화 로밍 대상일 수 있어 캐시가 로밍될 소지 — 필요 시 캐시만 <code>%LOCALAPPDATA%</code>로 옮기는 것은 M4 재검토 여지(현 규모엔 무시 가능).</li>
+    <li><span class="bad">−</span> 데이터가 수천~수만 규모로 커지면(전체 드라이브 R-05/M4) 단일 JSON 로드가 무거워질 수 있음 → 그 시점에 분할/스트리밍 재검토(M4 결정 사항).</li>
+  </ul>
+</section>
+
+<section id="adr4">
+  <h2>ADR-004 — 웹서버·정적 서빙은 내장 http 모듈로 직접 구현</h2>
+  <div class="adr-meta">상태: <span class="status">승인</span> (rev.2 — M-1·L-1·P1-1 반영) · 관련 요구: <span class="rid">R-10</span> <span class="nid">N-02</span> <span class="nid">N-03</span> <span class="nid">N-04</span> · 보안 M-1·L-1 · 검증 P1-1</div>
+
+  <h3>맥락 (Context)</h3>
+  <p>대시보드를 위해 정적 자산(HTML/CSS/JS)과 소수의 데이터/액션 API를 localhost에 제공해야 한다. 엔드포인트는 7개 미만이고 로컬 단일 사용자다. 프레임워크 도입 여부가 N-04에 직결된다.</p>
+
+  <h3>고려한 대안</h3>
+  <table>
+    <tr><th>대안</th><th>장점</th><th>단점/트레이드오프</th></tr>
+    <tr><td><b>A. 내장 http + 직접 라우터/정적 핸들러</b> <span class="pick">← 채택</span></td><td>의존성 0, 바인딩·헤더·CSRF·정적 경로 차단을 완전 제어, N-04 충족</td><td>라우팅/MIME 직접 구현(소량)</td></tr>
+    <tr><td>B. Express/Koa 등 프레임워크</td><td>라우팅·미들웨어 편의</td><td>의존성 트리 유입 → N-04 위배, 본 규모엔 과함</td></tr>
+    <tr><td>C. 정적 파일 서버 패키지(serve 등)</td><td>정적 서빙 즉시</td><td>API·액션·CSRF·화이트리스트 통합 어려움, 의존성</td></tr>
+  </table>
+
+  <h3>결정 (Decision)</h3>
+  <p><b>A 채택.</b> <code>server.js</code>가 <code>http.createServer</code>로 서버를 만들고 <code>listen(port, '127.0.0.1')</code>로 루프백 전용 바인딩한다(N-02). <code>lib/server/router</code>가 메서드·경로로 디스패치하고, <b>정적 자산 URL 규약은 P1-1로 통일</b>한다 — <code>GET /</code> → <code>public/index.html</code>, <code>GET /static/&lt;asset&gt;</code> → <code>public/&lt;asset&gt;</code>, <code>/api/*</code> 외 모든 GET은 staticHandler가 처리하며 매핑 후 <code>public/</code> 절대경로 하위로 정규화해 이탈 요청을 404 처리(N-03)한다. index.html은 자산을 <code>/static/*</code>로 참조한다.</p>
+  <p><b>M-1 반영(CSRF/DNS 리바인딩):</b> 상태변경 POST는 <code>Content-Type: application/json</code> 요구에 더해 <b>Host 헤더 allowlist 정확 비교</b>(기대 <code>127.0.0.1:&lt;port&gt;</code>/<code>localhost:&lt;port&gt;</code>)와 <b>Origin 폐쇄 기본값</b>(부재/불일치 거부), 기동 시 1회 생성한 <b>세션 토큰</b> 동봉 검증을 적용한다. <b>L-1 반영:</b> index.html에 CSP 메타(인라인/외부 스크립트 제한)를 둔다.</p>
+
+  <h3>근거 (Rationale)</h3>
+  <ul>
+    <li>엔드포인트가 적어 직접 라우팅 비용이 프레임워크 의존성 비용보다 낮다.</li>
+    <li>바인딩 주소·Host allowlist·CSP·경로 정규화·세션 토큰을 프레임워크 추상화 없이 명시적으로 제어 → 보안 통제(§11)가 명확(M-1·L-1).</li>
+    <li>정적 URL 규약을 <code>/static/*</code>→<code>public/</code> 단일 규약으로 통일해 staticHandler 정규화 기준과 index.html 자산 참조가 일치(P1-1, 구현 분기 제거).</li>
+    <li>ADR-001과 정합(의존성 0).</li>
+  </ul>
+
+  <h3>결과 (Consequences)</h3>
+  <ul>
+    <li><span class="good">+</span> 보안 통제(Host allowlist·세션토큰·CSP)를 코드로 직접·명시적으로 보장, 의존성 0.</li>
+    <li><span class="good">+</span> 정적+API+액션을 한 서버에서 일관 처리, URL 규약 통일로 구현 임의해석 제거.</li>
+    <li><span class="bad">−</span> 라우팅·MIME·파싱·Host 검증·토큰 주입 보일러플레이트를 직접 작성·테스트해야 함.</li>
+  </ul>
+</section>
+
+<section id="adr5">
+  <h2>ADR-005 — 스캔(쓰기)과 서빙(읽기)을 별도 프로세스로 분리</h2>
+  <div class="adr-meta">상태: <span class="status">승인</span> · 관련 요구: <span class="rid">R-14</span> <span class="rid">R-10</span> <span class="rid">R-16</span> <span class="nid">N-01</span> · package.json 골격</div>
+
+  <h3>맥락 (Context)</h3>
+  <p>확정 골격은 <code>scan.js</code>(bin spip)와 <code>server.js</code>를 별도 스크립트로 두고 있다(<code>scan</code>/<code>start</code>/<code>dev</code>). 스캔은 무거운 일회성 I/O 배치, 서빙은 가벼운 상시 읽기다. 두 책임을 한 프로세스에 합칠지, 분리할지 결정해야 한다.</p>
+
+  <h3>고려한 대안</h3>
+  <table>
+    <tr><th>대안</th><th>장점</th><th>단점/트레이드오프</th></tr>
+    <tr><td><b>A. 별도 프로세스 + JSON 스냅샷 연결</b> <span class="pick">← 채택</span></td><td>책임 분리, 서버 항상 경량, CLI 스캔 독립 실행, 확정 골격과 일치</td><td>'재스캔'(R-16) 시 서버가 자식 프로세스로 scan을 호출하는 연동 필요(M4)</td></tr>
+    <tr><td>B. 단일 서버 프로세스가 요청 시 스캔</td><td>프로세스 1개</td><td>스캔 중 서버 블로킹/메모리 급증, 30초 작업이 HTTP 타임아웃·UX 악화, 관심사 결합</td></tr>
+    <tr><td>C. 상시 watch 데몬</td><td>항상 최신</td><td>MVP 범위 밖(§9.2 Could/M4), 복잡·자원 상주</td></tr>
+  </table>
+
+  <h3>결정 (Decision)</h3>
+  <p><b>A 채택.</b> <code>scan.js</code>는 결과를 스냅샷으로 쓰고 종료한다. <code>server.js</code>는 스냅샷을 읽어 서빙만 한다. 둘은 OS 캐시의 <code>projects.json</code>으로만 연결된다(공유 메모리·IPC 불필요). 대시보드 재스캔(R-16, M4)은 서버가 <code>scan.js</code>를 자식 프로세스로 호출하고 스냅샷을 다시 로드하는 방식으로 자리만 확보한다.</p>
+
+  <h3>근거 (Rationale)</h3>
+  <ul>
+    <li>스캔(무거운 배치)과 서빙(경량 상시)의 성격 차이를 프로세스 경계로 분리 → 서버 응답성·견고성 유지(N-01).</li>
+    <li>스냅샷 파일 인터페이스는 가장 단순한 결합(공유 메모리·DB·IPC 불필요).</li>
+    <li>확정된 <code>package.json</code> 스크립트 골격과 1:1 일치 → 추가 설계 부채 없음.</li>
+    <li>서버가 스캔 미실행 상태로 떠도 graceful(200 + <code>hasSnapshot:false</code> + 빈 배열로 통일, P2-5) → 실행 순서 강제 불필요.</li>
+  </ul>
+
+  <h3>결과 (Consequences)</h3>
+  <ul>
+    <li><span class="good">+</span> 서버는 어떤 스캔 부하에도 영향받지 않고 가볍게 동작.</li>
+    <li><span class="good">+</span> CLI 스캔을 자동화/크론처럼 독립 사용 가능.</li>
+    <li><span class="bad">−</span> 스냅샷이 시점 데이터라 최신성은 사용자의 재스캔에 의존(실시간 watch는 M4).</li>
+    <li><span class="bad">−</span> R-16 재스캔 시 서버→scan 자식 프로세스 연동 코드 필요(M4 구현).</li>
+  </ul>
+</section>
+
+<section id="adr6">
+  <h2>ADR-006 — 스캔 대상은 부분신뢰 입력으로 취급하고 적대적 입력을 방어</h2>
+  <div class="adr-meta">상태: <span class="status">승인</span> (신규 rev.2) · 관련 요구: <span class="nid">N-03</span> <span class="nid">N-05</span> <span class="rid">R-13</span> · 보안 H-1·H-2·H-3·M-3·L-1 · PM 위험수용 RC-2</div>
+
+  <h3>맥락 (Context)</h3>
+  <p>기존 설계는 환경 부재·손상 파일에 대한 graceful 격리(R-13/N-05)는 갖췄으나, <b>고의로 만든 악성 입력</b>에 대한 방어는 명세하지 않았다. 보안 검증 1회차는 스캔 대상(<code>package.json</code>·<code>.git</code>·폴더명·심링크)이 신뢰 경계 밖(TB-B)임을 지적하고 높음 3건(H-1 심링크/realpath 우회, H-2 PATH 하이재킹, H-3 JSON 폭탄·ReDoS)을 게이트 차단 항목으로 제시했다. <b>PM은 RC-2를 "인정"으로 확정</b>(스캔 대상에 악성 외부 클론 리포가 섞일 수 있음)했으므로, 이들 방어는 권고가 아니라 <b>필수</b>다. graceful 격리(try)만으로는 무한 루프·메모리 폭발·경로 경계 우회·RCE를 막지 못한다는 점이 핵심이다.</p>
+
+  <h3>고려한 대안</h3>
+  <table>
+    <tr><th>대안</th><th>장점</th><th>단점/트레이드오프</th></tr>
+    <tr><td><b>A. 신뢰 경계 밖 전제 + 입력 게이트(크기·깊이·realpath·절대경로·이스케이프)</b> <span class="pick">← 채택</span></td><td>RC-2 인정과 정합, 높음 3건 구조적 차단, 추가 의존성 0(내장 fs/path/child_process로 구현 가능)</td><td>각 수집기·walker·pathGuard·safeExec에 가드 코드·테스트 추가 → 구현/검증 비용 증가</td></tr>
+    <tr><td>B. graceful 격리(try)만 유지</td><td>구현 단순</td><td>적대적 입력에 무력(DoS·경계우회·RCE 잔존) → 보안 게이트 FAIL, RC-2와 모순</td></tr>
+    <tr><td>C. 스캔을 별도 샌드박스/저권한 프로세스에서 실행</td><td>강한 격리</td><td>OS별 샌드박스 의존·복잡도 급증, 단일 사용자 로컬 도구엔 과설계(N-04 정신 위배), MVP 범위 밖</td></tr>
+  </table>
+
+  <h3>결정 (Decision)</h3>
+  <p><b>A 채택.</b> 스캔 대상을 부분신뢰(TB-B)로 명시 전제하고 다음 게이트를 설계 계약에 못박는다(구현 수용 기준): ① <b>realpath 화이트리스트</b> — walker 등록 시점·pathGuard 검증 시점 모두 <code>canonicalize()</code>(<code>fs.realpath</code> + 대소문자/유니코드/UNC/드라이브상대/확장경로 규칙)로 실경로 정규화 후 정확 일치(H-1). ② <b>실행 파일 절대경로 고정</b> — <code>resolveBin</code>으로 1회 해석, git의 cwd 위장 바이너리 차단, Windows PATHEXT 차단(H-2, ADR-002 연계). ③ <b>입력 파싱 가드</b> — 파일 크기 상한·JSON 깊이/바이트 가드·선형시간(ReDoS-free) 정규식·문자열 필드 길이절단/제어문자 제거(H-3). ④ <b>심링크 루프·깊이</b> — MVP 내장 안전 상한 강제+방문 실경로 추적 가지치기(M-3). ⑤ <b>출력 이스케이프+CSP</b> — 대시보드 동적 텍스트 textContent/이스케이프·CSP 메타(L-1). 위 가드는 모두 격리(try)보다 <b>앞단</b>에 둔다. 상세는 architecture.html §5 계약·§11.1·11.2·11.5·11.6.</p>
+
+  <h3>근거 (Rationale)</h3>
+  <ul>
+    <li>RC-2 인정 하에서 H-2·H-3·L-1은 필수 방어 — 권고로 두면 악성 리포 스캔/열기만으로 RCE·DoS·XSS가 성립한다.</li>
+    <li>모든 게이트는 Node 내장 모듈로 구현 가능 → ADR-001(의존성 0) 유지.</li>
+    <li>가드를 격리 앞단에 두는 것이 핵심 — try/catch는 무한 루프·메모리 폭발을 막지 못한다(H-3 시나리오).</li>
+    <li>샌드박스(C)는 단일 사용자 로컬 도구에 과설계이며, 입력 게이트로 위협 표면을 충분히 축소한다.</li>
+  </ul>
+
+  <h3>결과 (Consequences)</h3>
+  <ul>
+    <li><span class="good">+</span> 높음 3건(H-1·H-2·H-3)을 구조적으로 차단해 보안 게이트 PASS 조건 충족.</li>
+    <li><span class="good">+</span> 적대적 입력에도 스캔이 완주(SLA 유지)하고 경로 경계가 보존됨.</li>
+    <li><span class="bad">−</span> 각 모듈에 가드·테스트 추가 → 구현/검증 비용 증가(test/fixtures에 악성 입력 케이스 포함 필요).</li>
+    <li><span class="bad">−</span> realpath 해소·크기 검사 등으로 스캔에 소폭 오버헤드(제외 가지치기로 상쇄, RA1).</li>
+    <li>※ RC-1(동일머신 타 사용자 격리)은 MVP 비목표로 수용하되 파일 권한(M-2)·세션 토큰(M-1)은 심층방어로 적용(architecture.html §11.7).</li>
+  </ul>
+</section>
+
+<footer>Project-SPIP · 아키텍처 결정 기록(ADR) v1.0 (rev.2) · 6개 결정(ADR-001~006) · 보안 H-1·H-2·H-3 / 검증 P1-2 / RC-2 반영 · 자족형 HTML · 관련: architecture.html</footer>
+</body>
+</html>

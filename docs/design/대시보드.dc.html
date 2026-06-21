@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<style>
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{background:#f6f6f5;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;}
+  ::selection{background:#c7d2fe;}
+  input,button,select{font-family:inherit;}
+  @keyframes spipSpin{to{transform:rotate(360deg);}}
+  @keyframes spipFade{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
+  @keyframes spipDrawer{from{transform:translateX(28px);opacity:.5;}to{transform:none;opacity:1;}}
+  .spip-scroll::-webkit-scrollbar{width:11px;height:11px;}
+  .spip-scroll::-webkit-scrollbar-thumb{background:#d6d3d1;border-radius:7px;border:3px solid #fff;}
+  .spip-scroll::-webkit-scrollbar-track{background:transparent;}
+</style>
+</helmet>
+
+<div style="font-family:'Geist','Pretendard',system-ui,sans-serif;color:#1c1917;height:100vh;overflow:hidden;display:flex;flex-direction:column;background:#f6f6f5;">
+
+<!-- ===================== DASHBOARD ===================== -->
+<sc-if value="{{ isDashboard }}" hint-placeholder-val="{{ true }}">
+<div style="display:flex;flex-direction:column;height:100vh;">
+
+  <!-- header -->
+  <header style="flex:none;display:flex;align-items:center;gap:16px;padding:0 20px;height:56px;background:#fff;border-bottom:1px solid #e7e5e4;">
+    <div style="display:flex;align-items:center;gap:10px;flex:none;">
+      <div style="width:27px;height:27px;border-radius:7px;background:#1c1917;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:14px;font-family:'Geist Mono',monospace;">S</div>
+      <div style="font-weight:600;font-size:15px;letter-spacing:-.015em;">Project-SPIP</div>
+      <span style="font-family:'Geist Mono',monospace;font-size:9.5px;font-weight:600;letter-spacing:.07em;color:#15803d;background:#dcfce7;border:1px solid #bbf7d0;padding:2px 6px;border-radius:5px;">LOCAL</span>
+    </div>
+    <div style="flex:1;max-width:460px;position:relative;display:flex;align-items:center;">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#a8a29e" stroke-width="2" style="position:absolute;left:12px;pointer-events:none;"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.5" y2="16.5"></line></svg>
+      <input value="{{ search }}" onInput="{{ onSearch }}" placeholder="이름 · 경로 검색" style="width:100%;height:35px;border:1px solid #e7e5e4;border-radius:9px;background:#fafafa;padding:0 12px 0 35px;font-size:13px;color:#1c1917;outline:none;" style-focus="border-color:#4f46e5;background:#fff;box-shadow:0 0 0 3px #eef2ff;"/>
+    </div>
+    <div style="flex:1;"></div>
+    <div style="display:flex;align-items:center;gap:8px;flex:none;">
+      <button onClick="{{ gotoFirstRun }}" style="appearance:none;border:1px solid #e7e5e4;background:#fff;color:#57534e;font-size:12.5px;font-weight:600;padding:7px 12px;border-radius:8px;cursor:pointer;white-space:nowrap;" style-hover="background:#fafafa;border-color:#d6d3d1;">첫 실행 화면</button>
+      <button onClick="{{ startScan }}" style="appearance:none;border:1px solid #1c1917;background:#1c1917;color:#fff;font-size:12.5px;font-weight:600;padding:7px 14px;border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;white-space:nowrap;" style-hover="background:#000;">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 12a9 9 0 1 1-2.64-6.36"></path><path d="M21 3v6h-6"></path></svg>
+        재스캔
+      </button>
+    </div>
+  </header>
+
+  <!-- toolbar -->
+  <div style="flex:none;display:flex;align-items:center;gap:10px;padding:9px 20px;background:#fff;border-bottom:1px solid #e7e5e4;flex-wrap:wrap;">
+    <div style="font-size:13px;color:#57534e;"><b style="color:#1c1917;font-variant-numeric:tabular-nums;">{{ kProjShown }}</b> <span style="color:#a8a29e;">/ {{ kTotal }} 프로젝트</span></div>
+    <sc-for list="{{ activeChips }}" as="c" hint-placeholder-count="0">
+      <button onClick="{{ c.remove }}" style="appearance:none;display:inline-flex;align-items:center;gap:5px;border:1px solid #c7d2fe;background:#eef2ff;color:#4338ca;font-size:11.5px;font-weight:600;padding:3px 8px;border-radius:7px;cursor:pointer;">{{ c.label }} <span style="font-size:13px;line-height:1;">×</span></button>
+    </sc-for>
+    <sc-if value="{{ hasFilters }}" hint-placeholder-val="{{ false }}">
+      <button onClick="{{ clearFilters }}" style="appearance:none;border:none;background:none;color:#a8a29e;font-size:12px;font-weight:600;cursor:pointer;text-decoration:underline;text-underline-offset:2px;">초기화</button>
+    </sc-if>
+    <div style="flex:1;"></div>
+    <div style="display:flex;align-items:center;gap:6px;">
+      <span style="font-size:11.5px;color:#a8a29e;font-weight:600;">정렬</span>
+      <select value="{{ sort }}" onChange="{{ onSort }}" style="appearance:none;border:1px solid #e7e5e4;background:#fff;color:#1c1917;font-size:12.5px;font-weight:500;padding:6px 26px 6px 10px;border-radius:8px;cursor:pointer;background-image:url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 fill=%22none%22 stroke=%22%23a8a29e%22 stroke-width=%222%22><path d=%22M3 5l3 3 3-3%22/></svg>');background-repeat:no-repeat;background-position:right 9px center;">
+        <option value="modified">최근 수정순</option>
+        <option value="name">이름순</option>
+        <option value="size">용량순</option>
+      </select>
+    </div>
+    <div style="display:flex;background:#f5f5f4;border:1px solid #ececea;border-radius:9px;padding:2px;gap:2px;">
+      <button style="{{ dCards }}" onClick="{{ setCards }}">카드</button>
+      <button style="{{ dTable }}" onClick="{{ setTable }}">표</button>
+    </div>
+    <div style="display:flex;background:#f5f5f4;border:1px solid #ececea;border-radius:9px;padding:2px;gap:2px;">
+      <button style="{{ lSide }}" onClick="{{ setSidebar }}">사이드바</button>
+      <button style="{{ lBar }}" onClick="{{ setToolbar }}">툴바</button>
+    </div>
+  </div>
+
+  <!-- hero KPIs -->
+  <div style="flex:none;display:grid;grid-template-columns:1.05fr 1.4fr 1fr 1.7fr 1.2fr;gap:1px;background:#e7e5e4;border-bottom:1px solid #e7e5e4;">
+    <div style="background:#fff;padding:13px 18px;">
+      <div style="font-size:10.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:#a8a29e;">전체 프로젝트</div>
+      <div style="font-size:25px;font-weight:700;letter-spacing:-.02em;line-height:1.1;margin-top:6px;font-variant-numeric:tabular-nums;">{{ kTotal }}</div>
+      <div style="font-size:11.5px;color:#78716c;margin-top:5px;">{{ kActiveCount }} 활동 · {{ kStaleCount }} 방치</div>
+    </div>
+    <div style="background:#fff;padding:13px 18px;">
+      <div style="font-size:10.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:#a8a29e;">Git 변경</div>
+      <div style="display:flex;align-items:baseline;gap:16px;margin-top:6px;">
+        <div><span style="font-size:25px;font-weight:700;color:#b45309;font-variant-numeric:tabular-nums;letter-spacing:-.02em;">{{ kDirtyCount }}</span> <span style="font-size:11.5px;color:#78716c;">미커밋</span></div>
+        <div><span style="font-size:25px;font-weight:700;color:#1d4ed8;font-variant-numeric:tabular-nums;letter-spacing:-.02em;">{{ kAheadCount }}</span> <span style="font-size:11.5px;color:#78716c;">미푸시</span></div>
+      </div>
+      <div style="font-size:11.5px;color:#78716c;margin-top:5px;">커밋·푸시 잊은 프로젝트</div>
+    </div>
+    <div style="background:#fff;padding:13px 18px;">
+      <div style="font-size:10.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:#a8a29e;">방치(Stale)</div>
+      <div style="font-size:25px;font-weight:700;letter-spacing:-.02em;line-height:1.1;margin-top:6px;font-variant-numeric:tabular-nums;color:#78716c;">{{ kStaleCount }}</div>
+      <div style="font-size:11.5px;color:#78716c;margin-top:5px;">기준 {{ staleDaysVal }}일 무활동</div>
+    </div>
+    <div style="background:#fff;padding:13px 18px;">
+      <div style="font-size:10.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:#a8a29e;">언어 분포 · {{ kLangCount }}종</div>
+      <div style="display:flex;height:7px;border-radius:4px;overflow:hidden;margin-top:10px;background:#f0efed;">
+        <sc-for list="{{ langBar }}" as="seg" hint-placeholder-count="5"><div style="{{ seg.style }}"></div></sc-for>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:7px 13px;margin-top:9px;">
+        <sc-for list="{{ langLegend }}" as="L" hint-placeholder-count="4"><span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:#57534e;"><span style="{{ L.dotStyle }}"></span>{{ L.name }} <span style="color:#a8a29e;font-family:'Geist Mono',monospace;">{{ L.count }}</span></span></sc-for>
+      </div>
+    </div>
+    <div style="background:#fff;padding:13px 18px;">
+      <div style="font-size:10.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:#a8a29e;">디스크 사용</div>
+      <div style="font-size:25px;font-weight:700;letter-spacing:-.02em;line-height:1.1;margin-top:6px;font-variant-numeric:tabular-nums;">{{ kTotalSize }}</div>
+      <div style="font-size:11.5px;color:#78716c;margin-top:5px;">node_modules {{ kNmSize }}</div>
+    </div>
+  </div>
+
+  <!-- body -->
+  <div style="flex:1;display:flex;min-height:0;">
+
+    <!-- sidebar facets -->
+    <sc-if value="{{ isSidebar }}" hint-placeholder-val="{{ true }}">
+    <aside class="spip-scroll" style="flex:none;width:248px;border-right:1px solid #e7e5e4;background:#fff;overflow:auto;padding:18px 14px;">
+      <div style="font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:#a8a29e;margin:0 6px 8px;">언어</div>
+      <sc-for list="{{ languages }}" as="L" hint-placeholder-count="6">
+        <label style="display:flex;align-items:center;gap:9px;padding:5px 6px;border-radius:7px;cursor:pointer;font-size:13px;" style-hover="background:#f5f5f4;">
+          <input type="checkbox" checked="{{ L.selected }}" onChange="{{ L.toggle }}" style="accent-color:#4f46e5;width:14px;height:14px;cursor:pointer;margin:0;"/>
+          <span style="{{ L.dotStyle }}"></span>
+          <span style="flex:1;color:#1c1917;">{{ L.lang }}</span>
+          <span style="font-family:'Geist Mono',monospace;font-size:11px;color:#a8a29e;">{{ L.count }}</span>
+        </label>
+      </sc-for>
+      <div style="height:1px;background:#f0efed;margin:14px 6px;"></div>
+      <div style="font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:#a8a29e;margin:0 6px 8px;">신선도</div>
+      <label style="display:flex;align-items:center;gap:9px;padding:5px 6px;border-radius:7px;cursor:pointer;font-size:13px;" style-hover="background:#f5f5f4;"><input type="checkbox" checked="{{ freshActive }}" onChange="{{ toggleFreshActive }}" style="accent-color:#4f46e5;width:14px;height:14px;cursor:pointer;margin:0;"/><span style="flex:1;color:#1c1917;">활동 중</span><span style="font-family:'Geist Mono',monospace;font-size:11px;color:#a8a29e;">{{ kActiveCount }}</span></label>
+      <label style="display:flex;align-items:center;gap:9px;padding:5px 6px;border-radius:7px;cursor:pointer;font-size:13px;" style-hover="background:#f5f5f4;"><input type="checkbox" checked="{{ freshStale }}" onChange="{{ toggleFreshStale }}" style="accent-color:#4f46e5;width:14px;height:14px;cursor:pointer;margin:0;"/><span style="flex:1;color:#1c1917;">방치({{ staleDaysVal }}일+)</span><span style="font-family:'Geist Mono',monospace;font-size:11px;color:#a8a29e;">{{ kStaleCount }}</span></label>
+      <div style="height:1px;background:#f0efed;margin:14px 6px;"></div>
+      <div style="font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:#a8a29e;margin:0 6px 8px;">Git 상태</div>
+      <label style="display:flex;align-items:center;gap:9px;padding:5px 6px;border-radius:7px;cursor:pointer;font-size:13px;" style-hover="background:#f5f5f4;"><input type="checkbox" checked="{{ gitClean }}" onChange="{{ toggleGitClean }}" style="accent-color:#4f46e5;width:14px;height:14px;cursor:pointer;margin:0;"/><span style="width:8px;height:8px;border-radius:50%;background:#15803d;"></span><span style="flex:1;color:#1c1917;">정상</span><span style="font-family:'Geist Mono',monospace;font-size:11px;color:#a8a29e;">{{ cClean }}</span></label>
+      <label style="display:flex;align-items:center;gap:9px;padding:5px 6px;border-radius:7px;cursor:pointer;font-size:13px;" style-hover="background:#f5f5f4;"><input type="checkbox" checked="{{ gitDirty }}" onChange="{{ toggleGitDirty }}" style="accent-color:#4f46e5;width:14px;height:14px;cursor:pointer;margin:0;"/><span style="width:8px;height:8px;border-radius:50%;background:#b45309;"></span><span style="flex:1;color:#1c1917;">미커밋 변경</span><span style="font-family:'Geist Mono',monospace;font-size:11px;color:#a8a29e;">{{ cDirty }}</span></label>
+      <label style="display:flex;align-items:center;gap:9px;padding:5px 6px;border-radius:7px;cursor:pointer;font-size:13px;" style-hover="background:#f5f5f4;"><input type="checkbox" checked="{{ gitAhead }}" onChange="{{ toggleGitAhead }}" style="accent-color:#4f46e5;width:14px;height:14px;cursor:pointer;margin:0;"/><span style="width:8px;height:8px;border-radius:50%;background:#1d4ed8;"></span><span style="flex:1;color:#1c1917;">미푸시(ahead)</span><span style="font-family:'Geist Mono',monospace;font-size:11px;color:#a8a29e;">{{ cAhead }}</span></label>
+      <label style="display:flex;align-items:center;gap:9px;padding:5px 6px;border-radius:7px;cursor:pointer;font-size:13px;" style-hover="background:#f5f5f4;"><input type="checkbox" checked="{{ gitNorepo }}" onChange="{{ toggleGitNorepo }}" style="accent-color:#4f46e5;width:14px;height:14px;cursor:pointer;margin:0;"/><span style="width:8px;height:8px;border-radius:50%;background:#d6d3d1;"></span><span style="flex:1;color:#1c1917;">Git 아님</span><span style="font-family:'Geist Mono',monospace;font-size:11px;color:#a8a29e;">{{ cNorepo }}</span></label>
+    </aside>
+    </sc-if>
+
+    <main class="spip-scroll" style="flex:1;overflow:auto;min-width:0;">
+
+      <!-- toolbar-layout facet bar -->
+      <sc-if value="{{ isToolbar }}" hint-placeholder-val="{{ false }}">
+      <div class="spip-scroll" style="display:flex;align-items:center;gap:7px;padding:11px 20px;border-bottom:1px solid #e7e5e4;background:#fafafa;overflow-x:auto;">
+        <span style="font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:#a8a29e;flex:none;">언어</span>
+        <sc-for list="{{ languages }}" as="L" hint-placeholder-count="6">
+          <label style="display:inline-flex;align-items:center;gap:6px;padding:4px 9px;border-radius:8px;cursor:pointer;font-size:12.5px;background:#fff;border:1px solid #e7e5e4;flex:none;" style-hover="border-color:#d6d3d1;"><input type="checkbox" checked="{{ L.selected }}" onChange="{{ L.toggle }}" style="accent-color:#4f46e5;width:13px;height:13px;cursor:pointer;margin:0;"/><span style="{{ L.dotStyle }}"></span>{{ L.lang }} <span style="color:#a8a29e;font-family:'Geist Mono',monospace;font-size:10.5px;">{{ L.count }}</span></label>
+        </sc-for>
+        <div style="width:1px;height:20px;background:#e7e5e4;flex:none;margin:0 3px;"></div>
+        <span style="font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:#a8a29e;flex:none;">신선도</span>
+        <label style="display:inline-flex;align-items:center;gap:6px;padding:4px 9px;border-radius:8px;cursor:pointer;font-size:12.5px;background:#fff;border:1px solid #e7e5e4;flex:none;"><input type="checkbox" checked="{{ freshActive }}" onChange="{{ toggleFreshActive }}" style="accent-color:#4f46e5;width:13px;height:13px;margin:0;"/>활동 중</label>
+        <label style="display:inline-flex;align-items:center;gap:6px;padding:4px 9px;border-radius:8px;cursor:pointer;font-size:12.5px;background:#fff;border:1px solid #e7e5e4;flex:none;"><input type="checkbox" checked="{{ freshStale }}" onChange="{{ toggleFreshStale }}" style="accent-color:#4f46e5;width:13px;height:13px;margin:0;"/>방치</label>
+        <div style="width:1px;height:20px;background:#e7e5e4;flex:none;margin:0 3px;"></div>
+        <span style="font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:#a8a29e;flex:none;">Git</span>
+        <label style="display:inline-flex;align-items:center;gap:6px;padding:4px 9px;border-radius:8px;cursor:pointer;font-size:12.5px;background:#fff;border:1px solid #e7e5e4;flex:none;"><input type="checkbox" checked="{{ gitClean }}" onChange="{{ toggleGitClean }}" style="accent-color:#4f46e5;width:13px;height:13px;margin:0;"/><span style="width:7px;height:7px;border-radius:50%;background:#15803d;"></span>정상</label>
+        <label style="display:inline-flex;align-items:center;gap:6px;padding:4px 9px;border-radius:8px;cursor:pointer;font-size:12.5px;background:#fff;border:1px solid #e7e5e4;flex:none;"><input type="checkbox" checked="{{ gitDirty }}" onChange="{{ toggleGitDirty }}" style="accent-color:#4f46e5;width:13px;height:13px;margin:0;"/><span style="width:7px;height:7px;border-radius:50%;background:#b45309;"></span>미커밋</label>
+        <label style="display:inline-flex;align-items:center;gap:6px;padding:4px 9px;border-radius:8px;cursor:pointer;font-size:12.5px;background:#fff;border:1px solid #e7e5e4;flex:none;"><input type="checkbox" checked="{{ gitAhead }}" onChange="{{ toggleGitAhead }}" style="accent-color:#4f46e5;width:13px;height:13px;margin:0;"/><span style="width:7px;height:7px;border-radius:50%;background:#1d4ed8;"></span>미푸시</label>
+        <label style="display:inline-flex;align-items:center;gap:6px;padding:4px 9px;border-radius:8px;cursor:pointer;font-size:12.5px;background:#fff;border:1px solid #e7e5e4;flex:none;"><input type="checkbox" checked="{{ gitNorepo }}" onChange="{{ toggleGitNorepo }}" style="accent-color:#4f46e5;width:13px;height:13px;margin:0;"/><span style="width:7px;height:7px;border-radius:50%;background:#d6d3d1;"></span>Git 아님</label>
+      </div>
+      </sc-if>
+
+      <!-- results -->
+      <sc-if value="{{ hasResults }}" hint-placeholder-val="{{ true }}">
+
+        <sc-if value="{{ isCards }}" hint-placeholder-val="{{ true }}">
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:14px;padding:20px;">
+          <sc-for list="{{ cards }}" as="card" hint-placeholder-count="6">
+            <div style="background:#fff;border:1px solid #e7e5e4;border-radius:13px;padding:15px 16px;display:flex;flex-direction:column;gap:11px;transition:border-color .15s,box-shadow .15s;" style-hover="border-color:#d6d3d1;box-shadow:0 6px 22px rgba(28,25,23,.07);">
+              <div style="display:flex;align-items:flex-start;gap:10px;">
+                <span style="{{ card.langDotStyle }}"></span>
+                <div style="flex:1;min-width:0;cursor:pointer;" onClick="{{ card.open }}">
+                  <div style="font-size:14px;font-weight:600;letter-spacing:-.01em;color:#1c1917;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ card.name }}</div>
+                  <div style="font-family:'Geist Mono',monospace;font-size:11px;color:#a8a29e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px;">{{ card.path }}</div>
+                </div>
+              </div>
+              <div style="font-size:12.5px;color:#57534e;line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:37px;">{{ card.desc }}</div>
+              <div style="display:flex;flex-wrap:wrap;gap:6px;">
+                <span style="display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:6px;background:#f7f7f6;color:#57534e;border:1px solid #ececea;font-family:'Geist Mono',monospace;">{{ card.langLabel }}</span>
+                <sc-if value="{{ card.isClean }}" hint-placeholder-val="{{ false }}"><span style="display:inline-flex;align-items:center;font-size:11px;font-weight:600;padding:2px 8px;border-radius:6px;background:#dcfce7;color:#15803d;border:1px solid #bbf7d0;">정상</span></sc-if>
+                <sc-if value="{{ card.isDirty }}" hint-placeholder-val="{{ false }}"><span style="display:inline-flex;align-items:center;font-size:11px;font-weight:600;padding:2px 8px;border-radius:6px;background:#fef3c7;color:#b45309;border:1px solid #fde68a;">미커밋 {{ card.dirtyCount }}</span></sc-if>
+                <sc-if value="{{ card.isAhead }}" hint-placeholder-val="{{ false }}"><span style="display:inline-flex;align-items:center;font-size:11px;font-weight:600;padding:2px 8px;border-radius:6px;background:#dbeafe;color:#1d4ed8;border:1px solid #bfdbfe;">미푸시 {{ card.ahead }}</span></sc-if>
+                <sc-if value="{{ card.isStale }}" hint-placeholder-val="{{ false }}"><span style="display:inline-flex;align-items:center;font-size:11px;font-weight:600;padding:2px 8px;border-radius:6px;background:#f5f5f4;color:#78716c;border:1px solid #e7e5e4;">방치</span></sc-if>
+                <sc-if value="{{ card.isNoRepo }}" hint-placeholder-val="{{ false }}"><span style="display:inline-flex;align-items:center;font-size:11px;font-weight:600;padding:2px 8px;border-radius:6px;background:#fff;color:#a8a29e;border:1px solid #e7e5e4;">Git 아님</span></sc-if>
+              </div>
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;border-top:1px solid #f4f3f1;padding-top:11px;">
+                <div style="font-size:11.5px;color:#a8a29e;font-family:'Geist Mono',monospace;display:flex;align-items:center;gap:8px;"><span>{{ card.relMod }}</span><span style="color:#d6d3d1;">·</span><span>{{ card.sizeLabel }}</span></div>
+                <div style="display:flex;gap:6px;">
+                  <button onClick="{{ card.open }}" style="appearance:none;border:1px solid #e7e5e4;background:#fff;color:#57534e;font-size:12px;font-weight:600;padding:5px 11px;border-radius:8px;cursor:pointer;" style-hover="background:#fafafa;border-color:#d6d3d1;">상세</button>
+                  <button onClick="{{ card.openVs }}" style="appearance:none;border:1px solid #1c1917;background:#1c1917;color:#fff;font-size:12px;font-weight:600;padding:5px 11px;border-radius:8px;cursor:pointer;" style-hover="background:#000;">{{ card.openLabel }}</button>
+                </div>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+        </sc-if>
+
+        <sc-if value="{{ isTable }}" hint-placeholder-val="{{ false }}">
+        <div style="padding:20px;">
+          <table style="width:100%;border-collapse:collapse;background:#fff;border:1px solid #e7e5e4;border-radius:12px;overflow:hidden;font-size:13px;">
+            <thead><tr>
+              <th style="text-align:left;padding:10px 14px;font-size:10.5px;font-weight:600;color:#a8a29e;text-transform:uppercase;letter-spacing:.04em;background:#fafafa;border-bottom:1px solid #e7e5e4;">프로젝트</th>
+              <th style="text-align:left;padding:10px 14px;font-size:10.5px;font-weight:600;color:#a8a29e;text-transform:uppercase;letter-spacing:.04em;background:#fafafa;border-bottom:1px solid #e7e5e4;">경로</th>
+              <th style="text-align:left;padding:10px 14px;font-size:10.5px;font-weight:600;color:#a8a29e;text-transform:uppercase;letter-spacing:.04em;background:#fafafa;border-bottom:1px solid #e7e5e4;">언어</th>
+              <th style="text-align:left;padding:10px 14px;font-size:10.5px;font-weight:600;color:#a8a29e;text-transform:uppercase;letter-spacing:.04em;background:#fafafa;border-bottom:1px solid #e7e5e4;">최종 수정</th>
+              <th style="text-align:left;padding:10px 14px;font-size:10.5px;font-weight:600;color:#a8a29e;text-transform:uppercase;letter-spacing:.04em;background:#fafafa;border-bottom:1px solid #e7e5e4;">Git</th>
+              <th style="text-align:right;padding:10px 14px;font-size:10.5px;font-weight:600;color:#a8a29e;text-transform:uppercase;letter-spacing:.04em;background:#fafafa;border-bottom:1px solid #e7e5e4;">크기</th>
+              <th style="background:#fafafa;border-bottom:1px solid #e7e5e4;"></th>
+            </tr></thead>
+            <tbody>
+              <sc-for list="{{ cards }}" as="card" hint-placeholder-count="8">
+                <tr onClick="{{ card.open }}" style="cursor:pointer;border-top:1px solid #f4f3f1;" style-hover="background:#fafafa;">
+                  <td style="padding:11px 14px;"><div style="display:flex;align-items:center;gap:9px;"><span style="{{ card.langDotStyle }}"></span><span style="font-weight:600;color:#1c1917;">{{ card.name }}</span></div></td>
+                  <td style="padding:11px 14px;font-family:'Geist Mono',monospace;font-size:11.5px;color:#a8a29e;max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ card.path }}</td>
+                  <td style="padding:11px 14px;color:#57534e;">{{ card.langLabel }}</td>
+                  <td style="padding:11px 14px;color:#57534e;font-family:'Geist Mono',monospace;font-size:11.5px;"><span style="display:inline-flex;align-items:center;gap:7px;">{{ card.relMod }}<sc-if value="{{ card.isStale }}" hint-placeholder-val="{{ false }}"><span style="font-size:9.5px;font-weight:600;padding:1px 6px;border-radius:5px;background:#f5f5f4;color:#78716c;border:1px solid #e7e5e4;font-family:'Geist';">방치</span></sc-if></span></td>
+                  <td style="padding:11px 14px;"><div style="display:flex;gap:5px;flex-wrap:wrap;">
+                    <sc-if value="{{ card.isClean }}" hint-placeholder-val="{{ false }}"><span style="font-size:10.5px;font-weight:600;padding:1px 7px;border-radius:5px;background:#dcfce7;color:#15803d;border:1px solid #bbf7d0;">정상</span></sc-if>
+                    <sc-if value="{{ card.isDirty }}" hint-placeholder-val="{{ false }}"><span style="font-size:10.5px;font-weight:600;padding:1px 7px;border-radius:5px;background:#fef3c7;color:#b45309;border:1px solid #fde68a;">미커밋 {{ card.dirtyCount }}</span></sc-if>
+                    <sc-if value="{{ card.isAhead }}" hint-placeholder-val="{{ false }}"><span style="font-size:10.5px;font-weight:600;padding:1px 7px;border-radius:5px;background:#dbeafe;color:#1d4ed8;border:1px solid #bfdbfe;">미푸시 {{ card.ahead }}</span></sc-if>
+                    <sc-if value="{{ card.isNoRepo }}" hint-placeholder-val="{{ false }}"><span style="font-size:10.5px;font-weight:600;padding:1px 7px;border-radius:5px;background:#fff;color:#a8a29e;border:1px solid #e7e5e4;">N/A</span></sc-if>
+                  </div></td>
+                  <td style="padding:11px 14px;text-align:right;font-family:'Geist Mono',monospace;font-size:12px;color:#57534e;">{{ card.sizeLabel }}</td>
+                  <td style="padding:11px 14px;text-align:right;"><button onClick="{{ card.openVs }}" style="appearance:none;border:1px solid #e7e5e4;background:#fff;color:#1c1917;font-size:11.5px;font-weight:600;padding:4px 10px;border-radius:7px;cursor:pointer;white-space:nowrap;" style-hover="background:#1c1917;color:#fff;border-color:#1c1917;">{{ card.openLabel }}</button></td>
+                </tr>
+              </sc-for>
+            </tbody>
+          </table>
+        </div>
+        </sc-if>
+
+      </sc-if>
+
+      <sc-if value="{{ noResults }}" hint-placeholder-val="{{ false }}">
+      <div style="padding:90px 20px;text-align:center;">
+        <div style="width:48px;height:48px;border-radius:13px;background:#f5f5f4;border:1px solid #e7e5e4;display:inline-flex;align-items:center;justify-content:center;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#a8a29e" stroke-width="2"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.5" y2="16.5"></line></svg></div>
+        <div style="font-size:15px;font-weight:600;color:#57534e;margin-top:14px;">조건에 맞는 프로젝트가 없습니다</div>
+        <div style="font-size:13px;color:#a8a29e;margin-top:4px;">필터나 검색어를 조정해 보세요.</div>
+        <button onClick="{{ clearFilters }}" style="appearance:none;border:1px solid #e7e5e4;background:#fff;color:#1c1917;font-size:13px;font-weight:600;padding:8px 16px;border-radius:9px;cursor:pointer;margin-top:16px;" style-hover="background:#fafafa;">필터 초기화</button>
+      </div>
+      </sc-if>
+
+    </main>
+  </div>
+</div>
+
+<!-- detail drawer -->
+<sc-if value="{{ hasSelection }}" hint-placeholder-val="{{ false }}">
+<div onClick="{{ closeDetail }}" style="position:fixed;inset:0;background:rgba(28,25,23,.34);z-index:50;display:flex;justify-content:flex-end;">
+  <aside onClick="{{ stop }}" class="spip-scroll" style="width:480px;max-width:92vw;height:100%;background:#fff;overflow:auto;box-shadow:-14px 0 44px rgba(28,25,23,.14);animation:spipDrawer .22s ease;">
+    <div style="position:sticky;top:0;background:#fff;border-bottom:1px solid #e7e5e4;padding:18px 20px;display:flex;align-items:flex-start;gap:12px;z-index:2;">
+      <span style="{{ sel.langDotStyle }}"></span>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:16px;font-weight:600;letter-spacing:-.015em;">{{ sel.name }}</div>
+        <div style="font-family:'Geist Mono',monospace;font-size:11.5px;color:#a8a29e;margin-top:3px;word-break:break-all;">{{ sel.path }}</div>
+      </div>
+      <button onClick="{{ closeDetail }}" style="appearance:none;border:none;background:#f5f5f4;color:#78716c;width:30px;height:30px;border-radius:8px;cursor:pointer;font-size:17px;line-height:1;flex:none;display:flex;align-items:center;justify-content:center;" style-hover="background:#e7e5e4;">×</button>
+    </div>
+
+    <div style="padding:18px 20px;display:flex;flex-direction:column;gap:14px;">
+      <div style="display:flex;gap:9px;">
+        <button onClick="{{ sel.openVs }}" style="flex:1;appearance:none;border:1px solid #1c1917;background:#1c1917;color:#fff;font-size:13px;font-weight:600;padding:9px 14px;border-radius:9px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:7px;" style-hover="background:#000;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"></path></svg>{{ sel.openLabel }}</button>
+      </div>
+      <div style="font-size:12.5px;color:#57534e;line-height:1.6;">{{ sel.desc }}</div>
+
+      <!-- insight 1: language -->
+      <div style="border:1px solid #ececea;border-radius:11px;padding:15px 16px;">
+        <div style="font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:#a8a29e;margin-bottom:11px;">언어 / 스택</div>
+        <div style="display:flex;align-items:center;gap:9px;margin-bottom:11px;"><span style="{{ sel.langDotStyle }}"></span><span style="font-size:15px;font-weight:600;">{{ sel.langLabel }}</span></div>
+        <div style="display:flex;height:8px;border-radius:5px;overflow:hidden;background:#f0efed;margin-bottom:11px;">
+          <sc-for list="{{ sel.mixSegs }}" as="seg" hint-placeholder-count="2"><div style="{{ seg.style }}"></div></sc-for>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          <sc-for list="{{ sel.mixList }}" as="m" hint-placeholder-count="2"><div style="display:flex;align-items:center;gap:8px;font-size:12.5px;"><span style="{{ m.dotStyle }}"></span><span style="flex:1;color:#57534e;">{{ m.name }}</span><span style="font-family:'Geist Mono',monospace;color:#a8a29e;">{{ m.pct }}%</span></div></sc-for>
+        </div>
+      </div>
+
+      <!-- insight 2: freshness -->
+      <div style="border:1px solid #ececea;border-radius:11px;padding:15px 16px;">
+        <div style="font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:#a8a29e;margin-bottom:11px;">활동 / 신선도</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;font-size:13px;"><span style="color:#78716c;">최종 파일 수정</span><span style="color:#1c1917;font-weight:500;">{{ sel.modDate }} <span style="color:#a8a29e;font-family:'Geist Mono',monospace;font-size:11.5px;">({{ sel.modRel }})</span></span></div>
+        <div style="height:1px;background:#f4f3f1;"></div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;font-size:13px;"><span style="color:#78716c;">최근 커밋</span><span style="color:#1c1917;font-weight:500;">{{ sel.commitDate }} <span style="color:#a8a29e;font-family:'Geist Mono',monospace;font-size:11.5px;">({{ sel.commitRel }})</span></span></div>
+        <div style="height:1px;background:#f4f3f1;"></div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0 2px;font-size:13px;"><span style="color:#78716c;">상태</span>
+          <sc-if value="{{ sel.isStale }}" hint-placeholder-val="{{ false }}"><span style="font-size:11.5px;font-weight:600;padding:3px 10px;border-radius:7px;background:#f5f5f4;color:#78716c;border:1px solid #e7e5e4;">방치 · {{ staleDaysVal }}일+ 무활동</span></sc-if>
+          <sc-if value="{{ sel.isActive }}" hint-placeholder-val="{{ true }}"><span style="font-size:11.5px;font-weight:600;padding:3px 10px;border-radius:7px;background:#dcfce7;color:#15803d;border:1px solid #bbf7d0;">활동 중</span></sc-if>
+        </div>
+      </div>
+
+      <!-- insight 3: git -->
+      <div style="border:1px solid #ececea;border-radius:11px;padding:15px 16px;">
+        <div style="font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:#a8a29e;margin-bottom:11px;">Git 상태</div>
+        <sc-if value="{{ sel.repo }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;font-size:13px;"><span style="color:#78716c;">브랜치</span><span style="font-family:'Geist Mono',monospace;font-size:12.5px;color:#1c1917;background:#f5f5f4;padding:2px 8px;border-radius:6px;">{{ sel.branch }}</span></div>
+          <div style="height:1px;background:#f4f3f1;"></div>
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;font-size:13px;"><span style="color:#78716c;">미커밋 변경</span>
+            <sc-if value="{{ sel.isDirty }}" hint-placeholder-val="{{ false }}"><span style="color:#b45309;font-weight:600;">{{ sel.dirtyCount }}개 파일</span></sc-if>
+            <sc-if value="{{ sel.noDirty }}" hint-placeholder-val="{{ true }}"><span style="color:#15803d;font-weight:600;">없음</span></sc-if>
+          </div>
+          <div style="height:1px;background:#f4f3f1;"></div>
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;font-size:13px;"><span style="color:#78716c;">원격 대비</span><span style="font-family:'Geist Mono',monospace;font-size:12.5px;color:#1c1917;">↑{{ sel.ahead }} ↓{{ sel.behind }}</span></div>
+          <div style="height:1px;background:#f4f3f1;"></div>
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0 2px;font-size:13px;"><span style="color:#78716c;">원격</span><span style="color:#1c1917;font-weight:500;">{{ sel.remoteLabel }}</span></div>
+        </sc-if>
+        <sc-if value="{{ sel.isNoRepo }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:#a8a29e;padding:4px 0;"><span style="width:8px;height:8px;border-radius:50%;background:#d6d3d1;"></span>Git 저장소가 아닙니다 — N/A</div>
+        </sc-if>
+      </div>
+
+      <!-- insight 4: size/deps -->
+      <div style="border:1px solid #ececea;border-radius:11px;padding:15px 16px;">
+        <div style="font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:#a8a29e;margin-bottom:11px;">규모 / 의존성</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;font-size:13px;"><span style="color:#78716c;">총 용량</span><span style="font-family:'Geist Mono',monospace;font-size:13px;color:#1c1917;font-weight:500;">{{ sel.sizeLabel }}</span></div>
+        <div style="height:1px;background:#f4f3f1;"></div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;font-size:13px;"><span style="color:#78716c;">node_modules</span><span style="font-family:'Geist Mono',monospace;font-size:13px;color:#1c1917;font-weight:500;">{{ sel.nmLabel }}</span></div>
+        <div style="height:1px;background:#f4f3f1;"></div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0 2px;font-size:13px;"><span style="color:#78716c;">의존성</span><span style="font-family:'Geist Mono',monospace;font-size:13px;color:#1c1917;font-weight:500;">{{ sel.deps }} deps · {{ sel.dev }} devDeps</span></div>
+      </div>
+    </div>
+  </aside>
+</div>
+</sc-if>
+</sc-if>
+
+<!-- ===================== FIRST RUN ===================== -->
+<sc-if value="{{ isFirstRun }}" hint-placeholder-val="{{ false }}">
+<div style="height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;background:#f6f6f5;">
+  <div style="width:540px;max-width:100%;background:#fff;border:1px solid #e7e5e4;border-radius:16px;box-shadow:0 10px 44px rgba(28,25,23,.07);padding:32px;animation:spipFade .3s ease;">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:22px;">
+      <div style="width:30px;height:30px;border-radius:8px;background:#1c1917;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:15px;font-family:'Geist Mono',monospace;">S</div>
+      <div style="font-weight:600;font-size:16px;letter-spacing:-.015em;">Project-SPIP</div>
+      <span style="font-family:'Geist Mono',monospace;font-size:9.5px;font-weight:600;letter-spacing:.07em;color:#15803d;background:#dcfce7;border:1px solid #bbf7d0;padding:2px 6px;border-radius:5px;">LOCAL</span>
+    </div>
+    <h1 style="margin:0 0 8px;font-size:22px;font-weight:700;letter-spacing:-.02em;">스캔할 루트 폴더를 지정하세요</h1>
+    <p style="margin:0 0 20px;font-size:13.5px;color:#78716c;line-height:1.6;">첫 실행에는 스캔 루트가 비어 있습니다. 흩어진 프로젝트가 모여 있는 상위 폴더를 한 개 이상 추가한 뒤 스캔을 시작하세요. 전체 드라이브 자동 스캔은 후속(M4) 옵션입니다.</p>
+
+    <div style="border:1px solid #e7e5e4;border-radius:11px;padding:8px;margin-bottom:14px;background:#fafafa;">
+      <sc-if value="{{ hasRoots }}" hint-placeholder-val="{{ false }}">
+        <sc-for list="{{ roots }}" as="r" hint-placeholder-count="2">
+          <div style="display:flex;align-items:center;gap:10px;padding:9px 10px;background:#fff;border:1px solid #ececea;border-radius:8px;margin:3px;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#78716c" stroke-width="1.8"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>
+            <span style="flex:1;font-family:'Geist Mono',monospace;font-size:12.5px;color:#1c1917;word-break:break-all;">{{ r.path }}</span>
+            <button onClick="{{ r.remove }}" style="appearance:none;border:none;background:none;color:#a8a29e;cursor:pointer;font-size:16px;line-height:1;padding:2px 4px;" style-hover="color:#b45309;">×</button>
+          </div>
+        </sc-for>
+      </sc-if>
+      <sc-if value="{{ noRoots }}" hint-placeholder-val="{{ true }}">
+        <div style="text-align:center;padding:22px 10px;color:#a8a29e;font-size:13px;">지정된 루트 폴더가 없습니다.</div>
+      </sc-if>
+    </div>
+
+    <button onClick="{{ addRoot }}" style="width:100%;appearance:none;border:1px dashed #d6d3d1;background:#fff;color:#57534e;font-size:13px;font-weight:600;padding:10px;border-radius:9px;cursor:pointer;margin-bottom:18px;" style-hover="border-color:#4f46e5;color:#4f46e5;background:#eef2ff;">+ 루트 폴더 추가</button>
+
+    <sc-if value="{{ hasRoots }}" hint-placeholder-val="{{ false }}">
+      <button onClick="{{ startScan }}" style="width:100%;appearance:none;border:1px solid #1c1917;background:#1c1917;color:#fff;font-size:14px;font-weight:600;padding:12px;border-radius:10px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px;" style-hover="background:#000;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.5" y2="16.5"></line></svg>스캔 시작</button>
+    </sc-if>
+    <sc-if value="{{ noRoots }}" hint-placeholder-val="{{ true }}">
+      <div style="width:100%;border:1px solid #ececea;background:#f5f5f4;color:#c4c0bb;font-size:14px;font-weight:600;padding:12px;border-radius:10px;text-align:center;cursor:not-allowed;">스캔 시작 (루트를 먼저 추가)</div>
+    </sc-if>
+
+    <div style="display:flex;align-items:center;gap:8px;margin-top:18px;font-size:11.5px;color:#a8a29e;justify-content:center;">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#a8a29e" stroke-width="2"><rect x="4" y="11" width="16" height="9" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path></svg>
+      localhost(127.0.0.1) 전용 · 외부로 어떤 데이터도 전송하지 않습니다
+    </div>
+  </div>
+</div>
+</sc-if>
+
+<!-- ===================== SCANNING ===================== -->
+<sc-if value="{{ isScanning }}" hint-placeholder-val="{{ false }}">
+<div style="height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;background:#f6f6f5;">
+  <div style="width:480px;max-width:100%;background:#fff;border:1px solid #e7e5e4;border-radius:16px;box-shadow:0 10px 44px rgba(28,25,23,.07);padding:34px;animation:spipFade .3s ease;">
+    <div style="display:flex;align-items:center;gap:13px;margin-bottom:22px;">
+      <sc-if value="{{ scanRunning }}" hint-placeholder-val="{{ true }}">
+        <div style="width:34px;height:34px;border-radius:50%;border:3px solid #eef2ff;border-top-color:#4f46e5;animation:spipSpin .8s linear infinite;flex:none;"></div>
+      </sc-if>
+      <sc-if value="{{ scanDone }}" hint-placeholder-val="{{ false }}">
+        <div style="width:34px;height:34px;border-radius:50%;background:#dcfce7;border:1px solid #bbf7d0;display:flex;align-items:center;justify-content:center;flex:none;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#15803d" stroke-width="2.6"><path d="M5 12l4 4 10-10"></path></svg></div>
+      </sc-if>
+      <div>
+        <div style="font-size:17px;font-weight:700;letter-spacing:-.015em;">{{ scanTitle }}</div>
+        <div style="font-size:12.5px;color:#a8a29e;margin-top:2px;">{{ scanFolders }} 폴더 탐색 · {{ scanFound }} 프로젝트 발견</div>
+      </div>
+      <div style="flex:1;"></div>
+      <div style="font-size:24px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.02em;color:#1c1917;">{{ scanPctLabel }}<span style="font-size:14px;color:#a8a29e;">%</span></div>
+    </div>
+
+    <div style="height:8px;background:#f0efed;border-radius:5px;overflow:hidden;margin-bottom:14px;">
+      <div style="{{ scanBarStyle }}"></div>
+    </div>
+
+    <div style="background:#fafafa;border:1px solid #ececea;border-radius:9px;padding:10px 12px;font-family:'Geist Mono',monospace;font-size:11.5px;color:#78716c;display:flex;align-items:center;gap:8px;min-height:38px;">
+      <sc-if value="{{ scanRunning }}" hint-placeholder-val="{{ true }}">
+        <span style="color:#4f46e5;">▸</span><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ scanPath }}</span>
+      </sc-if>
+      <sc-if value="{{ scanDone }}" hint-placeholder-val="{{ false }}">
+        <span style="color:#15803d;">✓</span><span>스캔 완료 — 결과를 OS 캐시 폴더에 저장했습니다</span>
+      </sc-if>
+    </div>
+
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-top:18px;">
+      <div style="font-size:12px;color:#a8a29e;font-family:'Geist Mono',monospace;">경과 {{ scanElapsedLabel }}s</div>
+      <sc-if value="{{ scanRunning }}" hint-placeholder-val="{{ true }}">
+        <button onClick="{{ gotoFirstRun }}" style="appearance:none;border:1px solid #e7e5e4;background:#fff;color:#78716c;font-size:12.5px;font-weight:600;padding:7px 14px;border-radius:8px;cursor:pointer;" style-hover="background:#fafafa;">취소</button>
+      </sc-if>
+      <sc-if value="{{ scanDone }}" hint-placeholder-val="{{ false }}">
+        <button onClick="{{ gotoDashboard }}" style="appearance:none;border:1px solid #1c1917;background:#1c1917;color:#fff;font-size:12.5px;font-weight:600;padding:7px 16px;border-radius:8px;cursor:pointer;" style-hover="background:#000;">대시보드 열기 →</button>
+      </sc-if>
+    </div>
+  </div>
+</div>
+</sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:&quot;100%&quot;,&quot;height&quot;:&quot;100%&quot;},&quot;staleDays&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:90,&quot;min&quot;:7,&quot;max&quot;:365,&quot;tsType&quot;:&quot;number&quot;},&quot;density&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;cards&quot;,&quot;options&quot;:[&quot;cards&quot;,&quot;table&quot;],&quot;tsType&quot;:&quot;string&quot;},&quot;defaultView&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;dashboard&quot;,&quot;options&quot;:[&quot;dashboard&quot;,&quot;firstRun&quot;,&quot;scanning&quot;],&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  now = new Date(2026, 5, 21);
+  allProjects = this.buildProjects();
+  state = {
+    view: this.props.defaultView ?? 'dashboard',
+    density: this.props.density ?? 'cards',
+    layout: 'sidebar',
+    search: '',
+    fLang: [], fFresh: [], fGit: [],
+    sort: 'modified',
+    selectedId: null,
+    openState: {},
+    roots: [],
+    scanPct: 0, scanFolders: 0, scanFound: 0, scanPath: '', scanDone: false, scanElapsed: 0,
+  };
+
+  componentDidMount() { if (this.state.view === 'scanning') this.startScan(); }
+  componentWillUnmount() { clearInterval(this._iv); clearInterval(this._ev); clearTimeout(this._done); }
+
+  staleDays() { return this.props.staleDays ?? 90; }
+
+  buildProjects() {
+    return [
+      { name:'spip-dashboard', path:'D:\\work\\spip-dashboard', desc:'이 도구 자체 — VS Code 프로젝트 스캐너 & 로컬 대시보드.', lang:'TypeScript', mix:[['TypeScript',68],['JavaScript',22],['CSS',10]], mod:0, commit:0, repo:true, branch:'main', dirty:4, ahead:2, behind:0, remote:true, size:318, nm:256, deps:9, dev:14 },
+      { name:'orbit-web', path:'C:\\Users\\dev\\dev\\orbit-web', desc:'Next.js 마케팅 사이트 + MDX 블로그.', lang:'TypeScript', mix:[['TypeScript',74],['JavaScript',12],['CSS',14]], mod:3, commit:3, repo:true, branch:'main', dirty:0, ahead:0, behind:0, remote:true, size:412, nm:340, deps:22, dev:18 },
+      { name:'ledger-api', path:'D:\\work\\ledger-api', desc:'결제 정산 REST API (Express + Prisma).', lang:'JavaScript', mix:[['JavaScript',82],['TypeScript',18]], mod:6, commit:5, repo:true, branch:'develop', dirty:11, ahead:0, behind:0, remote:true, size:280, nm:220, deps:17, dev:9 },
+      { name:'vision-lab', path:'E:\\research\\vision-lab', desc:'이미지 분할 실험 (PyTorch).', lang:'Python', mix:[['Python',100]], mod:132, commit:140, repo:true, branch:'main', dirty:0, ahead:0, behind:2, remote:true, size:1340, nm:0, deps:0, dev:0 },
+      { name:'dotfiles', path:'C:\\Users\\dev\\dotfiles', desc:'셸 · 에디터 설정 모음.', lang:'Shell', mix:[['Shell',100]], mod:24, commit:24, repo:true, branch:'main', dirty:2, ahead:1, behind:0, remote:true, size:12, nm:0, deps:0, dev:0 },
+      { name:'rusty-grep', path:'D:\\work\\rusty-grep', desc:'병렬 grep CLI 클론 (Rust).', lang:'Rust', mix:[['Rust',100]], mod:58, commit:60, repo:true, branch:'main', dirty:0, ahead:3, behind:0, remote:true, size:96, nm:0, deps:0, dev:0 },
+      { name:'snake-go', path:'C:\\Users\\dev\\dev\\snake-go', desc:'터미널 스네이크 게임 (Go).', lang:'Go', mix:[['Go',100]], mod:210, commit:210, repo:true, branch:'master', dirty:0, ahead:0, behind:0, remote:true, size:18, nm:0, deps:0, dev:0 },
+      { name:'portfolio-2023', path:'C:\\Users\\dev\\Desktop\\portfolio-2023', desc:'이전 포트폴리오 — 정적 사이트.', lang:'JavaScript', mix:[['JavaScript',40],['HTML',38],['CSS',22]], mod:300, commit:300, repo:true, branch:'main', dirty:0, ahead:0, behind:0, remote:true, size:64, nm:28, deps:6, dev:4 },
+      { name:'invoice-pdf', path:'D:\\work\\invoice-pdf', desc:'송장 PDF 생성기 (Node).', lang:'TypeScript', mix:[['TypeScript',90],['JavaScript',10]], mod:14, commit:12, repo:true, branch:'main', dirty:3, ahead:0, behind:0, remote:true, size:150, nm:120, deps:8, dev:5 },
+      { name:'chatbot-proto', path:'C:\\Temp\\chatbot-proto', desc:'임시 LLM 챗봇 프로토타입.', lang:'Python', mix:[['Python',100]], mod:9, commit:null, repo:false, branch:'', dirty:0, ahead:0, behind:0, remote:false, size:88, nm:0, deps:0, dev:0 },
+      { name:'mobile-rn', path:'D:\\work\\mobile-rn', desc:'React Native 가계부 앱.', lang:'TypeScript', mix:[['TypeScript',80],['JavaScript',20]], mod:21, commit:19, repo:true, branch:'main', dirty:7, ahead:1, behind:0, remote:true, size:980, nm:760, deps:31, dev:22 },
+      { name:'data-pipeline', path:'E:\\research\\data-pipeline', desc:'ETL 배치 파이프라인 (Airflow).', lang:'Python', mix:[['Python',100]], mod:45, commit:44, repo:true, branch:'main', dirty:0, ahead:0, behind:0, remote:true, size:210, nm:0, deps:0, dev:0 },
+      { name:'wasm-paint', path:'D:\\work\\wasm-paint', desc:'WASM 페인트 데모 (Rust + JS).', lang:'Rust', mix:[['Rust',62],['JavaScript',38]], mod:160, commit:162, repo:true, branch:'main', dirty:0, ahead:0, behind:0, remote:true, size:74, nm:40, deps:5, dev:3 },
+      { name:'notes-cli', path:'C:\\Users\\dev\\dev\\notes-cli', desc:'마크다운 노트 CLI (Go).', lang:'Go', mix:[['Go',100]], mod:7, commit:6, repo:true, branch:'main', dirty:0, ahead:2, behind:0, remote:true, size:22, nm:0, deps:0, dev:0 },
+      { name:'legacy-jquery', path:'C:\\Users\\dev\\old\\legacy-jquery', desc:'구형 jQuery 관리 페이지.', lang:'JavaScript', mix:[['JavaScript',70],['HTML',18],['CSS',12]], mod:420, commit:430, repo:true, branch:'master', dirty:1, ahead:0, behind:0, remote:true, size:140, nm:88, deps:9, dev:2 },
+      { name:'ml-utils', path:'E:\\research\\ml-utils', desc:'공용 ML 유틸 패키지.', lang:'Python', mix:[['Python',100]], mod:33, commit:30, repo:true, branch:'main', dirty:0, ahead:0, behind:0, remote:true, size:56, nm:0, deps:0, dev:0 },
+      { name:'shop-admin', path:'D:\\work\\shop-admin', desc:'커머스 관리자 대시보드 (Vue).', lang:'TypeScript', mix:[['TypeScript',72],['JavaScript',16],['CSS',12]], mod:4, commit:2, repo:true, branch:'develop', dirty:9, ahead:0, behind:0, remote:true, size:520, nm:410, deps:28, dev:19 },
+      { name:'cpp-sandbox', path:'C:\\Users\\dev\\Desktop\\cpp-sandbox', desc:'알고리즘 연습 (C++).', lang:'C++', mix:[['C++',100]], mod:75, commit:null, repo:false, branch:'', dirty:0, ahead:0, behind:0, remote:false, size:8, nm:0, deps:0, dev:0 },
+      { name:'blog-astro', path:'C:\\Users\\dev\\dev\\blog-astro', desc:'Astro 개인 블로그.', lang:'TypeScript', mix:[['TypeScript',58],['JavaScript',20],['CSS',22]], mod:12, commit:10, repo:true, branch:'main', dirty:0, ahead:1, behind:0, remote:true, size:240, nm:190, deps:14, dev:9 },
+      { name:'scraper-old', path:'C:\\Temp\\scraper-old', desc:'임시 웹 스크레이퍼.', lang:'Python', mix:[['Python',100]], mod:188, commit:null, repo:false, branch:'', dirty:0, ahead:0, behind:0, remote:false, size:30, nm:0, deps:0, dev:0 },
+      { name:'design-tokens', path:'D:\\work\\design-tokens', desc:'디자인 토큰 빌드 파이프라인.', lang:'JavaScript', mix:[['JavaScript',84],['TypeScript',16]], mod:19, commit:17, repo:true, branch:'main', dirty:0, ahead:0, behind:0, remote:true, size:70, nm:52, deps:11, dev:7 },
+      { name:'game-engine', path:'E:\\research\\game-engine', desc:'취미 2D 게임 엔진 (C++).', lang:'C++', mix:[['C++',100]], mod:240, commit:245, repo:true, branch:'main', dirty:0, ahead:0, behind:0, remote:true, size:460, nm:0, deps:0, dev:0 },
+    ];
+  }
+
+  langColor(l) {
+    const m = { 'TypeScript':'#3178c6', 'JavaScript':'#cba70f', 'Python':'#3572A5', 'Go':'#00a7c4', 'Rust':'#c46a36', 'C++':'#6e40c9', 'Shell':'#5b8a2e', 'HTML':'#e34c26', 'CSS':'#9b59b6' };
+    return m[l] || '#a8a29e';
+  }
+  dot(l, size) { const s = size || 9; return { width:s+'px', height:s+'px', borderRadius:'2px', background:this.langColor(l), flex:'none', display:'inline-block', marginTop: size?'5px':'0' }; }
+  relTime(d) { if (d<=0) return '오늘'; if (d===1) return '어제'; if (d<7) return d+'일 전'; if (d<30) return Math.floor(d/7)+'주 전'; if (d<365) return Math.floor(d/30)+'개월 전'; return Math.floor(d/365)+'년 전'; }
+  sizeLabel(mb) { if (mb>=1024) return (mb/1024).toFixed(1)+' GB'; return Math.round(mb)+' MB'; }
+  fmtDate(d) { const x = new Date(this.now); x.setDate(x.getDate()-d); const p=n=>String(n).padStart(2,'0'); return x.getFullYear()+'-'+p(x.getMonth()+1)+'-'+p(x.getDate()); }
+  gitKeys(p) { if (!p.repo) return ['norepo']; const k=[]; if (p.dirty===0 && p.ahead===0) k.push('clean'); if (p.dirty>0) k.push('dirty'); if (p.ahead>0) k.push('ahead'); return k; }
+  seg(active) { return { padding:'5px 13px', fontSize:'12.5px', fontWeight:600, borderRadius:'7px', border:'none', whiteSpace:'nowrap', background:active?'#fff':'transparent', color:active?'#1c1917':'#a8a29e', cursor:'pointer', boxShadow:active?'0 1px 3px rgba(28,25,23,.1)':'none', transition:'all .12s' }; }
+
+  toggleArr(key, val) { this.setState(s => { const a=s[key]; return { [key]: a.includes(val) ? a.filter(x=>x!==val) : [...a, val] }; }); }
+  openVs(id) {
+    this.setState(s => ({ openState: { ...s.openState, [id]:'running' } }));
+    setTimeout(() => this.setState(s => ({ openState: { ...s.openState, [id]:'done' } })), 800);
+    setTimeout(() => this.setState(s => { const o={...s.openState}; delete o[id]; return { openState:o }; }), 2600);
+  }
+  removeRoot(i) { this.setState(s => ({ roots: s.roots.filter((_,k)=>k!==i) })); }
+  addRoot() {
+    const pool = ['C:\\Users\\dev\\dev', 'D:\\work', 'E:\\research', 'C:\\Users\\dev\\Desktop', 'C:\\Temp'];
+    this.setState(s => { const next = pool.find(p=>!s.roots.includes(p)); return next ? { roots:[...s.roots, next] } : {}; });
+  }
+  startScan() {
+    clearInterval(this._iv); clearInterval(this._ev); clearTimeout(this._done);
+    this.setState({ view:'scanning', scanPct:0, scanFolders:0, scanFound:0, scanPath:'', scanDone:false, scanElapsed:0 });
+    const paths = ['D:\\work\\shop-admin\\src', 'C:\\Users\\dev\\dev\\orbit-web\\app', 'E:\\research\\vision-lab', 'D:\\work\\mobile-rn\\android', 'C:\\Users\\dev\\dev\\blog-astro', 'E:\\research\\data-pipeline\\dags', 'D:\\work\\ledger-api\\routes', 'C:\\Temp\\chatbot-proto'];
+    const total = this.allProjects.length;
+    let pct = 0; this._t0 = Date.now();
+    this._ev = setInterval(() => this.setState({ scanElapsed: (Date.now()-this._t0)/1000 }), 100);
+    this._iv = setInterval(() => {
+      pct = Math.min(100, pct + (4 + Math.random()*8));
+      this.setState({ scanPct: pct, scanFolders: Math.round(pct/100*4820), scanFound: Math.round(pct/100*total), scanPath: paths[Math.floor(Math.random()*paths.length)] });
+      if (pct >= 100) { clearInterval(this._iv); clearInterval(this._ev); this.setState({ scanDone:true }); this._done = setTimeout(() => this.setState({ view:'dashboard' }), 1100); }
+    }, 150);
+  }
+
+  renderVals() {
+    const st = this.state, A = this.allProjects, sd = this.staleDays();
+    const s = st.search.trim().toLowerCase();
+
+    // filter
+    let list = A.filter(p => {
+      if (s && !(p.name + ' ' + p.path).toLowerCase().includes(s)) return false;
+      if (st.fLang.length && !st.fLang.includes(p.lang)) return false;
+      if (st.fFresh.length) { const k = p.mod>=sd ? 'stale' : 'active'; if (!st.fFresh.includes(k)) return false; }
+      if (st.fGit.length) { const ks = this.gitKeys(p); if (!ks.some(k=>st.fGit.includes(k))) return false; }
+      return true;
+    });
+    if (st.sort==='name') list = [...list].sort((a,b)=>a.name.localeCompare(b.name));
+    else if (st.sort==='size') list = [...list].sort((a,b)=>b.size-a.size);
+    else list = [...list].sort((a,b)=>a.mod-b.mod);
+
+    const cards = list.map(p => {
+      const id = p.name, os = st.openState[id];
+      return {
+        id, name:p.name, path:p.path, desc:p.desc, langLabel:p.lang,
+        langDotStyle:this.dot(p.lang),
+        relMod:this.relTime(p.mod), sizeLabel:this.sizeLabel(p.size),
+        isStale:p.mod>=sd, isNoRepo:!p.repo,
+        isClean: p.repo && p.dirty===0 && p.ahead===0,
+        isDirty: p.dirty>0, isAhead: p.ahead>0,
+        dirtyCount:p.dirty, ahead:p.ahead,
+        openLabel: os==='running'?'실행 중…':os==='done'?'열림 ✓':'열기',
+        open: () => this.setState({ selectedId:id }),
+        openVs: (e) => { if (e&&e.stopPropagation) e.stopPropagation(); this.openVs(id); },
+      };
+    });
+
+    // stats
+    const kStaleCount = A.filter(p=>p.mod>=sd).length;
+    const totalSize = A.reduce((a,p)=>a+p.size,0), totalNm = A.reduce((a,p)=>a+p.nm,0);
+    const langOrder = ['TypeScript','JavaScript','Python','Go','Rust','C++','Shell'];
+    const languages = langOrder.map(l => ({ lang:l, count:A.filter(p=>p.lang===l).length, selected:st.fLang.includes(l), toggle:()=>this.toggleArr('fLang',l), dotStyle:this.dot(l) })).filter(x=>x.count>0);
+    const langBar = languages.map(L => ({ style:{ width:(L.count/A.length*100)+'%', background:this.langColor(L.lang), height:'100%' } }));
+    const langLegend = [...languages].sort((a,b)=>b.count-a.count).slice(0,4).map(L=>({ name:L.lang, count:L.count, dotStyle:this.dot(L.lang) }));
+
+    // chips
+    const gitLabels = { clean:'정상', dirty:'미커밋', ahead:'미푸시', norepo:'Git 아님' };
+    const chips = [];
+    st.fLang.forEach(l => chips.push({ label:l, remove:()=>this.toggleArr('fLang',l) }));
+    st.fFresh.forEach(f => chips.push({ label: f==='active'?'활동 중':'방치', remove:()=>this.toggleArr('fFresh',f) }));
+    st.fGit.forEach(g => chips.push({ label:gitLabels[g], remove:()=>this.toggleArr('fGit',g) }));
+    if (st.search.trim()) chips.push({ label:'"'+st.search.trim()+'"', remove:()=>this.setState({search:''}) });
+
+    // selection
+    const sp = A.find(p=>p.name===st.selectedId);
+    let sel = null;
+    if (sp) {
+      const os = st.openState[sp.name];
+      sel = {
+        name:sp.name, path:sp.path, desc:sp.desc, langLabel:sp.lang,
+        langDotStyle:this.dot(sp.lang, 9),
+        mixSegs: sp.mix.map(m=>({ style:{ width:m[1]+'%', background:this.langColor(m[0]), height:'100%' } })),
+        mixList: sp.mix.map(m=>({ name:m[0], pct:m[1], dotStyle:this.dot(m[0]) })),
+        modDate:this.fmtDate(sp.mod), modRel:this.relTime(sp.mod),
+        commitDate: sp.commit==null?'—':this.fmtDate(sp.commit),
+        commitRel: sp.commit==null?'N/A':this.relTime(sp.commit),
+        isStale: sp.mod>=sd, isActive: sp.mod<sd,
+        repo:sp.repo, isNoRepo:!sp.repo, branch:sp.branch,
+        dirtyCount:sp.dirty, isDirty:sp.dirty>0, noDirty:sp.dirty===0,
+        ahead:sp.ahead, behind:sp.behind, remoteLabel: sp.remote?'연결됨':'없음',
+        sizeLabel:this.sizeLabel(sp.size), nmLabel: sp.nm>0?this.sizeLabel(sp.nm):'없음',
+        deps:sp.deps, dev:sp.dev,
+        openLabel: os==='running'?'실행 중…':os==='done'?'열림 ✓':'VS Code로 열기',
+        openVs: (e) => { if (e&&e.stopPropagation) e.stopPropagation(); this.openVs(sp.name); },
+      };
+    }
+
+    return {
+      isDashboard: st.view==='dashboard', isFirstRun: st.view==='firstRun', isScanning: st.view==='scanning',
+      isCards: st.density==='cards', isTable: st.density==='table',
+      isSidebar: st.layout==='sidebar', isToolbar: st.layout==='toolbar',
+      search: st.search, sort: st.sort,
+      onSearch: (e)=>this.setState({search:e.target.value}),
+      onSort: (e)=>this.setState({sort:e.target.value}),
+      setCards: ()=>this.setState({density:'cards'}), setTable: ()=>this.setState({density:'table'}),
+      setSidebar: ()=>this.setState({layout:'sidebar'}), setToolbar: ()=>this.setState({layout:'toolbar'}),
+      dCards: this.seg(st.density==='cards'), dTable: this.seg(st.density==='table'),
+      lSide: this.seg(st.layout==='sidebar'), lBar: this.seg(st.layout==='toolbar'),
+      gotoFirstRun: ()=>this.setState({view:'firstRun'}),
+      gotoDashboard: ()=>this.setState({view:'dashboard'}),
+      startScan: ()=>this.startScan(),
+      clearFilters: ()=>this.setState({search:'', fLang:[], fFresh:[], fGit:[]}),
+      hasFilters: chips.length>0, activeChips: chips,
+      cards, hasResults: list.length>0, noResults: list.length===0,
+      kProjShown: list.length, kTotal: A.length,
+      kStaleCount, kActiveCount: A.length-kStaleCount,
+      kDirtyCount: A.filter(p=>p.dirty>0).length, kAheadCount: A.filter(p=>p.ahead>0).length,
+      kTotalSize: this.sizeLabel(totalSize), kNmSize: this.sizeLabel(totalNm),
+      kLangCount: languages.length, languages, langBar, langLegend,
+      staleDaysVal: sd,
+      freshActive: st.fFresh.includes('active'), freshStale: st.fFresh.includes('stale'),
+      toggleFreshActive: ()=>this.toggleArr('fFresh','active'), toggleFreshStale: ()=>this.toggleArr('fFresh','stale'),
+      gitClean: st.fGit.includes('clean'), gitDirty: st.fGit.includes('dirty'), gitAhead: st.fGit.includes('ahead'), gitNorepo: st.fGit.includes('norepo'),
+      toggleGitClean: ()=>this.toggleArr('fGit','clean'), toggleGitDirty: ()=>this.toggleArr('fGit','dirty'),
+      toggleGitAhead: ()=>this.toggleArr('fGit','ahead'), toggleGitNorepo: ()=>this.toggleArr('fGit','norepo'),
+      cClean: A.filter(p=>p.repo&&p.dirty===0&&p.ahead===0).length,
+      cDirty: A.filter(p=>p.dirty>0).length, cAhead: A.filter(p=>p.ahead>0).length,
+      cNorepo: A.filter(p=>!p.repo).length,
+      hasSelection: !!sel, sel, closeDetail: ()=>this.setState({selectedId:null}), stop: (e)=>e.stopPropagation(),
+      // first run
+      roots: st.roots.map((r,i)=>({ path:r, remove:()=>this.removeRoot(i) })),
+      hasRoots: st.roots.length>0, noRoots: st.roots.length===0,
+      addRoot: ()=>this.addRoot(),
+      // scanning
+      scanRunning: !st.scanDone, scanDone: st.scanDone,
+      scanTitle: st.scanDone?'스캔 완료':'프로젝트 스캔 중…',
+      scanPctLabel: Math.round(st.scanPct), scanFolders: st.scanFolders, scanFound: st.scanFound,
+      scanPath: st.scanPath, scanElapsedLabel: st.scanElapsed.toFixed(1),
+      scanBarStyle: { width: st.scanPct+'%', height:'100%', background:'#4f46e5', borderRadius:'5px', transition:'width .15s ease' },
+    };
+  }
+}
+</script>
+</body>
+</html>

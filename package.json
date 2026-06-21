@@ -3,16 +3,27 @@
   "version": "1.0.0",
   "description": "PC에 흩어진 VSCode 프로젝트를 스캔해 간략한 설명과 함께 보여주는 로컬 대시보드",
   "type": "commonjs",
+  "main": "electron/main.js",
   "bin": {
     "spip": "scan.js"
   },
   "scripts": {
     "scan": "node scan.js",
-    "start": "node server.js",
-    "dev": "node scan.js && node server.js"
+    "start": "electron .",
+    "build": "electron-builder",
+    "build:portable": "electron-builder --win portable",
+    "start:web": "node server.js",
+    "serve:http": "node server.js",
+    "dev": "node scan.js && node server.js",
+    "test": "node --test \"test/**/*.test.js\""
   },
   "engines": {
-    "node": ">=16"
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3",
+    "@electron/fuses": "^1.8.0"
   },
   "license": "MIT"
 }

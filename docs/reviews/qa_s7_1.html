@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project-SPIP — S7 통합·동작 QA 검증 보고서 (1회차)</title>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#1e293b; --text:#e2e8f0; --sub:#94a3b8;
+    --accent:#34d399; --ref:#38bdf8; --line:#334155; --warn:#fbbf24; --danger:#f87171;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:"Segoe UI","Malgun Gothic",system-ui,sans-serif;line-height:1.7;}
+  header{padding:48px 32px 36px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#13203b,#0f172a);}
+  header h1{margin:0 0 8px;font-size:28px;}
+  header .tag{display:inline-block;background:rgba(52,211,153,.12);color:var(--accent);
+    border:1px solid rgba(52,211,153,.4);border-radius:999px;padding:3px 12px;font-size:13px;margin-right:8px;}
+  header p{margin:14px 0 0;color:var(--sub);max-width:940px;}
+  .meta{margin-top:16px;font-size:13px;color:var(--sub);}
+  main{max-width:1100px;margin:0 auto;padding:32px;}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:24px 28px;margin:22px 0;}
+  h2{margin:0 0 16px;font-size:21px;color:var(--accent);border-left:4px solid var(--accent);padding-left:12px;}
+  h3{font-size:16px;color:var(--ref);margin:22px 0 10px;}
+  p{margin:8px 0;}
+  ul,ol{margin:8px 0;padding-left:22px;}li{margin:5px 0;}
+  code{background:#0b1220;color:var(--ref);padding:1px 6px;border-radius:5px;font-size:13px;}
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13.5px;}
+  th,td{border:1px solid var(--line);padding:9px 11px;text-align:left;vertical-align:top;}
+  th{background:#142035;color:var(--accent);}
+  tr:nth-child(even) td{background:rgba(255,255,255,.02);}
+  .rid{font-family:Consolas,monospace;color:var(--accent);font-weight:700;white-space:nowrap;}
+  .nid{font-family:Consolas,monospace;color:var(--warn);font-weight:700;white-space:nowrap;}
+  .verdict{font-size:22px;font-weight:800;padding:6px 18px;border-radius:10px;display:inline-block;}
+  .pass{background:rgba(52,211,153,.16);color:#6ee7b7;border:1px solid rgba(52,211,153,.5);}
+  .cond{background:rgba(251,191,36,.16);color:#fcd34d;border:1px solid rgba(251,191,36,.5);}
+  .fail{background:rgba(248,113,113,.16);color:#fca5a5;border:1px solid rgba(248,113,113,.5);}
+  .sev-block{background:rgba(248,113,113,.16);color:#fca5a5;border:1px solid rgba(248,113,113,.45);font-weight:700;padding:2px 9px;border-radius:6px;white-space:nowrap;font-size:12px;}
+  .sev-high{background:rgba(251,146,60,.16);color:#fdba74;border:1px solid rgba(251,146,60,.45);font-weight:700;padding:2px 9px;border-radius:6px;white-space:nowrap;font-size:12px;}
+  .sev-mid{background:rgba(251,191,36,.16);color:#fcd34d;border:1px solid rgba(251,191,36,.45);font-weight:700;padding:2px 9px;border-radius:6px;white-space:nowrap;font-size:12px;}
+  .sev-low{background:rgba(56,189,248,.14);color:#7dd3fc;border:1px solid rgba(56,189,248,.4);font-weight:700;padding:2px 9px;border-radius:6px;white-space:nowrap;font-size:12px;}
+  .ok{color:#6ee7b7;font-weight:700;}
+  .ng{color:#fca5a5;font-weight:700;}
+  .wk{color:#fcd34d;font-weight:700;}
+  .res{background:rgba(52,211,153,.16);color:#6ee7b7;border:1px solid rgba(52,211,153,.5);font-weight:700;padding:2px 9px;border-radius:6px;white-space:nowrap;font-size:12px;}
+  .note{background:rgba(56,189,248,.08);border:1px solid rgba(56,189,248,.3);border-radius:8px;
+    padding:12px 16px;font-size:13.5px;color:#bae6fd;margin:10px 0;}
+  .warn-box{background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.3);border-radius:8px;
+    padding:12px 16px;font-size:13.5px;color:#fde68a;margin:10px 0;}
+  .ok-box{background:rgba(52,211,153,.08);border:1px solid rgba(52,211,153,.3);border-radius:8px;
+    padding:12px 16px;font-size:13.5px;color:#bbf7d0;margin:10px 0;}
+  .find{border-left:3px solid var(--warn);padding:4px 0 4px 14px;margin:16px 0;}
+  .find h4{margin:2px 0 8px;font-size:15px;color:var(--text);}
+  .kv{font-size:13px;color:var(--sub);margin:3px 0;}
+  .kv b{color:var(--text);}
+  pre{background:#0b1220;border:1px solid var(--line);border-radius:8px;padding:12px 14px;
+    overflow-x:auto;font-size:12.5px;color:#cbd5e1;}
+  .big{font-size:30px;font-weight:800;color:var(--accent);}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin:14px 0;}
+  .metric{background:#142035;border:1px solid var(--line);border-radius:10px;padding:16px;text-align:center;}
+  .metric .label{font-size:12.5px;color:var(--sub);}
+  footer{text-align:center;color:var(--sub);font-size:12.5px;padding:30px;border-top:1px solid var(--line);}
+  .legend{font-size:12.5px;color:var(--sub);margin-top:8px;}
+</style>
+</head>
+<body>
+<header>
+  <h1>Project-SPIP — S7 통합·동작 QA 검증 보고서 <span style="color:var(--sub);font-size:18px;">(1회차)</span></h1>
+  <div>
+    <span class="tag">QA 엔지니어</span>
+    <span class="tag">S7 출시 게이트</span>
+    <span class="tag">동작·통합·성능</span>
+  </div>
+  <p>S0~S6 구현물(<code>scan.js</code>·<code>server.js</code>·<code>lib/**</code>·<code>public/**</code>)이
+  기획 수용 기준과 API 계약을 실제로 만족하는지 <b>실행 기반</b>으로 검증한다. 모든 판정은 <code>npm test</code>·
+  스캔 CLI·인프로세스 서버 E2E·합성 픽스처 벤치의 <b>실측 결과</b>에 근거하며 추측은 배제했다.
+  보안 게이트(security-reviewer)·코드 품질(code-reviewer) 영역은 본 보고 범위 밖이다.</p>
+  <div class="meta">
+    검증일 2026-06-21 · 대상 디렉터리 <code>E:\03.프로젝트\Project-SPIP</code> · Node v24.5.0 · Windows 11<br>
+    기준 문서: <code>docs/api-contract.md</code>, <code>docs/PRD.html</code>, <code>docs/FeatureSpec.html</code>,
+    <code>docs/UserStories.html</code>, <code>docs/roadmap.html</code><br>
+    <code>docs/Development/</code> 폴더는 <b>부재</b> — 별도 파트 룰 없이 기획 수용 기준 + 계약으로 검증함.
+  </div>
+</header>
+
+<main>
+
+<section>
+  <h2>종합 판정</h2>
+  <p><span class="verdict pass">출시 가능 (PASS)</span></p>
+  <div class="ok-box">
+    검증한 <b>모든 핵심 시나리오·요구·성능 게이트가 PASS</b>다. 차단(블로커)·높음 등급 결함은 0건.
+    경계면(서버 응답 ↔ 프론트 기대 shape)이 정확히 맞물리며, 런타임에 깨질 불일치는 발견되지 않았다.
+    아래 <b>중간 1건·낮음 2건</b>은 모두 <b>계약 문서의 미세 보완</b>(코드 결함 아님) 수준으로,
+    출시를 막지 않으며 후속 패치/문서 갱신으로 처리 권고한다.
+  </div>
+  <div class="grid">
+    <div class="metric"><div class="big">107/107</div><div class="label">단위/통합 테스트 통과</div></div>
+    <div class="metric"><div class="big">100%</div><div class="label">탐지율 (게이트 ≥95%)</div></div>
+    <div class="metric"><div class="big">0.15ms</div><div class="label">필터/정렬 5000건 (게이트 200ms)</div></div>
+    <div class="metric"><div class="big">0건</div><div class="label">블로커·높음 결함</div></div>
+  </div>
+</section>
+
+<section>
+  <h2>1. 빌드·테스트 실행 (실측)</h2>
+  <p><code>npm test</code> (<code>node --test "test/**/*.test.js"</code>) 실제 실행.</p>
+  <table>
+    <tr><th>항목</th><th>값</th><th>판정</th></tr>
+    <tr><td>tests</td><td>107</td><td><span class="ok">PASS</span></td></tr>
+    <tr><td>pass / fail / cancelled</td><td>107 / 0 / 0</td><td><span class="ok">PASS</span></td></tr>
+    <tr><td>skipped / todo</td><td>0 / 0</td><td><span class="ok">완전 실행</span></td></tr>
+    <tr><td>duration</td><td>649ms</td><td><span class="ok">정상</span></td></tr>
+  </table>
+  <p>테스트 묶음: scanner·walker·detector·collectors·config·logger·paths·pathGuard·safeExec·
+  security-h2·server(계약 shape)·snapshotStore·staticHandler·dashboard(순수함수)·smoke. 실패 0.
+  스캔 중 적대적 입력(2MB pkg=TOO_LARGE, 깊이폭탄=TOO_DEEP) 경고 로그는 <b>의도된 격리 동작</b>으로 테스트 통과에 포함됨.</p>
+</section>
+
+<section>
+  <h2>2. 엔드투엔드 핵심 시나리오 (실측)</h2>
+  <p><code>node scan.js --roots "E:/03.프로젝트"</code> 실행 후, <code>server.js</code>의 <code>createServer()</code>를
+  인프로세스로 기동(127.0.0.1:38719)해 http 요청으로 검증. 별도 <code>node server.js</code> 데몬도 동일 코드경로.</p>
+  <table>
+    <tr><th>#</th><th>시나리오</th><th>기대</th><th>실제</th><th>판정</th></tr>
+    <tr><td>2-1</td><td>스캔 → 캐시 JSON 생성</td><td>projects.json 생성, 계약 shape</td>
+      <td>6개 프로젝트, 463ms, 0 오류 · <code>%APPDATA%\spip\cache\projects.json</code> (5520 bytes) 생성 확인</td><td><span class="ok">PASS</span></td></tr>
+    <tr><td>2-2</td><td>GET /api/projects</td><td>{schemaVersion,generatedAt,hasSnapshot,projects[]}</td>
+      <td>키 정확 일치 · 200 · <code>application/json; charset=utf-8</code> · hasSnapshot:true · 6건</td><td><span class="ok">PASS</span></td></tr>
+    <tr><td>2-3</td><td>GET /api/stats</td><td>{total,byLanguage,staleCount,totalBytes:null,generatedAt}</td>
+      <td>total:6 · byLanguage{HTML:2,React:1,Node.js:2,JavaScript:1} · staleCount:0 · totalBytes:null</td><td><span class="ok">PASS</span></td></tr>
+    <tr><td>2-4</td><td>GET /api/health</td><td>{ok:true,hasSnapshot,codeCli,git} (boolean)</td>
+      <td>ok:true · hasSnapshot:true · codeCli:false · git:true</td><td><span class="ok">PASS</span></td></tr>
+    <tr><td>2-5</td><td>POST /api/open (유효 id + 토큰)</td><td>계약 분기(code 미설치 환경)</td>
+      <td>200 · <code>{ok:false, code:"CODE_CLI_NOT_FOUND"}</code> — code CLI 미설치 환경의 정상 분기 (※ 4-1 참조)</td><td><span class="ok">PASS</span></td></tr>
+    <tr><td>2-6</td><td>POST /api/open (토큰 누락)</td><td>403 FORBIDDEN_ORIGIN</td>
+      <td>403 · <code>{ok:false, code:"FORBIDDEN_ORIGIN"}</code></td><td><span class="ok">PASS</span></td></tr>
+    <tr><td>2-7</td><td>POST /api/open (미존재 id)</td><td>404 ID_NOT_FOUND</td>
+      <td>404 · <code>{ok:false, code:"ID_NOT_FOUND"}</code></td><td><span class="ok">PASS</span></td></tr>
+    <tr><td>2-8</td><td>POST /api/rescan</td><td>404 NOT_FOUND (MVP 미마운트)</td>
+      <td>404 · <code>{ok:false, code:"NOT_FOUND"}</code></td><td><span class="ok">PASS</span></td></tr>
+    <tr><td>2-9</td><td>스냅샷 부재 graceful</td><td>200 + hasSnapshot:false + 빈 배열</td>
+      <td>projects 200/hasSnapshot:false/count:0 · stats total:0/generatedAt:null · health hasSnapshot:false — 크래시 0</td><td><span class="ok">PASS</span></td></tr>
+    <tr><td>2-10</td><td>GET / 토큰 주입</td><td>placeholder→실토큰 치환</td>
+      <td>64자 hex 토큰 주입 확인 · <code>__SPIP_SESSION_TOKEN__</code> 잔존 없음 · CSP 헤더 존재</td><td><span class="ok">PASS</span></td></tr>
+    <tr><td>2-11</td><td>/static/app.js · styles.css</td><td>200 + 올바른 MIME</td>
+      <td>app.js 200 <code>text/javascript</code> · styles.css 200 <code>text/css</code></td><td><span class="ok">PASS</span></td></tr>
+    <tr><td>2-12</td><td>R-04 빈 roots</td><td>자동스캔 안 함, 안내 후 종료</td>
+      <td>"스캔할 루트가 설정되어 있지 않습니다" + 기본 설정 생성 안내 · 종료코드 0</td><td><span class="ok">PASS</span></td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>3. 경계면 교차 비교 (서버 응답 ↔ 프론트 기대 shape)</h2>
+  <p>실제 캐시(<code>/api/projects</code>의 <code>projects[]</code>)를 프론트의 순수 함수
+  <code>app.toViewModel()</code>·<code>deriveStats()</code>에 직접 통과시켜 매핑이 깨지는 지점을 탐색했다.
+  단순 파일 존재 확인이 아니라 <b>양쪽 데이터를 실제로 맞물려</b> 검증.</p>
+  <table>
+    <tr><th>경계 계약</th><th>서버 실제 산출</th><th>프론트 처리(toViewModel)</th><th>판정</th></tr>
+    <tr><td>git.status==='na' → branch/dirty/ahead/behind 모두 null</td>
+      <td>AGT-HR·ux-inside: status:"na", branch/ahead/behind:null</td>
+      <td>na_branch_null:true, na_ahead_null:true, gitStatus:"na" 정확 변환</td><td><span class="ok">일치</span></td></tr>
+    <tr><td>description 는 null 가능</td>
+      <td>AGT-HR·marketplace·SimJae...: description:null</td>
+      <td>nullDesc_handled:true (null 유지 → 카드에서 "설명 없음" 표기)</td><td><span class="ok">일치</span></td></tr>
+    <tr><td>totalBytes 는 항상 null → UI "미측정"</td>
+      <td>/api/stats totalBytes:null</td>
+      <td>deriveStats().totalBytes === "미측정"</td><td><span class="ok">일치</span></td></tr>
+    <tr><td>language.primary 문자열</td>
+      <td>Node.js/React/HTML/JavaScript</td>
+      <td>uniqueLanguages → [HTML,JavaScript,Node.js,React] (필터 드롭다운 채움)</td><td><span class="ok">일치</span></td></tr>
+    <tr><td>Project 필수 필드(id,path,name)</td>
+      <td>전 항목 string 보유</td>
+      <td>6/6 viewModel 정상 생성, id 보존(열기 액션용)</td><td><span class="ok">일치</span></td></tr>
+    <tr><td>git.status==='ok'+dirty:true → 변경 표시</td>
+      <td>project-spip: status:"ok", dirty:true, branch:"master"</td>
+      <td>gitStatus:"dirty" → buildGitBadge "master · 변경됨"</td><td><span class="ok">일치</span></td></tr>
+  </table>
+  <div class="ok-box">
+    <b>경계면 불일치 0건.</b> 백엔드 캐시 스키마(serializer 산출) ↔ snapshotStore 적재 ↔ apiHandlers 응답
+    ↔ app.js toViewModel 의 4단 체인이 계약과 정확히 일치한다. null 처리·결측 graceful·textContent 렌더
+    (L-1 XSS 방어) 모두 정상. 런타임에 <code>undefined</code>로 깨질 지점 미발견.
+  </div>
+</section>
+
+<section>
+  <h2>4. MVP 수용 기준 충족표 (PRD §12.1)</h2>
+  <p>요구별 실측 근거 기반 판정. (보안 요구 N-01/N-04/N-07·M계열은 security-reviewer 담당이나, 동작 검증 과정에서
+  관측된 사실은 참고로 병기)</p>
+  <table>
+    <tr><th>요구</th><th>내용</th><th>검증 근거</th><th>판정</th></tr>
+    <tr><td><span class="rid">R-01</span></td><td>프로젝트 자동 탐지(신호 기반)</td>
+      <td>12종 신호(git/pkg/vscode/py/rust/go/java/php/dotnet/ws) 픽스처 10/10 탐지, 중첩 최상위 1건</td><td><span class="ok">PASS</span></td></tr>
+    <tr><td><span class="rid">R-02</span></td><td>제외 폴더 비진입(node_modules/dist 등)</td>
+      <td>BUILTIN_EXCLUDES 20+개 · 테스트 "제외 폴더 하위 재귀 미진입" 통과 · dist 내 pkg 미탐지</td><td><span class="ok">PASS</span></td></tr>
+    <tr><td><span class="rid">R-04</span></td><td>roots 미설정 시 자동스캔 안 함, 안내</td>
+      <td>2-12 실측: 안내 출력 + 기본 설정 생성 + 종료코드 0</td><td><span class="ok">PASS</span></td></tr>
+    <tr><td><span class="rid">R-06</span></td><td>언어/기술 식별</td>
+      <td>실 스캔: Node.js/React/HTML/JavaScript breakdown 산출 · TS 0.958→React 등 정상</td><td><span class="ok">PASS</span></td></tr>
+    <tr><td><span class="rid">R-07</span></td><td>신선도(lastModified/lastCommit/stale)</td>
+      <td>freshness 객체 정상 · isStale 판정 · stale 90일 기준 적용 확인</td><td><span class="ok">PASS</span></td></tr>
+    <tr><td><span class="rid">R-08</span></td><td>Git 상태(branch/dirty/ahead/behind)</td>
+      <td>실 스캔: main/master branch·dirty:true/false·ahead/behind:0 정상 · na 폴백 정확</td><td><span class="ok">PASS</span></td></tr>
+    <tr><td><span class="rid">R-10</span></td><td>로컬 웹서버 + 카드 렌더</td>
+      <td>서버 기동·전 엔드포인트 응답·index.html 서빙·app.js 카드 빌드 로직 검증</td><td><span class="ok">PASS</span></td></tr>
+    <tr><td><span class="rid">R-11</span></td><td>필터/정렬/검색(클라 메모리, 1회 fetch)</td>
+      <td>app.js: applyQuery(필터 AND→검색→정렬) 메모리 처리 · /api/projects 1회 fetch · 5000건 0.15ms</td><td><span class="ok">PASS</span></td></tr>
+    <tr><td><span class="rid">R-12</span></td><td>VS Code 열기(id 기반 액션)</td>
+      <td>POST /api/open id 역참조→화이트리스트→spawn 분기 전부 동작(2-5~2-7)</td><td><span class="ok">PASS</span></td></tr>
+    <tr><td><span class="rid">R-13</span></td><td>스냅샷 없어도 graceful 기동</td>
+      <td>2-9 실측: 부재/손상 시 200+hasSnapshot:false 빈 상태, 크래시 0</td><td><span class="ok">PASS</span></td></tr>
+    <tr><td><span class="rid">R-14</span></td><td>CLI 스캔 + 콘솔 요약</td>
+      <td>실 스캔 요약 출력(프로젝트/stale/오류/경고/소요/저장경로) · --help 동작</td><td><span class="ok">PASS</span></td></tr>
+    <tr><td><span class="nid">N-02</span></td><td>루프백 전용 바인딩(127.0.0.1)</td>
+      <td>server.listen(port,'127.0.0.1') · 테스트 "listen 127.0.0.1 바인딩" 통과</td><td><span class="ok">PASS</span></td></tr>
+    <tr><td><span class="nid">N-03</span></td><td>정적 서빙 경로 이탈 차단</td>
+      <td>../ / %2e%2e / 널바이트 / 매핑외 경로 → 전부 404 (테스트 통과)</td><td><span class="ok">PASS</span></td></tr>
+    <tr><td><span class="nid">N-04</span></td><td>입력 가드(크기/깊이 상한)</td>
+      <td>적대적 픽스처: 2MB pkg=TOO_LARGE, 깊이200=TOO_DEEP 격리 · 전체 완주</td><td><span class="ok">PASS</span></td></tr>
+    <tr><td><span class="nid">N-05</span></td><td>항목 격리(손상 입력에 전체 미중단)</td>
+      <td>테스트: collector throw·손상 JSON 섞여도 스캔 완주 · 실 스캔 errors:0</td><td><span class="ok">PASS</span></td></tr>
+    <tr><td><span class="nid">N-06</span></td><td>캐시 원자적·0600 쓰기</td>
+      <td>테스트 "serializer 원자적 쓰기 + 0600 권한" 통과 · 캐시 파일 생성 확인</td><td><span class="ok">PASS</span></td></tr>
+  </table>
+  <p style="color:var(--sub);font-size:13px;">MVP 16건(R-01·02·04·06·07·08·10·11·12·13·14 + N-02·03·04·05·06) <b>전건 PASS</b>.</p>
+
+  <h3>4-1. <code>CODE_CLI_NOT_FOUND</code> 계약 적합성 (시나리오 2-5 보충)</h3>
+  <div class="note">
+    계약 §에러응답 표는 403/404/410만 명시하고 <code>CODE_CLI_NOT_FOUND</code>를 열거하지 않으나,
+    계약 본문 "POST /api/open 성공 = spawn 시작 성공"·"실제 창 오픈 확인은 비범위(P2-3)" 정신과,
+    "성공 응답은 200 + ok 플래그" 구조에 정합한다. 구현은 <code>200 + {ok:false, code:"CODE_CLI_NOT_FOUND"}</code>로
+    반환하고 프론트 <code>describeError</code>는 default 분기로 "HTTP 200" 토스트를 띄운다 — <b>크래시·미정의 동작은 없다.</b>
+    동작상 PASS이나, 계약 문서/프론트 메시지 매핑 보완을 권고(아래 BUG-2·BUG-3).
+  </div>
+</section>
+
+<section>
+  <h2>5. 성능 벤치 (S7 게이트, 실측)</h2>
+
+  <h3>5-1. 탐지율 (게이트: 정탐 ≥95%)</h3>
+  <p>전용 합성 픽스처 — 진짜 프로젝트 10종(각 신호별) + 미끼 8종(README/txt/png/pdf/html/csv/mp3/빈폴더) + 중첩 1세트.
+  <code>detector.detectStream(walker.walk(...))</code> 실 실행.</p>
+  <table>
+    <tr><th>지표</th><th>값</th><th>게이트</th><th>판정</th></tr>
+    <tr><td>정탐(true positive)</td><td>10 / 10 = <b>100.0%</b></td><td>≥95%</td><td><span class="ok">PASS</span></td></tr>
+    <tr><td>미검(false negative)</td><td>0건</td><td>—</td><td><span class="ok">PASS</span></td></tr>
+    <tr><td>오탐(false positive)</td><td>0 / 8 미끼 = <b>0.0%</b></td><td>낮을수록</td><td><span class="ok">PASS</span></td></tr>
+    <tr><td>중첩 처리</td><td>nest/inner 중복 미탐(최상위 1건만)</td><td>R-01</td><td><span class="ok">PASS</span></td></tr>
+  </table>
+
+  <h3>5-2. 클라이언트 필터/정렬 체감 (게이트: 200ms)</h3>
+  <p>합성 5000 viewModel에 <code>applyQuery</code>(언어필터 + 검색 + 최근수정순 정렬) 200회 반복 실측.</p>
+  <table>
+    <tr><th>지표</th><th>값</th><th>게이트</th><th>판정</th></tr>
+    <tr><td>1회 처리 시간(5000건)</td><td><b>0.154ms</b></td><td>&lt;200ms</td><td><span class="ok">PASS (1300배 여유)</span></td></tr>
+    <tr><td>debounce 입력</td><td>120ms (app.js, "체감 200ms 이내" 목표)</td><td>—</td><td><span class="ok">PASS</span></td></tr>
+  </table>
+
+  <h3>5-3. 대규모 스캔 시간 (합성 픽스처)</h3>
+  <p>300개 합성 프로젝트(각 package.json + src/index.js + util.ts + README, 1/3은 .git 포함) 단일 루트 스캔.</p>
+  <table>
+    <tr><th>지표</th><th>값</th></tr>
+    <tr><td>탐지 프로젝트</td><td>300 / 300</td></tr>
+    <tr><td>총 소요</td><td>7,904ms (≈26.4ms/프로젝트)</td></tr>
+    <tr><td>오류 격리 / 경고</td><td>0 / 0</td></tr>
+    <tr><td>실환경 6개 프로젝트 스캔</td><td>463ms</td></tr>
+  </table>
+  <div class="note">
+    PRD §3은 대규모 스캔에 대한 절대 임계 ms를 못박지 않아(시간 게이트는 측정·관찰 항목), 위 수치는 <b>참고 측정값</b>으로 제시한다.
+    git 미포함 항목 다수에서 git collector 폴백 비용이 항목당 비용의 주요 인자로 관측됨 — 실사용(루트당 수십~수백 개)에서
+    수 초 내 완료로 체감 양호. 절대 임계 미정의로 인해 "성능 게이트 위반"은 <b>해당 없음</b>.
+  </div>
+</section>
+
+<section>
+  <h2>6. 발견 결함 (심각도 등급화)</h2>
+  <p>차단·높음 결함 <b>0건</b>. 아래는 모두 출시를 막지 않는 <b>문서/메시지 보완</b> 항목이다.</p>
+
+  <div class="find">
+    <h4>BUG-1 <span class="sev-mid">중간</span> 계약 에러응답 표에 <code>CODE_CLI_NOT_FOUND</code> 누락</h4>
+    <p class="kv"><b>무엇이:</b> 구현이 반환하는 <code>{ok:false, code:"CODE_CLI_NOT_FOUND"}</code>·<code>{code:"OPEN_FAILED"}</code>가 계약 문서 에러표에 명시되지 않음.</p>
+    <p class="kv"><b>어디서:</b> <code>docs/api-contract.md</code> §에러응답 ↔ <code>lib/server/actionHandlers.js:108-135</code></p>
+    <p class="kv"><b>기대 vs 실제:</b> 기대=계약이 단일 출처로서 모든 응답 code를 망라 / 실제=200 ok:false 분기 2종이 미문서화.</p>
+    <p class="kv"><b>재현:</b> code CLI 미설치 환경에서 <code>POST /api/open</code> → 200 <code>CODE_CLI_NOT_FOUND</code> (시나리오 2-5).</p>
+    <p class="kv"><b>영향:</b> 동작 정상(크래시 없음). 계약-구현 동기화 측면의 문서 부채.</p>
+    <p class="kv"><b>조치:</b> 계약 에러표에 200 ok:false code 2종 추가(문서 갱신, PM 중재 P3-3).</p>
+  </div>
+
+  <div class="find">
+    <h4>BUG-2 <span class="sev-low">낮음</span> 프론트 <code>describeError</code>가 <code>CODE_CLI_NOT_FOUND</code> 미매핑</h4>
+    <p class="kv"><b>무엇이:</b> code 미설치 시 사용자 토스트가 친절한 한국어 대신 default 분기로 노출됨.</p>
+    <p class="kv"><b>어디서:</b> <code>public/app.js:373-382</code> (<code>describeError</code> switch) ↔ <code>openProject</code> 359행.</p>
+    <p class="kv"><b>기대 vs 실제:</b> 기대="VS Code CLI를 찾을 수 없습니다" 류 안내 / 실제=<code>res.ok && data.ok</code>가 false이므로
+      "열기 실패: HTTP 200" 형태로 표기될 수 있음(서버 message는 사용되지 않고 status 기반 default로 빠짐).</p>
+    <p class="kv"><b>재현:</b> code CLI 미설치 PC에서 카드 "VS Code로 열기" 클릭 → 토스트 문구 확인.</p>
+    <p class="kv"><b>영향:</b> UX 사소(기능 동작엔 무관). 사용자 혼란 가능.</p>
+    <p class="kv"><b>조치:</b> <code>describeError</code>에 <code>CODE_CLI_NOT_FOUND</code>/<code>OPEN_FAILED</code> case 추가 또는 서버 message 직접 표시. → frontend-dev.</p>
+  </div>
+
+  <div class="find">
+    <h4>BUG-3 <span class="sev-low">낮음</span> CSP 정책이 두 출처(meta vs 응답 헤더)에서 미세 상이</h4>
+    <p class="kv"><b>무엇이:</b> <code>index.html</code> 내 CSP meta와 staticHandler가 주입하는 <code>Content-Security-Policy</code> 헤더의 지시문이 완전 동일하지 않음(헤더는 <code>img-src 'self' data:</code>, <code>font-src 'self'</code> 포함 / meta는 <code>img-src 'self'</code>, font-src 미지정).</p>
+    <p class="kv"><b>어디서:</b> <code>public/index.html:7-8</code> ↔ <code>lib/server/staticHandler.js:49-59</code></p>
+    <p class="kv"><b>기대 vs 실제:</b> 기대=동일 정책 / 실제=브라우저는 둘 중 더 엄격한 쪽을 합집합으로 적용 → 현재 자산(self만 사용)엔 실문제 없음.</p>
+    <p class="kv"><b>재현:</b> 두 파일의 CSP 문자열 비교. 현재 앱 자산은 모두 <code>'self'</code>라 렌더 차단 없음.</p>
+    <p class="kv"><b>영향:</b> 현시점 동작 무해. 향후 자산 추가 시 혼선 소지. (세부 보안 평가는 security-reviewer 위임)</p>
+    <p class="kv"><b>조치:</b> 두 CSP를 단일 상수로 일원화 권고.</p>
+  </div>
+
+  <div class="note">
+    <b>debugger 회부 권고:</b> 해당 없음. 간헐적/경쟁조건/원인불명 결함은 관측되지 않았다(테스트·E2E·벤치 모두 결정적 재현).
+  </div>
+</section>
+
+<section>
+  <h2>7. 미검증·범위 외 항목</h2>
+  <ul>
+    <li><b>실제 VS Code 창 오픈</b> — 검증 환경에 code CLI 미설치(<code>codeCli:false</code>). spawn 시작 성공까지가 계약 범위(P2-3)이며,
+      미설치 분기는 정상 검증됨. code 설치 환경의 실제 창 오픈은 본 환경에서 측정 불가 → <b>사유: 환경 의존</b>.</li>
+    <li><b>브라우저 실DOM 렌더링</b> — app.js의 DOM/이벤트(<code>initBrowser</code>)는 헤드리스 브라우저 미사용으로 직접 미실행.
+      순수 로직(toViewModel/applyQuery/deriveStats 등)은 실데이터로 검증, index.html 서빙/토큰주입/자산로드는 E2E로 검증.
+      카드 DOM 빌드는 코드 정독으로 확인(textContent 일관 사용). → <b>사유: 헤드리스 브라우저 미구성</b>.</li>
+    <li><b>보안 게이트(M-1/H-1/H-2/L-1~3, RC-2 등)</b> — security-reviewer 담당. 단, 동작 검증 중 관측된 보안 동작(403/경로이탈404/토큰비교/textContent)은 정상.</li>
+    <li><b>코드 품질(가독성·중복)</b> — code-reviewer 담당.</li>
+    <li><b>대규모 스캔 절대 시간 게이트</b> — PRD에 임계 ms 미정의로 PASS/FAIL 대신 참고 측정값으로 제시(5-3).</li>
+  </ul>
+</section>
+
+<footer>
+  Project-SPIP QA — S7 통합·동작 검증 1회차 · 2026-06-21 · 실행 근거 기반(npm test·scan CLI·인프로세스 E2E·합성 벤치)<br>
+  종합: <b>출시 가능</b> — 블로커/높음 0, 중간 1(문서)·낮음 2(메시지/CSP 일원화) 후속 권고
+</footer>
+
+</main>
+</body>
+</html>

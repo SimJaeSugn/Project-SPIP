@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project-SPIP — S7 코드 품질 리뷰 (code_review_s7_1)</title>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#1e293b; --text:#e2e8f0; --sub:#94a3b8;
+    --accent:#34d399; --ref:#38bdf8; --line:#334155; --warn:#fbbf24; --danger:#f87171;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:"Segoe UI","Malgun Gothic",system-ui,sans-serif;line-height:1.7;}
+  header{padding:44px 32px 30px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#13203b,#0f172a);}
+  header h1{margin:0 0 8px;font-size:27px;}
+  header .tag{display:inline-block;background:rgba(52,211,153,.12);color:var(--accent);
+    border:1px solid rgba(52,211,153,.4);border-radius:999px;padding:3px 12px;font-size:13px;margin-right:8px;}
+  header p{margin:12px 0 0;color:var(--sub);max-width:960px;}
+  .meta{margin-top:14px;font-size:13px;color:var(--sub);}
+  main{max-width:1140px;margin:0 auto;padding:30px;}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:22px 26px;margin:20px 0;}
+  h2{margin:0 0 14px;font-size:20px;color:var(--accent);border-left:4px solid var(--accent);padding-left:12px;}
+  h3{font-size:15.5px;color:var(--ref);margin:20px 0 8px;}
+  p{margin:8px 0;}
+  code{background:#0b1220;color:var(--ref);padding:1px 6px;border-radius:5px;font-size:13px;font-family:Consolas,monospace;}
+  table{width:100%;border-collapse:collapse;margin:12px 0;font-size:13px;}
+  th,td{border:1px solid var(--line);padding:9px 11px;text-align:left;vertical-align:top;}
+  th{background:#142035;color:var(--accent);}
+  tr:nth-child(even) td{background:rgba(255,255,255,.02);}
+  .loc{font-family:Consolas,monospace;color:var(--warn);white-space:nowrap;font-size:12px;}
+  .sev{font-weight:700;padding:2px 9px;border-radius:6px;white-space:nowrap;font-size:12px;}
+  .p1{background:rgba(248,113,113,.16);color:#fecaca;border:1px solid rgba(248,113,113,.5);}
+  .p2{background:rgba(251,191,36,.16);color:#fde68a;border:1px solid rgba(251,191,36,.5);}
+  .p3{background:rgba(148,163,184,.16);color:#cbd5e1;border:1px solid rgba(148,163,184,.4);}
+  .ok{background:rgba(52,211,153,.16);color:#6ee7b7;border:1px solid rgba(52,211,153,.5);}
+  .verdict{display:inline-block;font-size:18px;font-weight:800;padding:8px 20px;border-radius:10px;}
+  .v-pass{background:rgba(52,211,153,.16);color:#6ee7b7;border:1px solid rgba(52,211,153,.55);}
+  .note{background:rgba(56,189,248,.08);border:1px solid rgba(56,189,248,.3);border-radius:8px;padding:12px 16px;font-size:13.5px;color:#bae6fd;}
+  .warn-box{background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.3);border-radius:8px;padding:12px 16px;font-size:13.5px;color:#fde68a;}
+  .scorebar{display:flex;gap:14px;flex-wrap:wrap;margin-top:8px;}
+  .scorebar div{background:#0b1220;border:1px solid var(--line);border-radius:10px;padding:14px 20px;text-align:center;min-width:120px;}
+  .scorebar .n{font-size:26px;font-weight:800;display:block;}
+  ul{margin:8px 0;padding-left:22px;} li{margin:5px 0;}
+  footer{text-align:center;color:var(--sub);font-size:12.5px;padding:28px;border-top:1px solid var(--line);}
+  .rec{color:var(--accent);}
+  .why{color:#fcd7cf;}
+</style>
+</head>
+<body>
+<header>
+  <span class="tag">코드 품질 리뷰</span><span class="tag">S7</span><span class="tag">1회차</span>
+  <h1>Project-SPIP — S7 전체 코드 품질 검증</h1>
+  <p>대상: <code>scan.js</code>·<code>server.js</code>·<code>lib/**</code>·<code>public/**</code>·<code>test/**</code> 전체. 동작(QA)·보안(security-reviewer)은 별도 트랙이며, 본 보고는 <b>코드 품질</b>(가독성·중복·복잡도·죽은 코드·네이밍/구조 일관성·잠재 결함: 경계조건·에러처리·리소스 누수)에 한정한다. 기준: <code>docs/architecture/architecture.html</code> §5·§6, <code>docs/api-contract.md</code>. (<code>docs/Development/</code> 표준 문서는 없음 → 주변 코드 일관성·Node 모범 사례 기준.)</p>
+  <div class="meta">리뷰어: 코드 품질 전담 리뷰어 · 일자: 2026-06-21 · 테스트: <code>node --test</code> 107건 전부 PASS(로컬 실행 확인) · 외부 의존성 0(내장 모듈만, ADR-001 준수)</div>
+</header>
+
+<main>
+
+<section>
+  <h2>종합 판정</h2>
+  <p><span class="verdict v-pass">PASS (품질 양호 · 경미 보완 권고)</span></p>
+  <div class="scorebar">
+    <div><span class="n" style="color:#6ee7b7">0</span>P1 정확성 결함</div>
+    <div><span class="n" style="color:#fde68a">6</span>P2 품질</div>
+    <div><span class="n" style="color:#cbd5e1">7</span>P3 경미</div>
+    <div><span class="n" style="color:#7dd3fc">107</span>테스트 PASS</div>
+  </div>
+  <p style="margin-top:14px">전반적으로 <b>설계 §5·§6 모듈 경계를 충실히 따르고</b>(진입점→도메인→공용 유틸 단방향, router 무로직, 수집기 격리), 경계 조건·에러 처리·리소스 정리(파일 핸들 <code>finally</code> close, 임시파일 정리, child 타임아웃 kill·in-flight 해제)가 일관되게 구현되어 있다. <b>프로세스 크래시로 직결되는 정확성 결함(P1)은 발견되지 않았다.</b> 다만 <code>/api/open</code>의 응답 시점이 계약(P2-3 "spawn 시작 성공") 및 R-12(2초 피드백)와 어긋날 수 있는 점, 일부 중복 <code>require</code>·죽은 코드·미세 일관성 항목을 P2/P3로 정리한다. 모두 출시 차단 사유는 아니며 수정 권고다.</p>
+  <div class="note"><b>설계 대비 구조 편차 1건(허용):</b> 설계 §6.2·§7은 <code>pathGuard</code>를 <code>lib/server/</code>에 배치하나, 구현은 <code>lib/common/pathGuard.js</code>에 두고 walker(등록)·server(검증) 양쪽이 동일 <code>canonicalize()</code>를 재사용한다. 이는 H-1 "등록·검증 동일 규칙 단일 원천" 요구를 <b>오히려 더 잘 충족</b>하며 공용 유틸이 상위를 참조하지 않는 단방향 규칙도 지킨다 → 합리적 편차로 수용. (P3-1에 문서 정합만 기록)</p></div>
+</section>
+
+<section>
+  <h2>P2 — 품질 개선 항목 (6)</h2>
+  <table>
+    <tr><th style="width:42px">#</th><th style="width:90px">심각도</th><th>무엇 / 위치</th><th>왜 문제 · 권고</th></tr>
+
+    <tr>
+      <td>1</td><td><span class="sev p2">P2</span></td>
+      <td><b>/api/open 응답이 <code>code</code> 프로세스 종료까지 대기</b><br><span class="loc">lib/server/actionHandlers.js:122 open()</span><br><span class="loc">lib/common/safeExec.js:223 (close에서만 resolve)</span></td>
+      <td><span class="why">safeExec는 child <code>'close'</code> 이벤트에서만 Promise를 resolve한다. <code>open()</code>은 이를 <code>await</code>하므로, 응답은 "spawn 시작"이 아니라 <b><code>code</code> 프로세스가 종료된 뒤</b> 전송된다. <code>code</code> 런처가 빠르게 분리·종료되는 환경에서는 문제없지만, 첫 실행/런처가 부모에 붙는 경우 응답이 지연되고 in-flight 카운터도 그동안 점유된다. 계약 §9 P2-3 "성공 = spawn 시작 성공", R-12 "2초 내 피드백"과 의미가 어긋날 수 있다.</span><br><span class="rec">권고: open 액션은 <code>spawn</code> 직후(또는 child 'spawn' 이벤트) 즉시 <code>OPENING</code> 응답을 반환하고, detach(<code>unref()</code>) 처리. 또는 safeExec에 <code>detached/fireAndForget</code> 모드를 추가해 액션 경로에서 사용. 현재 테스트는 <code>code</code> 미설치 환경이라 이 지연을 드러내지 못한다.</span></td>
+    </tr>
+
+    <tr>
+      <td>2</td><td><span class="sev p2">P2</span></td>
+      <td><b>스캔 child 프로세스 정리: stdout 상한 초과 시 stderr는 무한 누적 가능</b><br><span class="loc">lib/common/safeExec.js:208-220</span></td>
+      <td><span class="why">stdout는 <code>maxBuffer</code> 초과 시 즉시 <code>SIGKILL</code>하지만, stderr 핸들러(216-219)는 상한 초과 시 <b>누적만 멈추고 kill하지 않는다</b>. stderr만 폭주하는 악성/이상 프로세스는 메모리 누적은 막히나 프로세스가 타임아웃까지 살아남아 자원을 점유한다. 비대칭 처리라 의도를 읽기 어렵다.</span><br><span class="rec">권고: stderr도 상한 초과 시 stdout과 동일하게 kill하거나, 두 경로를 공통 헬퍼로 묶어 대칭화. 의도가 "stderr는 살려둔다"면 주석으로 명시.</span></td>
+    </tr>
+
+    <tr>
+      <td>3</td><td><span class="sev p2">P2</span></td>
+      <td><b>인라인 <code>require</code> 반복 — 모듈 상단 import 규약과 불일치</b><br><span class="loc">lib/scan/scanner.js:26 projectId()</span><br><span class="loc">lib/scan/collectors/git.js:134 collect()</span><br><span class="loc">lib/scan/walker.js:99 walk()</span></td>
+      <td><span class="why">대부분 모듈이 상단에서 <code>require</code>를 모으는데, 위 3곳은 함수 본문에서 <code>require('../common/pathGuard')</code>·<code>require('../../common/logger')</code>를 호출한다. 순환 의존 회피 목적이 아니라면(실제로 순환 없음) 일관성을 해치고, 핫 패스(projectId는 프로젝트마다 호출)에서 매번 require 캐시 조회 비용이 든다.</span><br><span class="rec">권고: 세 곳 모두 파일 상단 <code>const</code> import로 승격. walker:99의 <code>defaultLogger</code> 지연 로드는 단순 폴백이므로 상단으로 올려도 무해.</span></td>
+    </tr>
+
+    <tr>
+      <td>4</td><td><span class="sev p2">P2</span></td>
+      <td><b>제외 디렉터리 목록(SKIP_DIRS) 중복 정의</b><br><span class="loc">lib/scan/collectors/language.js:54</span><br><span class="loc">lib/scan/collectors/freshness.js:21</span><br><span class="loc">cf. lib/scan/excludeRules.js:19 BUILTIN_EXCLUDES</span></td>
+      <td><span class="why">동일 목적의 "표본 순회 시 건너뛸 폴더" 집합이 language·freshness에 각각 하드코딩되어 있고, 내용도 미묘하게 다르다(language엔 <code>.idea/.vs</code> 없음, freshness엔 <code>.git</code> 포함 등). <code>excludeRules.BUILTIN_EXCLUDES</code>와도 부분 중복이라 한 곳을 고치면 다른 곳이 누락되기 쉽다.</span><br><span class="rec">권고: 표본 스킵 집합을 <code>collectors/_safeParse</code>나 공용 상수 모듈로 단일화하고 두 수집기가 import. excludeRules와의 관계(순회 제외 vs 표본 스킵)는 주석으로 구분.</span></td>
+    </tr>
+
+    <tr>
+      <td>5</td><td><span class="sev p2">P2</span></td>
+      <td><b><code>toViewModel(p)</code>의 최상위 <code>p</code> null/원시값 미방어</b><br><span class="loc">public/app.js:16-35 toViewModel()</span></td>
+      <td><span class="why">중첩 필드는 <code>(p &amp;&amp; p.git)</code> 식으로 방어하지만 <code>p.id</code>·<code>p.name</code>·<code>p.path</code>·<code>p.description</code>(25,28행)은 <code>p</code>를 직접 역참조한다. <code>store.raw.map(toViewModel)</code>에 <code>null</code>이나 비객체 항목이 섞이면 <code>TypeError</code>로 렌더 전체가 catch 분기(에러 상태)로 빠진다. 서버 snapshotStore가 비객체를 거르므로 현재 경로상 도달은 어렵지만, "graceful 매핑"이라는 함수 주석 의도와 어긋난다.</span><br><span class="rec">권고: 함수 첫 줄 <code>p = p &amp;&amp; typeof p === 'object' ? p : {};</code> 가드 추가.</span></td>
+    </tr>
+
+    <tr>
+      <td>6</td><td><span class="sev p2">P2</span></td>
+      <td><b>HEAD 요청을 GET처럼 처리 → 본문 전송 가능성</b><br><span class="loc">lib/server/router.js:77-80</span><br><span class="loc">lib/server/staticHandler.js:181-187 handle()</span></td>
+      <td><span class="why">router는 <code>GET</code>과 <code>HEAD</code>를 함께 staticHandler로 보내지만(77행), staticHandler는 메서드를 구분하지 않고 항상 <code>res.end(buf)</code>로 <b>본문까지 전송</b>한다. HEAD 응답에 본문을 실으면 HTTP 규약 위반이며 일부 클라이언트가 혼란을 겪는다. (보안 위험은 낮아 P2.)</span><br><span class="rec">권고: HEAD면 헤더만 쓰고 본문 없이 <code>res.end()</code>. 또는 MVP 범위상 HEAD를 지원하지 않으면 router에서 HEAD를 405/404로 단순 처리해 의도를 명확히.</span></td>
+    </tr>
+  </table>
+</section>
+
+<section>
+  <h2>P3 — 경미 / 일관성 / 죽은 코드 (7)</h2>
+  <table>
+    <tr><th style="width:42px">#</th><th style="width:90px">심각도</th><th>무엇 / 위치</th><th>왜 · 권고</th></tr>
+
+    <tr>
+      <td>1</td><td><span class="sev p3">P3</span></td>
+      <td><b>설계 문서와 pathGuard 배치 불일치</b><br><span class="loc">lib/common/pathGuard.js (설계 §6.2는 lib/server/)</span></td>
+      <td>구현이 더 합리적(상단의 수용 노트 참조). <span class="rec">권고: 설계서/디렉터리 트리(§7)에 "pathGuard는 양 도메인 공용이라 common으로 이동" 1줄 정합 기록.</span></td>
+    </tr>
+
+    <tr>
+      <td>2</td><td><span class="sev p3">P3</span></td>
+      <td><b>죽은/무효 코드 블록</b><br><span class="loc">lib/scan/scanner.js:61-63 (빈 if 본문)</span><br><span class="loc">server.js:85 <code>void token;</code></span></td>
+      <td>runCollectors의 <code>if (res.note &amp;&amp; res.status !== 'ok'){ /*주석만*/ }</code>는 본문이 비어 동작이 없다. server.js의 <code>void token;</code>는 lint 무마용 no-op. <span class="rec">권고: 빈 if는 제거(또는 실제 note 누적 구현). <code>void token</code>은 주석으로 의도 설명하거나 삭제.</span></td>
+    </tr>
+
+    <tr>
+      <td>3</td><td><span class="sev p3">P3</span></td>
+      <td><b>미사용 export / 변수</b><br><span class="loc">lib/scan/walker.js:67 <code>let name</code> (재할당 없음)</span><br><span class="loc">paths.js:78 <code>DIR_MODE</code> export, logger.js <code>sanitizeForUser</code> 현재 호출처 없음</span></td>
+      <td><code>name</code>은 <code>const</code>가 적절. <code>sanitizeForUser</code>는 L-3 토대로 마련됐으나 서버 응답 경로에서 실제로 쓰이지 않는다(현재 응답은 고정문이라 안전하긴 함). <span class="rec">권고: <code>let name</code>→<code>const</code>. <code>sanitizeForUser</code>는 사용 예정이면 TODO 주석, 아니면 제거 검토.</span></td>
+    </tr>
+
+    <tr>
+      <td>4</td><td><span class="sev p3">P3</span></td>
+      <td><b>detector 신호 우선순위/중복 라벨 처리 불명확</b><br><span class="loc">lib/scan/detector.js:19-33 SIGNAL_ENTRIES</span></td>
+      <td><code>*.csproj</code>·<code>*.sln</code> 둘 다 <code>dotnet</code> 신호라 한 폴더에 둘 다 있으면 Set 덕에 중복은 없으나, 확장자 신호는 매 엔트리마다 전체 <code>names</code>를 재순회(O(entries×signals))한다. 폴더당 엔트리가 적어 실측 영향은 미미. <span class="rec">권고: 확장자 신호를 한 번의 names 순회로 모으면 단순·고속. 현 상태로도 정확성 문제 없음.</span></td>
+    </tr>
+
+    <tr>
+      <td>5</td><td><span class="sev p3">P3</span></td>
+      <td><b>freshness 표본 깊이가 walker 안전상한과 무관하게 독립 하드코딩</b><br><span class="loc">freshness.js:48 (depth&lt;2)</span><br><span class="loc">language.js:85 (depth&lt;1)</span></td>
+      <td>두 수집기의 표본 깊이/파일 상한이 서로 다른 매직넘버(2000/4000, depth 2/1)로 흩어져 있다. 의도된 차이지만 근거 주석이 없어 조정 시 혼란. <span class="rec">권고: 상수에 "왜 이 값인지" 짧은 근거 주석 또는 LIMITS로 통합.</span></td>
+    </tr>
+
+    <tr>
+      <td>6</td><td><span class="sev p3">P3</span></td>
+      <td><b>getProjects가 내부 배열을 그대로 노출</b><br><span class="loc">lib/server/snapshotStore.js:104 getProjects() (주석은 "얕은 복사"라 하나 실제는 원본 반환)</span></td>
+      <td>주석은 "얕은 복사 — 외부 변형 방지"인데 코드는 <code>return this.projects;</code>로 <b>원본 참조</b>를 반환한다. 호출처(apiHandlers)가 읽기만 해서 현재 무해하나 주석-코드 불일치. <span class="rec">권고: 주석을 사실에 맞추거나 <code>this.projects.slice()</code>로 실제 복사.</span></td>
+    </tr>
+
+    <tr>
+      <td>7</td><td><span class="sev p3">P3</span></td>
+      <td><b>readJsonBody의 소켓 폐기 후 'end' 경합 주석 부족</b><br><span class="loc">lib/server/actionHandlers.js:42-69</span></td>
+      <td><code>req.destroy()</code> 후 <code>aborted</code> 플래그로 'end' 핸들러를 무시하는 패턴은 올바르나, destroy가 'error'를 유발할 수 있어 <code>req.on('error')</code>가 이미 resolve된 Promise를 재호출하는 무해한 이중 resolve가 발생할 수 있다(Promise는 1회만 채택되므로 안전). <span class="rec">권고: "이중 resolve는 무시됨" 한 줄 주석으로 의도 고정.</span></td>
+    </tr>
+  </table>
+</section>
+
+<section>
+  <h2>잘 된 점 (유지 권장)</h2>
+  <ul>
+    <li><b>리소스 정리 일관성:</b> <code>_safeParse.readTextGuarded</code> fd <code>finally</code> close, serializer 임시파일 실패 시 unlink, safeExec 타임아웃 <code>clearTimeout</code>+<code>release()</code>의 <code>finish()</code> 단일 경로 처리(<code>settled</code> 가드)로 이중 정산 방지 — 누수 방지 패턴이 견고하다.</li>
+    <li><b>경계 조건 처리:</b> 빈 scanRoots(scan.js:77), 미존재 루트(walker:108), 0/음수 staleDays 폴백(config), 빈 본문→<code>{}</code>(actionHandlers), null lastModified 정렬 말단(app.js cmpDate*) 등 경계가 빠짐없이 다뤄진다.</li>
+    <li><b>모듈 경계 준수:</b> router 무로직 디스패치, 수집기 try 격리 + H-3 가드 앞단 배치, detector 중첩 최상위 1건(접두사 폴드키 비교), DFS 명시 스택(재귀 스택오버플로 회피) 등 설계 §6 의도가 코드에 그대로 반영.</li>
+    <li><b>테스트 품질:</b> 107건이 형식적 통과가 아니라 의미 있는 단정 — 계약 shape·에러 코드·H-1 화이트리스트·H-2 위장 바이너리 미선택(pwned.txt 부재 검증)·H-3 크기/깊이/제어문자·P2-5 빈상태·원자적 쓰기 0600·DFS 루프/깊이 차단까지 핵심 경로를 폭넓게 커버. <code>code</code>/git 미설치를 graceful 분기로 흡수해 환경 비의존.</li>
+  </ul>
+  <div class="warn-box"><b>테스트 갭(참고):</b> ① <code>/api/open</code>이 실제로 <code>code</code>를 spawn할 때의 <b>응답 지연/즉시성</b>은 검증되지 않는다(P2-1과 연관 — code 미설치 환경 가정). ② safeExec stdout 상한 초과 kill 경로의 직접 단위 테스트 부재(P2-2). 두 경로에 대한 테스트 추가를 권장.</div>
+</section>
+
+<section>
+  <h2>확인 필요 (설계 의도 확인 요청)</h2>
+  <ul>
+    <li><b>open 응답 시멘틱(P2-1):</b> "spawn 시작 성공 즉시 응답"(계약 P2-3 문구)으로 갈지, "프로세스 종료까지 대기 후 응답"(현 구현)으로 갈지 PM/tech-lead 확정 요청. 전자가 계약·R-12 정합.</li>
+    <li><b>security.checkStateChange의 Origin 필수화:</b> 구현은 Origin 부재 시 거부한다(폐쇄 기본값). fetch 기반 동일 출처 POST는 항상 Origin을 보내므로 정상 동작하나, 계약 표(§9)는 "Host allowlist + Origin 검증"으로 둘 다 요구하므로 정합. 의도 확인만.</li>
+  </ul>
+</section>
+
+<footer>
+  Project-SPIP · S7 코드 품질 리뷰 1회차 · 판정 PASS(P1 0건 · P2 6 · P3 7) · 보고서: docs/reviews/code_review_s7_1.html
+</footer>
+
+</main>
+</body>
+</html>

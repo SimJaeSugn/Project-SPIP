@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Project-SPIP — M4 설계 델타 rev.2 (R-03·05·09·15·16·N-07)</title>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#1e293b; --panel2:#243044; --text:#e2e8f0; --muted:#94a3b8;
+    --accent:#34d399; --ref:#38bdf8; --warn:#fbbf24; --danger:#f87171; --border:#334155;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:"Segoe UI","Malgun Gothic",system-ui,sans-serif;line-height:1.6;font-size:15px;}
+  header{background:linear-gradient(135deg,#1e293b,#0f172a);padding:34px 40px;border-bottom:2px solid var(--accent);}
+  header h1{margin:0 0 6px;font-size:26px;}
+  header .sub{color:var(--muted);font-size:14px;}
+  main{max-width:1180px;margin:0 auto;padding:24px 40px 80px;}
+  section{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:24px 28px;margin:22px 0;}
+  h2{color:var(--accent);font-size:21px;margin-top:0;border-bottom:1px solid var(--border);padding-bottom:10px;}
+  h3{color:var(--ref);font-size:17px;margin-top:26px;}
+  h4{color:#cbd5e1;font-size:15px;margin:18px 0 6px;}
+  a{color:var(--ref);}
+  p,li{color:var(--text);}
+  code{background:#0b1220;color:#7dd3fc;padding:1px 6px;border-radius:5px;font-family:Consolas,monospace;font-size:13px;}
+  pre{background:#0b1220;border:1px solid var(--border);border-radius:8px;padding:14px 16px;overflow-x:auto;
+    color:#cbd5e1;font-family:Consolas,monospace;font-size:13px;line-height:1.5;}
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13.5px;}
+  th,td{border:1px solid var(--border);padding:8px 10px;text-align:left;vertical-align:top;}
+  th{background:var(--panel2);color:#e2e8f0;}
+  tr:nth-child(even) td{background:#1a2536;}
+  .rid{color:var(--accent);font-weight:600;white-space:nowrap;}
+  .nid{color:var(--ref);font-weight:600;white-space:nowrap;}
+  .pill{display:inline-block;padding:1px 8px;border-radius:10px;font-size:11.5px;font-weight:600;}
+  .get{background:#064e3b;color:#6ee7b7;}
+  .post{background:#7c2d12;color:#fdba74;}
+  .m4{background:#312e81;color:#c7d2fe;}
+  .new{background:#134e4a;color:#5eead4;}
+  .chg{background:#78350f;color:#fcd34d;}
+  .note{background:#0b2a3a;border-left:4px solid var(--ref);padding:10px 14px;border-radius:0 8px 8px 0;margin:12px 0;font-size:13.5px;}
+  .warn-box{background:#3a2a0b;border-left:4px solid var(--warn);padding:10px 14px;border-radius:0 8px 8px 0;margin:12px 0;font-size:13.5px;}
+  .danger-box{background:#3a0b0b;border-left:4px solid var(--danger);padding:10px 14px;border-radius:0 8px 8px 0;margin:12px 0;font-size:13.5px;}
+  .ok-box{background:#0b2a1f;border-left:4px solid var(--accent);padding:10px 14px;border-radius:0 8px 8px 0;margin:12px 0;font-size:13.5px;}
+  .adr{background:#172033;border:1px solid #2b3a52;border-radius:10px;padding:18px 22px;margin:18px 0;}
+  .adr h4{color:var(--accent);margin-top:0;}
+  .status{display:inline-block;padding:2px 10px;border-radius:8px;font-size:12px;background:#064e3b;color:#6ee7b7;}
+  figure{margin:16px 0;}
+  figcaption{color:var(--muted);font-size:12.5px;margin-top:8px;text-align:center;}
+  .legend{display:flex;flex-wrap:wrap;gap:14px;font-size:12.5px;color:var(--muted);margin:8px 0;}
+  .legend span{display:flex;align-items:center;gap:6px;}
+  .dot{width:11px;height:11px;border-radius:3px;display:inline-block;}
+  ul.tight{margin:6px 0;}
+  .toc{columns:2;font-size:13.5px;}
+  .toc a{display:block;padding:2px 0;}
+  svg{background:#0b1220;border:1px solid var(--border);border-radius:10px;width:100%;height:auto;}
+  .kbd{background:#0b1220;border:1px solid #475569;border-bottom-width:2px;border-radius:5px;padding:1px 7px;font-family:Consolas,monospace;font-size:12px;}
+</style>
+</head>
+<body>
+<header>
+  <h1>Project-SPIP — M4 설계 델타</h1>
+  <div class="sub">대상: R-16 재스캔 · R-15 진행 표시 · R-09 size collector · R-05 전체 드라이브 스캔 · R-03 depthLimit · N-07 접근성 &nbsp;|&nbsp; 2026-06-21 &nbsp;|&nbsp; rev.2 (검증 1회차 FAIL + 보안 조건부 PASS 반영) &nbsp;|&nbsp; 기준: MVP(M1~M3) 구현·검증 완료, 기존 설계·계약·<b>실제 코드</b>와 정합</div>
+</header>
+<main>
+
+<section id="overview">
+  <h2>0. 개요</h2>
+  <p>본 문서는 MVP(M1~M3) 완료 이후의 <b>M4 후속 6건</b>에 대한 <b>설계 델타</b>다. 기존 <code>docs/architecture/architecture.html</code>(§9 API·§11 보안 8중 통제·§14 추적성)와 <code>docs/api-contract.md</code>를 단일 출처로 삼아, 변경분만 정의한다. <b>코드는 작성하지 않으며</b>, 인터페이스 시그니처·계약 표·의사코드·ADR만 제시한다. 기존 보안 8중 통제(127.0.0.1 바인딩·Host allowlist·Origin·세션토큰 <code>X-SPIP-Token</code>·Content-Type·realpath pathGuard·safeExec·textContent+CSP)와 외부 의존성 0 제약은 <b>약화 없이 확장</b>한다.</p>
+  <div class="note"><b>정합 원칙:</b> M4 항목은 모두 <b>기존 모듈의 점진 확장</b>으로 설계한다. 새 신뢰 경계를 만들지 않고, 새 통제는 기존 8중 통제 위에 <b>덧붙이는(additive)</b> 형태다. 계약 변경은 <b>전진 호환(forward-compatible)</b> — MVP의 <code>size.status:'skipped'</code>·<code>rescan 404</code> 같은 자리표시는 그대로 실값으로 승격된다.</div>
+
+  <div class="warn-box"><b>rev.2 변경 요약 (검증 1회차 반영):</b> 독립 검증 FAIL(정합 P1 2건) + 보안 조건부 PASS(높음 2건)를 받아 다음을 정정·보강했다. <b>실제 코드와 어긋난 정합 기술이 FAIL 원인</b>이었으므로, 아래 항목은 모두 <code>scanner.js</code>·<code>walker.js</code>·<code>router.js</code>·<code>size.js</code>·<code>apiHandlers.js</code> 실제 시그니처에 맞춘다.
+    <ul class="tight" style="margin-top:6px;">
+      <li><b>[M4-H-1] §3.4 신설</b> — <code>GET /api/scan-status</code>에 M-1(세션토큰+Host allowlist+Origin) 적용 + <code>currentPath</code> basename 축약. L-3 상충 해소.</li>
+      <li><b>[M4-H-2] §5.2 보강</b> — 시스템 디렉터리 제외를 <code>canonicalize()</code> 실경로 + <b>세그먼트 단위</b> 비교로, walker 진입 전 가지치기 시점에 적용(8.3/UNC/심링크/대소문자 우회 차단).</li>
+      <li><b>[P1-1] §3.2 재작성</b> — 실제 <code>scanner.js:148-150</code> <code>onProgress(projects.length, project)</code> 기준으로 dirs/currentPath 산출 메커니즘을 <b>walker 콜백 확장</b>으로 코드 정합 의사코드 확정. "1줄 수정" 문장 삭제.</li>
+      <li><b>[P1-2] §10·§8.1 보강</b> — <code>router.js:66-69</code> 정정: rescan(POST)+<code>checkStateChange</code> 선통과, scan-status(GET)+M-1 read 검증 라우트 추가를 파일 델타에 명시.</li>
+      <li><b>[M4-M-1/2/3·P2]</b> — withSize/allDrives 게이트 비대칭 명문화, all-drives 깊이/ABS 상한 재검증, 락 finally+watchdog, finalizing phase·scanId 규약·size status 2레이어 분리·totalBytes 집계 위치 확정.</li>
+    </ul>
+  </div>
+
+  <h3>목차</h3>
+  <div class="toc">
+    <a href="#drivers">1. 아키텍처 동인 / 요구 매핑</a>
+    <a href="#r16">2. R-16 — POST /api/rescan (상태변경)</a>
+    <a href="#r15">3. R-15 — 스캔 진행 표시 (메커니즘 + onProgress 정합 + scan-status 보안)</a>
+    <a href="#r09">4. R-09 — size collector (성능 전략)</a>
+    <a href="#r05">5. R-05 — 전체 드라이브 스캔 (--all-drives)</a>
+    <a href="#r03">6. R-03 — walker depthLimit (config 기반)</a>
+    <a href="#n07">7. N-07 — 접근성 (WCAG 2.1 AA)</a>
+    <a href="#contract">8. 신규/변경 API 계약 (api-contract.md 입력)</a>
+    <a href="#adr">9. ADR (결정 기록)</a>
+    <a href="#dirs">10. 디렉토리 / 파일 델타</a>
+    <a href="#risk">11. 리스크 · 가정 · 미해결 질문</a>
+  </div>
+</section>
+
+<section id="drivers">
+  <h2>1. 아키텍처 동인 / 요구 매핑</h2>
+  <table>
+    <tr><th style="width:80px;">요구 ID</th><th>요구</th><th>아키텍처 동인 (이 설계를 좌우한 점)</th><th style="width:120px;">영향 모듈</th></tr>
+    <tr><td class="rid">R-16</td><td>대시보드에서 재스캔 트리거(Could)</td><td>상태변경 POST → 기존 M-1 통제 그대로. <b>단일 in-flight 락</b>(중복 거부). 백그라운드 실행 후 snapshotStore 무중단 갱신.</td><td>actionHandlers, snapshotStore, scanner</td></tr>
+    <tr><td class="rid">R-15</td><td>진행 표시(Should)</td><td>외부 의존성 0·단순성·견고성 기준으로 <b>폴링 vs SSE</b> 1택. scanner 진행 콜백 확장(기존 <code>onProgress(count)</code> 정합).</td><td>scanner, 진행 라우트, 프론트</td></tr>
+    <tr><td class="rid">R-09</td><td>규모/의존성(Should)</td><td><b>N-01 성능예산 보호</b>가 최우선. node_modules는 순회 제외 대상이나 크기는 재야 함 → 비용 큼 → 예산·상한·opt-in. <code>status:'skipped'→실값</code> 전진 호환.</td><td>collectors/size, walker, config, 프론트</td></tr>
+    <tr><td class="rid">R-05</td><td>전체 드라이브 스캔(Should)</td><td>신뢰불가(RC-2)·거대 트리(R1). <b>opt-in</b> + BUILTIN_EXCLUDES + 시스템 디렉터리 제외 + 깊이 상한 + realpath 화이트리스트. OS별 열거.</td><td>config, scan.js, walker, driveEnum(신규)</td></tr>
+    <tr><td class="rid">R-03</td><td>깊이/심링크 안전(Should)</td><td>하드코딩 <code>SAFE_MAX_DEPTH=24</code>를 <b>config 기반</b>으로. 단, MVP 안전상한은 <b>하한(floor)</b>으로 유지 — 약화 금지. all-drives와 연계.</td><td>walker, config</td></tr>
+    <tr><td class="nid">N-07</td><td>접근성 WCAG AA(Should)</td><td>키보드 내비·포커스 트랩/복귀·aria·색 외 상태 텍스트·대비. 순수 HTML/CSS/JS·CSP 유지하며 프론트에만 적용.</td><td>public/* (프론트)</td></tr>
+  </table>
+  <h4>품질 속성 목표 (M4에서 추가로 지켜야 할 값)</h4>
+  <table>
+    <tr><th style="width:130px;">속성</th><th>목표</th><th>검증</th></tr>
+    <tr><td>성능 (N-01)</td><td>지정 루트(~200 프로젝트) 스캔 &lt; 30s 유지. size 활성화 시에도 예산 내(상한 초과분은 측정 생략). 진행 폴링 간격은 서버 부하 &lt; 1% 수준(주기 ≥ 1s).</td><td>벤치 스크립트(콜드 캐시 3회 중앙값)</td></tr>
+    <tr><td>견고성 (N-05)</td><td>재스캔 중 서버 응답 0 다운. 진행 메커니즘이 끊겨도 대시보드는 폴링 폴백으로 복구. all-drives 권한 거부 폴더는 항목 격리.</td><td>회귀 테스트</td></tr>
+    <tr><td>보안 (N-02/03)</td><td>8중 통제 무약화. 신규 GET 진행 라우트(scan-status)는 <b>M-1 read 게이트(checkReadAccess) 뒤</b>에 두고, <code>currentPath</code>는 <b>basename 축약</b>만 노출(전체 절대경로 금지, L-3 정합·M4-H-1). 모든 진행 문자열 필드 textContent 렌더(M4-L-2). 재스캔은 M-1 통과 필수. all-drives 시스템 제외는 canonicalize 세그먼트 단위(M4-H-2).</td><td>security-reviewer 위협 모델링(2회차 재검)</td></tr>
+    <tr><td>접근성 (N-07)</td><td>WCAG 2.1 AA: 본문 대비 ≥ 4.5:1, 비텍스트 ≥ 3:1. 모든 인터랙션 키보드 도달. 포커스 가시.</td><td>수동 키보드 워크스루 + 대비 측정</td></tr>
+  </table>
+</section>
+
+<!-- ============ R-16 RESCAN ============ -->
+<section id="r16">
+  <h2>2. R-16 — <code>POST /api/rescan</code> (상태변경)</h2>
+  <p>브라우저에서 재스캔을 트리거한다. MVP의 <code>404 NOT_FOUND</code> 자리표시(actionHandlers.rescan)를 <b>활성 핸들러</b>로 승격한다. 동시성은 <b>전역 단일 in-flight 락</b>(프로세스 1개만 백그라운드 스캔, 중복은 즉시 거부). 완료 시 <code>snapshotStore</code>를 무중단 갱신한다.</p>
+
+  <h3>2.1 동시성 모델 — 단일 in-flight 락</h3>
+  <ul class="tight">
+    <li>서버 프로세스 내 <b>전역 ScanController</b>(신규, <code>lib/server/scanController.js</code>)가 boolean 락 <code>running</code>과 진행 스냅샷 <code>state</code>를 보유한다.</li>
+    <li><code>/api/open</code>의 <b>id별</b> in-flight(<code>safeExec</code> maxInflight)와 달리, 재스캔은 <b>전역 1개</b>다(스캔은 캐시 전체를 재작성하므로 동시 2개는 무의미·위험).</li>
+    <li>락이 잡혀 있으면 새 요청은 <b>409 SCAN_IN_PROGRESS</b>로 즉시 거부(대기열 없음 — 단순성).</li>
+    <li>스캔은 <b>백그라운드 비동기</b>로 실행(요청 핸들러는 즉시 202 ACCEPTED 반환). 완료/실패는 진행 라우트(R-15)로 관측한다.</li>
+    <li><b>락 해제 견고성(M4-M-3 — 데드락 방지):</b> 백그라운드 <code>start()</code>는 <b><code>try/finally</code>로 성공·실패·예외 무관 항상 <code>running=false</code> 해제</b>한다. 추가로 ScanController는 <b>watchdog 타임아웃</b>(<code>config.scan.watchdogMs</code>, 기본 절대 상한)을 두어, 그 시간을 넘기면 스캔을 강제 종료 신호 + <code>phase="error"</code> + 락 강제 해제한다. 즉 처리되지 않은 예외·무한 순회로 백그라운드가 죽어도 <b>락이 영구 점유되어 이후 재스캔이 409로 영구 거부되는 가용성 데드락이 발생하지 않는다</b>(N-05 "재스캔 중 0 다운" 정합). <code>phase="error"</code> 진입 시에도 락은 해제되어 idle로 복귀한다.</li>
+  </ul>
+
+  <h3>2.2 보안 — 기존 M-1 그대로</h3>
+  <div class="ok-box"><b>약화 없음 (단, 라우터 정정 필수 — P1-2).</b> <code>/api/rescan</code>은 상태변경 POST이므로 라우터가 <code>/api/open</code> 분기(<code>router.js:56-64</code>)와 동형으로 <code>security.checkStateChange</code>(Host allowlist + Origin + <code>X-SPIP-Token</code> + Content-Type)를 <b>선통과</b>시켜야 한다(M-1). <b>현재 <code>router.js:66-69</code>는 rescan을 메서드 무관 404로 처리하며 checkStateChange를 호출하지 않으므로, §10의 router.js 정정이 선행되어야 이 보안 주장이 성립한다</b>(이전 rev는 이 라우터 수정을 누락해 모순이었다 — 정정 완료). 실패 시 기존과 동일 <code>403 FORBIDDEN_ORIGIN</code>. 본문은 <code>{}</code>(또는 옵션) — 기존 <code>readJsonBody</code> 16KB 상한·JSON-only 파싱 가드 재사용. <b>재스캔은 새 파일을 읽지만 scanRoots/excludes/depthLimit는 모두 서버측 config에서 가져오며 요청 본문으로 경로를 받지 않는다</b>(경로 조작 표면 0 — H-1 정합).</div>
+  <p>옵션 본문(선택, M4 범위 내 최소):</p>
+  <pre>// 요청 본문 — 모두 선택. 미지정 시 서버 config 기본값 사용.
+{
+  "withSize": false,      // R-09 size 수집(성능 옵션). 본문으로 켜기 허용 — 단 예산 제한 내(아래).
+  "allDrives": false      // R-05 전체 드라이브 스캔(위험 모드). 본문만으로는 못 켬 — config 게이트 전용.
+}</pre>
+  <div class="warn-box"><b>옵션 게이트 비대칭 명문화 (M4-M-1, PM 확정):</b> 두 옵션의 권한 모델은 <b>의도적으로 다르다</b>.
+    <table style="margin-top:8px;">
+      <tr><th style="width:120px;">옵션</th><th>게이트 정책</th><th>근거</th></tr>
+      <tr><td><code>allDrives</code></td><td><b>config 게이트 전용.</b> 본문 <code>allDrives:true</code>는 <code>config.allowAllDrives===true</code>일 때만 적용. 아니면 false로 <b>강등</b>하고 <code>state.note</code>에 "all-drives는 서버 설정에서 비활성" 표기. <b>요청 본문만으로 켤 수 없음.</b></td><td>디스크 전체 도달(RC-2)·자원 고갈(R1) 위험이 커 안전 기본값 필수. 본문 허용 시 토큰 탈취 폴러가 위험 모드 강제 가능.</td></tr>
+      <tr><td><code>withSize</code></td><td><b>본문 허용</b>(성능 옵션). config 기본값(<code>config.size.enabled</code>)을 본문 <code>withSize:true</code>가 덮어쓸 수 있음. <b>단 활성 시에도 size 예산 상한(budgetMs·maxDepth·maxEntries, §4.1)이 항상 강제</b>되어 폭주가 제한된다.</td><td>size는 측정 비용만 늘 뿐 새 신뢰 경계·도달 범위 확대 없음. 전역 단일 락(P2)으로 동시 1개, 예산 상한으로 자원 한계 내 → 본문 허용해도 위험 제한적.</td></tr>
+    </table>
+    이 비대칭은 §8.1 계약 표에도 명시했다(allDrives는 "config 게이트", withSize는 "예산 내 본문 허용").
+  </div>
+
+  <h3>2.3 응답 계약 — 수락 / 거부 / 완료</h3>
+  <table>
+    <tr><th>상황</th><th>HTTP</th><th>응답 body</th></tr>
+    <tr><td>수락(스캔 시작)</td><td>202</td><td><code>{ ok:true, code:"SCAN_STARTED", scanId:"&lt;hex&gt;", startedAt:"ISO" }</code></td></tr>
+    <tr><td>거부(이미 진행 중)</td><td>409</td><td><code>{ ok:false, code:"SCAN_IN_PROGRESS", scanId:"&lt;현재 hex&gt;" }</code></td></tr>
+    <tr><td>거부(scanRoots 미설정)</td><td>409</td><td><code>{ ok:false, code:"NO_SCAN_ROOTS", message:"스캔할 루트가 설정되어 있지 않습니다" }</code></td></tr>
+    <tr><td>거부(M-1 실패)</td><td>403</td><td><code>{ ok:false, code:"FORBIDDEN_ORIGIN" }</code> (기존)</td></tr>
+    <tr><td>완료/실패</td><td colspan="2">동기 응답 아님. <b>진행 라우트(R-15)</b>의 <code>phase:"done"|"error"</code>로 관측. 완료 시 snapshotStore가 새 스냅샷으로 교체됨. <b>실패(error)·watchdog 타임아웃 시에도 락은 finally에서 해제되어 idle로 복귀</b>(M4-M-3) — 이후 재스캔이 영구 409로 막히지 않음.</td></tr>
+  </table>
+  <div class="note"><b>완료 후 snapshotStore 갱신:</b> 백그라운드 스캔이 <code>serializer.writeSnapshot</code>으로 캐시 파일을 원자적·0600 쓰기(기존 M-2)한 뒤, ScanController가 <code>store.load()</code>를 <b>재호출</b>한다. <code>load()</code>는 이미 graceful·idempotent(P2-5)이므로 무중단 교체된다. 프론트는 <code>phase:"done"</code>을 받으면 <code>/api/projects</code>를 1회 재fetch한다(R-11 클라이언트 처리 모델 정합).</div>
+
+  <h3>2.4 시퀀스 (재스캔 + 진행)</h3>
+  <figure>
+    <svg viewBox="0 0 1080 520" role="img" aria-label="재스캔 트리거와 진행 폴링 시퀀스">
+      <!-- lifelines -->
+      <g font-family="Segoe UI" font-size="12" fill="#e2e8f0" text-anchor="middle">
+        <rect x="60"  y="20" width="150" height="30" rx="6" fill="#243044" stroke="#334155"/><text x="135" y="40">브라우저(프론트)</text>
+        <rect x="300" y="20" width="170" height="30" rx="6" fill="#243044" stroke="#334155"/><text x="385" y="40">router + security(M-1)</text>
+        <rect x="560" y="20" width="170" height="30" rx="6" fill="#243044" stroke="#334155"/><text x="645" y="40">ScanController(락)</text>
+        <rect x="820" y="20" width="200" height="30" rx="6" fill="#243044" stroke="#334155"/><text x="920" y="40">scanner / snapshotStore</text>
+      </g>
+      <g stroke="#475569" stroke-dasharray="3 4">
+        <line x1="135" y1="50" x2="135" y2="490"/>
+        <line x1="385" y1="50" x2="385" y2="490"/>
+        <line x1="645" y1="50" x2="645" y2="490"/>
+        <line x1="920" y1="50" x2="920" y2="490"/>
+      </g>
+      <g font-family="Segoe UI" font-size="11.5" fill="#e2e8f0">
+        <!-- POST rescan -->
+        <line x1="135" y1="80" x2="383" y2="80" stroke="#38bdf8" marker-end="url(#ar)"/>
+        <text x="150" y="74" fill="#7dd3fc">POST /api/rescan + X-SPIP-Token</text>
+        <text x="300" y="98" fill="#94a3b8" text-anchor="middle">checkStateChange (Host/Origin/토큰/CT)</text>
+        <!-- acquire lock -->
+        <line x1="385" y1="118" x2="643" y2="118" stroke="#34d399" marker-end="url(#ar)"/>
+        <text x="400" y="112" fill="#6ee7b7">acquire() 락 시도</text>
+        <text x="645" y="136" fill="#94a3b8" text-anchor="middle">running=true · scanId 발급</text>
+        <!-- 202 -->
+        <line x1="383" y1="156" x2="137" y2="156" stroke="#34d399" marker-end="url(#ar)"/>
+        <text x="150" y="150" fill="#6ee7b7">202 SCAN_STARTED {scanId}</text>
+        <!-- background scan -->
+        <line x1="645" y1="186" x2="918" y2="186" stroke="#fbbf24" marker-end="url(#ar)"/>
+        <text x="660" y="180" fill="#fcd34d">백그라운드 scanner.scan(onProgress)</text>
+        <!-- polling loop box -->
+        <rect x="100" y="206" width="600" height="150" fill="none" stroke="#475569" stroke-dasharray="2 3" rx="6"/>
+        <text x="110" y="222" fill="#94a3b8" font-size="10.5">loop: 1초 간격 폴링 (R-15 ADR-M4-2)</text>
+        <line x1="135" y1="240" x2="383" y2="240" stroke="#38bdf8" marker-end="url(#ar)"/>
+        <text x="150" y="234" fill="#7dd3fc">GET /api/scan-status + X-SPIP-Token (checkReadAccess, M4-H-1)</text>
+        <line x1="645" y1="266" x2="397" y2="266" stroke="#94a3b8" marker-end="url(#ar)"/>
+        <text x="640" y="260" fill="#94a3b8" text-anchor="end">state(읽기) ←</text>
+        <line x1="383" y1="292" x2="137" y2="292" stroke="#34d399" marker-end="url(#ar)"/>
+        <text x="150" y="286" fill="#6ee7b7">200 {phase:"scanning", dirs, found, currentPath(basename), elapsedMs}</text>
+        <text x="400" y="330" fill="#94a3b8">진행률·현재 경로 갱신 (currentPath=basename 축약, textContent 렌더)</text>
+        <!-- done -->
+        <line x1="918" y1="378" x2="647" y2="378" stroke="#34d399" marker-end="url(#ar)"/>
+        <text x="912" y="372" fill="#6ee7b7" text-anchor="end">writeSnapshot → store.load() → phase=done</text>
+        <line x1="135" y1="408" x2="383" y2="408" stroke="#38bdf8" marker-end="url(#ar)"/>
+        <text x="150" y="402" fill="#7dd3fc">GET /api/scan-status → {phase:"done", counts}</text>
+        <line x1="135" y1="440" x2="383" y2="440" stroke="#38bdf8" marker-end="url(#ar)"/>
+        <text x="150" y="434" fill="#7dd3fc">GET /api/projects (재fetch, R-11)</text>
+        <line x1="383" y1="468" x2="137" y2="468" stroke="#34d399" marker-end="url(#ar)"/>
+        <text x="150" y="462" fill="#6ee7b7">200 {hasSnapshot:true, projects:[...새 스냅샷]}</text>
+      </g>
+      <defs><marker id="ar" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#94a3b8"/></marker></defs>
+    </svg>
+    <figcaption>그림 1. 재스캔은 202로 즉시 수락(백그라운드 실행)되고, 진행은 1초 폴링으로 관측한다. 완료(<code>phase:done</code>) 시 snapshotStore가 무중단 교체되고 프론트가 목록을 재fetch한다. 모든 상태변경은 M-1을 선통과한다.</figcaption>
+  </figure>
+
+  <h3>2.5 ScanController 인터페이스 (설계 시그니처)</h3>
+  <pre>// lib/server/scanController.js (신규) — 전역 단일 인스턴스
+class ScanController {
+  // acquire(): 락 시도. 성공 시 scanId 발급, 실패(이미 running) 시 null.
+  //   [M4-L-1] scanId = crypto.randomBytes(8).toString('hex')(16자, 충분 엔트로피).
+  //   scanId는 인가 토큰이 아니라 "표시·상관용 식별자"다(프론트가 자기 scanId와 대조해 타 스캔 무시).
+  acquire(opts) -> { scanId } | null
+
+  // start(opts): 백그라운드 scanner.scan 시작. scanner의 onProgress(ScanProgress)로 this.state 갱신.
+  //   state에 scanId·startedAt·elapsedMs·note를 합성하고, scanner가 준 currentPath 절대경로는
+  //   currentPathAbs(서버 메모리 전용)로 보관(응답엔 §3.4 shortenPath만 노출).
+  //   완료: scanner.scan() 반환 → phase="finalizing" → serializer.writeSnapshot → store.load() → phase="done".
+  //   [M4-M-3] 전 과정을 try/finally로 감싸 성공·실패·예외 무관 finally에서 running=false.
+  //            예외 시 phase="error"(락 해제 후 idle 복귀). watchdog(watchdogMs) 초과 시 강제 error+해제.
+  start({ config, withSize, allDrives, store, logger }) -> void  // 비동기, 대기 안 함(202 즉시 반환)
+
+  // status(): 현재 진행 스냅샷(R-15 ScanProgress). 락 없을 땐 phase="idle".
+  //   currentPath는 shortenPath(currentPathAbs)로 basename 축약(M4-H-1). scanId·elapsedMs 합성.
+  status() -> ScanProgress
+
+  // running: boolean (락 상태) — finally·watchdog로 영구 true 방지(M4-M-3).
+}</pre>
+  <pre>// start() 데드락 방지 골격(의사코드 — M4-M-3)
+async function start(opts) {
+  const wd = setTimeout(() => { this._forceError('WATCHDOG_TIMEOUT'); }, opts.config.scan.watchdogMs);
+  try {
+    this.state.phase = 'scanning';
+    const snap = await scanner.scan({ ...mapped, onProgress: (p) => this._merge(p) });
+    this.state.phase = 'finalizing'; this.state.counts = snap.counts;
+    serializer.writeSnapshot(snap, { logger: opts.logger });   // 원자 0600(M-2)
+    opts.store.load();                                          // graceful·idempotent(P2-5)
+    this.state.phase = 'done';
+  } catch (err) {
+    this.state.phase = 'error'; this.state.note = '스캔 실패';   // 내부정보 비노출(L-3)
+    opts.logger.error('background scan failed', err);
+  } finally {
+    clearTimeout(wd);
+    this.running = false;        // ★ 항상 해제 — 영구 점유(409 데드락) 방지
+  }
+}</pre>
+</section>
+
+<!-- ============ R-15 PROGRESS ============ -->
+<section id="r15">
+  <h2>3. R-15 — 스캔 진행 표시 (메커니즘 결정)</h2>
+  <p>전달할 진행 정보: <b>폴더수(dirs)·발견수(found)·현재 경로(currentPath)·경과(elapsedMs)·완료/단계(phase)</b>. 전달 메커니즘으로 (a) 폴링 <code>GET /api/scan-status</code> vs (b) SSE <code>GET /api/scan-progress</code>를 비교한다.</p>
+
+  <h3>3.1 대안 비교</h3>
+  <table>
+    <tr><th style="width:160px;">기준</th><th>(a) 폴링 <code>GET /api/scan-status</code></th><th>(b) SSE <code>GET /api/scan-progress</code></th></tr>
+    <tr><td>외부 의존성 0</td><td>충족(http GET + fetch)</td><td>충족(http + EventSource)</td></tr>
+    <tr><td>서버 구현 복잡도</td><td><b>낮음</b> — 핸들러가 <code>controller.status()</code> JSON 1회 반환</td><td>높음 — long-lived 응답 스트림, <code>text/event-stream</code>, keep-alive, 연결 수명/정리, 재연결 헤더 관리</td></tr>
+    <tr><td>견고성(연결 끊김)</td><td><b>높음</b> — 매 요청 독립, 끊겨도 다음 폴링에서 자동 복구</td><td>중 — 끊김 시 EventSource 자동 재연결이 있으나 서버측 연결 상태/누수 관리 부담</td></tr>
+    <tr><td>실시간성</td><td>중 — 1초 지연(스캔은 수초~수십초라 충분)</td><td>높음 — 수백 ms</td></tr>
+    <tr><td>보안 표면(M-1 정합)</td><td><b>작음</b> — GET 1건 + checkReadAccess 읽기 게이트(M4-H-1), 기존 라우팅과 동형</td><td>큼 — long-lived 커넥션이 신뢰 경계 안에서 오래 열림(자원 점유·DoS 표면 증가)</td></tr>
+    <tr><td>프론트 복잡도</td><td>낮음 — <code>setInterval</code> + fetch + 종료 정리</td><td>중 — EventSource 수명·에러·정리</td></tr>
+    <tr><td>CSP 정합</td><td>충족(<code>connect-src 'self'</code>)</td><td>충족(<code>connect-src 'self'</code>)</td></tr>
+  </table>
+
+  <div class="ok-box"><b>결정(권고): (a) 폴링 <code>GET /api/scan-status</code> 채택.</b> 근거: 스캔은 본질적으로 단발성·수초~수십초 작업이라 1초 지연은 UX상 무해하다. 폴링은 서버를 <b>(거의) 무상태 GET 1건</b>으로 유지해 외부 의존성 0·단순성·견고성·보안 표면 최소화에서 모두 우위다. SSE의 실시간성 이점은 이 작업 특성상 잉여이며, long-lived 커넥션은 로컬 단일 사용자 도구에 과설계다. <b>단, 이 GET은 민감 데이터(진행 경로·식별자)를 담으므로 무인증이 아니라 <code>checkReadAccess</code>(Host+Origin+X-SPIP-Token) 게이트 뒤에 두고 currentPath를 basename으로 축약한다</b>(§3.4, M4-H-1). 상세 근거는 <a href="#adr-2">ADR-M4-2</a>.</div>
+
+  <h3>3.2 진행 산출 메커니즘 — 코드 정합 (P1-1 정정)</h3>
+  <div class="danger-box"><b>1회차 FAIL 정정:</b> 이전 rev는 "MVP는 <code>onProgress(count)</code>(발견수만), walker yield마다 dirs++ 하고 scan.js를 1줄 수정"이라 기술했으나 <b>실제 코드와 어긋났다</b>. 실제 <code>scanner.js:148-150</code>은 <code>options.onProgress(projects.length, project)</code>로 <b>프로젝트가 detector를 통과해 확정될 때만</b> 호출된다. scanner의 외부 루프(<code>for ...of projectStream</code>)는 <b>walker가 yield한 디렉터리가 아니라 detector가 확정한 프로젝트만</b> 본다(<code>walker.walk()</code> → <code>detector.detectStream()</code> 사이에서 디렉터리 단위 신호가 소실). 따라서 dirs(순회 디렉터리 수)·currentPath는 <b>현재 호출 지점에서 절대 얻을 수 없다</b> — 거대 트리에서 진행 표시가 오래 0/null에 머문다.</div>
+
+  <h4>채택 방식 — walker 진행 콜백 인자 확장 (전진 호환)</h4>
+  <p>검증 보고 P1-1의 두 안 중 <b>(a) walker.walk에 디렉터리 진행 콜백 인자를 추가</b>하는 방식을 채택한다. <code>scanner</code> 루프 구조를 바꾸는 (b)안은 detector 스트림 소비 구조(<code>detector.detectStream(candidateStream)</code>)를 해체해야 해 회귀 표면이 크다. (a)는 walker가 <b>이미 디렉터리를 yield하는 지점(walker.js:48)</b>에 콜백 1회 호출만 추가하므로 최소 변경이고, 콜백 미지정 시 기존과 완전 동일하게 동작한다.</p>
+  <pre>// ── walker.js 실제 정합 변경점 ──────────────────────────────
+// 변경 전: function* walk(roots, opts)            // opts={excludes,logger}
+// 변경 후: function* walk(roots, opts)            // opts={excludes,logger,depthLimit,onDir}
+//   walkRoot의 ctx에 onDir를 전달. yield 직전(walker.js:47-48 "후보로 방출") 에 1회 호출.
+//
+//   기존:  yield dir;
+//   M4:    if (typeof ctx.onDir === 'function') {
+//             try { ctx.onDir(dir); } catch (_) { /* 진행 신호 실패는 순회를 막지 않음(N-05) */ }
+//          }
+//          yield dir;
+//   → onDir 미지정 호출부(없음)는 동작 불변. dir는 canonical 실경로(H-1) — 표시 전 basename 축약(§3.4).
+
+// ── scanner.js 실제 정합 변경점 ─────────────────────────────
+// scan()이 진행 카운터를 보유하고, walk 호출에 onDir를 주입. 기존 onProgress(2인자)는
+// "프로젝트 확정 시 found 갱신"으로 유지하되, dirs/currentPath는 onDir에서 갱신한다.
+//
+//   변경 전(scanner.js:137):
+//     const candidateStream = walker.walk(roots, { excludes, logger });
+//   변경 후:
+//     let dirs = 0; let currentPath = null;
+//     const emit = makeThrottle(250);   // ≥250ms 또는 매 N개 — 호출 빈도 제한
+//     const candidateStream = walker.walk(roots, {
+//       excludes, logger, depthLimit,
+//       onDir(dir) {
+//         dirs++; currentPath = dir;
+//         emit(() => options.onProgress && options.onProgress({
+//           phase:'scanning', dirs, found: projects.length, currentPath
+//         }));
+//       },
+//     });
+//
+//   변경 전(scanner.js:148-150) — 프로젝트 확정 시:
+//     if (typeof options.onProgress === 'function') {
+//       try { options.onProgress(projects.length, project); } catch (_) {}
+//     }
+//   변경 후 — onProgress를 객체 단일 인자로 통일(아래 ScanProgress):
+//     if (typeof options.onProgress === 'function') {
+//       try { options.onProgress({ phase:'scanning', dirs, found: projects.length, currentPath }); }
+//       catch (_) {}
+//     }</pre>
+  <div class="warn-box"><b>CLI(scan.js) 호출부 영향 — 정확히:</b> <code>scan.js:105-111</code>의 <code>onProgress: (count) => …</code>는 <b>인자 시그니처가 number→object로 바뀌므로 1줄이 아니라 콜백 본문을 정정</b>해야 한다. <code>(count) =&gt;</code> 를 <code>(p) =&gt;</code> 로 바꾸고 본문의 <code>count</code>를 <code>p.found</code>로 읽도록 수정한다(예: <code>'\r  탐지된 프로젝트: ' + p.found</code>). 이 변경은 <b>§10 파일 델타의 scan.js·scanner.js·walker.js 수정 항목</b>에 반영했다.</div>
+
+  <h4>ScanProgress (scanner→controller→/api/scan-status 응답 공통 shape)</h4>
+  <pre>// onProgress는 항상 이 객체를 받는다(number 인자 시그니처는 폐기 — 호출부 일괄 수정 완료).
+{
+  phase:       "idle"|"scanning"|"finalizing"|"done"|"error",
+  scanId:      string|null,
+  dirs:        number,        // walker onDir 누계(순회한 디렉터리 수) — P1-1 산출 경로
+  found:       number,        // 탐지된 프로젝트 수(= scanner projects.length, 기존 의미)
+  currentPath: string|null,   // walker onDir의 마지막 dir → §3.4에서 basename 축약 후 노출
+  elapsedMs:   number,        // startedAt 기준 경과(ScanController가 채움)
+  startedAt:   string|null,   // ISO(ScanController가 채움)
+  counts:      { projects, stale, errors }|null, // done/finalizing일 때만(scanner.counts)
+  note:        string|null    // all-drives 강등 등 안내(textContent 렌더 필수)
+}
+// 책임 분리: scanner의 onProgress는 {phase,dirs,found,currentPath,counts?}만 채운다.
+//   scanId·elapsedMs·startedAt·note는 ScanController가 자기 state에 합성해 응답으로 노출한다(§3.3).</pre>
+  <div class="note"><b>currentPath 안전:</b> <code>onDir(dir)</code>의 dir는 canonical <b>절대 실경로</b>(부분신뢰, TB-B)다. 따라서 (1) <b>응답 노출 전 §3.4에서 basename 축약</b>(M4-H-1), (2) 프론트는 <b>반드시 textContent</b>로 렌더(L-1)한다. note·currentPath 등 ScanProgress의 <b>모든 문자열 필드</b>가 textContent 대상이다(§7.1 포괄 규칙, M4-L-2).</div>
+
+  <h3 id="r15-finalize">3.3 phase 상태 전이 정의 (finalizing 명세 — P2-1)</h3>
+  <p>이전 rev는 <code>finalizing</code>을 열거만 하고 전이 시점을 정의하지 않았다. ScanController.state의 phase 전이를 다음으로 확정한다.</p>
+  <table>
+    <tr><th style="width:120px;">phase</th><th>진입 시점</th><th>dirs/found</th><th>counts</th><th>프론트 처리</th></tr>
+    <tr><td><code>idle</code></td><td>락 미보유(스캔 안 함). 기본 상태.</td><td>0 / 0</td><td>null</td><td>진행 패널 숨김</td></tr>
+    <tr><td><code>scanning</code></td><td><code>acquire()</code> 직후 ~ scanner 루프 진행 중(walker onDir·프로젝트 확정 onProgress 갱신)</td><td>증가 중</td><td>null</td><td>진행률·currentPath 갱신</td></tr>
+    <tr><td><code>finalizing</code></td><td>scanner.scan()이 Snapshot 객체를 반환한 직후 ~ <code>serializer.writeSnapshot</code> + <code>store.load()</code> 완료 전(캐시 원자 쓰기·재적재 구간)</td><td>최종값 고정</td><td><b>채워짐</b>(snapshot.counts)</td><td>"마무리 중" 표시(currentPath 미갱신)</td></tr>
+    <tr><td><code>done</code></td><td><code>store.load()</code> 성공 직후. 락 해제됨.</td><td>최종값</td><td>채워짐</td><td><code>/api/projects</code> 1회 재fetch(R-11)</td></tr>
+    <tr><td><code>error</code></td><td>scanner/serializer 예외 또는 watchdog 타임아웃. <b>락 해제됨</b>(finally, M4-M-3).</td><td>예외 시점값</td><td>부분/ null</td><td>오류 안내 + 재시도 버튼 활성</td></tr>
+  </table>
+  <div class="note"><b>finalizing 필요성:</b> <code>writeSnapshot</code>(원자 0600 쓰기) + <code>store.load()</code> 재적재는 수백 ms 걸릴 수 있어, 그 사이 프론트가 <code>done</code>으로 오해해 옛 스냅샷을 재fetch하는 경쟁을 막는 명시적 중간 상태다. <b>done은 store.load() 성공 후에만</b> 진입하므로 재fetch는 항상 새 스냅샷을 받는다(RM-3 정합).</div>
+
+  <h3 id="r15-sec">3.4 <code>GET /api/scan-status</code> 보안 — M-1 적용 + currentPath 축약 (M4-H-1)</h3>
+  <div class="danger-box"><b>보안 게이트 차단 사유(높음) 해소:</b> 이전 rev는 scan-status를 "무인증 무상태 GET"으로 설계해, 같은 머신의 비인가 로컬 프로세스(RC-1 비격리)가 토큰 없이 폴링하면 <b>절대경로(currentPath)·scanId·counts를 점진 수집</b>할 수 있었다(L-3 "내부 절대경로 응답 비노출"과 정면 상충). <b>PM 확정</b>에 따라 아래 두 통제를 함께 적용한다.</div>
+  <h4>(a) scan-status에도 M-1 검증 적용 (읽기 게이트)</h4>
+  <p>scan-status는 상태를 바꾸지 않는 GET이지만, <b>민감 데이터(진행 경로·식별자)를 노출</b>하므로 비브라우저 폴러를 배제하기 위해 M-1의 검증 요소를 읽기에도 부분 승계한다. 우리 대시보드는 기동 시 주입된 <code>X-SPIP-Token</code>을 보유하므로 폴링에 문제없다.</p>
+  <pre>// router.js — scan-status GET 분기(§10 라우터 델타와 동일). open POST 패턴과 동형이되 GET용.
+if (urlPath === '/api/scan-status') {
+  if (method !== 'GET') return methodNotAllowed(res);          // GET 한정
+  const guard = security.checkStateChange(req, ctx);            // ← M-1 재사용
+  if (!guard.ok) { sendJson(res, 403, { ok:false, code: guard.code }); return; }
+  return apiHandlers.getScanStatus(req, res, ctx);              // ScanController.status() 노출
+}
+// 정합 주의: 기존 security.checkStateChange(security.js:90-93)는 Content-Type:application/json을
+// 보조 검증한다. 폴링 GET은 본문이 없어 CT 헤더가 없을 수 있으므로, scan-status에 한해
+// CT 검증을 면제한 read 전용 변형 checkReadAccess(req, ctx)를 security.js에 추가한다
+// (Host allowlist + Origin + X-SPIP-Token 3요소만 — DNS 리바인딩·CSRF식 정보유출 폴러 차단).
+// 이로써 무인증 노출 채널이 닫히고, 우리 대시보드(토큰 보유)는 그대로 폴링 가능하다.</pre>
+  <pre>// security.js 추가 시그니처(설계 수준) — 기존 checkStateChange와 1·2·3요소 공유, CT만 제외
+checkReadAccess(req, ctx) -> { ok:true } | { ok:false, code:'FORBIDDEN_ORIGIN' }
+//   = Host allowlist(buildHostAllowlist) + Origin(buildOriginAllowlist) + safeEqual(token)
+//   CSP connect-src 'self' 하에서 동일출처 fetch는 Origin/Host가 자동 일치하므로 대시보드 무영향.</pre>
+  <h4>(b) currentPath 정보 최소화 — basename/축약 노출 (전체 절대경로 금지)</h4>
+  <p>응답에 담기는 <code>currentPath</code>는 <b>전체 절대 실경로를 절대 노출하지 않는다</b>. ScanController가 응답 합성 시 마지막 1~2 세그먼트(basename)로 축약한다. 진행 표시 UX("… <span class="kbd">some-folder</span> 순회 중")에는 basename으로 충분하다.</p>
+  <pre>// ScanController.status() 응답 합성 — currentPath 축약 규칙
+function shortenPath(abs) {
+  if (!abs) return null;
+  const parts = abs.split(/[\\/]+/).filter(Boolean);
+  // 마지막 2세그먼트만(부모/현재). 1개뿐이면 그대로. 드라이브 루트는 노출 안 함.
+  return parts.slice(-2).join('/') || null;   // 예: "Project-SPIP/lib"  (E:\…\ 절대경로 미노출)
+}
+// 응답의 currentPath = shortenPath(state.currentPathAbs). 절대경로(state.currentPathAbs)는
+// 서버 메모리에만 두고 응답·로그(L-3)로 내보내지 않는다. scanId는 §8.3·M4-L-1 규약(비인가·표시용).</pre>
+  <div class="ok-box"><b>L-3 정합 복원:</b> (a)+(b)로 (1) 비인가 폴러의 접근이 차단되고, (2) 인가된 응답조차 절대경로 대신 basename만 담아 "내부 절대경로 응답 비노출" L-3 정책과 정렬된다. §8.3 계약과 그림 1의 <code>currentPath</code> 정의를 "축약 표시명"으로 갱신했다(아래 §8.3).</div>
+</section>
+
+<!-- ============ R-09 SIZE ============ -->
+<section id="r09">
+  <h2>4. R-09 — size collector (성능 전략)</h2>
+  <p>수집 대상: 프로젝트 총 용량(<code>totalBytes</code>)·<code>node_modules</code> 용량(<code>nodeModulesBytes</code>)·의존성 개수(<code>deps</code>/<code>devDeps</code>). 문제: <code>node_modules</code>는 순회 제외 대상(walker excludeRules)이지만 size는 그 크기를 재야 한다 → 수만 파일 stat = 비용 큼 → <b>N-01 30초 예산을 위협</b>.</p>
+
+  <h3>4.1 성능 전략 — 예산·상한·opt-in (N-01 보호)</h3>
+  <table>
+    <tr><th style="width:170px;">가드</th><th>정책</th></tr>
+    <tr><td>opt-in</td><td>size 수집은 <b>기본 비활성</b>. <code>config.size.enabled</code> 또는 <code>--with-size</code>(CLI)·<code>withSize:true</code>(rescan)로만 켠다. 기본 스캔(N-01 200루트 30초)은 영향 0.</td></tr>
+    <tr><td>deps/devDeps는 항상 저비용</td><td>의존성 개수는 <code>package.json</code>을 <b>이미 읽는</b> detector 단계에서 키 개수만 센다 → 추가 I/O 0. <b>size.enabled와 무관하게 항상 수집</b>(저렴·유용).</td></tr>
+    <tr><td>시간 상한(per-project)</td><td>프로젝트당 size 측정에 <code>config.size.budgetMs</code>(기본 1500ms) 상한. 초과 시 측정 중단·<code>status:"partial"</code>·측정분까지 보고(H-3 가드 정합 — 적대적·거대 트리에서 무한 stat 방지).</td></tr>
+    <tr><td>깊이 상한</td><td>size 측정 순회는 <code>config.size.maxDepth</code>(기본 6) 이하만. node_modules 내부는 깊이 폭발 → 상한으로 절단, 절단 시 <code>status:"partial"</code>.</td></tr>
+    <tr><td>node_modules 지연/근사</td><td>기본은 <b>top-level만</b>(node_modules 직속 패키지 디렉터리까지) stat 합산 + flat 추정. <code>config.size.deepNodeModules:true</code>일 때만 전체 순회. (R3 리스크 완화)</td></tr>
+    <tr><td>entry 수 상한</td><td>측정 중 누계 stat 호출이 <code>config.size.maxEntries</code>(기본 50000) 초과 시 중단·<code>partial</code>.</td></tr>
+    <tr><td>심링크</td><td>walker와 동일 — 심링크 미추적(루프·이중계상 방지). lstat 기준.</td></tr>
+  </table>
+  <div class="warn-box"><b>H-3 가드 정합:</b> size 측정은 부분신뢰 파일시스템(TB-B)을 깊게 순회하므로 §11.5 H-3(부분신뢰 입력 파싱 방어)의 연장선이다. 시간·깊이·entry 상한은 적대적으로 구성된 거대/심링크 트리에서 자원 고갈을 막는 <b>필수 가드</b>다(선택 아님).</div>
+
+  <h3 id="size-layers">4.1.1 collector status vs data.status — 2레이어 분리 (P2-3)</h3>
+  <div class="warn-box"><b>1회차 레이어 충돌 정정:</b> 검증이 지적한 대로 <b>두 개의 <code>status</code>가 충돌</b>한다. (1) <b>공통 collector 계약 status</b>는 <code>'ok'|'na'|'error'</code>(architecture.html §5)이고, (2) <b>size 도메인 data.status</b>는 <code>'ok'|'partial'|'skipped'|'error'</code>다. 실제 size.js는 <code>{ ok, data:{status,…}, status, note }</code>를 반환하는데, <code>scanner.js:60</code>이 <code>Object.assign({ status: res.status }, res.data)</code>로 병합하므로 <b>res.data.status가 res.status를 덮어쓴다</b>(data가 뒤에 spread). 현재 둘 다 <code>'skipped'</code>라 충돌이 드러나지 않을 뿐, 도메인 값(partial)을 넣으면 계약 status가 silently 사라진다.</div>
+  <p><b>해소 규약(레이어 명확 분리):</b></p>
+  <table>
+    <tr><th style="width:200px;">레이어</th><th>값 집합</th><th>책임 / 매핑</th></tr>
+    <tr><td><b>계약 status</b><br>(<code>res.status</code>, runCollectors가 N-05 격리·error 집계에 사용)</td><td><code>'ok'|'na'|'error'</code></td><td>"수집기가 정상 완주했는가"의 운영 신호. 매핑: size 측정 성공/부분(ok·partial)·미측정(skipped) → 계약 <code>'ok'</code>(또는 비활성은 <code>'na'</code>), 측정 중 격리 오류 → <code>'error'</code>. <b>partial/skipped는 계약 status에 없으므로 ok/na로 흡수</b>한다.</td></tr>
+    <tr><td><b>size data.status</b><br>(<code>res.data.status</code> → Project.size.status)</td><td><code>'ok'|'partial'|'skipped'|'error'</code></td><td>"size 측정 결과 품질"의 도메인 신호. 프론트 표시(아래 4.2)에 사용. buildProject가 <code>size.status</code>로 노출하는 값은 <b>이 data.status</b>다(병합 후 data 우선).</td></tr>
+  </table>
+  <div class="ok-box"><b>코드 정합 결론:</b> size.js의 <b>계약 status(<code>res.status</code>)는 측정 성공·부분·미측정에서 <code>'ok'</code>(비활성은 <code>'na'</code>), 격리 오류에서만 <code>'error'</code></b>로 둔다(runCollectors의 errorCount 집계가 의미를 갖게). <b>도메인 품질은 <code>res.data.status</code>에만</b> ok/partial/skipped/error로 싣는다. 두 필드가 다른 값을 가질 수 있음을 size.js 주석·계약에 명문화한다(예: <code>res.status:'ok'</code> + <code>res.data.status:'partial'</code> = "수집기는 정상 완주, 측정은 예산 도달로 부분"). 이로써 <code>scanner.js:60</code> 병합이 data.status를 노출해도 의미 충돌이 없다.</div>
+
+  <h3>4.2 size data.status:'skipped' → 실값 전진 호환</h3>
+  <p>계약상 <code>size</code> 객체 shape는 <b>불변</b>. <b>data.status</b> 값만 확장한다 — 기존 프론트는 자동 호환된다.</p>
+  <table>
+    <tr><th style="width:130px;">status</th><th>의미</th><th>UI 표시(N-07 색 외 텍스트 병기)</th></tr>
+    <tr><td><code>"skipped"</code></td><td>size 비활성(기본) — MVP와 동일</td><td>"미측정"</td></tr>
+    <tr><td><code>"ok"</code> (신규)</td><td>전체 측정 완료. totalBytes 등 실값</td><td>"1.2 GB" 등 + node_modules 비중</td></tr>
+    <tr><td><code>"partial"</code> (신규)</td><td>예산/상한 도달로 일부만</td><td>"≈ 1.2 GB (부분)" + 안내 툴팁</td></tr>
+    <tr><td><code>"error"</code> (신규)</td><td>측정 중 격리된 오류(N-05)</td><td>"측정 실패"</td></tr>
+  </table>
+  <pre>// size 객체 (계약 shape 불변, 값만 실측으로 승격)
+"size": {
+  "status": "ok"|"partial"|"skipped"|"error",
+  "totalBytes": 1288490188,        // skipped/error 시 null
+  "nodeModulesBytes": 980000000,   // 없으면 null
+  "deps": 12,                      // package.json dependencies 개수(항상 수집 가능)
+  "devDeps": 30                    // devDependencies 개수
+}
+// /api/stats.totalBytes: 기존 null → size.enabled로 스캔된 스냅샷이면 합계(number). 미측정이면 계속 null.
+//   프론트는 number면 표시, null이면 "미측정"(기존 P2-2 로직 그대로).</pre>
+  <div class="ok-box"><b>계약·UI 자동 호환:</b> 프론트는 <code>size.status==='skipped'||size.totalBytes==null</code>을 "미측정"으로 처리하던 기존 로직을 유지하면, 실값(<code>ok</code>) 도착 시 별도 변경 없이 표시된다. <code>partial</code>/<code>error</code>만 라벨 분기 추가.</div>
+
+  <h3 id="totalbytes">4.3 stats.totalBytes 집계 위치 확정 (P2-4)</h3>
+  <p>이전 rev는 "enabled 스냅샷이면 number"라고만 하고 <b>합계를 어디서 계산하는지</b>를 정하지 않았다. 두 후보(스캐너 저장 시 vs getStats 산출 시) 중 <b>스캐너가 스냅샷에 집계값을 저장</b>하는 방식으로 확정한다.</p>
+  <table>
+    <tr><th style="width:180px;">결정</th><th>내용</th></tr>
+    <tr><td>집계 위치</td><td><b>scanner.scan()이 Snapshot에 <code>totalBytes</code> 합계를 저장</b>한다. scanner.js의 반환 객체 <code>counts</code> 옆에 <code>stats: { totalBytes }</code>를 추가(또는 <code>counts.totalBytes</code>). 프로젝트 루프에서 <code>size.status==='ok'||'partial'</code>이고 <code>totalBytes</code>가 number인 항목만 누계.</td></tr>
+    <tr><td>partial 합산 정책</td><td><code>partial</code> 항목의 부분값도 <b>합산에 포함</b>하되(측정분까지 유효), size 미측정(<code>skipped</code>)·<code>error</code>·null은 제외. 모든 항목이 미측정이면 합계는 저장 안 함(<code>null</code> 유지).</td></tr>
+    <tr><td>getStats 책임</td><td><code>apiHandlers.getStats</code>(현재 <code>totalBytes:null</code> 고정, apiHandlers.js:63)는 <b>읽기만</b> — <code>store</code>가 적재한 스냅샷의 저장된 합계를 그대로 노출한다. getStats가 매 요청 projects를 재합산하지 않는다(스냅샷 시점 일관성·O(1) 응답). 스냅샷에 합계 필드가 없으면(MVP 캐시·미측정) <code>null</code>.</td></tr>
+  </table>
+  <pre>// scanner.js 정합 변경점 — 반환 객체에 합계 추가
+//   루프 내(buildProject 후): if (project.size.totalBytes != null) totalBytesSum += project.size.totalBytes;
+//   반환: { …, counts:{ projects, stale, errors }, stats:{ totalBytes: anyMeasured ? totalBytesSum : null }, … }
+// snapshotStore.load()는 이 필드를 그대로 적재(기존 graceful 병합 — 신규 키 무파손).
+// getStats: totalBytes: store.stats ? store.stats.totalBytes : null   // null 고정 제거</pre>
+  <div class="note"><b>snapshotStore 정합:</b> <code>snapshotStore.js</code>는 현재 <code>schemaVersion·generatedAt·projects</code>만 적재한다(snapshotStore.js:81-87). <code>stats.totalBytes</code> 노출을 위해 <b>load()가 <code>parsed.stats</code>를 읽어 <code>this.stats</code>로 보관</b>하는 최소 추가가 필요하다(없으면 null). §10 파일 델타에 snapshotStore.js "없음"을 <b>경미 수정</b>으로 정정했다.</div>
+</section>
+
+<!-- ============ R-05 ALL DRIVES ============ -->
+<section id="r05">
+  <h2>5. R-05 — 전체 드라이브 스캔 (<code>--all-drives</code>)</h2>
+  <p>드라이브/마운트를 열거해 스캔 루트로 삼는다. <b>거대 트리(R1)·신뢰불가(RC-2)</b> 리스크가 가장 큰 항목이므로, <b>opt-in + 다중 안전 가드</b>로 설계한다.</p>
+
+  <h3>5.1 OS별 열거 (driveEnum, 외부 의존성 0)</h3>
+  <table>
+    <tr><th style="width:130px;">OS</th><th>열거 방법(내장만)</th><th>후보 루트</th></tr>
+    <tr><td>Windows</td><td>드라이브 문자 <code>A:\</code>~<code>Z:\</code>를 <code>fs.statSync</code>로 존재 검사(접근 가능한 것만). <b>외부 명령 없이</b> fs로 탐지(ADR-001 정합).</td><td><code>C:\</code>, <code>D:\</code> ...</td></tr>
+    <tr><td>POSIX(mac/Linux)</td><td><code>/</code> 기본. 추가 마운트는 <code>/Volumes/*</code>(mac)·<code>/mnt/*</code>·<code>/media/*</code>(Linux) 디렉터리 항목 열거. <code>/proc</code>·<code>/sys</code>·<code>/dev</code> 등은 시스템 제외 목록으로 차단.</td><td><code>/</code>, <code>/Volumes/X</code> ...</td></tr>
+  </table>
+  <pre>// lib/scan/driveEnum.js (신규) — 시그니처
+// enumerateRoots(): 접근 가능한 드라이브/마운트 루트(realpath 정규화 배열) 반환.
+//   각 후보는 config.normalizeScanRoots와 동일하게 realpath·디렉터리 검증 통과분만.
+enumerateRoots(opts) -> string[]   // canonical 실경로 배열</pre>
+
+  <h3>5.2 안전 모델 (필수 가드 — 약화 불가)</h3>
+  <figure>
+    <svg viewBox="0 0 1080 300" role="img" aria-label="all-drives 안전 가드 계층">
+      <g font-family="Segoe UI" font-size="12" fill="#e2e8f0">
+        <rect x="20" y="20" width="1040" height="40" rx="8" fill="#3a0b0b" stroke="#f87171"/>
+        <text x="540" y="45" text-anchor="middle" fill="#fca5a5">opt-in 게이트 — config.allowAllDrives===true 일 때만 활성. 요청 본문만으로 켤 수 없음(기본 false)</text>
+        <rect x="20" y="80" width="510" height="44" rx="8" fill="#243044" stroke="#334155"/>
+        <text x="275" y="100" text-anchor="middle" fill="#7dd3fc">① 시스템 디렉터리 제외 (canonicalize·세그먼트)</text>
+        <text x="275" y="116" text-anchor="middle" fill="#94a3b8" font-size="10.5">실경로+폴드키, 진입 전 앞단 가지치기 (M4-H-2)</text>
+        <rect x="550" y="80" width="510" height="44" rx="8" fill="#243044" stroke="#334155"/>
+        <text x="805" y="100" text-anchor="middle" fill="#7dd3fc">② BUILTIN_EXCLUDES (기존 excludeRules)</text>
+        <text x="805" y="116" text-anchor="middle" fill="#94a3b8" font-size="10.5">node_modules·.git·캐시 등 — 그대로 적용</text>
+        <rect x="20" y="138" width="510" height="44" rx="8" fill="#243044" stroke="#334155"/>
+        <text x="275" y="158" text-anchor="middle" fill="#7dd3fc">③ depthLimit 상한 (R-03)</text>
+        <text x="275" y="174" text-anchor="middle" fill="#94a3b8" font-size="10.5">all-drives 시 더 낮은 기본 깊이 권장</text>
+        <rect x="550" y="138" width="510" height="44" rx="8" fill="#243044" stroke="#334155"/>
+        <text x="805" y="158" text-anchor="middle" fill="#7dd3fc">④ realpath 화이트리스트 (H-1)</text>
+        <text x="805" y="174" text-anchor="middle" fill="#94a3b8" font-size="10.5">스캔된 실경로만 store 화이트리스트 등록</text>
+        <rect x="20" y="196" width="1040" height="44" rx="8" fill="#0b2a1f" stroke="#34d399"/>
+        <text x="540" y="216" text-anchor="middle" fill="#6ee7b7">⑤ 진행 표시(R-15) + 항목 격리(N-05) + 심링크 미추적(M-3) 동반 필수 — N-01 항상 적용</text>
+        <text x="540" y="232" text-anchor="middle" fill="#94a3b8" font-size="10.5">권한 거부 폴더는 건너뛰고 전체 스캔 완료(크래시 0)</text>
+        <rect x="20" y="256" width="1040" height="34" rx="8" fill="#172033" stroke="#2b3a52"/>
+        <text x="540" y="277" text-anchor="middle" fill="#cbd5e1" font-size="11">신뢰 경계 변화 없음 — TB-B(스캔 대상=신뢰불가) 전제 그대로. 출력은 textContent+CSP(L-1)로 렌더</text>
+      </g>
+    </svg>
+    <figcaption>그림 2. all-drives 안전 모델 — opt-in 게이트 아래 5중 가드. 모두 기존 통제(excludeRules·pathGuard·walker M-3·N-05·R-15)의 재사용/강화이며 새 신뢰 경계는 생기지 않는다.</figcaption>
+  </figure>
+  <ul class="tight">
+    <li><b>기본값 아님(opt-in):</b> <code>config.allowAllDrives</code> 기본 <code>false</code>. CLI <code>--all-drives</code> 또는 rescan <code>allDrives:true</code>는 이 config가 true일 때만 적용(아니면 강등 + note).</li>
+    <li><b>시스템 디렉터리 제외 목록(신규):</b> Windows(<code>C:\Windows</code>, <code>C:\$Recycle.Bin</code>, <code>C:\System Volume Information</code>, <code>C:\Program Files</code>, <code>C:\Program Files (x86)</code> 등), POSIX(<code>/proc</code>, <code>/sys</code>, <code>/dev</code>, <code>/run</code>, <code>/private/var</code> 등). 제외 비교는 <b>raw 문자열 prefix가 아니라 canonicalize 실경로의 세그먼트 단위</b>로 수행한다(아래 §5.3, M4-H-2). all-drives에서만 활성.</li>
+    <li><b>realpath 화이트리스트:</b> 스캔으로 발견된 프로젝트 실경로만 store에 등록(H-1) — 드라이브 루트를 통째로 화이트리스트하지 않음. <code>/api/open</code> 표면은 변화 없음.</li>
+  </ul>
+
+  <h3 id="r05-sysexclude">5.3 시스템 디렉터리 제외 — canonicalize 실경로 + 세그먼트 단위 (M4-H-2)</h3>
+  <div class="danger-box"><b>보안 게이트 차단 사유(높음) 해소:</b> 이전 rev는 시스템 제외를 "경로 prefix 기반"으로만 명세해, <b>raw 문자열 prefix 비교가 H-1 canonicalize 규칙과 어긋나는</b> 잔여를 남겼다. all-drives 활성 시 다음으로 <code>C:\Windows</code> 등 제외 대상을 우회 순회할 수 있었다: (1) Windows 8.3 단축명 <code>C:\PROGRA~1</code>, (2) 다른 위치의 junction/심링크가 시스템 폴더를 가리킴, (3) 대소문자 <code>c:\windows</code>, (4) UNC/확장경로 <code>\\?\C:\Windows</code>·<code>\\127.0.0.1\C$\Windows</code>. 이는 시스템 경로 정보노출(I)·거대 시스템 트리 순회 자원고갈(D)로 이어진다.</div>
+  <p><b>해소 원칙 (기존 H-1 규칙 재사용):</b> 시스템 제외 판정을 <code>pathGuard.canonicalize()</code> 실경로 + <code>foldForCompare()</code> 폴드 키 기준으로, <b>walker가 자식 디렉터리를 canonicalize한 직후·스택 push(진입) 전</b>에 적용한다. 이는 walker가 이미 H-1을 위해 수행하는 정규화(<code>walker.js:78</code> <code>childCanonical = pathGuard.canonicalize(childRaw)</code>)를 재사용하므로 8.3 단축명·UNC·확장경로·대소문자·심링크가 모두 canonicalize 단계에서 동일하게 흡수·정규화된다.</p>
+  <pre>// ── 정합 변경점 ─────────────────────────────────────────────
+// 시스템 제외 목록은 "원형 절대경로"로 정의하되, 비교는 canonicalize→foldForCompare 키로.
+// 부팅 1회 구성(또는 driveEnum 산출 시): 각 항목을 canonicalize한 폴드 키 Set.
+//   const SYSTEM_EXCLUDE_KEYS = buildSystemExcludeKeySet(platform);
+//     // = canonicalize 후 foldForCompare. 해소 실패(부재) 항목은 스킵.
+//
+// 세그먼트 단위 판정(prefix 부분일치 우회 차단):
+//   isUnderSystemDir(canonicalDir):
+//     const segs = foldForCompare(canonicalDir).split(/[\\/]+/).filter(Boolean);
+//     for (each excludeKey in SYSTEM_EXCLUDE_KEYS) {
+//       const ex = excludeKey.split(/[\\/]+/).filter(Boolean);
+//       // canonicalDir의 선두 세그먼트가 excludeKey 세그먼트열과 정확히 일치하면 제외.
+//       // 세그먼트 경계 비교라 C:\WindowsApps 가 C:\Windows 제외에 걸리지 않음(반대도).
+//       if (segs.length >= ex.length && ex.every((s, i) => s === segs[i])) return true;
+//     }
+//     return false;
+//
+// ── walker.js 적용 시점(진입 전 가지치기) ─────────────────────
+//   기존(walker.js:78-85): childCanonical = pathGuard.canonicalize(childRaw);
+//                          if (childCanonical === null) continue;
+//                          childDirs.push({ dir: childCanonical, depth: depth+1 });
+//   M4(all-drives 활성 시): canonicalize 직후, push 전에 세그먼트 제외 판정 추가:
+//                          if (ctx.allDrives && excludeRules.isUnderSystemDir(childCanonical)) continue;
+//   → 제외 판정이 visited 가지치기·심링크 미추적보다 "앞단"임을 보장(H-3 "가드 앞단" 원칙 승계).
+//     심링크/junction은 walker.js:71의 lstat 미추적으로 진입 자체가 차단되나, 제외는 그보다 앞.</pre>
+  <div class="ok-box"><b>H-1 규칙 단일 출처 유지:</b> 시스템 제외도 <code>/api/open</code> 화이트리스트(H-1)와 <b>동일한 canonicalize+foldForCompare</b>를 쓴다 — 정규화 규칙이 한 곳(<code>pathGuard</code>)에서만 정의되므로 등록·검증·제외 3자가 절대 어긋나지 않는다. 신규 함수 <code>excludeRules.isUnderSystemDir</code>·<code>buildSystemExcludeKeySet</code>은 기존 name 기반 <code>isExcludedName</code>과 별도 레이어(§10 excludeRules.js 수정).</div>
+
+  <div class="danger-box"><b>security-reviewer 입력:</b> all-drives는 스캔 도달 범위를 디스크 전체로 넓혀 <b>저장형 XSS(RC-2)·자원 고갈(R1)</b> 노출을 키운다. 따라서 (1) <code>currentPath</code>·프로젝트 메타 모두 textContent 렌더 강제(L-1) + currentPath basename 축약(§3.4), (2) 시간/깊이/entry 상한(H-3) 동반, (3) opt-in 게이트가 <b>기본 차단</b>임, (4) 시스템 제외가 <b>canonicalize 세그먼트 단위·진입 전 앞단</b>임(§5.3)을 위협 모델에 명시한다.</div>
+
+  <h3 id="r05-notice">5.4 스캔 시작 전 시간 고지 (R-05 수용기준 — P3-2)</h3>
+  <p>PRD §12 R-05 수용기준 후단("시작 전 사용자에게 시간이 오래 걸릴 수 있음을 고지")을 충족하기 위해, all-drives 활성 스캔은 <b>시작 전 고지 단계</b>를 둔다(채널별).</p>
+  <table>
+    <tr><th style="width:130px;">채널</th><th>고지 방식</th></tr>
+    <tr><td>CLI(<code>scan.js</code>)</td><td><code>--all-drives</code> 인자가 설정되고 <code>config.allowAllDrives===true</code>이면, 루트 열거 직후 스캔 시작 전 콘솔에 <b>경고 출력</b>(예: "전체 드라이브 스캔은 디스크 규모에 따라 수 분 이상 걸릴 수 있습니다. 진행 상황은 콘솔/대시보드에서 확인하세요."). <code>--quiet</code>여도 이 1줄 경고는 출력(안전 고지).</td></tr>
+    <tr><td>대시보드(rescan)</td><td>재스캔 버튼의 <b>allDrives 토글</b>을 켜면, 요청 전송 전에 <b>확인 단계</b>(경고 텍스트 + 확인 버튼)를 노출한다. 경고 텍스트는 <code>aria-live</code> 영역에도 반영(N-07). config가 all-drives를 비활성한 경우 토글은 <b>비활성/숨김</b>(서버가 어차피 강등). 강등 시 응답 <code>note</code>를 textContent로 표시.</td></tr>
+  </table>
+  <div class="note"><b>정합:</b> 고지는 프론트/CLI UX 추가일 뿐 서버 계약·신뢰 경계 변경이 없다. 경고 텍스트는 정적 문자열(서버 생성 <code>note</code>는 textContent 렌더, L-1).</div>
+</section>
+
+<!-- ============ R-03 DEPTH ============ -->
+<section id="r03">
+  <h2>6. R-03 — walker depthLimit (config 기반)</h2>
+  <p>현재 walker는 하드코딩 <code>SAFE_MAX_DEPTH=24</code>를 사용자 설정과 무관하게 강제한다(M-3). M4에서 <b>config 기반 depthLimit</b>를 도입하되, <b>MVP 안전상한을 하한(floor)으로 유지</b>해 약화하지 않는다.</p>
+  <h3>6.1 정책</h3>
+  <ul class="tight">
+    <li><code>config.depthLimit</code> 신설(기본 <code>SAFE_MAX_DEPTH=24</code>). 사용자가 <b>더 얕게</b> 줄이는 것은 허용(성능 목적).</li>
+    <li><b>약화 금지:</b> 사용자가 24보다 큰 값을 줘도 walker는 <code>min(이론상 무한, 절대 상한)</code>이 아니라, <b>절대 상한 <code>ABS_MAX_DEPTH</code>(예: 64)</b>를 새로 도입해 그 위로는 못 넘게 한다. 즉 유효 깊이 = <code>clamp(config.depthLimit, 1, ABS_MAX_DEPTH)</code>. 기존 24는 <b>기본값</b>으로 강등되고, 안전 의미는 <code>ABS_MAX_DEPTH</code>가 승계한다.</li>
+    <li><b>all-drives 연계(자원 예산 재검증 — M4-M-2):</b> all-drives 모드에서는 (1) <code>depthLimit</code> 미지정 시 더 낮은 기본 <b>12</b>를 <b>강제</b> 적용하고, (2) all-drives에서는 <b>ABS 절대 상한도 더 낮게(<code>ABS_MAX_DEPTH_ALL_DRIVES = 24</code>)</b> 별도 적용한다 — 즉 all-drives 유효깊이 = <code>clamp(depthLimit ?? 12, 1, 24)</code>. 일반 스캔의 64까지 허용하지 않아 디스크 전체 결합 시 순회 폭발을 추가 억제한다.</li>
+    <li><b>walker 레벨 전역 자원 상한(신규 — M4-M-2):</b> size 측정에만 있던 entry/시간 상한을 <b>walker 순회 전체에도</b> 둔다 — <code>config.scan.maxDirs</code>(전역 순회 디렉터리 상한)·<code>config.scan.timeBudgetMs</code> 도달 시 순회를 <b>안전 중단</b>(<code>phase</code>는 done이되 <code>note</code>에 "자원 상한 도달로 일부만 스캔"). 깊이와 독립적으로 작동해, 얕고 넓은 거대 트리(예: 수백만 파일의 평면 디렉터리)도 N-01/N-05를 깨지 않는다. ABS_MAX_DEPTH=64 + all-drives + maxEntries 조합이 예산을 깨지 않음은 구현 게이트 벤치(V-2 연장)로 실증한다.</li>
+    <li>심링크 미추적·visited 루프 차단(M-3)은 <b>그대로</b> — depthLimit은 깊이만 다룬다.</li>
+  </ul>
+  <pre>// walker.js 시그니처 변경(전진 호환) — 실제 walk(roots, opts) 정합
+//   기존: walk(roots, { excludes, logger })                    · 내부 SAFE_MAX_DEPTH=24 하드코딩
+//   M4:   walk(roots, { excludes, logger, depthLimit, onDir, allDrives })
+//         const ABS_MAX_DEPTH = 64;                  // 신규 절대 안전 상한(일반 스캔)
+//         const ABS_MAX_DEPTH_ALL_DRIVES = 24;       // all-drives 전용 더 낮은 상한(M4-M-2)
+//         const DEFAULT_DEPTH = SAFE_MAX_DEPTH;       // = 24 (기존 값 기본으로 강등)
+//         const cap   = allDrives ? ABS_MAX_DEPTH_ALL_DRIVES : ABS_MAX_DEPTH;
+//         const dflt  = allDrives ? 12 : DEFAULT_DEPTH;
+//         const effective = clamp(depthLimit ?? dflt, 1, cap);
+//   onDir(dir): yield 직전 1회 호출(P1-1 진행 산출). 미지정 호출부(없음/CLI)는 동작 불변.
+//   allDrives: true면 canonicalize 직후 excludeRules.isUnderSystemDir 가지치기 활성(M4-H-2).
+//   depthLimit 미지정 일반 호출부는 24로 동작 → 행동 불변(정합).</pre>
+  <div class="note"><b>config 검증:</b> <code>config.js</code>의 <code>validatePositiveNumber</code> 재사용 + 상한 clamp. 잘못된 값은 경고 후 기본 24로 폴백(N-05). <code>config.DEFAULTS</code>의 주석 "depthLimit는 M4" 자리를 실제 키로 승격.</div>
+</section>
+
+<!-- ============ N-07 A11Y ============ -->
+<section id="n07">
+  <h2>7. N-07 — 접근성 (WCAG 2.1 AA)</h2>
+  <p>MVP는 권고 수준만 적용했다. M4에서 정식 검증·완성한다. 순수 HTML/CSS/JS·CSP(인라인 스크립트 금지)·textContent 렌더를 <b>유지하면서</b> 프론트에만 적용한다(서버·계약 변경 없음).</p>
+  <h3>7.1 적용 가이드</h3>
+  <table>
+    <tr><th style="width:170px;">영역</th><th>요구(WCAG AA)</th><th>적용 방법</th></tr>
+    <tr><td>키보드 내비</td><td>2.1.1 모든 기능 키보드 도달</td><td>카드·필터·정렬·검색·"VS Code로 열기"·재스캔 버튼을 <code>&lt;button&gt;</code>/실제 폼 컨트롤로. <span class="kbd">Tab</span> 순서 = DOM 순서. 커스텀 div 클릭 핸들러 제거.</td></tr>
+    <tr><td>포커스 가시</td><td>2.4.7</td><td>전역 <code>:focus-visible</code> 아웃라인(대비 ≥ 3:1, 예 <code>2px solid #38bdf8</code>). <code>outline:none</code> 단독 금지.</td></tr>
+    <tr><td>포커스 관리(드로어/모달)</td><td>2.4.3 · 1.3.2</td><td>상세 드로어 열림 시 <b>포커스 트랩</b>(<span class="kbd">Tab</span>/<span class="kbd">Shift+Tab</span> 순환), <span class="kbd">Esc</span> 닫기, 닫으면 <b>여는 버튼으로 포커스 복귀</b>. <code>role="dialog"</code> <code>aria-modal="true"</code> <code>aria-labelledby</code>.</td></tr>
+    <tr><td>aria 라벨</td><td>4.1.2 · 1.1.1</td><td>아이콘 전용 버튼에 <code>aria-label</code>. 목록은 <code>role="list"</code>/항목 <code>role="listitem"</code> 또는 시맨틱 태그. 검색 입력 <code>&lt;label&gt;</code> 연결.</td></tr>
+    <tr><td>상태 라이브 영역</td><td>4.1.3</td><td>재스캔 진행(R-15)은 <code>aria-live="polite"</code> 영역에 "폴더 1,240개 · 발견 38개 · 12초 경과 · <span class="kbd">some-folder</span> 순회 중" 텍스트 갱신. 완료 시 <code>aria-live</code>로 알림. <b>모든 갱신은 textContent로만</b>(ScanProgress 전 문자열 필드 — currentPath·note 포함, M4-L-2). currentPath는 basename 축약값(M4-H-1).</td></tr>
+    <tr><td>색 외 상태 텍스트</td><td>1.4.1</td><td>stale·git dirty·size status를 <b>색만</b>으로 구분 금지 → 텍스트 라벨/아이콘+텍스트 병기("방치", "변경됨", "부분"). size status 표(4.2)가 이미 텍스트 병기.</td></tr>
+    <tr><td>대비</td><td>1.4.3</td><td>본문 텍스트 ≥ 4.5:1, 큰 텍스트/비텍스트 ≥ 3:1. 다크 토큰(<code>#e2e8f0</code> on <code>#0f172a/#1e293b</code>)은 충족. <code>#94a3b8</code> muted는 보조 텍스트로만(본문 금지) 또는 대비 확인 후 사용.</td></tr>
+    <tr><td>리플로/확대</td><td>1.4.10 · 1.4.4</td><td>200% 확대·320px 폭에서 가로 스크롤 없이 사용 가능(반응형 그리드).</td></tr>
+    <tr><td>건너뛰기 링크</td><td>2.4.1</td><td>"본문 바로가기" skip link(첫 Tab에서 노출).</td></tr>
+  </table>
+  <div class="ok-box"><b>CSP·보안 정합:</b> 접근성 향상은 모두 시맨틱 마크업·정적 CSS·동일 출처 JS로 구현 → CSP(<code>default-src 'self'</code>, 인라인 스크립트 금지)·textContent 렌더(L-1)를 약화하지 않는다. 외부 a11y 라이브러리 도입 없음(의존성 0 유지). 포커스 트랩도 자체 JS로 구현.</div>
+</section>
+
+<!-- ============ CONTRACT ============ -->
+<section id="contract">
+  <h2>8. 신규/변경 API 계약 (api-contract.md 갱신 입력)</h2>
+  <p>아래 표를 <code>docs/api-contract.md</code>에 반영한다(PM 중재 후 양측 통지, P3-3). 변경분만 표기 — 기존 엔드포인트는 불변.</p>
+  <h3>8.1 엔드포인트 델타 (api-contract.md 최종 계약 표)</h3>
+  <table>
+    <tr><th style="width:55px;">메서드</th><th style="width:155px;">경로</th><th>요청</th><th>보안 게이트</th><th>응답(성공)</th><th style="width:64px;">상태</th></tr>
+    <tr><td><span class="pill post">POST</span></td><td><code>/api/rescan</code></td><td><code>{ withSize?:bool, allDrives?:bool }</code><br><span style="color:#94a3b8;font-size:12px;">withSize=본문 허용(예산 내) · allDrives=config 게이트 전용(본문만으론 강등)</span></td><td><b>M-1</b>(checkStateChange: Host+Origin+X-SPIP-Token+CT)</td><td><code>202 { ok:true, code:"SCAN_STARTED", scanId, startedAt }</code></td><td><span class="pill chg">변경</span></td></tr>
+    <tr><td><span class="pill get">GET</span></td><td><code>/api/scan-status</code></td><td>—</td><td><b>M-1 read</b>(checkReadAccess: Host+Origin+X-SPIP-Token, CT 면제)</td><td><code>200 ScanProgress</code> (idle/scanning/finalizing/done/error). <code>currentPath</code>=basename 축약</td><td><span class="pill new">신규</span></td></tr>
+    <tr><td><span class="pill get">GET</span></td><td><code>/api/stats</code></td><td>—</td><td>(기존, 읽기)</td><td><code>totalBytes</code>: 기존 항상 <code>null</code> → <b>size.enabled 스냅샷이면 number 승격</b>(§4.3)</td><td><span class="pill chg">변경</span></td></tr>
+  </table>
+  <p>MVP의 <code>/api/rescan → 404 NOT_FOUND</code> 미마운트 규정은 폐기되고 위 활성 핸들러로 승격(라우터 정정 §10). SSE <code>/api/scan-progress</code>는 <b>채택하지 않음</b>(ADR-M4-2). <b>scan-status는 무인증 GET이 아니라 M-1 read 게이트(checkReadAccess) 뒤에 둔다</b>(M4-H-1).</p>
+
+  <h3>8.2 신규 에러/거부 코드</h3>
+  <table>
+    <tr><th style="width:80px;">HTTP</th><th>code</th><th>조건</th></tr>
+    <tr><td>409</td><td><code>SCAN_IN_PROGRESS</code></td><td>이미 재스캔 진행 중(단일 in-flight 락)</td></tr>
+    <tr><td>409</td><td><code>NO_SCAN_ROOTS</code></td><td>scanRoots 미설정 상태에서 재스캔 요청</td></tr>
+    <tr><td>403</td><td><code>FORBIDDEN_ORIGIN</code></td><td>(기존) M-1 실패 — rescan(POST) <b>및 scan-status(GET) M-1 read</b> 실패 시 동일 코드(M4-H-1)</td></tr>
+  </table>
+
+  <h3>8.3 ScanProgress shape (GET /api/scan-status 응답)</h3>
+  <pre>{
+  "phase": "idle"|"scanning"|"finalizing"|"done"|"error",
+  "scanId": "a1b2c3d4e5f6a7b8|null",            // 16자 hex = crypto.randomBytes(8). 표시·상관용(비인가, M4-L-1)
+  "dirs": 1240, "found": 38,
+  "currentPath": "Project-SPIP/lib|null",        // ★ basename 축약(최대 2세그먼트). 절대경로 미노출(M4-H-1).
+                                                 //   모든 문자열 필드와 함께 프론트 textContent 렌더 필수(L-1, M4-L-2)
+  "elapsedMs": 12000, "startedAt": "2026-06-21T...|null",
+  "counts": { "projects": 38, "stale": 4, "errors": 1 } | null,  // finalizing·done에서만(§3.3)
+  "note": "all-drives는 서버 설정에서 비활성|null" // textContent 렌더 필수
+}</pre>
+  <div class="note"><b>scanId 규약 (P2-2 / M4-L-1):</b> (1) <b>생성 주체</b> = <code>ScanController.acquire()</code>(scanner가 아님). (2) <b>형식</b> = <code>crypto.randomBytes(8).toString('hex')</code> 16자 hex. (3) <b>동일성</b> = 202 응답의 scanId와 이후 모든 scan-status 응답의 scanId는 같은 스캔 동안 동일. (4) <b>대조 규약</b> = 프론트는 자기 202에서 받은 scanId를 보관하고, <code>status.scanId</code>가 다르면 <b>다른 스캔으로 간주해 자기 진행 표시를 무시</b>(다중 탭/타 스캔 혼선 방지). (5) scanId는 <b>인가에 쓰지 않는다</b>(단일 락이라 불필요) — 표시·상관용.</div>
+  <div class="note"><b>textContent 포괄 규칙 (M4-L-2):</b> ScanProgress의 <b>모든 문자열 필드</b>(<code>currentPath</code>·<code>note</code> 포함)는 프론트에서 <b>textContent로만</b> 렌더하고, <code>aria-live</code> 영역 갱신도 textContent로 한다(innerHTML 금지). currentPath는 basename 축약으로 노출되므로 정보노출·XSS 표면이 함께 최소화된다(§3.4·§7.1).</div>
+
+  <h3>8.4 Project.size shape 승격 (계약 shape 불변, data.status·값 확장)</h3>
+  <pre>"size": { "status":"ok"|"partial"|"skipped"|"error",   // ← 이 status는 size 도메인 값(=res.data.status, §4.1.1)
+          "totalBytes":number|null, "nodeModulesBytes":number|null,
+          "deps":number|null, "devDeps":number|null }
+// MVP: status 항상 "skipped", 값 null. M4: enabled 스캔이면 실값(ok/partial).
+// 주의: 공통 collector 계약 status(ok/na/error)는 별도 레이어 — Project.size.status에는 노출되지 않음(§4.1.1).
+// /api/stats.totalBytes: 미측정 null(기존) → enabled 스냅샷이면 number(scanner가 집계 저장, getStats는 읽기만, §4.3).</pre>
+  <div class="note"><b>전진 호환 보증:</b> 위 변경은 모두 (1) 신규 엔드포인트 추가 또는 (2) 기존 객체에 status 값/숫자 채우기뿐이다. MVP 프론트가 <code>skipped</code>/<code>null</code>을 "미측정"으로 처리하던 코드와 <code>data.ok===false</code> 실패 매핑은 그대로 동작한다.</div>
+
+  <h3>8.5 api-contract.md 갱신 절차 (P3-1)</h3>
+  <div class="warn-box"><b>단일 출처 동기화:</b> 현재 <code>docs/api-contract.md</code>는 여전히 <code>rescan=404</code>·<code>totalBytes:null</code>·<code>size always skipped</code>로 적혀 있어 본 설계 표와 불일치 상태다. 본 설계가 검증 PASS(2회차)된 직후 <b>PM 중재로 api-contract.md를 위 §8.1~§8.4 표대로 갱신</b>한다(P3-3 절차). 갱신 항목: (1) <code>/api/rescan</code> 404→202/409(SCAN_IN_PROGRESS·NO_SCAN_ROOTS), (2) <code>/api/scan-status</code> 신규(M-1 read·ScanProgress·currentPath 축약), (3) <code>size.status</code> 확장(ok/partial), (4) <code>/api/stats.totalBytes</code> null→number 승격, (5) withSize/allDrives 게이트 비대칭 명시. 설계 확정 전 선반영 금지(계약 표류 방지).</div>
+</section>
+
+<!-- ============ ADR ============ -->
+<section id="adr">
+  <h2>9. ADR (아키텍처 결정 기록)</h2>
+
+  <div class="adr" id="adr-1">
+    <h4>ADR-M4-1 — 재스캔 동시성: 전역 단일 in-flight 락 (대기열 없음)</h4>
+    <p><span class="status">승인(권고)</span></p>
+    <p><b>맥락:</b> R-16 재스캔은 캐시 전체를 재작성한다. 브라우저에서 버튼 연타·다중 탭으로 중복 트리거될 수 있다. <code>/api/open</code>은 id별 in-flight(safeExec maxInflight)지만, 스캔은 전역 1개여야 의미가 있다.</p>
+    <p><b>고려한 대안:</b> (a) 전역 단일 락 + 즉시 거부(409), (b) 락 + 대기열(다음 스캔 예약), (c) 무제한 동시 스캔.</p>
+    <p><b>결정:</b> (a) 전역 단일 in-flight 락, 중복은 <code>409 SCAN_IN_PROGRESS</code> 즉시 거부. 백그라운드 실행 + 202 즉시 응답.</p>
+    <p><b>근거:</b> (c)는 캐시 파일 동시 쓰기 경쟁·자원 2배 → 위험. (b) 대기열은 단일 사용자 로컬 도구에 과설계(재스캔 결과는 어차피 최신 1개면 충분, 중복 예약은 잉여). (a)가 가장 단순·견고하며 기존 in-flight 패턴과 개념 일관.</p>
+    <p><b>결과:</b> + 단순·예측 가능, 캐시 경쟁 0. − 진행 중 재요청은 거부됨(프론트가 버튼 비활성·"진행 중" 표시로 흡수 — N-07 aria-live와 정합).</p>
+  </div>
+
+  <div class="adr" id="adr-2">
+    <h4>ADR-M4-2 — 진행 전달 메커니즘: 폴링(GET /api/scan-status) 채택, SSE 기각</h4>
+    <p><span class="status">승인(권고)</span></p>
+    <p><b>맥락:</b> R-15 진행(폴더수·발견수·현재경로·경과·완료)을 브라우저에 전달해야 한다. 외부 의존성 0·단순성·견고성이 결정 기준.</p>
+    <p><b>고려한 대안:</b> (a) 폴링 <code>GET /api/scan-status</code> 1초 간격, (b) SSE <code>text/event-stream</code> long-lived 스트림, (c) WebSocket(즉시 기각 — 내장 http로 비자명·과설계).</p>
+    <p><b>결정:</b> (a) 폴링 채택.</p>
+    <p><b>근거:</b> 스캔은 단발성·수초~수십초 작업이라 1초 지연은 UX 무해. 폴링은 서버를 <b>무상태 GET 1건</b>으로 유지 → 구현 복잡도·연결 누수·DoS 표면이 SSE보다 낮고, 연결이 끊겨도 다음 폴링에서 자동 복구(견고성 우위). SSE의 실시간성 이점은 이 작업 특성상 잉여. 둘 다 의존성 0이나 (a)가 단순성·견고성·보안 표면에서 우위.</p>
+    <p><b>결과:</b> + 단순·견고·보안 표면 최소. − 최대 1초 지연·폴링 트래픽(로컬·주기≥1s라 무시 가능). 미래에 실시간성이 정말 필요하면 동일 state를 SSE로 노출하는 확장은 가능(현재는 불필요).</p>
+  </div>
+
+  <div class="adr" id="adr-3">
+    <h4>ADR-M4-3 — size 수집: opt-in + 예산/상한 + node_modules 지연 측정</h4>
+    <p><span class="status">승인(권고)</span></p>
+    <p><b>맥락:</b> R-09 size는 node_modules(수만 파일) stat이 필요해 N-01 30초 예산을 위협(R3). node_modules는 walker 순회 제외 대상이지만 크기는 재야 한다.</p>
+    <p><b>고려한 대안:</b> (a) 항상 전체 측정(정확·느림), (b) opt-in + 시간/깊이/entry 상한 + node_modules top-level 근사(기본), 전체는 옵션, (c) du/외부 명령 위임(의존성·보안 위반).</p>
+    <p><b>결정:</b> (b). deps/devDeps는 package.json을 이미 읽으므로 항상 수집(저비용). 용량 측정은 opt-in, 상한 도달 시 <code>partial</code>.</p>
+    <p><b>근거:</b> (a)는 N-01 위반·적대적 트리에서 자원 고갈(H-3 위배). (c)는 외부 명령 = ADR-001/N-04·safeExec 정책 위반. (b)는 기본 스캔 성능을 보존(opt-in)하면서, 켰을 때도 상한으로 예산을 지킨다. status 확장은 계약 전진 호환.</p>
+    <p><b>결과:</b> + N-01 보존·예산 안전·계약 무파손. − 큰 트리는 근사/partial(정확도 trade-off, 명시적 라벨로 사용자 인지).</p>
+  </div>
+
+  <div class="adr" id="adr-4">
+    <h4>ADR-M4-4 — all-drives: opt-in 게이트 + 5중 안전 가드, 기본 차단</h4>
+    <p><span class="status">승인(권고)</span></p>
+    <p><b>맥락:</b> R-05 전체 드라이브 스캔은 거대 트리(R1)·신뢰불가 입력(RC-2) 노출이 가장 크다. 외부 명령 없이 OS별 드라이브/마운트를 열거해야 한다.</p>
+    <p><b>고려한 대안:</b> (a) 기본 활성(편의 우선), (b) opt-in config 게이트(기본 차단) + 시스템 제외 + BUILTIN_EXCLUDES + depthLimit + realpath 화이트리스트 + 진행/격리, (c) 미구현.</p>
+    <p><b>결정:</b> (b). <code>config.allowAllDrives</code> 기본 false, 요청 본문만으로 켤 수 없음.</p>
+    <p><b>근거:</b> (a)는 안전 기본값 위반·성능/보안 사고 위험. (c)는 R-05 요구 미충족. (b)는 위험을 명시적 opt-in으로 한정하고 기존 통제(excludeRules·pathGuard·walker M-3·N-05)를 재사용·강화 — 새 신뢰 경계 없이 최소 추가로 충족.</p>
+    <p><b>결과:</b> + 안전 기본값·기존 통제 재사용. − 사용자가 명시 활성화 필요(편의 약간 ↓, 안전과 trade-off). 드라이브 열거는 OS별 분기 코드 추가.</p>
+  </div>
+
+  <div class="adr" id="adr-5">
+    <h4>ADR-M4-5 — depthLimit: config화하되 MVP 안전상한을 절대 상한으로 승계</h4>
+    <p><span class="status">승인(권고)</span></p>
+    <p><b>맥락:</b> R-03은 깊이 설정 정교화를 요구. 그러나 walker의 하드코딩 <code>SAFE_MAX_DEPTH=24</code>는 무한재귀/심링크 폭발 방어(M-3)의 일부라 단순 제거는 보안 약화.</p>
+    <p><b>고려한 대안:</b> (a) 하드코딩 유지(요구 미충족), (b) config.depthLimit + 별도 절대 상한 ABS_MAX_DEPTH 신설(약화 금지), (c) config로 완전 위임(상한 제거).</p>
+    <p><b>결정:</b> (b). 유효 깊이 = <code>clamp(config.depthLimit ?? 24, 1, ABS_MAX_DEPTH=64)</code>.</p>
+    <p><b>근거:</b> (c)는 사용자가 무한 깊이 지정 가능 → M-3 약화·자원 고갈. (b)는 사용자 유연성(얕게/깊게 조정)을 주면서 절대 상한으로 안전 의미를 승계 — "MVP 안전상한은 하한으로 유지"라는 요구를 충족.</p>
+    <p><b>결과:</b> + 유연성 + 안전 불변. − 절대 상한(64)은 여전히 하드코딩(의도된 안전 floor/ceiling).</p>
+    <p><b>보강(M4-M-2):</b> 절대 상한이 24→64로 완화되는 것이 all-drives와 결합 시 자원 위험을 키운다는 지적을 반영해, <b>all-drives 모드에서는 별도 상한 <code>ABS_MAX_DEPTH_ALL_DRIVES=24</code> + 기본 깊이 12를 강제</b>하고(§6.1), 깊이와 독립적인 <b>walker 전역 entry/시간 상한</b>(<code>config.scan.maxDirs·timeBudgetMs</code>)을 추가했다. 즉 일반 스캔은 64까지, all-drives는 24까지로 제한해 MVP 안전상한(24)을 all-drives에서 사실상 유지한다.</p>
+  </div>
+</section>
+
+<!-- ============ DIRS ============ -->
+<section id="dirs">
+  <h2>10. 디렉토리 / 파일 델타</h2>
+  <p>M4는 기존 레이아웃에 <b>최소 추가</b>한다(신규 파일 2~3개 + 기존 파일 점진 수정). 신규는 <span class="pill new">신규</span>, 수정은 <span class="pill chg">수정</span>.</p>
+  <pre>Project-SPIP/
+├─ scan.js                         <span class="pill chg">수정</span> --with-size·--all-drives·--depth 인자 파싱 + onProgress 콜백 (count→p.found) 정정(P1-1) + all-drives 사전 고지(R-09/05/03)
+├─ lib/
+│  ├─ common/
+│  │  ├─ config.js                 <span class="pill chg">수정</span> depthLimit·ABS_MAX_DEPTH_ALL_DRIVES·size{enabled,budgetMs,maxDepth,...}·allowAllDrives·scan{watchdogMs,maxDirs,timeBudgetMs} 키(R-03/09/05)
+│  │  └─ pathGuard.js              <span class="pill chg">수정</span> 없음 — canonicalize·foldForCompare 재사용만(시스템 제외·H-2)
+│  ├─ scan/
+│  │  ├─ walker.js                 <span class="pill chg">수정</span> walk opts에 depthLimit·onDir·allDrives 추가, ABS_MAX_DEPTH 신설, yield 직전 onDir 호출(P1-1), canonicalize 직후 시스템 제외 가지치기(M4-H-2)(R-03/15/05)
+│  │  ├─ excludeRules.js           <span class="pill chg">수정</span> isUnderSystemDir·buildSystemExcludeKeySet 신규(canonicalize 세그먼트 단위, all-drives 전용)(R-05, M4-H-2)
+│  │  ├─ driveEnum.js              <span class="pill new">신규</span> OS별 드라이브/마운트 열거(R-05)
+│  │  ├─ scanner.js                <span class="pill chg">수정</span> walk에 onDir 주입(dirs/currentPath 집계), onProgress(ScanProgress) 객체화(P1-1), size 연동, Snapshot에 stats.totalBytes 집계(P2-4)(R-15/09)
+│  │  └─ collectors/
+│  │     └─ size.js                <span class="pill chg">수정</span> skipped→실측. res.status(ok/na/error)와 res.data.status(ok/partial/skipped/error) 2레이어 분리(P2-3)(R-09)
+│  └─ server/
+│     ├─ router.js                 <span class="pill chg">수정</span> ★P1-2 — rescan POST한정+checkStateChange 선통과(open과 동형), scan-status GET한정+checkReadAccess 분기 추가(현재 66-69 메서드 무관 404 폐기)
+│     ├─ security.js               <span class="pill chg">수정</span> checkReadAccess 추가(Host+Origin+토큰, CT 면제 — scan-status 읽기 게이트, M4-H-1)
+│     ├─ actionHandlers.js         <span class="pill chg">수정</span> rescan 404→활성(202 SCAN_STARTED·409 SCAN_IN_PROGRESS/NO_SCAN_ROOTS), ScanController 연동(R-16)
+│     ├─ scanController.js         <span class="pill new">신규</span> 전역 단일 락·진행 state·scanId 발급·백그라운드 스캔(try/finally+watchdog 데드락 방지 M4-M-3)·currentPath basename 축약(R-16/15)
+│     ├─ apiHandlers.js            <span class="pill chg">수정</span> getScanStatus 핸들러 신규(ScanController.status() 노출), getStats.totalBytes null고정 제거→store.stats 읽기(P2-4)(R-15/09)
+│     └─ snapshotStore.js          <span class="pill chg">수정</span> 경미 — load()가 parsed.stats(totalBytes) 적재(없으면 null). load() 재호출 graceful 재사용은 그대로(P2-4)
+└─ public/                         <span class="pill chg">수정</span> 재스캔 버튼·allDrives 토글+사전 고지(P3-2)·진행 UI(aria-live, 전 필드 textContent)·size 표시·포커스 트랩/aria/대비(R-16/15/09/N-07)
+</pre>
+  <div class="warn-box"><b>P1-2 router.js 정정(핵심):</b> 현재 <code>router.js:66-69</code>는 rescan을 <b>메서드 무관 <code>actionHandlers.rescan</code>(404)</b>로 처리하고 <code>checkStateChange</code>를 부르지 않아, 이전 rev의 "라우터가 M-1 선통과시킨다"는 주장과 모순이었다. 정정: rescan은 <code>/api/open</code> 분기(router.js:56-64)와 <b>동형</b>으로 POST 한정 + <code>security.checkStateChange</code> 선통과 후 <code>actionHandlers.rescan</code>; scan-status는 GET 한정 + <code>security.checkReadAccess</code> 후 <code>apiHandlers.getScanStatus</code>. 두 라우트 모두 §10 파일 델타에 router.js 수정으로 명시했다.</div>
+  <pre>// router.js 정정 분기(설계 — open 패턴 재사용)
+if (urlPath === '/api/rescan') {
+  if (method !== 'POST') return methodNotAllowed(res);               // 기존 "메서드 무관 404" 폐기
+  const guard = security.checkStateChange(req, ctx);                  // [M-1] 선통과(open과 동형)
+  if (!guard.ok) { sendJson(res, 403, { ok:false, code: guard.code }); return; }
+  return actionHandlers.rescan(req, res, ctx);                        // 202/409
+}
+if (urlPath === '/api/scan-status') {
+  if (method !== 'GET') return methodNotAllowed(res);
+  const guard = security.checkReadAccess(req, ctx);                   // [M4-H-1] 읽기 게이트
+  if (!guard.ok) { sendJson(res, 403, { ok:false, code: guard.code }); return; }
+  return apiHandlers.getScanStatus(req, res, ctx);                    // ScanController.status()
+}</pre>
+  <div class="note"><b>의존성 방향 불변:</b> 신규 <code>scanController</code>는 server 레이어에서 scan 레이어(scanner)를 호출 — 기존 방향(server→scan)과 동일. <code>driveEnum</code>은 scan 레이어 내부. 순환 의존 없음. 외부 의존성 0 유지(fs·os·http·crypto 내장만). <b>scanController는 ctx에 주입</b>(router createHandler의 ctx에 추가)되어 actionHandlers·apiHandlers가 공유한다(server.js 기동 시 1회 생성).</div>
+</section>
+
+<!-- ============ RISK ============ -->
+<section id="risk">
+  <h2>11. 리스크 · 가정 · 미해결 질문</h2>
+  <h3>리스크 / 완화</h3>
+  <table>
+    <tr><th style="width:90px;">ID</th><th>리스크</th><th>완화</th></tr>
+    <tr><td>RM-1</td><td>all-drives 거대 트리로 스캔 장시간(R1)</td><td>opt-in + depthLimit(낮은 기본) + 시스템 제외 + 진행 표시(중단 인지) + entry/시간 상한</td></tr>
+    <tr><td>RM-2</td><td>size deep node_modules가 N-01 위협(R3)</td><td>opt-in + budgetMs/maxDepth/maxEntries 상한 + top-level 근사 기본 → partial 명시</td></tr>
+    <tr><td>RM-3</td><td>재스캔 중 store.load() 교체 시 짧은 불일치</td><td>load()는 atomic write 후 재호출 → 부분 상태 노출 없음. 폴링 done 후 프론트가 재fetch</td></tr>
+    <tr><td>RM-4</td><td>폴링 트래픽/배터리</td><td>주기 ≥ 1s, idle 시 폴링 중단(phase done/idle이면 정리). 탭 비활성 시 간격 완화 권장</td></tr>
+    <tr><td>RM-5</td><td>all-drives가 신뢰불가 메타데이터 노출 확대(RC-2)</td><td>textContent+CSP(L-1) 강제, currentPath basename 축약(M4-H-1)+textContent. 시스템 제외 canonicalize 세그먼트(M4-H-2). security-reviewer 2회차 재검</td></tr>
+    <tr><td>RM-6</td><td>백그라운드 스캔 예외/크래시로 in-flight 락 영구 점유 → 재스캔 영구 409(가용성 데드락)</td><td>start() try/finally 항상 락 해제 + watchdog 타임아웃 강제 해제(M4-M-3). phase=error도 idle 복귀</td></tr>
+    <tr><td>RM-7</td><td>무인증 폴러가 scan-status로 절대경로·scanId 점진 수집(RC-1 확대·L-3 상충)</td><td>scan-status에 checkReadAccess(Host+Origin+토큰) 게이트 + currentPath basename 축약(M4-H-1). 절대경로는 서버 메모리 전용</td></tr>
+  </table>
+  <h3>가정</h3>
+  <ul class="tight">
+    <li>단일 사용자·로컬·인증 없음(기존 전제 불변). 동시 스캔 요청은 사실상 동일 사용자의 중복.</li>
+    <li>OS는 Windows/macOS/Linux. driveEnum은 이 3종 기준(기타 OS는 <code>/</code> 단일 폴백).</li>
+    <li>프론트는 기존 SPA 1페이지·fetch 모델(R-11)을 유지하며 재스캔 후 재fetch로 갱신.</li>
+  </ul>
+  <h3 id="open">미해결 질문 (PM 확인 필요)</h3>
+  <ul class="tight">
+    <li><b>Q1 (R-16 옵션 노출) — PM 확정 반영:</b> <code>allDrives</code>는 <b>config 게이트 전용</b>(본문만으론 강등), <code>withSize</code>는 <b>본문 허용</b>(성능 옵션, 예산 상한 내)으로 <b>비대칭 확정</b>(§2.2·§8.1, M4-M-1). 미해결 아님 — PM 결정으로 종결.</li>
+    <li><b>Q2 (size 기본 활성):</b> size 수집을 M4에서 <b>기본 on</b>으로 할지(N-01 벤치 통과 시) <b>기본 off</b>로 둘지? 본 설계 기본은 off(opt-in) — 200루트 30초 보존 우선.</li>
+    <li><b>Q3 (폴링 주기·idle 정리):</b> 폴링 1초가 적정한지, 탭 비활성 시 간격 완화 정책을 도입할지.</li>
+    <li><b>Q4 (depthLimit 기본/절대값):</b> 기본 24·절대 상한 64·all-drives 기본 12가 적정한지 (벤치로 튜닝 권장).</li>
+    <li><b>Q5 (N-07 검증 도구):</b> 외부 의존성 0 제약상 자동 a11y 린터(axe 등) 도입 불가 → 수동 워크스루 + 대비 측정으로 검증하는 것을 수용할지.</li>
+  </ul>
+</section>
+
+</main>
+</body>
+</html>

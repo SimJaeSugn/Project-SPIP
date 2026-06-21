@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project-SPIP — M4 설계 델타 보안 검증 보고서 (위협 모델링) 1회차</title>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#1e293b; --text:#e2e8f0; --sub:#94a3b8;
+    --accent:#34d399; --ref:#38bdf8; --line:#334155; --warn:#fbbf24; --danger:#f87171;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:"Segoe UI","Malgun Gothic",system-ui,sans-serif;line-height:1.7;}
+  header{padding:48px 32px 36px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#13203b,#0f172a);}
+  header h1{margin:0 0 8px;font-size:27px;}
+  header .tag{display:inline-block;background:rgba(52,211,153,.12);color:var(--accent);
+    border:1px solid rgba(52,211,153,.4);border-radius:999px;padding:3px 12px;font-size:13px;margin-right:8px;}
+  header p{margin:14px 0 0;color:var(--sub);max-width:980px;}
+  .meta{margin-top:16px;font-size:13px;color:var(--sub);}
+  main{max-width:1140px;margin:0 auto;padding:32px;}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:24px 28px;margin:22px 0;}
+  h2{margin:0 0 16px;font-size:21px;color:var(--accent);border-left:4px solid var(--accent);padding-left:12px;}
+  h3{font-size:16px;color:var(--ref);margin:22px 0 10px;}
+  h4{font-size:14px;color:var(--text);margin:16px 0 6px;}
+  p{margin:8px 0;}
+  ul,ol{margin:8px 0;padding-left:22px;}li{margin:5px 0;}
+  code{background:#0b1220;color:var(--ref);padding:1px 6px;border-radius:5px;font-size:13px;font-family:Consolas,monospace;}
+  pre{background:#0b1220;border:1px solid var(--line);border-radius:8px;padding:14px 16px;
+    overflow-x:auto;font-size:13px;color:#cbd5e1;font-family:Consolas,monospace;line-height:1.55;}
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13.5px;}
+  th,td{border:1px solid var(--line);padding:9px 11px;text-align:left;vertical-align:top;}
+  th{background:#142035;color:var(--accent);}
+  tr:nth-child(even) td{background:rgba(255,255,255,.02);}
+  .fid{font-family:Consolas,monospace;font-weight:700;white-space:nowrap;}
+  .sev{font-size:11px;font-weight:700;padding:2px 9px;border-radius:6px;white-space:nowrap;display:inline-block;}
+  .crit{background:rgba(248,113,113,.18);color:#fecaca;border:1px solid rgba(248,113,113,.6);}
+  .high{background:rgba(251,146,60,.16);color:#fdba74;border:1px solid rgba(251,146,60,.55);}
+  .med{background:rgba(251,191,36,.14);color:#fcd34d;border:1px solid rgba(251,191,36,.5);}
+  .low{background:rgba(56,189,248,.14);color:#7dd3fc;border:1px solid rgba(56,189,248,.5);}
+  .pass{background:rgba(52,211,153,.16);color:#6ee7b7;border:1px solid rgba(52,211,153,.5);}
+  .verdict{display:inline-block;border-radius:999px;padding:6px 22px;font-size:18px;font-weight:800;}
+  .v-cond{background:rgba(251,191,36,.16);color:#fcd34d;border:1px solid rgba(251,191,36,.6);}
+  .v-pass{background:rgba(52,211,153,.16);color:#6ee7b7;border:1px solid rgba(52,211,153,.6);}
+  .v-fail{background:rgba(248,113,113,.18);color:#fecaca;border:1px solid rgba(248,113,113,.6);}
+  .note{background:rgba(56,189,248,.08);border:1px solid rgba(56,189,248,.3);border-radius:8px;
+    padding:12px 16px;font-size:13.5px;color:#bae6fd;margin:10px 0;}
+  .warn-box{background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.3);border-radius:8px;
+    padding:12px 16px;font-size:13.5px;color:#fde68a;margin:10px 0;}
+  .danger-box{background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.35);border-radius:8px;
+    padding:12px 16px;font-size:13.5px;color:#fecaca;margin:10px 0;}
+  .ok-box{background:rgba(52,211,153,.08);border:1px solid rgba(52,211,153,.3);border-radius:8px;
+    padding:12px 16px;font-size:13.5px;color:#bbf7d0;margin:10px 0;}
+  figure{margin:18px 0;background:#0b1220;border:1px solid var(--line);border-radius:10px;padding:18px;}
+  figcaption{color:var(--sub);font-size:12.5px;margin-top:10px;text-align:center;}
+  .legend{display:flex;gap:18px;flex-wrap:wrap;font-size:12.5px;color:var(--sub);margin-top:10px;justify-content:center;}
+  .legend span{display:inline-flex;align-items:center;gap:6px;}
+  .dot{width:11px;height:11px;border-radius:3px;display:inline-block;}
+  .finding{border-left:3px solid var(--warn);padding:6px 0 6px 14px;margin:20px 0;}
+  .finding.pass-f{border-left-color:var(--accent);}
+  .finding.high-f{border-left-color:#fb923c;}
+  .finding.crit-f{border-left-color:var(--danger);}
+  .finding h4{margin:0 0 8px;font-size:15px;color:var(--text);}
+  .kv{font-size:13px;margin:3px 0;}
+  .kv b{color:var(--sub);font-weight:600;display:inline-block;min-width:96px;vertical-align:top;}
+  footer{text-align:center;color:var(--sub);font-size:12.5px;padding:30px;border-top:1px solid var(--line);}
+  .scorecard{display:flex;gap:14px;flex-wrap:wrap;margin:16px 0;}
+  .scard{flex:1;min-width:110px;background:#0b1220;border:1px solid var(--line);border-radius:10px;padding:14px;text-align:center;}
+  .scard .n{font-size:28px;font-weight:800;}
+  .scard .l{font-size:12px;color:var(--sub);margin-top:4px;}
+</style>
+</head>
+<body>
+<header>
+  <span class="tag">보안 검증 보고서</span><span class="tag">위협 모델링 (STRIDE)</span><span class="tag">M4 설계 델타 · 1회차</span>
+  <h1>Project-SPIP — M4 설계 델타 보안 검증 보고서</h1>
+  <p>MVP(M1~M3) 보안 베이스라인(아키텍처 2회차 재검증: 8중 통제·TB-A/TB-B·치명/높음 0)을 기준으로, M4 델타(R-16 재스캔·R-15 진행표시·R-09 size·R-05 전체드라이브·R-03 depthLimit·N-07 접근성)가 <b>새로 추가하는 공격 표면</b>을 적대적 관점에서 위협 모델링했다. 핵심 질문: 기존 8중 통제가 신규 상태변경·신규 GET·디스크 전체 도달 범위 확대에 <b>실제로 승계</b>되는가, 그리고 신규 표면이 베이스라인 위험 수용(RC-1 타사용자 비격리·RC-2 부분신뢰)을 <b>확대</b>하지 않는가. 검증 대상은 <b>설계 청사진</b>이다(구현 코드 없음 — <code>npm audit</code>/시크릿 스캔 비해당, 외부 의존성 0).</p>
+  <div class="meta">검증자: Security Reviewer · 일자: 2026-06-21 · 입력: m4-design.html(§2~§9 ADR-M4-1~5) / architecture.html(§11 8중 통제·TB-A/TB-B) / architecture_security_review_2.html(베이스라인·RC-1/RC-2·V-1/V-2) / api-contract.md · 방법: 자산·신뢰경계 식별 → 신규 표면별 STRIDE 위협 도출 → 기존 통제 승계 여부 대조 → 등급화 → 시정 항목·종합 판정</div>
+</header>
+
+<main>
+
+<!-- ===================== 판정 ===================== -->
+<section id="verdict">
+  <h2>0. 종합 판정</h2>
+  <p style="font-size:16px;">판정: <span class="verdict v-cond">조건부 PASS</span> <span style="color:var(--sub);font-size:13px;">(치명 0 · 높음 2 · 중간 3 · 낮음 2 · PASS 6)</span></p>
+  <p>M4 델타의 보안 골격은 견고하다 — M-1(Host allowlist+Origin+세션토큰+CT)이 신규 상태변경 <code>/api/rescan</code>에 그대로 선통과로 승계되고, all-drives는 <b>config opt-in 게이트 + 5중 가드</b>로 기본 차단이며, size·depthLimit은 H-3/M-3의 상한 가드를 확장한다. 경로를 본문으로 받지 않는(config-only) 설계는 H-1을 유지한다. 그러나 <b>두 가지 높음 위협</b>이 설계 반영을 요구한다: ① <b>신규 무인증 GET <code>/api/scan-status</code>가 절대 경로(<code>currentPath</code>)·<code>scanId</code>를 노출</b>하여 베이스라인의 RC-1(동일머신 타사용자 비격리) 위험 수용 범위를 <b>정보노출 방향으로 확대</b>하고 L-3(내부경로 응답 비노출) 정책과 상충한다(M4-H-1). ② <b>all-drives 시스템 디렉터리 prefix 제외가 H-1 canonicalize 규칙과 동일 시점·동일 정규화로 적용된다는 보증이 설계에 없어</b>, 심링크/접합점·Windows 8.3 단축명·대소문자·UNC로 <code>C:\Windows</code> 등 제외 대상을 우회 순회할 잔여(M4-H-2)가 있다. 치명/높음 잔여가 있으므로 <b>보안 게이트는 통과시키지 않는다</b> — 아래 §4 H급 2건의 설계 반영 후 재검증(2회차)을 조건으로 한다.</p>
+
+  <div class="scorecard">
+    <div class="scard"><div class="n" style="color:#fecaca">0</div><div class="l">치명</div></div>
+    <div class="scard"><div class="n" style="color:#fdba74">2</div><div class="l">높음</div></div>
+    <div class="scard"><div class="n" style="color:#fcd34d">3</div><div class="l">중간</div></div>
+    <div class="scard"><div class="n" style="color:#7dd3fc">2</div><div class="l">낮음</div></div>
+    <div class="scard"><div class="n" style="color:#6ee7b7">6</div><div class="l">PASS(통제 유효)</div></div>
+  </div>
+
+  <div class="warn-box"><b>게이트 결과:</b> 베이스라인이 PASS인 상태에서 M4가 <b>새 정보노출 채널(무인증 GET)</b>과 <b>제외 우회 잔여</b>를 들여온다. 둘 다 설계 단계에서 저비용으로 닫을 수 있으므로(코드 작성 불필요, 계약·통제 명세 추가), <b>조건부 PASS</b>로 분류하고 H급 2건 반영을 게이트 차단 사유로 둔다. 코드를 직접 수정하지 않으며 시정 항목만 산출한다.</div>
+</section>
+
+<!-- ===================== 자산 / 신뢰경계 ===================== -->
+<section id="surface">
+  <h2>1. M4 신규 공격 표면 · 신뢰경계 (변화 지점)</h2>
+  <p>M4는 새 신뢰 경계를 만들지 않는다(설계 주장 — 대체로 타당). 그러나 <b>기존 경계에서 데이터가 흐르는 방향·범위가 바뀐다</b>: (a) TB-A에 신규 상태변경 1건(rescan)·신규 읽기 1건(scan-status)이 추가되고, (b) TB-B(스캔 대상=부분신뢰)의 <b>도달 범위가 지정 루트 → 디스크 전체</b>로 확대되며(all-drives), (c) 부분신뢰 입력에서 신뢰 영역으로 흐르는 데이터에 <b>currentPath(진행 경로)</b>가 추가되어 무인증 GET으로 TB-A 너머로 다시 흘러나간다. 아래 SVG는 베이스라인 그림 위에 M4 신규 흐름(굵은 주황)만 덧그린 것이다.</p>
+  <figure>
+    <svg viewBox="0 0 1080 360" width="100%" role="img" aria-label="M4 신규 데이터 흐름과 위협 지점">
+      <defs>
+        <marker id="ar" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 Z" fill="#94a3b8"/></marker>
+        <marker id="ao" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 Z" fill="#fb923c"/></marker>
+      </defs>
+      <!-- TB-A browser -->
+      <rect x="20" y="40" width="210" height="270" rx="10" fill="#170d0d" stroke="#f87171" stroke-width="1.3" stroke-dasharray="6 5"/>
+      <text x="125" y="62" fill="#f87171" font-size="12" text-anchor="middle" font-weight="bold" font-family="Segoe UI">TB-A 브라우저 (미신뢰)</text>
+      <text x="125" y="84" fill="#cbd5e1" font-size="10" text-anchor="middle" font-family="Segoe UI">CSRF · 연타 트리거 · 폴링</text>
+      <text x="125" y="104" fill="#94a3b8" font-size="9.5" text-anchor="middle" font-family="Segoe UI">RC-1: 동일머신 타사용자도</text>
+      <text x="125" y="120" fill="#94a3b8" font-size="9.5" text-anchor="middle" font-family="Segoe UI">127.0.0.1에 접근 가능(비격리)</text>
+      <!-- M-1 gate -->
+      <rect x="270" y="60" width="150" height="110" rx="10" fill="#0b1220" stroke="#34d399" stroke-width="1.5"/>
+      <text x="345" y="84" fill="#34d399" font-size="12" text-anchor="middle" font-weight="bold" font-family="Segoe UI">M-1 게이트</text>
+      <text x="345" y="106" fill="#cbd5e1" font-size="9.5" text-anchor="middle" font-family="Segoe UI">Host+Origin+토큰+CT</text>
+      <text x="345" y="124" fill="#6ee7b7" font-size="9.5" text-anchor="middle" font-family="Segoe UI">POST rescan ✔ 승계</text>
+      <text x="345" y="146" fill="#fca5a5" font-size="9.5" text-anchor="middle" font-family="Segoe UI">GET scan-status ✘ 미적용</text>
+      <!-- server -->
+      <rect x="270" y="200" width="320" height="110" rx="10" fill="#0d1726" stroke="#34d399" stroke-width="1.3" stroke-dasharray="6 5"/>
+      <text x="430" y="224" fill="#34d399" font-size="12" text-anchor="middle" font-weight="bold" font-family="Segoe UI">신뢰 영역 (로컬 런타임)</text>
+      <text x="430" y="246" fill="#cbd5e1" font-size="9.5" text-anchor="middle" font-family="Segoe UI">ScanController(전역 단일 락·state)</text>
+      <text x="430" y="264" fill="#cbd5e1" font-size="9.5" text-anchor="middle" font-family="Segoe UI">scanner · snapshotStore(0600)</text>
+      <text x="430" y="286" fill="#94a3b8" font-size="9.5" text-anchor="middle" font-family="Segoe UI">currentPath = 부분신뢰 절대경로 보유</text>
+      <!-- TB-B -->
+      <rect x="640" y="40" width="420" height="270" rx="10" fill="#1a1206" stroke="#fbbf24" stroke-width="1.3" stroke-dasharray="6 5"/>
+      <text x="850" y="62" fill="#fbbf24" font-size="12" text-anchor="middle" font-weight="bold" font-family="Segoe UI">TB-B 스캔 대상 (부분신뢰)</text>
+      <text x="850" y="86" fill="#fca5a5" font-size="10" text-anchor="middle" font-family="Segoe UI">M4 확대: 지정 루트 → 디스크 전체 (all-drives)</text>
+      <text x="850" y="112" fill="#cbd5e1" font-size="9.5" text-anchor="middle" font-family="Segoe UI">시스템 디렉터리(C:\Windows, /proc …)</text>
+      <text x="850" y="130" fill="#cbd5e1" font-size="9.5" text-anchor="middle" font-family="Segoe UI">심링크/접합점 · 거대/심링크 루프 트리</text>
+      <text x="850" y="156" fill="#6ee7b7" font-size="9.5" text-anchor="middle" font-family="Segoe UI">가드: opt-in · 시스템제외 · depthLimit</text>
+      <text x="850" y="174" fill="#6ee7b7" font-size="9.5" text-anchor="middle" font-family="Segoe UI">realpath화이트리스트 · 심링크미추적 · H-3상한</text>
+      <text x="850" y="200" fill="#fdba74" font-size="9.5" text-anchor="middle" font-family="Segoe UI">잔여(M4-H-2): prefix 제외 vs canonicalize</text>
+      <text x="850" y="216" fill="#fdba74" font-size="9.5" text-anchor="middle" font-family="Segoe UI">시점·정규화 불일치 시 우회 가능</text>
+      <!-- flows -->
+      <line x1="230" y1="100" x2="268" y2="100" stroke="#94a3b8" stroke-width="1.4" marker-end="url(#ar)"/>
+      <line x1="420" y1="130" x2="588" y2="200" stroke="#94a3b8" stroke-width="1.4" marker-end="url(#ar)"/>
+      <text x="500" y="158" fill="#94a3b8" font-size="9" font-family="Segoe UI">rescan(202)</text>
+      <line x1="590" y1="250" x2="638" y2="180" stroke="#fb923c" stroke-width="2" marker-end="url(#ao)"/>
+      <text x="600" y="232" fill="#fdba74" font-size="9" font-family="Segoe UI">디스크 전체 순회</text>
+      <!-- leak flow: server state -> browser via scan-status bypassing M-1 -->
+      <line x1="320" y1="200" x2="180" y2="160" stroke="#fb923c" stroke-width="2.2" marker-end="url(#ao)"/>
+      <text x="150" y="200" fill="#fdba74" font-size="9.5" font-family="Segoe UI">GET scan-status →</text>
+      <text x="150" y="214" fill="#fdba74" font-size="9.5" font-family="Segoe UI">currentPath·scanId (무인증)</text>
+    </svg>
+    <div class="legend">
+      <span><span class="dot" style="background:#f87171"></span> TB-A 미신뢰</span>
+      <span><span class="dot" style="background:#fbbf24"></span> TB-B 부분신뢰</span>
+      <span><span class="dot" style="background:#34d399"></span> 통제 게이트 / 신뢰영역</span>
+      <span><span class="dot" style="background:#fb923c"></span> M4 신규 흐름 / 잔여 위협</span>
+    </div>
+    <figcaption>그림 1. M4 신규 흐름. POST rescan은 M-1을 승계(PASS)하나, GET scan-status는 무인증으로 신뢰 영역의 currentPath·scanId를 TB-A로 흘려보낸다(M4-H-1). all-drives는 TB-B 도달 범위를 디스크 전체로 확대하고 prefix 제외 우회 잔여(M4-H-2)를 남긴다.</figcaption>
+  </figure>
+
+  <h3>1.1 보호 자산 (M4 관점)</h3>
+  <ul>
+    <li><b>호스트 파일시스템 구조(절대 경로)</b> — all-drives 시 디스크 전체 디렉터리 레이아웃·사용자명·프로젝트 위치. <code>currentPath</code>·프로젝트 <code>path</code>로 노출.</li>
+    <li><b>스캔 자원(CPU·I/O·시간)</b> — N-01 30초 예산. 재스캔 트리거·거대 트리·size 측정·폴링이 소모.</li>
+    <li><b>scanId · 진행 state</b> — 추측/노출 시 상태 추론·잠재적 상관관계.</li>
+    <li><b>캐시 무결성</b> — 동시 재스캔이 캐시 동시 쓰기를 일으키면 손상.</li>
+  </ul>
+</section>
+
+<!-- ===================== 발견 요약 ===================== -->
+<section id="summary">
+  <h2>2. 발견 요약 (등급별)</h2>
+  <table>
+    <tr><th style="width:80px;">ID</th><th>취약점 / 관찰</th><th style="width:90px;">대상</th><th style="width:130px;">STRIDE</th><th style="width:90px;">심각도</th></tr>
+    <tr><td class="fid">M4-H-1</td><td>무인증 GET <code>/api/scan-status</code>가 절대경로·scanId 노출 (RC-1 확대·L-3 상충)</td><td>R-15</td><td>정보노출(I)</td><td><span class="sev high">높음</span></td></tr>
+    <tr><td class="fid">M4-H-2</td><td>all-drives 시스템 디렉터리 prefix 제외가 H-1 canonicalize와 동일 정규화·시점 보증 없음 → 우회 순회</td><td>R-05</td><td>정보노출(I)·DoS(D)</td><td><span class="sev high">높음</span></td></tr>
+    <tr><td class="fid">M4-M-1</td><td>rescan body <code>withSize</code>에 config 게이트 부재 — 본문만으로 비싼 측정 모드 강제(allDrives와 비대칭)</td><td>R-16/09</td><td>DoS(D)·변조(T)</td><td><span class="sev med">중간</span></td></tr>
+    <tr><td class="fid">M4-M-2</td><td>ABS_MAX_DEPTH=64로 절대상한 상향(MVP 24 대비) — all-drives와 결합 시 자원 예산 재검증 필요</td><td>R-03/05</td><td>DoS(D)</td><td><span class="sev med">중간</span></td></tr>
+    <tr><td class="fid">M4-M-3</td><td>락 해제 견고성: 백그라운드 스캔 예외/크래시 시 <code>running</code> 락 영구 점유(데드락) 가능 — 회복 경로 미명세</td><td>R-16</td><td>DoS(D)</td><td><span class="sev med">중간</span></td></tr>
+    <tr><td class="fid">M4-L-1</td><td>scanId 엔트로피·용도 미명세 — 추측/상관 방지 보증 부재(영향은 낮음)</td><td>R-16/15</td><td>정보노출(I)</td><td><span class="sev low">낮음</span></td></tr>
+    <tr><td class="fid">M4-L-2</td><td><code>note</code>(강등 안내) 등 신규 진행 문자열의 textContent 렌더 명시는 currentPath에만 국한 — 전 필드 강제 누락</td><td>R-15/N-07</td><td>변조(T)→XSS</td><td><span class="sev low">낮음</span></td></tr>
+    <tr><td class="fid">M4-P-1</td><td>POST /api/rescan에 M-1(Host+Origin+토큰+CT) 선통과 승계 — CSRF/조작 트리거 차단</td><td>R-16</td><td>위장(S)·변조(T)</td><td><span class="sev pass">PASS</span></td></tr>
+    <tr><td class="fid">M4-P-2</td><td>전역 단일 in-flight 락 + 즉시 409 — 동시 캐시 쓰기 경쟁·자원 2배 차단</td><td>R-16</td><td>DoS(D)</td><td><span class="sev pass">PASS</span></td></tr>
+    <tr><td class="fid">M4-P-3</td><td>경로를 본문으로 받지 않고 config-only — H-1 경로조작 표면 0 유지</td><td>R-16</td><td>변조(T)·E</td><td><span class="sev pass">PASS</span></td></tr>
+    <tr><td class="fid">M4-P-4</td><td>all-drives config opt-in 게이트(기본 false, 본문만으로 불가) — 위험 모드 기본 차단</td><td>R-05</td><td>권한상승(E)</td><td><span class="sev pass">PASS</span></td></tr>
+    <tr><td class="fid">M4-P-5</td><td>size 시간/깊이/entry 상한 + lstat 심링크 미추적 — H-3 정합, 거대/루프 트리 자원고갈 방어</td><td>R-09</td><td>DoS(D)</td><td><span class="sev pass">PASS</span></td></tr>
+    <tr><td class="fid">M4-P-6</td><td>depthLimit clamp(1, ABS_MAX_DEPTH) — config로 무한 깊이 우회 불가, M-3 안전상한 승계</td><td>R-03</td><td>DoS(D)</td><td><span class="sev pass">PASS</span></td></tr>
+    <tr><td class="fid">M4-P-7</td><td>N-07 접근성: CSP·textContent·외부 의존성 0 유지, 포커스 트랩 자체 구현 — 보안 약화 없음</td><td>N-07</td><td>—</td><td><span class="sev pass">PASS</span></td></tr>
+  </table>
+</section>
+
+<!-- ===================== 높음 ===================== -->
+<section id="high">
+  <h2>3. 높음 위협 — 상세 (게이트 차단)</h2>
+
+  <div class="finding high-f">
+    <h4>M4-H-1. 무인증 GET <code>/api/scan-status</code>의 절대경로·scanId 정보 노출 <span class="sev high">높음</span></h4>
+    <div class="kv"><b>위치</b> §3 R-15, §8.3 ScanProgress (<code>apiHandlers.js</code> GET <code>/api/scan-status</code>)</div>
+    <div class="kv"><b>STRIDE</b> 정보노출(I)</div>
+    <div class="kv"><b>관찰</b> ScanProgress는 <code>currentPath</code>(순회 중 절대 경로), <code>scanId</code>, <code>counts</code>, <code>startedAt</code>을 담는다. 이 라우트는 <b>GET</b>이므로 M-1(상태변경 POST 전용)이 적용되지 않는다 — 설계도 §3.1에서 "무상태 GET 1건"으로 명시. 즉 <b>토큰 없이 누구나 폴링 가능</b>하다.</div>
+    <div class="kv"><b>악용 시나리오</b> 베이스라인은 RC-1(동일머신 타 로컬 사용자/프로세스 비격리)을 위험 수용했고 127.0.0.1은 사용자 격리를 하지 않는다(검증2 §5). all-drives 재스캔이 도는 동안 같은 머신의 다른 로컬 프로세스가 <code>/api/scan-status</code>를 1초 폴링하면, <b>인증 없이 디스크 전체의 절대 경로 트리(사용자명·프로젝트 위치·디렉터리 구조)를 점진 수집</b>할 수 있다. <code>counts</code>로 프로젝트 규모도 추론. 베이스라인 L-3은 "내부 절대경로는 응답 비노출, 콘솔 로그 한정"을 못박았는데, 이 신규 GET은 <b>의도적으로 절대경로를 응답</b>하므로 L-3 정책과 정면 상충한다. MVP에는 없던 신규 정보노출 채널이다.</div>
+    <div class="kv"><b>권고 조치</b>
+      <ol>
+        <li><b>정보 최소화(우선):</b> 응답의 <code>currentPath</code>를 <b>전체 절대경로 대신 마지막 1~2 세그먼트(basename) 또는 드라이브 루트 기준 상대 경로</b>로 축약. 진행 표시 UX에는 basename으로 충분하다. <code>startedAt</code>·scanId 등 상관 가능한 식별자는 최소화.</li>
+        <li><b>대안/병행 — 동일출처 강제:</b> GET에도 <b>Origin/Referer 또는 세션토큰</b> 약식 검증을 적용해 같은 머신의 비브라우저 폴러를 배제(M-1을 읽기에도 부분 승계). 최소한 <code>currentPath</code>를 담는 응답은 토큰 검증 게이트 뒤에 둔다.</li>
+        <li>설계에 <b>L-3 예외 사유</b>를 명문화하거나 L-3 준수로 정렬할 것(현재 상충 미해소).</li>
+        <li>위 1)을 채택하면 §8.3 계약과 R-15 그림 1의 <code>currentPath</code> 정의를 "축약 표시명"으로 갱신.</li>
+      </ol>
+    </div>
+  </div>
+
+  <div class="finding high-f">
+    <h4>M4-H-2. all-drives 시스템 디렉터리 prefix 제외의 정규화·시점 불일치로 인한 우회 순회 <span class="sev high">높음</span></h4>
+    <div class="kv"><b>위치</b> §5.2 (시스템 디렉터리 제외 — "경로 prefix 기반"), <code>excludeRules.js</code> · <code>driveEnum.js</code></div>
+    <div class="kv"><b>STRIDE</b> 정보노출(I) · 서비스거부(D)</div>
+    <div class="kv"><b>관찰</b> §5.2는 시스템 디렉터리 제외를 <b>"경로 prefix 기반"</b>(<code>C:\Windows</code>, <code>C:\Program Files*</code>, <code>/proc</code> 등)으로 추가한다고만 명세한다. 그러나 베이스라인 H-1은 보안 결정에 반드시 <code>canonicalize()</code>(realpath·심링크/접합점 해소·대소문자 폴드·NFC·UNC/드라이브상대/<code>\\?\</code> 정규화)를 등록·검증 <b>동일 시점·동일 규칙</b>으로 적용하라고 못박았다. 제외가 <b>raw 문자열 prefix 비교</b>로 수행되면 canonicalize와 어긋난다.</div>
+    <div class="kv"><b>악용 시나리오</b> all-drives가 활성(opt-in)된 상태에서: (1) <b>Windows 8.3 단축명</b> — <code>C:\PROGRA~1</code>은 <code>C:\Program Files</code>의 실경로이나 prefix 문자열 비교를 통과해 제외를 우회. (2) <b>접합점/심링크</b> — 다른 위치의 junction이 <code>C:\Windows</code>를 가리키면 raw prefix는 다르나 realpath는 시스템 폴더. (3) <b>대소문자/UNC</b> — <code>c:\windows</code>, <code>\\?\C:\Windows</code>, <code>\\127.0.0.1\C$\Windows</code> 변형. 이로써 시스템 디렉터리가 순회되어 (a) 시스템 경로/구조 정보노출(I) 확대, (b) 거대/특수 시스템 트리 순회로 N-01 예산 초과·자원고갈(D)이 발생한다. all-drives가 도달 범위를 디스크 전체로 넓혔기 때문에 영향이 베이스라인보다 크다.</div>
+    <div class="kv"><b>권고 조치</b>
+      <ol>
+        <li>시스템 제외 판정을 <b>canonicalize() 실경로 기준</b>으로 수행하도록 §5.2에 명시 — raw prefix 금지. 제외 비교는 walker가 디렉터리를 canonicalize한 <b>직후·진입 전</b>에 적용(가지치기 시점 통일).</li>
+        <li>prefix가 아닌 <b>경로 세그먼트(canonical 컴포넌트) 단위 비교</b>로 부분 일치 우회 차단(예: <code>C:\WindowsApps</code>가 <code>C:\Windows</code> 제외에 잘못 걸리거나 그 반대를 방지).</li>
+        <li>8.3 단축명·UNC·확장경로(<code>\\?\</code>)는 canonicalize 단계에서 정규화 또는 거부(H-1 규칙 재사용)됨을 §5.2에 명문화.</li>
+        <li>심링크/접합점은 walker M-3(심링크 미추적)로 진입 자체가 차단되나, <b>제외 판정이 미추적 가지치기보다 앞단</b>임을 보장(H-3 "격리/처리보다 가드 앞단" 원칙 승계).</li>
+      </ol>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 중간/낮음 ===================== -->
+<section id="midlow">
+  <h2>4. 중간 · 낮음 위협 — 상세</h2>
+
+  <div class="finding">
+    <h4>M4-M-1. rescan <code>withSize</code> body 옵션의 config 게이트 비대칭 <span class="sev med">중간</span></h4>
+    <div class="kv"><b>위치</b> §2.2 옵션 본문, §8.1</div>
+    <div class="kv"><b>STRIDE</b> 서비스거부(D) · 변조(T)</div>
+    <div class="kv"><b>관찰</b> <code>allDrives:true</code>는 <code>config.allowAllDrives===true</code>일 때만 수락(강등+note) — 안전. 그러나 <code>withSize:true</code>는 동일한 config 게이트 명세가 없어, <b>요청 본문만으로 비싼 size 측정(node_modules stat 수만 회)을 강제</b>할 수 있다. M-1을 통과한 브라우저(또는 RC-1상 동일머신 폴러가 토큰 탈취 시)가 size 측정을 반복 유발.</div>
+    <div class="kv"><b>완화 사실</b> 전역 단일 락(M4-P-2)이 동시 1개로 제한하고, size 자체에 budgetMs/maxDepth/maxEntries 상한(M4-P-5)이 있어 폭주는 제한적. 그래서 치명/높음이 아닌 중간.</div>
+    <div class="kv"><b>권고 조치</b> <code>withSize</code>도 <b>서버 config 상한(예: <code>config.size.allowOnDemand</code>)에 종속</b>시키거나, 최소한 size 활성 여부의 최종 결정권을 서버 config가 갖도록 명세(allDrives와 대칭). 미해결 질문 Q1과 함께 PM이 "본문 옵션을 config 허용 범위 내로만"이라는 원칙을 <code>withSize</code>에도 명시 적용.</div>
+  </div>
+
+  <div class="finding">
+    <h4>M4-M-2. ABS_MAX_DEPTH=64 상향 + all-drives 결합 자원 예산 <span class="sev med">중간</span></h4>
+    <div class="kv"><b>위치</b> §6 (ABS_MAX_DEPTH=64), §5.2 all-drives</div>
+    <div class="kv"><b>STRIDE</b> 서비스거부(D)</div>
+    <div class="kv"><b>관찰</b> MVP의 안전상한은 24였다(M-3에서 "항상 강제"). M4는 이를 기본값으로 강등하고 <b>절대 상한을 64로 신설</b>한다. 즉 사용자가 config로 깊이를 24→64까지 늘릴 수 있고, all-drives 디스크 전체와 결합하면 순회량이 MVP 대비 크게 증가할 수 있다. 64는 유한하므로 무한루프는 아니나, "MVP 안전상한을 약화하지 않는다"는 R-03 원칙과 미묘하게 어긋난다(절대상한이 24→64로 완화됨).</div>
+    <div class="kv"><b>권고 조치</b> (1) all-drives 모드 기본 깊이를 낮게(설계 §6의 12 권고) <b>강제</b>하고, all-drives에서는 ABS 상한도 더 낮게(예: 24) 별도 적용 검토. (2) ABS_MAX_DEPTH=64 + all-drives + maxEntries 상한 조합이 N-01/N-05를 깨지 않음을 구현 게이트(V-2 연장)에서 벤치로 실증. (3) entry/시간 상한이 깊이와 <b>독립적으로</b> 전체 순회에도 적용되는지(현재 size에만 명시) walker 레벨 전역 상한 추가 검토.</div>
+  </div>
+
+  <div class="finding">
+    <h4>M4-M-3. 백그라운드 스캔 실패 시 락 영구 점유(데드락) 회복 경로 미명세 <span class="sev med">중간</span></h4>
+    <div class="kv"><b>위치</b> §2.1 동시성 모델, §2.5 ScanController</div>
+    <div class="kv"><b>STRIDE</b> 서비스거부(D)</div>
+    <div class="kv"><b>관찰</b> <code>acquire()</code>가 <code>running=true</code>로 락을 잡고 백그라운드 <code>start()</code>가 비동기 실행된다. 설계는 완료 시 phase=done, 예외 시 phase=error를 명시하나, <b>예외/크래시 시 <code>running</code> 락이 반드시 해제된다는 보증(finally·watchdog)이 시그니처에 없다</b>. 백그라운드 스캔이 처리되지 않은 예외로 죽으면 <code>running</code>이 영구 true가 되어 <b>이후 모든 재스캔이 409로 영구 거부</b>(가용성 데드락)될 수 있다.</div>
+    <div class="kv"><b>악용/유발</b> 적대적 트리(거대/특수 파일)나 권한 오류가 격리되지 않고 상위로 전파되면 트리거. all-drives에서 발생 확률↑.</div>
+    <div class="kv"><b>권고 조치</b> (1) <code>start()</code>는 <b>try/finally로 항상 락 해제</b>(성공·실패·예외 무관)함을 계약에 명시. (2) <b>watchdog 타임아웃</b>(예: 절대 상한 시간 초과 시 강제 해제+phase=error)을 ScanController에 추가. (3) phase=error도 락 해제 후 idle로 복귀함을 §2.3 완료/실패 행에 명문화. (N-05 "재스캔 중 0 다운"과 정합 필수.)</div>
+  </div>
+
+  <div class="finding">
+    <h4>M4-L-1. scanId 엔트로피·용도 미명세 <span class="sev low">낮음</span></h4>
+    <div class="kv"><b>위치</b> §2.3, §8.3 (<code>scanId:"&lt;hex&gt;"</code>)</div>
+    <div class="kv"><b>STRIDE</b> 정보노출(I)</div>
+    <div class="kv"><b>관찰</b> scanId가 <code>crypto</code> 기반 충분 엔트로피인지, 인가에 쓰이는지(쓰인다면 추측 위험), 단순 표시용인지 미명세. 현재 설계상 인가에 쓰이지 않고 단일 락이라 영향은 낮음.</div>
+    <div class="kv"><b>권고 조치</b> scanId는 (1) <code>crypto.randomBytes</code> 기반 충분 엔트로피, (2) <b>인가 토큰이 아님</b>(표시·상관용)을 명시. 인가에 쓸 계획이면 추측 불가성 보증 추가.</div>
+  </div>
+
+  <div class="finding">
+    <h4>M4-L-2. 진행 응답 전 필드의 textContent 렌더 강제 범위 <span class="sev low">낮음</span></h4>
+    <div class="kv"><b>위치</b> §3.2, §8.3, §7.1 aria-live</div>
+    <div class="kv"><b>STRIDE</b> 변조(T) → 저장형 XSS(L-1)</div>
+    <div class="kv"><b>관찰</b> 설계는 <code>currentPath</code>에 대해 textContent 렌더를 명시하나, <code>note</code>(all-drives 강등 안내 등)는 서버 생성이라 비교적 안전해도, <b>진행 패널 전 필드를 일괄 textContent로 렌더한다는 포괄 규칙</b>이 명문화되어 있지 않다. aria-live 영역에 부분신뢰 문자열을 갱신할 때 누락 위험.</div>
+    <div class="kv"><b>권고 조치</b> §7.1/§3.2에 "ScanProgress의 <b>모든 문자열 필드</b>(currentPath·note 포함)는 textContent로만 렌더, aria-live 갱신도 textContent"를 L-1 포괄 규칙으로 명시. (currentPath를 basename 축약하면 M4-H-1과 동시 완화.)</div>
+  </div>
+</section>
+
+<!-- ===================== PASS ===================== -->
+<section id="pass">
+  <h2>5. 기존 통제가 유효하게 막는 부분 (PASS)</h2>
+  <table>
+    <tr><th style="width:80px;">ID</th><th>통제</th><th>근거</th></tr>
+    <tr><td class="fid">M4-P-1</td><td>rescan에 M-1 선통과 승계</td><td>§2.2 ok-box: 라우터가 상태변경 POST에 <code>checkStateChange</code>(Host allowlist+Origin+X-SPIP-Token+CT)를 선통과. 실패 시 403 FORBIDDEN_ORIGIN. CSRF·DNS 리바인딩·조작 트리거가 신규 상태변경에도 차단됨. <b>신규 표면이 기존 게이트를 우회하지 않음.</b></td></tr>
+    <tr><td class="fid">M4-P-2</td><td>전역 단일 in-flight 락 + 409</td><td>§2.1·ADR-M4-1: 동시 2개 스캔 불가 → 캐시 동시 쓰기 경쟁·자원 2배 차단. 반복 트리거는 락 점유 중 즉시 409(M-1 검증 비용만)로 흡수 — 무제한 백그라운드 스캔 생성형 DoS 차단.</td></tr>
+    <tr><td class="fid">M4-P-3</td><td>경로 config-only(본문 미수용)</td><td>§2.2: scanRoots/excludes/depthLimit를 서버 config에서만. 요청 본문으로 경로를 받지 않음 → 경로 조작·순회 표면 0. H-1 정합 유지.</td></tr>
+    <tr><td class="fid">M4-P-4</td><td>all-drives config opt-in 게이트</td><td>§5.2·ADR-M4-4: <code>config.allowAllDrives</code> 기본 false. 본문 <code>allDrives:true</code>는 config 허용 시에만 적용, 아니면 강등+note. <b>요청만으로 위험 모드 활성 불가</b>(안전 기본값).</td></tr>
+    <tr><td class="fid">M4-P-5</td><td>size H-3 상한 가드</td><td>§4.1: budgetMs(1500)·maxDepth(6)·maxEntries(50000)·lstat 심링크 미추적·top-level 근사 기본. 적대적 거대/심링크 루프 트리에서 자원고갈을 격리 앞단에서 차단 — H-3 연장으로 정합.</td></tr>
+    <tr><td class="fid">M4-P-6</td><td>depthLimit clamp 승계</td><td>§6·ADR-M4-5: 유효깊이=clamp(config.depthLimit, 1, ABS_MAX_DEPTH). config로 무한/무제한 깊이 지정 불가. M-3 안전 의미를 절대상한이 승계(단, 절대값 64는 M4-M-2 참조).</td></tr>
+    <tr><td class="fid">M4-P-7</td><td>N-07 접근성의 보안 무약화</td><td>§7.1 ok-box: 시맨틱 마크업·정적 CSS·동일출처 JS로만 구현. CSP(default-src 'self', 인라인 금지)·textContent(L-1)·외부 a11y 라이브러리 0(의존성 0) 유지. 포커스 트랩도 자체 JS. <b>접근성 향상이 공격 표면을 늘리지 않음.</b></td></tr>
+  </table>
+</section>
+
+<!-- ===================== 시정 ===================== -->
+<section id="actions">
+  <h2>6. 시정 항목 요약 (게이트 통과 조건)</h2>
+  <div class="danger-box"><b>게이트 차단(필수 — H급):</b>
+    <ul>
+      <li><b>M4-H-1</b> — <code>/api/scan-status</code> currentPath를 basename/축약으로 정보 최소화 <b>또는</b> 무인증 GET에 동일출처(토큰) 검증 적용. L-3 상충 해소를 설계·계약에 반영.</li>
+      <li><b>M4-H-2</b> — all-drives 시스템 디렉터리 제외를 <b>canonicalize 실경로 + 세그먼트 단위</b>로, walker 진입 전 가지치기 앞단에 적용함을 §5.2에 명시(8.3/UNC/심링크/대소문자 우회 차단).</li>
+    </ul>
+  </div>
+  <div class="warn-box"><b>반영 권장(중간):</b> M4-M-1(withSize config 게이트 대칭) · M4-M-2(all-drives 깊이/ABS 상한 재검토+벤치) · M4-M-3(락 finally 해제+watchdog 데드락 회복).</div>
+  <div class="note"><b>구현 게이트 이월(추적):</b> M4-L-1(scanId 엔트로피·비인가 명시) · M4-L-2(진행 전 필드 textContent 포괄 규칙). 베이스라인 V-1(TOCTOU)·V-2(적대적 입력 실측)는 M4 size/all-drives 깊은 순회로 적용 범위가 넓어졌으므로 코드 보안 게이트에서 함께 실증.</div>
+
+  <h3>6.1 PM 확인 필요 (위험 수용 결정)</h3>
+  <ul>
+    <li><b>Q-A (M4-H-1 연계):</b> 무인증 GET <code>/api/scan-status</code>가 진행 경로를 어느 수준까지 노출할지 — basename 축약(권장) vs 전체 경로 유지(RC-1 정보노출 확대 수용). 본 보안 검증은 축약 또는 토큰 검증을 강하게 권고하며, 전체 경로 유지는 <b>RC-1 수용 범위의 명시적 확대</b>로 PM 재결정이 필요하다.</li>
+    <li><b>Q-B (설계 미해결 Q1 연계):</b> rescan 본문 옵션(withSize/allDrives)을 "config 허용 범위 내에서만" 원칙을 <code>withSize</code>에도 대칭 적용할지(M4-M-1).</li>
+  </ul>
+</section>
+
+<footer>Project-SPIP · M4 설계 델타 보안 검증 보고서 (위협 모델링) 1회차 · 판정: 조건부 PASS (치명 0 · 높음 2 · 중간 3 · 낮음 2 · PASS 6) · 게이트 차단: M4-H-1·M4-H-2 설계 반영 후 2회차 재검증 필요 · 검증 대상: M4 설계 청사진(구현 코드 없음, 외부 의존성 0 → npm audit/시크릿 스캔 비해당) · 기준: 아키텍처 8중 통제·TB-A/TB-B·RC-1/RC-2 베이스라인 · 자족형 HTML · 코드 미수정</footer>
+</body>
+</html>

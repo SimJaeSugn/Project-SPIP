@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project-SPIP — 기획 검증 보고서 (2회차 / 재검증)</title>
+<style>
+  :root{--bg:#0f172a;--panel:#1e293b;--text:#e2e8f0;--sub:#94a3b8;
+    --accent:#34d399;--ref:#38bdf8;--line:#334155;--warn:#fbbf24;--danger:#f87171;}
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:"Segoe UI","Malgun Gothic",system-ui,sans-serif;line-height:1.7;}
+  header{padding:44px 32px 30px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#13203b,#0f172a);}
+  header h1{margin:0 0 8px;font-size:28px;}
+  header .tag{display:inline-block;border-radius:999px;padding:3px 12px;font-size:13px;margin-right:8px;
+    background:rgba(52,211,153,.12);color:var(--accent);border:1px solid rgba(52,211,153,.4);}
+  header .verdict{display:inline-block;border-radius:999px;padding:4px 16px;font-size:15px;font-weight:800;margin-right:8px;
+    background:rgba(52,211,153,.16);color:#6ee7b7;border:1px solid rgba(52,211,153,.55);}
+  header p{margin:14px 0 0;color:var(--sub);max-width:920px;}
+  .meta{margin-top:14px;font-size:13px;color:var(--sub);}
+  main{max-width:1080px;margin:0 auto;padding:30px;}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px 28px;margin:20px 0;}
+  h2{margin:0 0 14px;font-size:20px;color:var(--accent);border-left:4px solid var(--accent);padding-left:12px;}
+  h3{font-size:15px;color:var(--ref);margin:18px 0 8px;}
+  p{margin:8px 0;}
+  code{background:#0b1220;color:var(--ref);padding:1px 6px;border-radius:5px;font-size:13px;}
+  table{width:100%;border-collapse:collapse;margin:12px 0;font-size:13.5px;}
+  th,td{border:1px solid var(--line);padding:9px 11px;text-align:left;vertical-align:top;}
+  th{background:#142035;color:var(--accent);}
+  tr:nth-child(even) td{background:rgba(255,255,255,.02);}
+  .rid{font-family:Consolas,monospace;color:var(--accent);font-weight:700;white-space:nowrap;}
+  .pill{font-size:11px;font-weight:700;padding:2px 9px;border-radius:6px;white-space:nowrap;}
+  .p1{background:rgba(248,113,113,.16);color:#fca5a5;border:1px solid rgba(248,113,113,.45);}
+  .p2{background:rgba(251,191,36,.16);color:#fcd34d;border:1px solid rgba(251,191,36,.45);}
+  .p3{background:rgba(56,189,248,.16);color:#7dd3fc;border:1px solid rgba(56,189,248,.45);}
+  .resolved{background:rgba(52,211,153,.16);color:#6ee7b7;border:1px solid rgba(52,211,153,.5);}
+  .open{background:rgba(251,191,36,.16);color:#fcd34d;border:1px solid rgba(251,191,36,.5);}
+  .pass{color:var(--accent);font-weight:700;}
+  .fail{color:var(--danger);font-weight:700;}
+  .warn{color:var(--warn);font-weight:700;}
+  .note{background:rgba(56,189,248,.08);border:1px solid rgba(56,189,248,.3);border-radius:8px;padding:12px 16px;font-size:13.5px;color:#bae6fd;}
+  .ok-box{background:rgba(52,211,153,.08);border:1px solid rgba(52,211,153,.35);border-radius:8px;padding:12px 16px;font-size:13.5px;color:#bbf7d0;}
+  .warn-box{background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.3);border-radius:8px;padding:12px 16px;font-size:13.5px;color:#fde68a;}
+  ul,ol{margin:8px 0;padding-left:22px;}li{margin:5px 0;}
+  figure{margin:16px 0;background:#0b1220;border:1px solid var(--line);border-radius:10px;padding:16px;}
+  figcaption{color:var(--sub);font-size:12.5px;margin-top:10px;text-align:center;}
+  footer{text-align:center;color:var(--sub);font-size:12.5px;padding:28px;border-top:1px solid var(--line);}
+  .small{font-size:12.5px;color:var(--sub);}
+</style>
+</head>
+<body>
+<header>
+  <span class="tag">기획 검증</span><span class="tag">2회차 · 재검증</span>
+  <h1>Project-SPIP — 기획 산출물 독립 검증 보고서 (2회차)</h1>
+  <div style="margin-top:14px;"><span class="verdict">판정: PASS</span></div>
+  <p>검증 대상: <code>docs/PRD.html</code>, <code>docs/FeatureSpec.html</code>, <code>docs/UserStories.html</code>, <code>README.md</code>.
+  1회차 FAIL의 핵심 원인이던 <b>P1 3건(비기능 추적성 단절 · MVP 경계 3중 불일치 · 대시보드 화면 명세 공백)</b>이 모두 해소됐고, P2/P3 6건과 PM 확정 결정 4건도 문서에 반영됐다. 설계 착수 가능.</p>
+  <div class="meta">검증자: 독립 리뷰어 · 검증일: 2026-06-21 · 기준 폴더(docs/Planning/) 부재 → 일반 기획 기준 + 1회차 보고서 대조로 재검증</div>
+</header>
+<main>
+
+<section>
+  <h2>1. 요약</h2>
+  <p>1회차에서 지적한 P1 3건이 실제 문서 변경으로 확인됐다. (1) 비기능 N-01·N-06·N-07이 각각 US-E4·E5·E6 스토리로 분해돼 백로그·스프린트·테스트로 추적 가능해졌고, (2) PRD §12.1에 "단일 MVP 요구 집합" 표가 신설돼 PRD 단계표·MVP 정의 노트·UserStories 스프린트가 <b>동일 R/N 집합으로 수렴</b>했으며(기계 대조 결과 R 집합 완전 일치), (3) FeatureSpec에 F-3(R-10)·F-4(R-11)가 정상/예외/엣지 흐름과 함께 추가됐다.</p>
+  <div class="ok-box"><b>결론: PASS.</b> P1 3건 전부 해소. 설계 착수를 막는 잔여 기획 결함 없음. 아래 §6의 경미 관찰 2건은 설계와 병행 정리 권고(블로커 아님).</div>
+</section>
+
+<section>
+  <h2>2. P1 항목 해소 검증 (1회차 대조)</h2>
+  <table>
+    <tr><th style="width:54px;">순위</th><th style="width:180px;">1회차 지적</th><th style="width:90px;">상태</th><th>해소 근거 (실제 문서 확인)</th></tr>
+    <tr>
+      <td><span class="pill p1">P1</span></td>
+      <td>N-01/N-06/N-07 백로그 미연결 (추적성 단절)</td>
+      <td><span class="pill resolved">해소</span></td>
+      <td>UserStories EPIC E에 <span class="rid">US-E4</span>(N-01 성능: 200개 30초·필터 200ms, QA 자동측정, R-ID=N-01·R-11), <span class="rid">US-E5</span>(N-06 데이터/인증: OS 캐시 영속화, R-ID=N-06), <span class="rid">US-E6</span>(N-07 접근성: 키보드 포커스·색상 비의존 라벨·WCAG AA, R-ID=N-07)가 신설됨. 세 비기능 모두 AC와 R-ID 연결을 가져 스프린트·테스트로 추적 가능.</td>
+    </tr>
+    <tr>
+      <td><span class="pill p1">P1</span></td>
+      <td>MVP 경계 3중 불일치</td>
+      <td><span class="pill resolved">해소</span></td>
+      <td>PRD §12.1 "단일 MVP 요구 집합" 표 신설(R-01·02·04·06·07·08·10·11·12·13·14 + N-02·03·04·05·06). §12.1 노트·§12.2 단계표(M1+M2+M3)·UserStories MVP 스프린트(S1+S2+S3)가 모두 이 표를 참조. <b>기계 대조: 세 출처의 MVP R-ID 집합이 완전 일치(diff 0).</b> N-07은 MVP에서 빠지고 M4(US-E6=S4)로 단일 귀속, R-13은 MVP로 단일 귀속(§12.1·§12.2 M2 일치).</td>
+    </tr>
+    <tr>
+      <td><span class="pill p1">P1</span></td>
+      <td>FeatureSpec 화면 기능 미상세 (R-10/R-11)</td>
+      <td><span class="pill resolved">해소</span></td>
+      <td>FeatureSpec에 <span class="rid">F-3</span>(대시보드 표시, R-10)·<span class="rid">F-4</span>(필터/정렬/검색, R-11)가 추가됨. 각각 사용자 스토리+AC, 정상 흐름, 예외/에러 흐름(0건·손상 JSON·N/A·외부접속), 엣지 케이스(긴 경로·대량 항목·결측 정렬·정규식 리터럴화)를 포함. 헤더도 "F-1·F-2·F-3·F-4 4개 MVP 기능"으로 갱신.</td>
+    </tr>
+  </table>
+</section>
+
+<section>
+  <h2>3. MVP 경계 단일화 — 기계 대조 결과</h2>
+  <p class="small">세 출처의 MVP 구성 R/N-ID 집합을 직접 대조했다.</p>
+  <table>
+    <tr><th>출처</th><th>MVP R 집합</th><th>N 집합</th><th>판정</th></tr>
+    <tr><td>PRD §12.1 단일 표 / §12.1 노트</td><td class="rid">R-01,02,04,06,07,08,10,11,12,13,14</td><td class="rid">N-02,03,04,05,06 (+N-01 품질기준)</td><td class="pass">기준</td></tr>
+    <tr><td>PRD §12.2 단계표 (M1+M2+M3)</td><td class="rid">동일</td><td class="rid">동일 (M3에 N-01 품질기준 명시)</td><td class="pass">일치</td></tr>
+    <tr><td>UserStories MVP 스프린트 (S1+S2+S3)</td><td class="rid">동일 (diff 0)</td><td class="rid">N-01·02·03·04·05·06 (N-01은 S3/US-E4)</td><td class="pass">일치</td></tr>
+  </table>
+  <div class="note"><b>N-07·N-01 처리 일관성:</b> N-07(접근성)은 세 출처 모두 MVP 비포함→M4(US-E6=S4)로 통일. N-01(성능)은 PRD가 "MVP 산출물 품질 기준"으로, US가 US-E4(S3)로 분해 — 둘 다 MVP/M3 시점에 적용·검증되므로 단계 귀속에 모순 없음. (라벨 표현 차이는 §6 경미 관찰 참고.)</div>
+</section>
+
+<section>
+  <h2>4. P2 / P3 항목 반영 확인</h2>
+  <table>
+    <tr><th style="width:54px;">순위</th><th style="width:200px;">1회차 지적</th><th style="width:80px;">상태</th><th>확인 근거</th></tr>
+    <tr><td><span class="pill p2">P2</span></td><td>"2초 이내" 상하위 역전</td><td><span class="pill resolved">해소</span></td><td>PRD R-12가 "2초 이내 UI 피드백"을 <b>단일 정의</b>, FeatureSpec F-2 AC는 "PRD R-12 응답 기준 준수…시간 수치는 R-12에서 단일 정의하며 본 명세는 참조"로 수정. 단일 출처 복원.</td></tr>
+    <tr><td><span class="pill p2">P2</span></td><td>"체감 &lt;200ms" 검증 불가</td><td><span class="pill resolved">해소</span></td><td>PRD §3 "지표 측정 정의" 표 신설 + R-11이 "200개 로드 상태, 입력→DOM 재렌더 완료 <code>performance.now()</code> 중앙값 ≤200ms"로 정량화. "체감" 표현 제거.</td></tr>
+    <tr><td><span class="pill p2">P2</span></td><td>"≥95% 탐지" 모집단 미정의</td><td><span class="pill resolved">해소</span></td><td>PRD §3 측정 정의: "사전 정의된 검증용 프로젝트 세트(실제 N개+미끼 M개 픽스처)" 모집단·재현율 공식·QA 자동 회귀로 명시.</td></tr>
+    <tr><td><span class="pill p2">P2</span></td><td>OoS Won't/Could 미분리</td><td><span class="pill resolved">해소</span></td><td>PRD §9.1 "이번 제품에서 제외(Won't)" / §9.2 "MVP 범위 밖·후속 후보(Could)"로 표 분리. 모순 제거.</td></tr>
+    <tr><td><span class="pill p3">P3</span></td><td>R-16 트리거 분리</td><td><span class="pill resolved">해소</span></td><td>FeatureSpec F-1 트리거가 "(MVP) spip/npm run scan · (후속) 대시보드 재스캔 — R-16, Could/M4. MVP 필수 트리거 아님"으로 명시 분리. PRD §8 플로우 SVG도 "재스캔(Could)" 표기.</td></tr>
+    <tr><td><span class="pill p3">P3</span></td><td>README ↔ PRD 범위 불일치</td><td><span class="pill resolved">해소</span></td><td>README "주요 기능"에 인사이트 4종(언어/스택·신선도 90일·Git 상태·규모/의존성), 필터·정렬·검색, VS Code 열기, CLI, localhost·OS 캐시 보관이 모두 반영됨. PRD R-06~R-12와 정합.</td></tr>
+    <tr><td><span class="pill p3">P3</span></td><td>N-03 인젝션 방지 규칙 승격</td><td><span class="pill resolved">해소</span></td><td>PRD N-03에 "외부 프로세스 호출 규칙(명시): 모든 호출(code/git)은 <code>shell:false</code>+인자 배열, 사용자/스캔 유래 입력 셸 문자열 비연결" 일반 규칙으로 승격. FeatureSpec F-2 엣지에도 동일 규칙 반영.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>5. PM 확정 결정 반영 확인</h2>
+  <table>
+    <tr><th style="width:200px;">확정 결정</th><th style="width:80px;">상태</th><th>반영 위치</th></tr>
+    <tr><td>기본 루트 사용자 지정 강제 (자동 스캔 안 함)</td><td><span class="pill resolved">반영</span></td><td>PRD R-04 AC("미지정 시 자동 스캔 안 함, 안내 후 종료") + §10 확정 결정 표.</td></tr>
+    <tr><td>stale 기준 90일</td><td><span class="pill resolved">반영</span></td><td>PRD R-07, §10 확정 표, README, FeatureSpec F-3, US-B2 모두 "90일" 일관.</td></tr>
+    <tr><td>고정 포트 · 자동 오픈 없음</td><td><span class="pill resolved">반영</span></td><td>PRD §10 확정 표("고정 포트, 브라우저 자동 오픈 없음, 콘솔 URL 출력") + FeatureSpec F-3 트리거 "고정 포트 URL 접속(자동 오픈 없음)".</td></tr>
+    <tr><td>OS 사용자 캐시 폴더 영속화</td><td><span class="pill resolved">반영</span></td><td>PRD N-06(%LOCALAPPDATA%/~/Library/Caches/$XDG_CACHE_HOME), §10 확정 표, US-E5, README 모두 일관.</td></tr>
+  </table>
+  <div class="ok-box">1회차 §6 "확인 필요" 쟁점(N-07 MVP 포함 여부, FeatureSpec 상세 범위, Q1~Q4 미해결)이 모두 PM 확정으로 정리됨. PRD §11은 "설계 착수를 막는 미해결 기획 질문 없음"으로 갱신됨.</div>
+</section>
+
+<section>
+  <h2>6. 경미 관찰 (블로커 아님 · 설계 병행 정리 권고)</h2>
+  <table>
+    <tr><th style="width:54px;">순위</th><th style="width:180px;">무엇 / 위치</th><th>문제 / 권고</th></tr>
+    <tr>
+      <td><span class="pill p3">P3</span></td>
+      <td>N-01 우선순위 라벨 표현 차이<br><span class="small">PRD §7 N-01 vs UserStories US-E4</span></td>
+      <td><b>문제:</b> PRD는 N-01을 우선순위 라벨 없는 "MVP 산출물 품질 기준"으로 다루고, US-E4는 <span class="pill must">Must</span>로 표기. 충돌은 아니나(둘 다 MVP/M3·S3 적용) 라벨 표기가 다름.<br><b>권고:</b> N-01에 PRD에서도 동일한 분류(예: "Must(품질 기준)")를 1줄 명기해 표현을 통일. 추적 혼선 방지용 경미 정리.</td>
+    </tr>
+    <tr>
+      <td><span class="pill p3">P3</span></td>
+      <td>FeatureSpec F-1의 MVP/M4 요구 혼재<br><span class="small">FeatureSpec F-1 "관련 요구 ID"</span></td>
+      <td><b>문제:</b> F-1 "관련 요구 ID"에 R-03·R-05·R-09·R-15(M4)가 MVP 스캔 요구(R-01·02·04·06~08·14)와 함께 나열됨. 본문에서 이들은 엣지/의존성/흐름5의 "있으면" 수준으로 맥락 구분되나, 헤더가 "MVP Must 기능 명세"라 ID 목록만 보면 M4 범위가 MVP로 오인될 소지.<br><b>권고:</b> F-1 관련 ID에서 M4 요구를 "(후속 M4)"로 괄호 표기하거나, MVP/후속을 2줄로 분리. (스캔을 한 기능으로 묶는 것 자체는 합리적.)</td>
+    </tr>
+  </table>
+  <div class="warn-box">위 2건은 1회차 P1/P2/P3 어디에도 해당하지 않는 <b>표기 일관성 수준</b>이며, 새로 유입된 중대 회귀(regression)는 아니다. 판정에 영향 없음.</div>
+</section>
+
+<section>
+  <h2>7. 회귀(Regression) 점검</h2>
+  <ul>
+    <li><b>요구 ID 무결성:</b> 신설 스토리(US-E4·E5·E6)·기능(F-3·F-4) 추가로 끊긴 참조 없음. R-10/R-11이 PRD·US·FeatureSpec 3자에 모두 연결돼 1회차 "화면 명세 공백"이 메워짐(추적성 매트릭스 공백 해소).</li>
+    <li><b>수치 단일 출처:</b> "2초"는 R-12 단일, "200ms"는 §3 측정 정의 단일, "30초"는 N-01/§3 단일, "90일"은 R-07 단일 — 신설 수치가 상위 문서에 먼저 정의돼 역전 없음.</li>
+    <li><b>OoS 재분류 부작용 없음:</b> §9.2로 옮긴 watch·태그/메모는 여전히 MVP 집합 밖이며 MVP 표와 충돌하지 않음. R-16은 Could/M4로 일관.</li>
+    <li>중대 회귀 <b>없음</b>. (코드·동작·보안 영역은 본 검증 범위 밖 — 각 담당 검증자 소관.)</li>
+  </ul>
+</section>
+
+<section>
+  <h2>8. 체크리스트 최종 판정</h2>
+  <table>
+    <tr><th style="width:260px;">검증 항목</th><th style="width:90px;">1회차</th><th style="width:90px;">2회차</th><th>근거</th></tr>
+    <tr><td>완결성 (확정 요구 R-ID 반영)</td><td class="warn">PASS*</td><td class="pass">PASS</td><td>비기능 3종이 US-E4/E5/E6로 백로그 진입, * 단서 해소.</td></tr>
+    <tr><td>일관성 (문서 간)</td><td class="fail">FAIL</td><td class="pass">PASS</td><td>§12.1 단일 표로 3출처 MVP 집합 수렴(diff 0). README 동기화.</td></tr>
+    <tr><td>수용 기준 검증가능성</td><td class="fail">FAIL</td><td class="pass">PASS</td><td>§3 측정 정의(모집단·주체·방법) + 정량 수치 단일 정의.</td></tr>
+    <tr><td>범위 명확성 (MoSCoW/OoS)</td><td class="warn">CONCERN</td><td class="pass">PASS</td><td>§9.1 Won't / §9.2 Could 분리, 모순 제거.</td></tr>
+    <tr><td>리스크/보안 누락</td><td class="pass">PASS</td><td class="pass">PASS</td><td>N-03 외부 프로세스 인젝션 규칙 일반화로 더 강화(상세 판정은 security-reviewer).</td></tr>
+    <tr><td>추적성 준비</td><td class="fail">FAIL</td><td class="pass">PASS</td><td>R-10/R-11 화면 명세(F-3/F-4) 보강, N-01/06/07 스토리 연결.</td></tr>
+  </table>
+</section>
+
+<footer>Project-SPIP · 기획 검증 보고서 2회차(재검증) · 독립 리뷰어 · 판정 PASS(P1 3건 해소, 경미 관찰 2건) · 자족형 HTML</footer>
+</body>
+</html>

@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project-SPIP — S7 최종 보안 게이트 검증 보고서 (구현 코드)</title>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#1e293b; --text:#e2e8f0; --sub:#94a3b8;
+    --accent:#34d399; --ref:#38bdf8; --line:#334155; --warn:#fbbf24; --danger:#f87171;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:"Segoe UI","Malgun Gothic",system-ui,sans-serif;line-height:1.7;}
+  header{padding:48px 32px 36px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#13203b,#0f172a);}
+  header h1{margin:0 0 8px;font-size:28px;}
+  header .tag{display:inline-block;background:rgba(52,211,153,.12);color:var(--accent);
+    border:1px solid rgba(52,211,153,.4);border-radius:999px;padding:3px 12px;font-size:13px;margin-right:8px;}
+  header p{margin:14px 0 0;color:var(--sub);max-width:980px;}
+  .meta{margin-top:16px;font-size:13px;color:var(--sub);}
+  main{max-width:1140px;margin:0 auto;padding:32px;}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:24px 28px;margin:22px 0;}
+  h2{margin:0 0 16px;font-size:21px;color:var(--accent);border-left:4px solid var(--accent);padding-left:12px;}
+  h3{font-size:16px;color:var(--ref);margin:22px 0 10px;}
+  p{margin:8px 0;}
+  ul,ol{margin:8px 0;padding-left:22px;}li{margin:5px 0;}
+  code{background:#0b1220;color:var(--ref);padding:1px 6px;border-radius:5px;font-size:13px;font-family:Consolas,monospace;}
+  pre{background:#0b1220;border:1px solid var(--line);border-radius:8px;padding:14px 16px;
+    overflow-x:auto;font-size:12.5px;color:#cbd5e1;font-family:Consolas,monospace;line-height:1.55;}
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13.5px;}
+  th,td{border:1px solid var(--line);padding:9px 11px;text-align:left;vertical-align:top;}
+  th{background:#142035;color:var(--accent);}
+  tr:nth-child(even) td{background:rgba(255,255,255,.02);}
+  .mono{font-family:Consolas,monospace;font-size:12.5px;}
+  .fid{font-family:Consolas,monospace;font-weight:700;white-space:nowrap;}
+  .sev{font-size:11px;font-weight:700;padding:2px 9px;border-radius:6px;white-space:nowrap;display:inline-block;}
+  .crit{background:rgba(248,113,113,.18);color:#fecaca;border:1px solid rgba(248,113,113,.6);}
+  .high{background:rgba(251,146,60,.16);color:#fdba74;border:1px solid rgba(251,146,60,.55);}
+  .med{background:rgba(251,191,36,.14);color:#fcd34d;border:1px solid rgba(251,191,36,.5);}
+  .low{background:rgba(56,189,248,.14);color:#7dd3fc;border:1px solid rgba(56,189,248,.5);}
+  .pass{background:rgba(52,211,153,.16);color:#6ee7b7;border:1px solid rgba(52,211,153,.5);}
+  .verdict{display:inline-block;border-radius:999px;padding:6px 22px;font-size:18px;font-weight:800;}
+  .v-pass{background:rgba(52,211,153,.16);color:#6ee7b7;border:1px solid rgba(52,211,153,.6);}
+  .v-cond{background:rgba(251,191,36,.16);color:#fcd34d;border:1px solid rgba(251,191,36,.6);}
+  .v-fail{background:rgba(248,113,113,.18);color:#fecaca;border:1px solid rgba(248,113,113,.6);}
+  .note{background:rgba(56,189,248,.08);border:1px solid rgba(56,189,248,.3);border-radius:8px;
+    padding:12px 16px;font-size:13.5px;color:#bae6fd;margin:10px 0;}
+  .warn-box{background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.3);border-radius:8px;
+    padding:12px 16px;font-size:13.5px;color:#fde68a;margin:10px 0;}
+  .ok-box{background:rgba(52,211,153,.08);border:1px solid rgba(52,211,153,.3);border-radius:8px;
+    padding:12px 16px;font-size:13.5px;color:#bbf7d0;margin:10px 0;}
+  figure{margin:18px 0;background:#0b1220;border:1px solid var(--line);border-radius:10px;padding:18px;}
+  figcaption{color:var(--sub);font-size:12.5px;margin-top:10px;text-align:center;}
+  .legend{display:flex;gap:18px;flex-wrap:wrap;font-size:12.5px;color:var(--sub);margin-top:10px;justify-content:center;}
+  .legend span{display:inline-flex;align-items:center;gap:6px;}
+  .dot{width:11px;height:11px;border-radius:3px;display:inline-block;}
+  .finding{border-left:3px solid var(--accent);padding:4px 0 4px 14px;margin:18px 0;}
+  .finding h4{margin:0 0 8px;font-size:15px;color:var(--text);}
+  .kv{font-size:13px;margin:3px 0;}
+  .kv b{color:var(--sub);font-weight:600;display:inline-block;min-width:96px;}
+  footer{text-align:center;color:var(--sub);font-size:12.5px;padding:30px;border-top:1px solid var(--line);}
+  .scorecard{display:flex;gap:14px;flex-wrap:wrap;margin:16px 0;}
+  .scard{flex:1;min-width:110px;background:#0b1220;border:1px solid var(--line);border-radius:10px;padding:14px;text-align:center;}
+  .scard .n{font-size:28px;font-weight:800;}
+  .scard .l{font-size:12px;color:var(--sub);margin-top:4px;}
+  .verified{color:#6ee7b7;font-weight:700;}
+</style>
+</head>
+<body>
+<header>
+  <span class="tag">보안 검증 보고서</span><span class="tag">S7 최종 보안 게이트</span><span class="tag">구현 코드 · 실측</span>
+  <h1>Project-SPIP — S7 최종 보안 게이트 검증 보고서</h1>
+  <p>설계 단계 보안검증(아키텍처 1·2회차)에서 PASS로 확정된 <b>8중 통제</b>가 실제 구현 코드(<code>lib/</code>, <code>public/</code>)에 <b>실재하는지</b>, 그리고 <b>동작하는지</b>를 적대적 관점에서 검증했다. 코드 정독으로 통제 실재를 확인하고, <code>npm test</code>(107 테스트, 보안 회귀 포함)를 <b>실제 실행</b>해 회귀 통과를 입증했으며, 직접 작성한 공격 프로브(우회 입력·위장 바이너리·ReDoS·헤더 위조)를 <code>node</code>로 실행해 차단을 실측했다. 아키텍처 단계에서 구현 게이트로 이월된 <b>V-1(TOCTOU 잔여)·V-2(적대적 입력 가드 실측)</b>를 함께 검증했다.</p>
+  <div class="meta">검증자: Security Reviewer · 일자: 2026-06-21 · 대상: lib/common/{pathGuard,safeExec,logger}.js · lib/scan/{walker, collectors/*, serializer}.js · lib/server/{security,staticHandler,actionHandlers,snapshotStore,router,apiHandlers}.js · public/{index.html,app.js} · test/** · 기준: architecture_security_review_2.html / architecture.html §11 / api-contract.md · docs/Development 부재 → 표준 체크리스트 + 기준문서 적용</div>
+</header>
+
+<main>
+
+<!-- ===================== 판정 ===================== -->
+<section id="verdict">
+  <h2>0. 종합 판정</h2>
+  <p style="font-size:16px;">판정: <span class="verdict v-pass">PASS</span> <span style="color:var(--sub);font-size:13px;">(치명 0 · 높음 0 · 중간 0 · 낮음 1[정보성])</span></p>
+  <p>설계 8중 통제가 모두 구현 코드에 <b>실재</b>하며 회귀 테스트·실측 프로브로 <b>동작이 입증</b>되었다. H-1 realpath 화이트리스트(등록=검증 단일 규칙), H-2 PATH 하이재킹 방어(절대경로 1회 해석·<code>.exe</code>만·<code>git -C</code>·cwd 제외), H-3 부분신뢰 입력 가드(크기·바이트·깊이·선형정규식·제어문자, 격리 앞단), M-1 POST 경계(Host allowlist 정확비교·Origin 폐쇄기본·상수시간 토큰·CT 검증), M-2 원자적 0600 쓰기, L-1 저장형 XSS(textContent 전수·innerHTML 0·CSP 메타), L-3 에러 비노출이 모두 확인됐다. 이월된 <b>V-1·V-2도 해소</b>: V-1은 검증 직후 <b>재해석된 실경로(<code>real</code>)를 spawn 인자로 전달</b>해 verify→spawn 창을 최소화했고 심링크/junction/UNC/대소문자/NFD 회귀가 통과한다. V-2는 위장 <code>git.bat</code> 미실행(<code>pwned.txt</code> 미생성)·.bat 절대경로 거부·거대/과중첩 JSON skip·200k자 입력 ReDoS 0ms가 실측됐다. <b>치명·높음 잔여 0 → 출시 게이트 PASS</b>.</p>
+
+  <div class="scorecard">
+    <div class="scard"><div class="n" style="color:#fecaca">0</div><div class="l">치명</div></div>
+    <div class="scard"><div class="n" style="color:#fdba74">0</div><div class="l">높음</div></div>
+    <div class="scard"><div class="n" style="color:#fcd34d">0</div><div class="l">중간</div></div>
+    <div class="scard"><div class="n" style="color:#7dd3fc">1</div><div class="l">낮음(정보성)</div></div>
+    <div class="scard"><div class="n" style="color:#6ee7b7">107/107</div><div class="l">테스트 통과</div></div>
+    <div class="scard"><div class="n" style="color:#6ee7b7">2/2</div><div class="l">V-1·V-2 해소</div></div>
+  </div>
+
+  <div class="ok-box"><b>게이트 결과:</b> 치명/높음 0건이므로 <b>S7 최종 보안 게이트 PASS</b>. 낮음 1건(L-OBS-1)은 출시를 막지 않는 정보성 권고(개선 백로그)다. 외부 npm 의존성 0개(ADR-001) 확인 → <code>npm audit</code> 비해당. 하드코딩 시크릿 0건(세션 토큰은 런타임 <code>crypto.randomBytes</code> 생성, 커밋 부재).</div>
+</section>
+
+<!-- ===================== 방법·증거 ===================== -->
+<section id="method">
+  <h2>1. 검증 방법 및 증거</h2>
+  <ul>
+    <li><b>코드 정독:</b> 통제별 구현 파일을 직접 읽어 실재·정확성을 확인(아래 §2~§3 표의 "구현 위치" 컬럼).</li>
+    <li><b>회귀 실행:</b> <code>node --test "test/**/*.test.js"</code> 실제 실행 → <span class="verified">107 pass / 0 fail</span> (보안 회귀 포함: H-1 6건+, H-2 6건, H-3 6건, M-1 6건, M-2 1건, L-1/L-3 다수).</li>
+    <li><b>실측 프로브:</b> 직접 작성한 적대적 입력 스크립트를 <code>node</code>로 실행해 차단을 실측(결과는 §3에 인용).</li>
+    <li><b>시크릿 스캔:</b> 코드/JSON/HTML/MD 전역 정규식 스캔 → 자격증명·키·토큰 하드코딩 0건(테스트 픽스처 문자열 외).</li>
+    <li><b>의존성:</b> <code>node_modules</code> 부재 + <code>package.json</code>에 dependencies 블록 없음 → 공급망 표면 0, <code>npm audit</code> 비해당.</li>
+  </ul>
+
+  <h3>1.1 회귀 테스트 실행 결과(요약)</h3>
+  <pre>$ node --test "test/**/*.test.js"
+...
+ℹ tests 107
+ℹ pass 107
+ℹ fail 0
+ℹ skipped 0
+ℹ duration_ms 627.76</pre>
+</section>
+
+<!-- ===================== 통제 실재/동작 표 ===================== -->
+<section id="controls">
+  <h2>2. 8중 통제 — 실재 + 동작 검증</h2>
+  <table>
+    <tr><th style="width:54px;">통제</th><th>구현 위치(실측)</th><th>검증 내용</th><th style="width:70px;">결과</th></tr>
+    <tr>
+      <td class="fid">H-1</td>
+      <td><code>pathGuard.js</code> canonicalize/isAllowed/foldForCompare · <code>walker.js</code> 등록 정규화 · <code>snapshotStore.js</code> buildAllowedKeySet · <code>actionHandlers.js</code> 검증</td>
+      <td>등록(walker)·검증(server) 양 시점 동일 <code>canonicalize()</code>(path.resolve → fs.realpathSync.native → NFC → 대소문자 폴드) 공유. <code>isAllowed</code>는 폴드 키 <b>정확 일치</b>만 허용(접두사 부분일치 차단). 회귀: ../순회·심링크 해소·접두사함정·대소문자·NFD·소멸→null 모두 통과. 프로브: UNC/드라이브상대/존재않는 확장경로 → <code>null</code>(거부), 실존 확장경로 정상 해소.</td>
+      <td><span class="sev pass">실재·동작</span></td>
+    </tr>
+    <tr>
+      <td class="fid">H-2</td>
+      <td><code>safeExec.js</code> resolveBin/safeExec · <code>git.js</code> runGit(<code>-C</code>) · <code>actionHandlers.js</code> resolveBin('code')</td>
+      <td>resolveBin은 신뢰 PATH만 순회(<code>cwd "."</code>·빈 항목 제외)·1회 해석 캐시·<code>.exe</code>만(.bat/.cmd 차단). safeExec는 절대경로 강제·shell:false·인자 문자열 배열 강제·타임아웃 SIGKILL·maxBuffer·in-flight 상한. git은 <code>git -C &lt;path&gt;</code>로 cwd 의존 제거. 회귀+프로브: 상대경로 거부·.bat 거부·비문자열 인자 거부 실측.</td>
+      <td><span class="sev pass">실재·동작</span></td>
+    </tr>
+    <tr>
+      <td class="fid">H-3</td>
+      <td><code>_safeParse.js</code> readTextGuarded/parseJsonGuarded/depthWithinLimit/sanitizeField · <code>language.js</code> · <code>git.js</code> parseStatus · <code>logger.js</code> clampString</td>
+      <td>파싱 앞단 가드: ① fs.stat 크기 상한(초과 미읽기) ② 바이트 한도 부분읽기 ③ JSON 깊이 가드(명시 스택, 재귀 폭발 없음) ④ 제어문자 제거+길이 절단. 모든 매칭 정확일치/확장자 비교 → 정규식 백트래킹 없음. parseStatus는 고정 패턴 선형. 회귀+프로브 §3.</td>
+      <td><span class="sev pass">실재·동작</span></td>
+    </tr>
+    <tr>
+      <td class="fid">M-1</td>
+      <td><code>security.js</code> checkStateChange/buildHostAllowlist/buildOriginAllowlist/safeEqual · <code>router.js</code> 선통과 · <code>staticHandler.js</code> 토큰주입</td>
+      <td>Host allowlist <b>정확 비교</b>(127.0.0.1:port/localhost:port Set.has) → DNS 리바인딩 차단. Origin 부재/불일치 거부(폐쇄 기본값). 토큰 <code>crypto.timingSafeEqual</code> 상수시간(길이 다르면 즉시 false). Content-Type application/json 보조검증. 실패 시 고정 <code>FORBIDDEN_ORIGIN</code>만. 프로브 5종+회귀 6종 통과.</td>
+      <td><span class="sev pass">실재·동작</span></td>
+    </tr>
+    <tr>
+      <td class="fid">M-2</td>
+      <td><code>scan/serializer.js</code> writeSnapshot</td>
+      <td>같은 디렉터리 임시파일(<code>wx</code>, 0600) → writeFileSync → fsync → rename(원자성) → chmod 재확정. 실패 시 임시파일 정리. 디렉터리는 paths가 0700. 회귀: 원자적 쓰기+0600 통과.</td>
+      <td><span class="sev pass">실재·동작</span></td>
+    </tr>
+    <tr>
+      <td class="fid">M-3</td>
+      <td><code>walker.js</code> SAFE_MAX_DEPTH(24)·visited realpath 집합·심링크 미추적</td>
+      <td>내장 깊이 상한 항상 강제·방문 실경로 가지치기(루프 a→b→a 차단)·lstat 링크 미진입. 회귀: 심링크 루프 종료·깊이 상한 초과 중단 통과.</td>
+      <td><span class="sev pass">실재·동작</span></td>
+    </tr>
+    <tr>
+      <td class="fid">L-1</td>
+      <td><code>public/app.js</code> buildCard/badge/toast(textContent) · <code>index.html</code> CSP 메타 · <code>staticHandler.js</code> CSP 헤더</td>
+      <td>모든 스캔 유래 문자열 <code>textContent</code>/<code>createElement</code>로만 렌더 — <code>innerHTML</code>/<code>outerHTML</code>/<code>insertAdjacentHTML</code>/<code>document.write</code> <b>사용 0건</b>(grep 확인). index.html CSP 메타 + staticHandler 응답 CSP 헤더 이중(<code>script-src 'self'</code>) → 인라인/외부 스크립트 차단. 토큰은 meta 속성값 치환(인라인 스크립트 아님). 회귀: 악성 <code>&lt;img onerror&gt;</code>/<code>&lt;script&gt;</code> name/branch 원형 보존(DOM 주입 없음).</td>
+      <td><span class="sev pass">실재·동작</span></td>
+    </tr>
+    <tr>
+      <td class="fid">L-3</td>
+      <td><code>logger.js</code> sanitizeForUser/error · <code>actionHandlers.js</code>·<code>apiHandlers.js</code> 고정 code/message</td>
+      <td>응답은 고정 code/message만(ID_NOT_FOUND·PATH_NOT_ALLOWED·PATH_GONE·OPEN_FAILED·FORBIDDEN_ORIGIN). 스택/원시예외/내부경로는 콘솔 한정(<code>logger.error</code>). sanitizeForUser가 절대경로 토큰 마스킹. 회귀: POSIX/Windows 경로 마스킹 통과.</td>
+      <td><span class="sev pass">실재·동작</span></td>
+    </tr>
+  </table>
+</section>
+
+<!-- ===================== V-1·V-2 ===================== -->
+<section id="vcheck">
+  <h2>3. 이월 항목 V-1·V-2 — 실측 판정</h2>
+
+  <div class="finding">
+    <h4>V-1. realpath·절대경로의 TOCTOU 잔여 — <span class="sev pass">해소</span></h4>
+    <div class="kv"><b>요구</b> 검증~spawn 사이 심링크 교체 창 최소화 + 심링크/junction/UNC/대소문자/NFD/확장경로 거부 회귀</div>
+    <div class="kv"><b>증거</b> <code>actionHandlers.open</code>은 ① <code>canonicalize(project.path)</code>로 실경로 <code>real</code> 산출(소멸 시 410 PATH_GONE) → ② <code>isAllowed</code> 화이트리스트 정확 일치 검증 → ③ <b>검증 직후 같은 <code>real</code> 값을 <code>safeExec(codeBin, [real])</code> 인자로 전달</b>. 원시 <code>project.path</code>를 재해소하지 않고 검증 산출물을 그대로 실행해 verify→spawn 재해석 창을 제거(설계 "표면 축소"를 코드로 이행). walker도 자식 realpath 해소 후 visited 집합 비교.</div>
+    <div class="kv"><b>실측</b> pathGuard.test 6건 통과(소멸→null, ../차단, 접두사함정 차단, 대소문자 폴드, 심링크 실경로 해소, NFD). 프로브: UNC/드라이브상대/존재않는 확장경로 모두 <code>null</code>로 거부, 실존 <code>\\?\C:\Windows</code> 정상 해소. 크래시 0.</div>
+    <div class="kv"><b>잔여</b> 단일 사용자·로컬 루프백·메타데이터 only 모델에서 동일 디렉터리 타 사용자 격리는 RC-1로 수용된 비목표(설계 명시). 본 모델 한도 내 TOCTOU 실위험 무시 가능.</div>
+  </div>
+
+  <div class="finding">
+    <h4>V-2. 적대적 입력 가드 + cwd 위장 바이너리 — <span class="sev pass">해소</span></h4>
+    <div class="kv"><b>요구</b> 거대/과중첩 JSON skip·ReDoS 0·제어문자 정제·위장 git.exe/.bat 미실행(pwned 미생성)·.bat 거부 실측</div>
+    <div class="kv"><b>실측(회귀)</b> 2MB package.json → <code>TOO_LARGE</code> skip · 깊이 200 JSON → <code>TOO_DEEP</code> 거부 · <code>&lt;img onerror&gt;</code>+제어문자+5000자 name → 정제(제어문자 제거·절단) · 위장 <code>git.bat</code>(<code>@echo EVIL &gt; pwned.txt</code>) 둔 폴더를 <code>git collect</code> → <span class="verified">pwned.txt 미생성</span>(절대경로 git + <code>-C</code>로 위장 미선택) · .exe 절대경로만 허용, .bat 거부 · resolveBin cwd 위장 미선택.</div>
+    <div class="kv"><b>실측(프로브)</b> <code>parseStatus</code>에 200,000자 브랜치명 입력 → <span class="verified">0ms</span> 완주(선형, ReDoS 없음, ahead/behind 정상). clampString 제어문자(<code>\n\t</code>) 공백 치환 확인.</div>
+    <div class="kv"><b>판정</b> 모든 가드가 파싱/격리 <b>앞단</b>에 실재하고 동작 실측됨.</div>
+  </div>
+
+  <h3>3.1 M-1 경계 통제 프로브(실측)</h3>
+  <pre>valid:          { ok: true }
+host-fake:      { ok: false, code: 'FORBIDDEN_ORIGIN' }   (DNS 리바인딩 차단)
+origin-missing: { ok: false, code: 'FORBIDDEN_ORIGIN' }   (폐쇄 기본값)
+token-wrong:    { ok: false, code: 'FORBIDDEN_ORIGIN' }   (상수시간 비교)
+ct-wrong:       { ok: false, code: 'FORBIDDEN_ORIGIN' }   (Content-Type 보조검증)
+safeEqual diff-len: false                                  (길이 누설 없이 거부)
+parseStatus huge-branch ms: 0                              (ReDoS 0)
+REL rejected: true / ARG rejected: true                    (상대경로·비문자열 인자 거부)
+UNC/driveRel/extPath-bogus/empty/nonString: null           (경로 우회 거부)</pre>
+</section>
+
+<!-- ===================== SVG ===================== -->
+<section id="boundary">
+  <h2>4. 신뢰 경계 · 데이터 흐름 (구현 실측 매핑)</h2>
+  <figure>
+    <svg viewBox="0 0 1060 320" width="100%" role="img" aria-label="S7 구현 통제 데이터 흐름">
+      <defs>
+        <marker id="ar" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 Z" fill="#34d399"/></marker>
+      </defs>
+      <!-- TB-A -->
+      <rect x="18" y="26" width="286" height="120" rx="10" fill="#170d0d" stroke="#f87171" stroke-width="1.3" stroke-dasharray="6 5"/>
+      <text x="161" y="48" fill="#f87171" font-size="12" text-anchor="middle" font-weight="bold" font-family="Segoe UI">TB-A 브라우저/네트워크</text>
+      <text x="161" y="70" fill="#cbd5e1" font-size="10" text-anchor="middle" font-family="Segoe UI">CSRF · DNS 리바인딩 · 위조 POST</text>
+      <text x="161" y="92" fill="#6ee7b7" font-size="9.5" text-anchor="middle" font-family="Segoe UI">security.checkStateChange(M-1)</text>
+      <text x="161" y="108" fill="#6ee7b7" font-size="9.5" text-anchor="middle" font-family="Segoe UI">Host정확비교·Origin폐쇄·상수시간토큰·CT</text>
+      <text x="161" y="130" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">staticHandler CSP + index.html CSP(L-1)</text>
+      <!-- TB-B -->
+      <rect x="18" y="160" width="286" height="132" rx="10" fill="#1a1206" stroke="#fbbf24" stroke-width="1.3" stroke-dasharray="6 5"/>
+      <text x="161" y="182" fill="#fbbf24" font-size="12" text-anchor="middle" font-weight="bold" font-family="Segoe UI">TB-B 스캔대상(부분신뢰)</text>
+      <text x="161" y="204" fill="#fca5a5" font-size="9.5" text-anchor="middle" font-family="Segoe UI">JSON폭탄·위장바이너리·심링크루프·오염메타</text>
+      <text x="161" y="226" fill="#6ee7b7" font-size="9.5" text-anchor="middle" font-family="Segoe UI">_safeParse(H-3)·resolveBin/git -C(H-2)</text>
+      <text x="161" y="242" fill="#6ee7b7" font-size="9.5" text-anchor="middle" font-family="Segoe UI">walker realpath/depth(H-1·M-3)</text>
+      <text x="161" y="264" fill="#6ee7b7" font-size="9.5" text-anchor="middle" font-family="Segoe UI">app.js textContent + CSP(L-1)</text>
+      <text x="161" y="284" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">위장 git.bat → pwned.txt 미생성(실측)</text>
+      <!-- gate -->
+      <rect x="360" y="86" width="206" height="150" rx="10" fill="#0b1220" stroke="#34d399" stroke-width="1.6"/>
+      <text x="463" y="112" fill="#34d399" font-size="13" text-anchor="middle" font-weight="bold" font-family="Segoe UI">8중 통제 (구현 실재)</text>
+      <text x="463" y="136" fill="#cbd5e1" font-size="10" text-anchor="middle" font-family="Segoe UI">canonicalize 정확일치</text>
+      <text x="463" y="156" fill="#cbd5e1" font-size="10" text-anchor="middle" font-family="Segoe UI">검증 산출 real → spawn</text>
+      <text x="463" y="176" fill="#cbd5e1" font-size="10" text-anchor="middle" font-family="Segoe UI">가드 = 격리 앞단</text>
+      <text x="463" y="200" fill="#6ee7b7" font-size="11" text-anchor="middle" font-weight="bold" font-family="Segoe UI">107/107 테스트 통과</text>
+      <text x="463" y="220" fill="#6ee7b7" font-size="11" text-anchor="middle" font-weight="bold" font-family="Segoe UI">치명/높음 0</text>
+      <!-- trusted -->
+      <rect x="624" y="56" width="416" height="206" rx="10" fill="#0d1726" stroke="#34d399" stroke-width="1.3" stroke-dasharray="6 5"/>
+      <text x="832" y="80" fill="#34d399" font-size="12" text-anchor="middle" font-weight="bold" font-family="Segoe UI">신뢰 영역 (로컬 런타임)</text>
+      <text x="832" y="106" fill="#cbd5e1" font-size="10" text-anchor="middle" font-family="Segoe UI">spawn 절대경로(code/git) · shell:false · 인자배열</text>
+      <text x="832" y="128" fill="#cbd5e1" font-size="10" text-anchor="middle" font-family="Segoe UI">realpath 폴드키 화이트리스트(snapshotStore)</text>
+      <text x="832" y="150" fill="#cbd5e1" font-size="10" text-anchor="middle" font-family="Segoe UI">cache/projects.json 원자적 0600(serializer)</text>
+      <text x="832" y="172" fill="#cbd5e1" font-size="10" text-anchor="middle" font-family="Segoe UI">대시보드 textContent + CSP(이중)</text>
+      <text x="832" y="196" fill="#94a3b8" font-size="9.5" text-anchor="middle" font-family="Segoe UI">파일 내용 미수집(메타데이터만) · 외부전송 0</text>
+      <text x="832" y="216" fill="#94a3b8" font-size="9.5" text-anchor="middle" font-family="Segoe UI">외부 npm 의존성 0 → 공급망 표면 0 · 시크릿 0</text>
+      <text x="832" y="238" fill="#6ee7b7" font-size="9.5" text-anchor="middle" font-family="Segoe UI">세션토큰 crypto.randomBytes 런타임 생성</text>
+      <line x1="306" y1="100" x2="358" y2="120" stroke="#34d399" stroke-width="1.6" marker-end="url(#ar)"/>
+      <line x1="306" y1="224" x2="358" y2="200" stroke="#34d399" stroke-width="1.6" marker-end="url(#ar)"/>
+      <line x1="566" y1="160" x2="620" y2="160" stroke="#34d399" stroke-width="1.8" marker-end="url(#ar)"/>
+    </svg>
+    <div class="legend">
+      <span><span class="dot" style="background:#f87171"></span> TB-A 미신뢰</span>
+      <span><span class="dot" style="background:#fbbf24"></span> TB-B 부분신뢰</span>
+      <span><span class="dot" style="background:#34d399"></span> 통제 게이트 / 신뢰 영역</span>
+    </div>
+    <figcaption>그림 1. 설계 §11 8중 통제를 구현 모듈·실측 결과에 매핑. 두 신뢰 경계의 통제가 코드에 실재하며 회귀·프로브로 동작 확인됨.</figcaption>
+  </figure>
+</section>
+
+<!-- ===================== 발견 항목 ===================== -->
+<section id="findings">
+  <h2>5. 발견 항목 (등급별)</h2>
+  <table>
+    <tr><th style="width:74px;">ID</th><th>취약점 / 위치</th><th>STRIDE</th><th style="width:66px;">심각도</th><th>악용 시나리오 / 권고</th></tr>
+    <tr>
+      <td class="fid">L-OBS-1</td>
+      <td>감사 로깅·레이트리밋 부재(정보성). <code>/api/open</code>은 id별 in-flight 상한(M-4)만 있고 거부 이벤트(403/404/410) 영속 감사 로그·전역 레이트리밋이 없음.</td>
+      <td>부인(R) · 서비스거부(D)</td>
+      <td><span class="sev low">낮음</span></td>
+      <td>단일 사용자·루프백·상태변경=VS Code 열기뿐인 MVP 위협 모델에서 실위험 낮음(공격 표면 좁음). 멀티유저/공용 PC 확장 시(RC-1 재검토 트리거) 거부 이벤트 감사 로그 + 전역 레이트리밋 도입 권고. <b>출시 게이트 차단 아님</b>(개선 백로그).</td>
+    </tr>
+  </table>
+  <div class="note"><b>치명·높음·중간 발견 0건.</b> H-1/H-2/H-3/M-1/M-2/M-3/L-1/L-3이 모두 코드 실재 + 회귀·프로브 동작 확인. 시크릿 하드코딩 0, 외부 의존성 0(npm audit 비해당), innerHTML 데이터 결합 0.</div>
+</section>
+
+<!-- ===================== 확인 필요 ===================== -->
+<section id="confirm">
+  <h2>6. 확인 필요 (위험 수용 — 정보 공유)</h2>
+  <div class="warn-box">
+    <p><b>RC-1(동일머신 타 사용자 격리 비목표) 재확인:</b> 아키텍처 단계에서 PM이 이미 수용·설계 명시. 127.0.0.1 루프백은 사용자 격리를 하지 않으므로 공용 PC·터미널 서버 지원 시 인증 부재 및 L-OBS-1(감사/레이트리밋)을 재검토해야 한다. 현 단일 사용자 가정에서는 M-1 토큰·M-2 0600 권한 심층방어로 충분하며 본 게이트는 이 수용을 존중한다. <b>새로 올릴 위험 수용 결정 없음.</b></p>
+  </div>
+</section>
+
+<footer>Project-SPIP · S7 최종 보안 게이트 검증 보고서(구현 코드) · 판정: PASS · 치명 0·높음 0·중간 0·낮음 1(정보성) · 8중 통제 실재+동작 확인 · V-1·V-2 해소 · 회귀 107/107 통과 · 외부 의존성 0·시크릿 0 · 실측 근거 · 자족형 HTML</footer>
+</body>
+</html>

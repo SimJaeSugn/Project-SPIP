@@ -1,0 +1,861 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project-SPIP — 시스템 아키텍처 설계서</title>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#1e293b; --text:#e2e8f0; --sub:#94a3b8;
+    --accent:#34d399; --ref:#38bdf8; --line:#334155; --warn:#fbbf24; --danger:#f87171;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:"Segoe UI","Malgun Gothic",system-ui,sans-serif;line-height:1.7;}
+  header{padding:48px 32px 36px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#13203b,#0f172a);}
+  header h1{margin:0 0 8px;font-size:30px;}
+  header .tag{display:inline-block;background:rgba(52,211,153,.12);color:var(--accent);
+    border:1px solid rgba(52,211,153,.4);border-radius:999px;padding:3px 12px;font-size:13px;margin-right:8px;}
+  header p{margin:14px 0 0;color:var(--sub);max-width:920px;}
+  .meta{margin-top:16px;font-size:13px;color:var(--sub);}
+  main{max-width:1120px;margin:0 auto;padding:32px;}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:24px 28px;margin:22px 0;}
+  h2{margin:0 0 16px;font-size:21px;color:var(--accent);border-left:4px solid var(--accent);
+    padding-left:12px;}
+  h3{font-size:16px;color:var(--ref);margin:22px 0 10px;}
+  h4{font-size:14px;color:var(--text);margin:16px 0 6px;}
+  p{margin:8px 0;}
+  ul,ol{margin:8px 0;padding-left:22px;}
+  li{margin:5px 0;}
+  code{background:#0b1220;color:var(--ref);padding:1px 6px;border-radius:5px;font-size:13px;}
+  pre{background:#0b1220;border:1px solid var(--line);border-radius:8px;padding:14px 16px;
+    overflow-x:auto;font-size:13px;color:#cbd5e1;font-family:Consolas,monospace;line-height:1.55;}
+  pre .c{color:#64748b;}
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13.5px;}
+  th,td{border:1px solid var(--line);padding:9px 11px;text-align:left;vertical-align:top;}
+  th{background:#142035;color:var(--accent);}
+  tr:nth-child(even) td{background:rgba(255,255,255,.02);}
+  .rid{font-family:Consolas,monospace;color:var(--accent);font-weight:700;white-space:nowrap;}
+  .nid{font-family:Consolas,monospace;color:var(--warn);font-weight:700;white-space:nowrap;}
+  .mono{font-family:Consolas,monospace;font-size:12.5px;}
+  .pill{font-size:11px;font-weight:700;padding:2px 9px;border-radius:6px;white-space:nowrap;}
+  .mvp{background:rgba(52,211,153,.16);color:#6ee7b7;border:1px solid rgba(52,211,153,.5);}
+  .m4{background:rgba(148,163,184,.16);color:#cbd5e1;border:1px solid rgba(148,163,184,.4);}
+  .get{background:rgba(56,189,248,.16);color:#7dd3fc;border:1px solid rgba(56,189,248,.45);}
+  .post{background:rgba(251,191,36,.16);color:#fcd34d;border:1px solid rgba(251,191,36,.45);}
+  .note{background:rgba(56,189,248,.08);border:1px solid rgba(56,189,248,.3);border-radius:8px;
+    padding:12px 16px;font-size:13.5px;color:#bae6fd;}
+  .warn-box{background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.3);border-radius:8px;
+    padding:12px 16px;font-size:13.5px;color:#fde68a;}
+  .danger-box{background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.35);border-radius:8px;
+    padding:12px 16px;font-size:13.5px;color:#fecaca;}
+  figure{margin:18px 0;background:#0b1220;border:1px solid var(--line);border-radius:10px;padding:18px;}
+  figcaption{color:var(--sub);font-size:12.5px;margin-top:10px;text-align:center;}
+  .legend{display:flex;gap:18px;flex-wrap:wrap;font-size:12.5px;color:var(--sub);margin-top:10px;justify-content:center;}
+  .legend span{display:inline-flex;align-items:center;gap:6px;}
+  .dot{width:11px;height:11px;border-radius:3px;display:inline-block;}
+  .toc a{color:var(--ref);text-decoration:none;}
+  .toc a:hover{text-decoration:underline;}
+  .toc ol{columns:2;}
+  .risk{border-left:3px solid var(--warn);padding-left:12px;margin:10px 0;}
+  footer{text-align:center;color:var(--sub);font-size:12.5px;padding:30px;border-top:1px solid var(--line);}
+</style>
+</head>
+<body>
+<header>
+  <span class="tag">아키텍처 설계서</span><span class="tag">v1.0</span><span class="tag">로컬 단일 사용자</span>
+  <h1>Project-SPIP — 시스템 아키텍처 설계서</h1>
+  <p>PC에 흩어진 VS Code 프로젝트를 스캔해 인사이트와 함께 로컬 웹 대시보드로 보여주는 단일 사용자 도구의 시스템·소프트웨어 아키텍처. CLI 스캐너(<code>scan.js</code>), 로컬 웹서버+API(<code>server.js</code>), 순수 HTML/CSS/JS 대시보드, OS 캐시 기반 데이터 저장의 4개 구성 요소로 이뤄진다. 본 문서는 청사진이며 구현 코드를 포함하지 않는다.</p>
+  <div class="meta">문서 유형: 아키텍처 설계서 · 작성: 수석 아키텍트 · 최종 갱신: 2026-06-21 (rev.2) · 입력: PRD v1.0 / FeatureSpec v1.0 / UserStories v1.0 / 기획검증 2회차 PASS · 반영: 아키텍처 검증 1회차(P1×2·P2×5) + 보안 검증 1회차(높음 3·중간 4·낮음 3) + PM 위험 수용 확정(RC-1·RC-2)</div>
+</header>
+
+<main>
+
+<section class="toc">
+  <h2>목차</h2>
+  <ol>
+    <li><a href="#overview">1. 개요</a></li>
+    <li><a href="#drivers">2. 입력 기획 요약 / 아키텍처 동인</a></li>
+    <li><a href="#quality">3. 품질 속성 요구</a></li>
+    <li><a href="#system">4. 시스템 아키텍처 (상위 수준)</a></li>
+    <li><a href="#software">5. 소프트웨어 아키텍처 (추상화)</a></li>
+    <li><a href="#components">6. 구성 요소 / 모듈</a></li>
+    <li><a href="#tree">7. 디렉터리 구조</a></li>
+    <li><a href="#data">8. 데이터 설계 (스키마)</a></li>
+    <li><a href="#api">9. API / 인터페이스 계약</a></li>
+    <li><a href="#stack">10. 기술 스택 / 선정 근거</a></li>
+    <li><a href="#security">11. 보안 설계 (신뢰 경계)</a></li>
+    <li><a href="#nfr">12. 비기능 대응</a></li>
+    <li><a href="#deploy">13. 배포 / 실행 구성</a></li>
+    <li><a href="#trace">14. 추적성 기여 (요구ID ↔ 설계)</a></li>
+    <li><a href="#risk">15. 리스크 및 가정 / 미해결 질문</a></li>
+  </ol>
+</section>
+
+<section id="overview">
+  <h2>1. 개요</h2>
+  <p>Project-SPIP는 <b>파이프라인-앤-대시보드</b> 구조의 로컬 도구다. 한 번의 CLI 스캔이 디스크를 순회해 프로젝트를 탐지하고 인사이트(언어/스택·신선도·git·규모)를 수집한 뒤 결과를 OS 캐시 폴더의 JSON 스냅샷으로 영속화한다. 별도로 실행되는 로컬 웹서버는 그 스냅샷을 읽어 정적 대시보드에 데이터 API로 제공하고, 'VS Code로 열기' 같은 액션을 화이트리스트 검증 후 실행한다. <b>스캔(쓰기)과 서빙(읽기)을 시간·프로세스로 분리</b>한 것이 핵심 설계 결정이며, 이는 단순성·견고성·성능 요구를 동시에 만족한다.</p>
+  <div class="note"><b>설계 원칙 적용:</b> 외부 npm 의존성 0개(Node 내장 모듈만), 빌드 도구 없음, 프레임워크 없음. 요구를 충족하는 가장 단순한 구조를 택했고, 분산화·마이크로서비스 등 과설계를 배제했다(N-04 / ADR-001).</div>
+  <div class="danger-box"><b>핵심 보안 전제(PM 확정 RC-2 = 인정):</b> 스캔 대상 폴더에는 <b>신뢰할 수 없는 외부 클론 리포가 섞일 수 있다</b>고 전제한다. 따라서 스캔 대상 파일시스템(<code>package.json</code>·<code>.git</code>·폴더명·심링크)은 <b>부분신뢰(TB-B)</b> 입력으로 취급하며, 실경로(realpath) 정규화·실행 파일 절대경로 고정·적대적 입력 파싱 방어·대시보드 출력 이스케이프를 <b>필수 방어</b>로 설계에 반영했다(§11 / 보안검증 H-1·H-2·H-3·L-1). "로컬이라 안전"이라는 가정은 명시적으로 배제한다.</div>
+</section>
+
+<section id="drivers">
+  <h2>2. 입력 기획 요약 / 아키텍처 동인</h2>
+  <p>참조 산출물: <code>docs/PRD.html</code>(§12.1 단일 MVP 집합·§10 확정 결정·§3 측정 정의·§9 범위), <code>docs/FeatureSpec.html</code>(F-1~F-4), <code>docs/UserStories.html</code>, 검증 통과 기록 <code>docs/reviews/planning_review_2.html</code>(PASS).</p>
+  <h3>설계를 좌우한 핵심 동인</h3>
+  <table>
+    <tr><th style="width:200px;">아키텍처 동인</th><th>설계에 미친 영향</th><th style="width:120px;">출처</th></tr>
+    <tr><td>스캔(무거운 I/O)과 표시(읽기)의 성격이 다름</td><td>두 책임을 별도 프로세스(<code>scan.js</code> / <code>server.js</code>)로 분리하고 그 사이를 JSON 스냅샷 파일로 연결 → 서버는 항상 가볍게 응답</td><td><span class="rid">R-14</span> <span class="nid">N-01</span></td></tr>
+    <tr><td>외부 의존성 최소화 + 빌드/프레임워크 없음</td><td>Node 내장 모듈(<code>fs/path/child_process/http</code>)만 사용. UI는 정적 HTML/CSS/JS. 번들러·런타임 의존성 0</td><td><span class="nid">N-04</span></td></tr>
+    <tr><td>로컬 전용·프라이버시</td><td>서버는 <code>127.0.0.1</code> 고정 포트에만 바인딩, 외부 전송 0, 인증 없음</td><td><span class="nid">N-02</span> <span class="nid">N-06</span></td></tr>
+    <tr><td>임의 파일 노출·프로세스 인젝션 위험</td><td>경로 화이트리스트(스캔으로 등록된 경로만), 외부 프로세스는 <code>shell:false</code>+인자 배열</td><td><span class="nid">N-03</span></td></tr>
+    <tr><td>환경 편차(git/code CLI 부재·권한·손상 파일)</td><td>모든 수집기·액션을 graceful 격리. 항목 단위 실패가 전체를 중단시키지 않음</td><td><span class="rid">R-13</span> <span class="nid">N-05</span></td></tr>
+    <tr><td>프로젝트 폴더 비오염</td><td>결과 JSON·설정·로그를 OS 사용자 캐시/설정 폴더에 저장</td><td><span class="nid">N-06</span></td></tr>
+    <tr><td>대량(200+) 데이터의 즉각적 필터/검색</td><td>필터·정렬·검색은 서버 왕복 없이 클라이언트 메모리에서 처리</td><td><span class="rid">R-11</span> <span class="nid">N-01</span></td></tr>
+  </table>
+  <div class="warn-box"><b>MVP/M4 경계 (검증 §6 경미 관찰 반영):</b> 본 설계는 MVP 집합(<span class="rid">R-01·02·04·06·07·08·10·11·12·13·14</span> + <span class="nid">N-02·03·04·05·06</span>, N-01은 품질 기준)을 1차 구현 대상으로 한다. <span class="rid">R-03</span>(깊이/심링크)·<span class="rid">R-05</span>(전체 드라이브)·<span class="rid">R-09</span>(규모/의존성)·<span class="rid">R-15</span>(진행 표시)·<span class="rid">R-16</span>(재스캔)·<span class="nid">N-07</span>(접근성)은 <span class="pill m4">M4 후속</span>이다. FeatureSpec F-1의 "관련 요구 ID"에 M4 항목이 혼재하나, 본 설계서는 모듈/엔드포인트마다 MVP/M4를 명시해 경계를 유지한다.</div>
+</section>
+
+<section id="quality">
+  <h2>3. 품질 속성 요구</h2>
+  <table>
+    <tr><th style="width:130px;">품질 속성</th><th>목표치 (측정 가능)</th><th style="width:120px;">출처</th></tr>
+    <tr><td>성능 — 스캔</td><td>프로젝트 ~200개 지정 루트 스캔 &lt; 30초 (콜드 캐시 3회 중앙값, wall-clock)</td><td><span class="nid">N-01</span></td></tr>
+    <tr><td>성능 — 필터</td><td>200개 로드 상태에서 입력→DOM 재렌더 <code>performance.now()</code> 중앙값 ≤ 200ms</td><td><span class="rid">R-11</span></td></tr>
+    <tr><td>성능 — 열기</td><td>'열기' 클릭 후 2초 이내 UI 피드백(실행 중/성공/실패)</td><td><span class="rid">R-12</span></td></tr>
+    <tr><td>정확도</td><td>검증용 프로젝트 세트 대비 탐지율 ≥ 95% (false negative ≤ 5%)</td><td>PRD §3</td></tr>
+    <tr><td>견고성</td><td>git 미설치·비저장소·권한 없음·손상 파일로 인한 크래시 0건</td><td><span class="rid">R-13</span> <span class="nid">N-05</span></td></tr>
+    <tr><td>보안/프라이버시</td><td>127.0.0.1 전용 바인딩, 외부 전송 0, 경로 화이트리스트 밖 접근 0, <b>realpath 기준</b> 화이트리스트 일치 0건 이탈, 실행 파일 절대경로 고정(PATH 하이재킹 0), 부분신뢰 입력 파싱 시 프로세스 크래시/SLA 초과 0건</td><td><span class="nid">N-02</span> <span class="nid">N-03</span> 보안 H-1·H-2·H-3</td></tr>
+    <tr><td>유지보수성</td><td>외부 의존성 0, 모듈 책임 단일화, 데이터 스키마 버전 필드 보유</td><td><span class="nid">N-04</span></td></tr>
+  </table>
+</section>
+
+<section id="system">
+  <h2>4. 시스템 아키텍처 (상위 수준)</h2>
+  <p>시스템은 5개 구성 요소(① CLI 스캐너, ② 데이터/설정 저장소, ③ 로컬 웹서버+API, ④ 브라우저 대시보드, ⑤ 외부 CLI 도구)로 이뤄진다. 데이터는 단방향 파이프라인으로 흐른다: <b>스캔 → 캐시 JSON → 서버 읽기 → 브라우저 렌더</b>. 액션('열기'·재스캔)만 브라우저 → 서버 → OS 방향의 역흐름을 가진다.</p>
+
+  <figure>
+    <svg viewBox="0 0 1080 560" width="100%" role="img" aria-label="Project-SPIP 시스템 컨텍스트 및 데이터 흐름 다이어그램">
+      <defs>
+        <marker id="arr" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto">
+          <path d="M0,0 L9,4 L0,8 Z" fill="#38bdf8"/>
+        </marker>
+        <marker id="arrG" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto">
+          <path d="M0,0 L9,4 L0,8 Z" fill="#34d399"/>
+        </marker>
+        <marker id="arrY" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto">
+          <path d="M0,0 L9,4 L0,8 Z" fill="#fbbf24"/>
+        </marker>
+      </defs>
+
+      <!-- 사용자 -->
+      <circle cx="60" cy="120" r="26" fill="#0b1220" stroke="#e2e8f0" stroke-width="1.5"/>
+      <text x="60" y="116" fill="#e2e8f0" font-size="11" text-anchor="middle" font-family="Segoe UI">개발자</text>
+      <text x="60" y="130" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">(본인)</text>
+
+      <!-- (1) CLI 스캐너 -->
+      <rect x="150" y="60" width="200" height="120" rx="12" fill="#0b1220" stroke="#34d399" stroke-width="1.6"/>
+      <text x="250" y="86" fill="#34d399" font-size="14" text-anchor="middle" font-family="Segoe UI" font-weight="bold">① CLI 스캐너</text>
+      <text x="250" y="104" fill="#cbd5e1" font-size="11" text-anchor="middle" font-family="Segoe UI">scan.js  (spip)</text>
+      <text x="250" y="126" fill="#94a3b8" font-size="10" text-anchor="middle" font-family="Segoe UI">루트 순회 · 제외규칙</text>
+      <text x="250" y="142" fill="#94a3b8" font-size="10" text-anchor="middle" font-family="Segoe UI">탐지 · 인사이트 수집</text>
+      <text x="250" y="158" fill="#94a3b8" font-size="10" text-anchor="middle" font-family="Segoe UI">직렬화 → 스냅샷 저장</text>
+
+      <!-- (2) 저장소 -->
+      <rect x="430" y="40" width="220" height="160" rx="12" fill="#0b1220" stroke="#38bdf8" stroke-width="1.6" stroke-dasharray="2 0"/>
+      <text x="540" y="64" fill="#38bdf8" font-size="13" text-anchor="middle" font-family="Segoe UI" font-weight="bold">② OS 캐시/설정 저장소</text>
+      <rect x="450" y="78" width="180" height="42" rx="8" fill="#142035" stroke="#475569"/>
+      <text x="540" y="96" fill="#e2e8f0" font-size="11" text-anchor="middle" font-family="Segoe UI">projects.json</text>
+      <text x="540" y="111" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">스캔 결과 스냅샷</text>
+      <rect x="450" y="128" width="180" height="38" rx="8" fill="#142035" stroke="#475569"/>
+      <text x="540" y="145" fill="#e2e8f0" font-size="11" text-anchor="middle" font-family="Segoe UI">spip.config.json</text>
+      <text x="540" y="159" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">루트·stale·포트 설정</text>
+      <text x="540" y="186" fill="#64748b" font-size="9" text-anchor="middle" font-family="Segoe UI">앱 폴더 %APPDATA%\spip\ {config/, cache/} · 0600/ACL</text>
+
+      <!-- (3) 웹서버 -->
+      <rect x="430" y="290" width="220" height="130" rx="12" fill="#0b1220" stroke="#34d399" stroke-width="1.6"/>
+      <text x="540" y="316" fill="#34d399" font-size="14" text-anchor="middle" font-family="Segoe UI" font-weight="bold">③ 로컬 웹서버 + API</text>
+      <text x="540" y="334" fill="#cbd5e1" font-size="11" text-anchor="middle" font-family="Segoe UI">server.js  (http)</text>
+      <text x="540" y="356" fill="#94a3b8" font-size="10" text-anchor="middle" font-family="Segoe UI">127.0.0.1 고정 포트 바인딩</text>
+      <text x="540" y="372" fill="#94a3b8" font-size="10" text-anchor="middle" font-family="Segoe UI">정적 서빙 + 데이터 API</text>
+      <text x="540" y="388" fill="#94a3b8" font-size="10" text-anchor="middle" font-family="Segoe UI">화이트리스트 검증 · 액션</text>
+      <text x="540" y="404" fill="#94a3b8" font-size="10" text-anchor="middle" font-family="Segoe UI">스냅샷 캐싱(메모리)</text>
+
+      <!-- (4) 브라우저 -->
+      <rect x="150" y="300" width="200" height="110" rx="12" fill="#142035" stroke="#38bdf8" stroke-width="1.6"/>
+      <text x="250" y="326" fill="#38bdf8" font-size="14" text-anchor="middle" font-family="Segoe UI" font-weight="bold">④ 브라우저 대시보드</text>
+      <text x="250" y="344" fill="#cbd5e1" font-size="11" text-anchor="middle" font-family="Segoe UI">순수 HTML/CSS/JS</text>
+      <text x="250" y="366" fill="#94a3b8" font-size="10" text-anchor="middle" font-family="Segoe UI">목록·통계·카드 렌더</text>
+      <text x="250" y="382" fill="#94a3b8" font-size="10" text-anchor="middle" font-family="Segoe UI">필터/정렬/검색(클라)</text>
+      <text x="250" y="398" fill="#94a3b8" font-size="10" text-anchor="middle" font-family="Segoe UI">액션 호출 + 피드백</text>
+
+      <!-- (5) 외부 CLI -->
+      <rect x="740" y="300" width="200" height="110" rx="12" fill="#0b1220" stroke="#fbbf24" stroke-width="1.6"/>
+      <text x="840" y="326" fill="#fbbf24" font-size="14" text-anchor="middle" font-family="Segoe UI" font-weight="bold">⑤ 외부 CLI 도구</text>
+      <text x="840" y="348" fill="#cbd5e1" font-size="11" text-anchor="middle" font-family="Segoe UI">code / git</text>
+      <text x="840" y="370" fill="#94a3b8" font-size="10" text-anchor="middle" font-family="Segoe UI">spawn(shell:false)</text>
+      <text x="840" y="386" fill="#94a3b8" font-size="10" text-anchor="middle" font-family="Segoe UI">부재 시 graceful</text>
+
+      <!-- 디스크 -->
+      <rect x="740" y="60" width="200" height="120" rx="12" fill="#0b1220" stroke="#64748b" stroke-width="1.4" stroke-dasharray="5 4"/>
+      <text x="840" y="86" fill="#cbd5e1" font-size="13" text-anchor="middle" font-family="Segoe UI" font-weight="bold">파일 시스템</text>
+      <text x="840" y="108" fill="#94a3b8" font-size="10" text-anchor="middle" font-family="Segoe UI">사용자 프로젝트 폴더들</text>
+      <text x="840" y="124" fill="#94a3b8" font-size="10" text-anchor="middle" font-family="Segoe UI">~/dev · D:\work · ...</text>
+      <text x="840" y="146" fill="#94a3b8" font-size="10" text-anchor="middle" font-family="Segoe UI">읽기 전용 순회</text>
+      <text x="840" y="162" fill="#94a3b8" font-size="10" text-anchor="middle" font-family="Segoe UI">(스캔 대상)</text>
+
+      <!-- 연결선 -->
+      <!-- 사용자 -> CLI -->
+      <line x1="86" y1="112" x2="146" y2="100" stroke="#fbbf24" stroke-width="1.8" marker-end="url(#arrY)"/>
+      <text x="100" y="86" fill="#fbbf24" font-size="9" font-family="Segoe UI">spip 실행</text>
+      <!-- CLI -> 디스크 (읽기) -->
+      <line x1="350" y1="110" x2="736" y2="110" stroke="#34d399" stroke-width="1.8" marker-end="url(#arrG)"/>
+      <text x="500" y="100" fill="#34d399" font-size="9" font-family="Segoe UI">디렉터리 읽기 순회</text>
+      <!-- CLI -> 외부(git) during scan -->
+      <line x1="320" y1="180" x2="790" y2="296" stroke="#fbbf24" stroke-width="1.4" stroke-dasharray="4 3" marker-end="url(#arrY)"/>
+      <text x="560" y="250" fill="#fbbf24" font-size="9" font-family="Segoe UI">git status (수집 시)</text>
+      <!-- CLI -> 저장소 (쓰기) -->
+      <line x1="350" y1="120" x2="446" y2="120" stroke="#38bdf8" stroke-width="2" marker-end="url(#arr)"/>
+      <text x="356" y="138" fill="#38bdf8" font-size="9" font-family="Segoe UI">쓰기</text>
+      <!-- 저장소 -> 서버 (읽기) -->
+      <line x1="540" y1="200" x2="540" y2="286" stroke="#38bdf8" stroke-width="2" marker-end="url(#arr)"/>
+      <text x="548" y="248" fill="#38bdf8" font-size="9" font-family="Segoe UI">읽기</text>
+      <!-- 서버 <-> 브라우저 -->
+      <line x1="430" y1="350" x2="354" y2="350" stroke="#38bdf8" stroke-width="2" marker-end="url(#arr)"/>
+      <text x="360" y="338" fill="#38bdf8" font-size="9" font-family="Segoe UI">HTTP: 정적+JSON</text>
+      <line x1="350" y1="392" x2="426" y2="392" stroke="#fbbf24" stroke-width="1.8" marker-end="url(#arrY)"/>
+      <text x="356" y="408" fill="#fbbf24" font-size="9" font-family="Segoe UI">액션 요청</text>
+      <!-- 사용자 -> 브라우저 -->
+      <line x1="74" y1="142" x2="160" y2="300" stroke="#fbbf24" stroke-width="1.6" marker-end="url(#arrY)"/>
+      <text x="78" y="230" fill="#fbbf24" font-size="9" font-family="Segoe UI">localhost 접속</text>
+      <!-- 서버 -> 외부 -->
+      <line x1="650" y1="355" x2="736" y2="355" stroke="#fbbf24" stroke-width="1.8" marker-end="url(#arrY)"/>
+      <text x="656" y="343" fill="#fbbf24" font-size="9" font-family="Segoe UI">code &lt;path&gt;</text>
+
+      <!-- 신뢰경계 표시 (점선 박스) -->
+      <rect x="120" y="280" width="840" height="160" rx="10" fill="none" stroke="#f87171" stroke-width="1.2" stroke-dasharray="6 5"/>
+      <text x="130" y="296" fill="#f87171" font-size="10" font-family="Segoe UI">신뢰 경계: 로컬 런타임 (127.0.0.1)</text>
+    </svg>
+    <div class="legend">
+      <span><span class="dot" style="background:#34d399"></span> Node 실행/읽기</span>
+      <span><span class="dot" style="background:#38bdf8"></span> 데이터(JSON/HTTP)</span>
+      <span><span class="dot" style="background:#fbbf24"></span> 사용자 액션/외부 프로세스</span>
+      <span><span class="dot" style="border:1px dashed #f87171;width:9px;height:9px;"></span> 신뢰 경계</span>
+    </div>
+    <figcaption>그림 1. 시스템 컨텍스트 + 데이터 흐름. 스캔(쓰기)과 서빙(읽기)이 JSON 스냅샷으로 분리된 단방향 파이프라인. 액션만 역방향.</figcaption>
+  </figure>
+
+  <h3>실행 흐름 요약</h3>
+  <ol>
+    <li><b>스캔 페이즈</b>(<code>spip</code> / <code>npm run scan</code>): 설정 로드 → 루트 순회(제외 규칙) → 프로젝트 탐지 → 인사이트 수집(언어·신선도·git·규모) → <code>projects.json</code>을 OS 캐시에 원자적 쓰기 → 콘솔 요약. <span class="rid">R-01·02·04·06·07·08·14</span></li>
+    <li><b>서빙 페이즈</b>(<code>npm run start</code>): <code>projects.json</code> 읽어 메모리 적재 → 127.0.0.1 고정 포트 바인딩 → 콘솔에 URL 출력(자동 오픈 없음). <span class="rid">R-10</span> <span class="nid">N-02·N-06</span></li>
+    <li><b>표시 페이즈</b>(브라우저): 페이지 로드 → <code>GET /api/projects</code>·<code>/api/stats</code> → 카드/통계 렌더 → 클라이언트 필터/정렬/검색. <span class="rid">R-10·R-11</span></li>
+    <li><b>액션 페이즈</b>: '열기' 클릭 → <code>POST /api/open</code>(Host allowlist+세션토큰) → realpath 화이트리스트 검증 → <code>spawn(absoluteCodeBin,[path],{shell:false})</code> → 피드백. <span class="rid">R-12·R-13</span> <span class="nid">N-03</span> · H-1·H-2·M-1</li>
+  </ol>
+</section>
+
+<section id="software">
+  <h2>5. 소프트웨어 아키텍처 (추상화)</h2>
+  <p>두 실행 진입점(<code>scan.js</code>, <code>server.js</code>)이 공용 라이브러리(<code>lib/</code>)를 공유한다. 의존성은 <b>진입점 → 도메인 모듈 → 공용 유틸</b> 한 방향으로만 흐르며, 공용 유틸은 상위를 참조하지 않는다(순환 의존 금지). 인사이트 수집기는 공통 인터페이스(계약)를 따르는 교체 가능한 모듈로 격리해, 새 수집기 추가나 graceful 실패가 다른 수집기에 영향을 주지 않게 한다.</p>
+
+  <figure>
+    <svg viewBox="0 0 1080 600" width="100%" role="img" aria-label="소프트웨어 레이어 및 모듈 의존성 다이어그램">
+      <defs>
+        <marker id="dep" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto">
+          <path d="M0,0 L8,4 L0,8 Z" fill="#94a3b8"/>
+        </marker>
+      </defs>
+
+      <!-- 진입점 레이어 -->
+      <rect x="30" y="30" width="1020" height="100" rx="10" fill="none" stroke="#34d399" stroke-width="1.2" stroke-dasharray="3 3"/>
+      <text x="44" y="50" fill="#34d399" font-size="12" font-family="Segoe UI" font-weight="bold">진입점 (Entry / Composition Root)</text>
+      <rect x="80" y="62" width="300" height="56" rx="9" fill="#0b1220" stroke="#34d399"/>
+      <text x="230" y="86" fill="#e2e8f0" font-size="13" text-anchor="middle" font-family="Segoe UI">scan.js — CLI 조립·옵션 파싱</text>
+      <text x="230" y="104" fill="#94a3b8" font-size="10" text-anchor="middle" font-family="Segoe UI">spip bin · 진행/요약 출력</text>
+      <rect x="700" y="62" width="300" height="56" rx="9" fill="#0b1220" stroke="#34d399"/>
+      <text x="850" y="86" fill="#e2e8f0" font-size="13" text-anchor="middle" font-family="Segoe UI">server.js — HTTP 서버 조립</text>
+      <text x="850" y="104" fill="#94a3b8" font-size="10" text-anchor="middle" font-family="Segoe UI">바인딩 · 라우터 마운트</text>
+
+      <!-- 도메인 레이어 -->
+      <rect x="30" y="160" width="1020" height="270" rx="10" fill="none" stroke="#38bdf8" stroke-width="1.2" stroke-dasharray="3 3"/>
+      <text x="44" y="180" fill="#38bdf8" font-size="12" font-family="Segoe UI" font-weight="bold">도메인 모듈 (lib/)</text>
+
+      <!-- 스캔 도메인 -->
+      <rect x="55" y="196" width="470" height="220" rx="9" fill="#101a30" stroke="#475569"/>
+      <text x="290" y="216" fill="#7dd3fc" font-size="12" text-anchor="middle" font-family="Segoe UI" font-weight="bold">스캔 도메인</text>
+      <rect x="75" y="228" width="200" height="40" rx="7" fill="#0b1220" stroke="#475569"/>
+      <text x="175" y="252" fill="#e2e8f0" font-size="11" text-anchor="middle" font-family="Segoe UI">walker (디렉터리 순회)</text>
+      <rect x="305" y="228" width="200" height="40" rx="7" fill="#0b1220" stroke="#475569"/>
+      <text x="405" y="252" fill="#e2e8f0" font-size="11" text-anchor="middle" font-family="Segoe UI">detector (프로젝트 판별)</text>
+      <rect x="75" y="280" width="430" height="48" rx="7" fill="#0b1220" stroke="#475569"/>
+      <text x="290" y="300" fill="#e2e8f0" font-size="11" text-anchor="middle" font-family="Segoe UI">collectors/ (인사이트 수집기 — 공통 계약)</text>
+      <text x="290" y="318" fill="#94a3b8" font-size="9.5" text-anchor="middle" font-family="Segoe UI">language · freshness · git · size</text>
+      <rect x="75" y="340" width="200" height="40" rx="7" fill="#0b1220" stroke="#475569"/>
+      <text x="175" y="364" fill="#e2e8f0" font-size="11" text-anchor="middle" font-family="Segoe UI">scanner (오케스트레이션)</text>
+      <rect x="305" y="340" width="200" height="40" rx="7" fill="#0b1220" stroke="#475569"/>
+      <text x="405" y="364" fill="#e2e8f0" font-size="11" text-anchor="middle" font-family="Segoe UI">serializer (직렬화)</text>
+      <rect x="75" y="388" width="200" height="22" rx="6" fill="#142035" stroke="#475569"/>
+      <text x="175" y="403" fill="#94a3b8" font-size="9.5" text-anchor="middle" font-family="Segoe UI">excludeRules (제외 규칙)</text>
+
+      <!-- 서버 도메인 -->
+      <rect x="555" y="196" width="470" height="220" rx="9" fill="#101a30" stroke="#475569"/>
+      <text x="790" y="216" fill="#7dd3fc" font-size="12" text-anchor="middle" font-family="Segoe UI" font-weight="bold">서버 도메인</text>
+      <rect x="575" y="228" width="200" height="40" rx="7" fill="#0b1220" stroke="#475569"/>
+      <text x="675" y="252" fill="#e2e8f0" font-size="11" text-anchor="middle" font-family="Segoe UI">router (요청 라우팅)</text>
+      <rect x="805" y="228" width="200" height="40" rx="7" fill="#0b1220" stroke="#475569"/>
+      <text x="905" y="252" fill="#e2e8f0" font-size="11" text-anchor="middle" font-family="Segoe UI">staticHandler (정적 서빙)</text>
+      <rect x="575" y="280" width="200" height="40" rx="7" fill="#0b1220" stroke="#475569"/>
+      <text x="675" y="304" fill="#e2e8f0" font-size="11" text-anchor="middle" font-family="Segoe UI">apiHandlers (데이터 API)</text>
+      <rect x="805" y="280" width="200" height="40" rx="7" fill="#0b1220" stroke="#475569"/>
+      <text x="905" y="304" fill="#e2e8f0" font-size="11" text-anchor="middle" font-family="Segoe UI">actionHandlers (열기/재스캔)</text>
+      <rect x="575" y="332" width="200" height="40" rx="7" fill="#0b1220" stroke="#475569"/>
+      <text x="675" y="356" fill="#e2e8f0" font-size="11" text-anchor="middle" font-family="Segoe UI">pathGuard (화이트리스트)</text>
+      <rect x="805" y="332" width="200" height="40" rx="7" fill="#0b1220" stroke="#475569"/>
+      <text x="905" y="356" fill="#e2e8f0" font-size="11" text-anchor="middle" font-family="Segoe UI">snapshotStore (메모리 캐시)</text>
+
+      <!-- 공용 유틸 레이어 -->
+      <rect x="30" y="460" width="1020" height="110" rx="10" fill="none" stroke="#fbbf24" stroke-width="1.2" stroke-dasharray="3 3"/>
+      <text x="44" y="480" fill="#fbbf24" font-size="12" font-family="Segoe UI" font-weight="bold">공용 유틸 (lib/common/) — 상위를 참조하지 않음</text>
+      <rect x="80" y="494" width="180" height="58" rx="8" fill="#0b1220" stroke="#64748b"/>
+      <text x="170" y="520" fill="#e2e8f0" font-size="11" text-anchor="middle" font-family="Segoe UI">paths (앱 폴더 해석)</text>
+      <text x="170" y="537" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">appDir/config·cache 하위</text>
+      <rect x="290" y="494" width="180" height="58" rx="8" fill="#0b1220" stroke="#64748b"/>
+      <text x="380" y="520" fill="#e2e8f0" font-size="11" text-anchor="middle" font-family="Segoe UI">config (설정 로드)</text>
+      <text x="380" y="537" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">기본값 병합·검증</text>
+      <rect x="500" y="494" width="180" height="58" rx="8" fill="#0b1220" stroke="#64748b"/>
+      <text x="590" y="520" fill="#e2e8f0" font-size="11" text-anchor="middle" font-family="Segoe UI">safeExec (프로세스)</text>
+      <text x="590" y="537" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">shell:false 래퍼</text>
+      <rect x="710" y="494" width="180" height="58" rx="8" fill="#0b1220" stroke="#64748b"/>
+      <text x="800" y="520" fill="#e2e8f0" font-size="11" text-anchor="middle" font-family="Segoe UI">logger (로깅)</text>
+      <text x="800" y="537" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">콘솔·경고 수집</text>
+
+      <!-- 의존성 화살표 -->
+      <line x1="230" y1="118" x2="290" y2="194" stroke="#94a3b8" stroke-width="1.4" marker-end="url(#dep)"/>
+      <line x1="850" y1="118" x2="790" y2="194" stroke="#94a3b8" stroke-width="1.4" marker-end="url(#dep)"/>
+      <line x1="290" y1="416" x2="290" y2="458" stroke="#94a3b8" stroke-width="1.4" marker-end="url(#dep)"/>
+      <line x1="790" y1="416" x2="700" y2="458" stroke="#94a3b8" stroke-width="1.4" marker-end="url(#dep)"/>
+      <text x="540" y="592" fill="#64748b" font-size="10" text-anchor="middle" font-family="Segoe UI">의존성 방향: 진입점 → 도메인 → 공용 유틸 (단방향, 순환 금지)</text>
+    </svg>
+    <figcaption>그림 2. 3-레이어 소프트웨어 아키텍처와 모듈 경계. 인사이트 수집기는 공통 계약을 따르는 교체 가능 모듈.</figcaption>
+  </figure>
+
+  <h3>핵심 추상화 (계약, 설계 수준 시그니처)</h3>
+  <p>아래는 모듈 간 계약을 보여주는 <b>설계 표현</b>이며 구현 코드가 아니다. 실제 시그니처·세부는 구현팀이 확정한다.</p>
+
+  <h4>인사이트 수집기 계약 (collectors/* — 보안검증 H-3 반영)</h4>
+  <pre><span class="c">// 모든 수집기는 동일한 형태를 따른다(교체 가능·격리). 실패는 throw가 아니라 결과에 담는다.</span>
+<span class="c">// 스캔 대상은 부분신뢰(TB-B)이므로 graceful 격리만으로는 부족 — 적대적 입력 방어를 계약에 포함한다.</span>
+Collector = {
+  name: string,                       <span class="c">// 'language' | 'freshness' | 'git' | 'size'</span>
+  mvp: boolean,                       <span class="c">// size(R-09)는 false → M4</span>
+  limits: {                           <span class="c">// H-3: 적대적 입력 가드(수집기별 상한, 공통 기본값 제공)</span>
+    maxFileBytes,                     <span class="c">// 읽기 전 fs.stat로 크기 검사. 초과 시 읽지 않고 status:'na'+warning (예: package.json 1MB)</span>
+    maxReadBytes,                     <span class="c">// 스트림/부분 읽기 바이트 한도(파일 핸들 가드)</span>
+    maxJsonDepth,                     <span class="c">// JSON.parse 후 깊이 가드(과중첩 거부) — 깊이 초과 시 skip</span>
+    maxStringField                    <span class="c">// name/description/branch 등 문자열 필드 길이 절단</span>
+  },
+  collect(projectPath, context) -> {  <span class="c">// context: { config, signals, logger, limits }</span>
+    ok: boolean,                      <span class="c">// 수집 성공 여부</span>
+    data: object | null,              <span class="c">// 성공 시 인사이트 필드(문자열은 길이절단·제어문자 제거 후)</span>
+    status: 'ok' | 'na' | 'error',    <span class="c">// 'na' = 환경 부재 또는 입력 한도 초과(graceful), R-13/H-3</span>
+    note: string | null               <span class="c">// 사용자 안내용 메모</span>
+  }
+}</pre>
+  <div class="danger-box"><b>H-3 부분신뢰 입력 파싱 규칙(필수):</b> ① 파싱 전 <code>fs.stat</code>로 <b>파일 크기 상한</b> 검사 → 초과 시 읽지 않고 skip+warning(거대 <code>package.json</code> 메모리 고갈 차단). ② <code>JSON.parse</code> 입력은 <b>바이트 한도·깊이 가드</b>를 거친다(JSON 폭탄·과중첩 차단). ③ 언어 추정 등 모든 정규식은 <b>선형시간(ReDoS-free)</b> 패턴만 사용하거나 입력 길이를 먼저 제한한다(역추적 폭발 금지). ④ 수집한 문자열 필드(<code>name</code>·<code>description</code>·<code>branch</code>)는 <b>길이 절단 + 제어문자 제거</b> 후 스냅샷에 담는다(저장형 XSS 표면 1차 축소, L-1 보완). 단일 항목 try 격리는 무한 루프/메모리 폭발을 막지 못하므로, 위 가드를 격리보다 <b>앞단</b>에 둔다.</div>
+
+  <h4>안전 프로세스 실행 (safeExec — 보안 핵심, 보안검증 H-2·M-4 반영)</h4>
+  <pre>resolveBin(name) -> absolutePath | null  <span class="c">// 기동/스캔 시작 시 1회만 호출해 결과를 고정(캐시)</span>
+  <span class="c">// 'code'/'git'을 신뢰 PATH 기준(where/which 또는 알려진 설치 경로)으로 절대경로 1회 해석</span>
+  <span class="c">// 이후 절대경로로만 spawn → 이름만 고정(name)이 아니라 경로를 고정(H-2)</span>
+
+safeExec(absoluteBin, argsArray, opts) -> { code, stdout, stderr, timedOut }
+  <span class="c">// 항상 spawn(absoluteBin, argsArray, { shell:false })  — 사용자/스캔 입력을 셸 문자열로 연결 안 함</span>
+  <span class="c">// opts.timeoutMs: 기본 타임아웃 + 초과 시 강제 kill(M-4)</span>
+  <span class="c">// opts.maxBuffer: stdout/stderr 출력 버퍼 상한(M-4)</span>
+  <span class="c">// Windows: .bat/.cmd 자동 확장(PATHEXT) 실행 금지 — 절대경로의 .exe만 실행(H-2)</span>
+  <span class="c">// git collector는 cwd:projectPath로 돌더라도 실행 파일은 절대경로 → cwd 내 위장 git.exe/.bat 선택 차단</span></pre>
+  <div class="danger-box"><b>H-2 PATH 하이재킹 차단(필수):</b> <code>code</code>·<code>git</code>은 <b>이름만 고정하지 않고</b> 기동/스캔 시작 시 <code>resolveBin()</code>으로 <b>절대경로를 1회 해석해 고정</b>한다. git collector가 <code>cwd:projectPath</code>(부분신뢰 폴더)에서 실행되더라도 실행 파일을 절대경로로 지정해, 스캔 대상 폴더 내에 심어진 위장 <code>git.exe</code>/<code>git.bat</code>가 선택돼 RCE로 이어지는 경로를 막는다. 가능하면 git 호출도 <code>-C &lt;projectPath&gt;</code> 인자 사용으로 <b>cwd 의존을 제거</b>한다.</div>
+
+  <h4>스캐너 오케스트레이션 (scanner)</h4>
+  <pre>scan(options) -> Snapshot
+  <span class="c">// options: { roots[], excludes[], staleDays, depthLimit, collectors[] }</span>
+  <span class="c">// 1) walker로 후보 디렉터리 스트리밍  2) detector로 프로젝트 확정</span>
+  <span class="c">// 3) 각 프로젝트에 등록된 collectors 순차/병렬 적용(개별 격리 + H-3 입력 가드)</span>
+  <span class="c">// 4) walker가 등록하는 후보 경로는 canonicalize(realpath)로 정규화해 화이트리스트 구성(H-1)</span>
+  <span class="c">// 5) serializer로 Snapshot 생성. 항목 단위 실패는 warnings[]에 누적</span></pre>
+
+  <h4>디렉터리 순회 (walker — DFS, 보안검증 M-3 반영, P2-4 2단 분리)</h4>
+  <pre>walk(roots, opts) -> AsyncIterable&lt;candidateDir&gt;
+  <span class="c">// 순회 전략: 깊이 우선(DFS)으로 단일화(§4·§6.1 용어 통일)</span>
+  <span class="c">// [MVP 안전장치 — 필수, N-05/M-3]</span>
+  <span class="c">//   · 내장 안전 깊이 상한(고정값, 하드코딩) — 사용자 설정과 무관하게 무한 재귀 방지</span>
+  <span class="c">//   · 방문 실경로(realpath) 집합 추적 → 재방문 가지치기(심링크 루프 a→b→a 차단)</span>
+  <span class="c">//   · 심링크 기본 미추적(fs.lstat로 링크 판별). 따라갈 경우 실경로가 루트 실경로 하위인지 재확인</span>
+  <span class="c">// [M4 — R-03]</span>
+  <span class="c">//   · 사용자 설정 가능한 depthLimit, 심링크 정책 정교화, --all-drives(R-05)</span></pre>
+
+  <h4>경로 가드 (pathGuard — 보안 핵심, 보안검증 H-1 반영)</h4>
+  <pre>canonicalize(rawPath) -> string        <span class="c">// 정규화 1차 함수 — 등록·검증 양쪽이 동일 규칙 사용</span>
+  <span class="c">// 1) path.resolve로 '../' 접기  2) fs.realpathSync로 심링크/Windows 접합점(junction) 실경로 해소</span>
+  <span class="c">// 3) 대소문자 비민감 FS(Windows/macOS)는 비교용 폴드(fold) 적용</span>
+  <span class="c">// 4) 유니코드 NFC 정규화로 NFC/NFD 차이 흡수</span>
+  <span class="c">// 5) UNC(\\\\server\\share)·드라이브 상대경로(C:foo)·확장경로(\\\\?\\)는 정규화 또는 거부</span>
+
+isAllowed(requestedPath, whitelist) -> boolean
+  <span class="c">// whitelist = 스냅샷 등록 시점에 canonicalize()로 만든 "실경로(realpath)" 집합</span>
+  <span class="c">// 요청 경로도 canonicalize() 후 실경로끼리 정확 일치만 허용 (등록·검증 동일 규칙 = TOCTOU 축소)</span>
+  <span class="c">// '../' 순회·심볼릭/접합점 우회·접두사 부분일치 모두 차단 (N-03, H-1)</span>
+  <span class="c">// 실경로 해소 실패(경로 소멸 등)는 false 반환 → 호출부가 PATH_GONE/403 처리</span></pre>
+  <div class="danger-box"><b>H-1 핵심 규칙:</b> 화이트리스트는 walker가 <b>등록하는 시점</b>과 pathGuard가 <b>검증하는 시점</b> 모두 동일한 <code>canonicalize()</code>(= <code>fs.realpath</code> 기반)로 만든 실경로를 기준으로 구성·대조한다. <code>path.resolve</code>만으로는 심링크/접합점이 해소되지 않아 스캔 루트 밖을 가리키는 경로가 "정확 일치"로 통과할 수 있으므로, 실경로 정규화를 단일 진실의 원천으로 강제한다.</div>
+</section>
+
+<section id="components">
+  <h2>6. 구성 요소 / 모듈</h2>
+  <h3>6.1 스캔 도메인 (scan.js가 조립)</h3>
+  <table>
+    <tr><th style="width:150px;">모듈</th><th>책임</th><th>경계 / 비책임</th><th style="width:90px;">요구</th></tr>
+    <tr><td><code>walker</code></td><td>루트부터 디렉터리를 <b>깊이 우선(DFS)</b> 순회하며 후보 폴더를 스트리밍. <code>excludeRules</code> 매칭 폴더는 재귀 비진입. <b>[MVP 필수]</b> 내장 안전 깊이 상한(고정값)+방문 실경로 추적으로 심링크 루프·무한 재귀 차단(N-05/M-3), 등록 경로는 realpath로 정규화(H-1)</td><td>프로젝트 판별·인사이트 수집 안 함(순회만). <b>사용자 설정 depthLimit·심링크 정책 정교화는 M4(R-03)</b></td><td><span class="rid">R-02</span> <span class="nid">N-05</span> · depth설정 <span class="rid">R-03</span><span class="pill m4">M4</span></td></tr>
+    <tr><td><code>excludeRules</code></td><td>제외 폴더 규칙(<code>node_modules</code>·<code>.git</code> 내부·<code>dist/build/.cache</code>·OS 시스템 폴더). 설정으로 확장</td><td>순회 자체는 안 함(판정 함수만 제공)</td><td><span class="rid">R-02</span></td></tr>
+    <tr><td><code>detector</code></td><td>후보 폴더가 프로젝트인지 판별(<code>.git</code>/<code>package.json</code>/<code>.vscode</code> 신호). 중첩 시 최상위 1건</td><td>인사이트 수집 안 함</td><td><span class="rid">R-01</span></td></tr>
+    <tr><td><code>collectors/language</code></td><td>주 언어/스택 추정: <code>package.json</code> deps + 확장자 비율. 불명 시 "Unknown". <b>[H-3]</b> 파싱 전 크기 상한·JSON 깊이/바이트 가드, 언어 추정 정규식은 선형시간(ReDoS-free), 문자열 필드 길이절단·제어문자 제거</td><td>git·용량 등 타 수집기 영역 침범 안 함</td><td><span class="rid">R-06</span> · H-3</td></tr>
+    <tr><td><code>collectors/freshness</code></td><td>최종 파일 수정일 + (가능 시) 최근 커밋 시각. stale 기준(기본 90일) 판정</td><td>git 원격 상태는 git 수집기 영역</td><td><span class="rid">R-07</span></td></tr>
+    <tr><td><code>collectors/git</code></td><td>저장소 여부·브랜치·미커밋 변경·ahead/behind. git CLI를 <code>safeExec</code>로 호출. 부재 시 status='na'. <b>[H-2]</b> git 실행 파일은 <b>절대경로 고정</b>(<code>resolveBin</code> 결과), <code>cwd:projectPath</code>여도 위장 바이너리 미선택. 가능 시 <code>-C &lt;path&gt;</code>로 cwd 의존 제거. <b>[M-4]</b> 타임아웃·출력버퍼 상한</td><td>git 쓰기(커밋/푸시) 절대 안 함 — 읽기 전용(§9.1 Won't)</td><td><span class="rid">R-08</span> <span class="rid">R-13</span> · H-2·M-4</td></tr>
+    <tr><td><code>collectors/size</code> <span class="pill m4">M4</span></td><td>총 용량·<code>node_modules</code> 크기·의존성 개수. 지연/근사 측정 허용</td><td>MVP 비포함. 계약만 미리 정의해 자리 확보</td><td><span class="rid">R-09</span></td></tr>
+    <tr><td><code>scanner</code></td><td>walker→detector→collectors→serializer 오케스트레이션. 항목 단위 격리·경고 누적</td><td>저장 위치 결정은 paths/serializer에 위임</td><td><span class="rid">R-14</span> <span class="nid">N-05</span></td></tr>
+    <tr><td><code>serializer</code></td><td>Snapshot을 스키마(§8)대로 직렬화하고 앱 폴더 <code>cache/projects.json</code>에 <b>원자적 쓰기</b>(임시파일→rename). <b>[M-2]</b> 캐시·임시 파일을 소유자 전용 권한(0600/ACL)으로 생성·실패 시 정리</td><td>비즈니스 로직 없음</td><td><span class="nid">N-06</span> · M-2</td></tr>
+  </table>
+
+  <h3>6.2 서버 도메인 (server.js가 조립)</h3>
+  <table>
+    <tr><th style="width:150px;">모듈</th><th>책임</th><th>경계 / 비책임</th><th style="width:90px;">요구</th></tr>
+    <tr><td><code>router</code></td><td>메서드·경로 매칭으로 핸들러 디스패치. <code>/api/*</code>는 API 핸들러, 그 외는 정적 핸들러</td><td>비즈니스 로직 없음</td><td><span class="rid">R-10</span></td></tr>
+    <tr><td><code>staticHandler</code></td><td><b>[P1-1 통일 규약]</b> <code>GET /</code> → <code>public/index.html</code>, <code>GET /static/&lt;asset&gt;</code> → <code>public/&lt;asset&gt;</code>로 매핑해 MIME 지정 서빙. 매핑 후 경로를 <code>public/</code> 절대경로 하위로 정규화(realpath)해 <b>이탈 시 404</b>(L-1 CSP 헤더도 함께 부여)</td><td>프로젝트 폴더 파일은 절대 서빙 안 함. <code>/api/*</code> 외 GET만 처리</td><td><span class="rid">R-10</span> <span class="nid">N-03</span></td></tr>
+    <tr><td><code>snapshotStore</code></td><td>기동 시 <code>projects.json</code>을 읽어 메모리 적재 + 화이트리스트 집합을 <b>realpath 정규화(H-1)</b>로 구성. <b>[P2-5 통일]</b> 스냅샷 부재/손상 시 <code>hasSnapshot:false</code> 플래그를 들고 빈 상태로 graceful 적재(크래시 0)</td><td>스캔 안 함(읽기만)</td><td><span class="rid">R-10</span> <span class="rid">R-13</span></td></tr>
+    <tr><td><code>apiHandlers</code></td><td><code>GET /api/projects</code>·<code>/api/stats</code>·<code>/api/health</code> 응답. 통계 집계 계산</td><td>필터/정렬/검색은 클라가 담당</td><td><span class="rid">R-10</span></td></tr>
+    <tr><td><code>pathGuard</code></td><td>액션 요청을 <code>id</code>로 받아 스냅샷에서 역참조 → <b>canonicalize(realpath) 기준 정확 일치</b> 검증(H-1). 불일치 시 403(<code>PATH_NOT_ALLOWED</code>), id 미존재 시 404(<code>ID_NOT_FOUND</code>), 실경로 소멸 시 <code>PATH_GONE</code></td><td>실행 자체는 actionHandlers</td><td><span class="nid">N-03</span> · H-1·P2-3</td></tr>
+    <tr><td><code>actionHandlers</code></td><td><code>POST /api/open</code>(code 실행), <code>POST /api/rescan</code><span class="pill m4">M4</span>. <code>safeExec</code>로 절대경로 호출(H-2), 결과 피드백. <b>[M-1]</b> Host allowlist+Origin 검증+세션토큰 선통과, <b>[M-4]</b> id별 in-flight 상한으로 중복 spawn 차단</td><td>경로 검증은 pathGuard 선통과 필수. MVP에서 <code>/api/rescan</code>은 미마운트(404)</td><td><span class="rid">R-12</span> <span class="rid">R-16</span><span class="pill m4">M4</span></td></tr>
+  </table>
+
+  <h3>6.3 브라우저 대시보드 (public/)</h3>
+  <table>
+    <tr><th style="width:150px;">모듈</th><th>책임</th><th style="width:90px;">요구</th></tr>
+    <tr><td><code>index.html</code></td><td>대시보드 골격: 통계 요약 영역 + 필터 컨트롤 + 카드 그리드 + 빈 상태/상세 패널. <b>[L-1]</b> 자산은 <code>/static/&lt;asset&gt;</code>로 참조(P1-1 규약), <b>CSP 메타</b>로 인라인/외부 스크립트 제한, 세션토큰 주입(M-1)</td><td><span class="rid">R-10</span></td></tr>
+    <tr><td><code>app.js — store</code></td><td><code>/api/projects</code>를 1회 fetch해 메모리 보관(전체 데이터 단일 출처). 빈/503/플래그 응답 시 빈 상태 트리거(P2-5)</td><td><span class="rid">R-10</span></td></tr>
+    <tr><td><code>app.js — view</code></td><td>카드/통계/상세 렌더. 긴 경로 말줄임·툴팁, 색상+텍스트 라벨 병기(N-07 권고). <b>[L-1 필수]</b> 모든 동적 텍스트는 <code>textContent</code>/명시적 이스케이프만 사용, <code>innerHTML</code> 직접 결합 금지(오염된 name/description/branch 저장형 XSS 차단)</td><td><span class="rid">R-10</span> · L-1</td></tr>
+    <tr><td><code>app.js — filter</code></td><td>필터(AND)→검색(리터럴 부분일치)→정렬 결합을 메모리에서 처리, 디바운스 재렌더. 결측값 정렬 말단. <b>[P2-1]</b> MVP 정렬 키 = 이름·최종수정(stale); 용량 정렬은 size 수집(R-09/M4) 도입 시 활성</td><td><span class="rid">R-11</span></td></tr>
+    <tr><td><code>app.js — actions</code></td><td>'열기' 클릭 → <code>POST /api/open</code> → 피드백 표시. 연타 방지(디바운스/일시 비활성)</td><td><span class="rid">R-12</span></td></tr>
+  </table>
+</section>
+
+<section id="tree">
+  <h2>7. 디렉터리 구조</h2>
+  <p>소프트웨어 아키텍처(§5)를 실제 파일 레이아웃으로 구체화한다. 진입점은 리포 루트에 두어 <code>package.json</code>의 <code>bin</code>/<code>scripts</code>(확정 골격)와 일치시킨다. 도메인 로직은 <code>lib/</code>, 정적 UI는 <code>public/</code>에 격리한다. <b>결과 데이터·설정·로그는 리포에 두지 않고 OS 캐시/설정 폴더에 저장</b>(N-06)하므로 트리에는 위치만 주석으로 표시한다.</p>
+  <pre>project-spip/
+├─ package.json              <span class="c"># 확정 골격: bin spip→scan.js, scripts scan/start/dev</span>
+├─ scan.js                   <span class="c"># [진입점] CLI 조립: 옵션 파싱·스캔 실행·요약 출력 (R-14)</span>
+├─ server.js                 <span class="c"># [진입점] HTTP 서버 조립: 127.0.0.1 바인딩·라우터 마운트 (R-10,N-02)</span>
+├─ lib/                      <span class="c"># 도메인 로직 (CommonJS 모듈, 외부 의존성 0)</span>
+│  ├─ scan/                  <span class="c"># 스캔 도메인</span>
+│  │  ├─ walker.js           <span class="c"># DFS 순회·내장 안전상한·realpath 루프차단 (R-02,N-05,M-3; 설정 depth R-03=M4)</span>
+│  │  ├─ excludeRules.js     <span class="c"># 제외 폴더 규칙 (R-02)</span>
+│  │  ├─ detector.js         <span class="c"># 프로젝트 판별·중첩 최상위 1건 (R-01)</span>
+│  │  ├─ scanner.js          <span class="c"># 오케스트레이션·항목 격리·경고 누적 (R-14,N-05)</span>
+│  │  ├─ serializer.js       <span class="c"># Snapshot 직렬화·원자적 쓰기 (N-06)</span>
+│  │  └─ collectors/         <span class="c"># 인사이트 수집기 (공통 계약)</span>
+│  │     ├─ index.js         <span class="c"># 수집기 레지스트리(MVP/M4 플래그)</span>
+│  │     ├─ language.js      <span class="c"># 언어/스택·크기/깊이/ReDoS 가드·문자열정제 (R-06,H-3,L-1)</span>
+│  │     ├─ freshness.js     <span class="c"># 신선도·stale 90일 (R-07)</span>
+│  │     ├─ git.js           <span class="c"># git 상태, safeExec 절대경로·타임아웃 (R-08,R-13,H-2,M-4)</span>
+│  │     └─ size.js          <span class="c"># 규모/의존성 (R-09) — M4</span>
+│  ├─ server/                <span class="c"># 서버 도메인</span>
+│  │  ├─ router.js           <span class="c"># 요청 라우팅</span>
+│  │  ├─ staticHandler.js    <span class="c"># /static/*→public/ 매핑·밖 차단·CSP (N-03,P1-1,L-1)</span>
+│  │  ├─ snapshotStore.js    <span class="c"># 스냅샷 적재·realpath 화이트리스트·hasSnapshot (R-10,R-13,H-1,P2-5)</span>
+│  │  ├─ apiHandlers.js      <span class="c"># /api/projects·/api/stats·/api/health (R-10)</span>
+│  │  ├─ pathGuard.js        <span class="c"># canonicalize(realpath) 화이트리스트 검증 (N-03,H-1)</span>
+│  │  └─ actionHandlers.js   <span class="c"># /api/open·/api/rescan(M4) (R-12,R-16)</span>
+│  └─ common/                <span class="c"># 공용 유틸 (상위 미참조)</span>
+│     ├─ paths.js            <span class="c"># 앱 폴더 해석 appDir/configPath/cachePath (N-06,P1-2)</span>
+│     ├─ config.js           <span class="c"># 설정 로드·병합·검증·scanRoots realpath 정규화 (R-04,R-07,L-2)</span>
+│     ├─ safeExec.js         <span class="c"># resolveBin 절대경로+shell:false+타임아웃 (N-03,H-2,M-4)</span>
+│     └─ logger.js           <span class="c"># 콘솔/경고 로깅</span>
+├─ public/                   <span class="c"># 정적 대시보드 (빌드 없음, 순수 HTML/CSS/JS — N-04)</span>
+│  │                         <span class="c"># URL 규약(P1-1): GET / → index.html, GET /static/&lt;asset&gt; → public/&lt;asset&gt;</span>
+│  ├─ index.html             <span class="c"># 대시보드 골격, CSP 메타, /static/* 자산 참조 (R-10,L-1)</span>
+│  ├─ styles.css             <span class="c"># 다크 테마·카드·배지 (GET /static/styles.css)</span>
+│  └─ app.js                 <span class="c"># store/view/filter/actions (GET /static/app.js)</span>
+├─ test/                     <span class="c"># 검증 (Node 내장 test runner 권장)</span>
+│  ├─ fixtures/              <span class="c"># 검증용 프로젝트 세트(실제+미끼) — 탐지율≥95%·30s 벤치</span>
+│  └─ *.test.js
+├─ README.md
+└─ docs/                     <span class="c"># 기획·설계 산출물 (PRD/FeatureSpec/architecture 등)</span>
+
+<span class="c"># 런타임 산출물 (리포 밖 — P1-2 확정: 단일 OS 앱 데이터 디렉터리 하위로 통일):</span>
+<span class="c">#   앱 폴더:  Win  %APPDATA%\spip\</span>
+<span class="c">#            macOS ~/Library/Application Support/spip/</span>
+<span class="c">#            Linux $XDG_CONFIG_HOME/spip/  (또는 ~/.config/spip/)</span>
+<span class="c">#   ├─ config/spip.config.json   # 설정 (루트·stale·포트) — 권한 0600/ACL (M-2)</span>
+<span class="c">#   └─ cache/projects.json       # 스캔 결과 스냅샷 — 원자적 쓰기, 권한 0600/ACL (M-2)</span>
+<span class="c">#   ※ paths.js가 appDir()/configPath()/cachePath()로 이 경로를 단일 해석 (P1-2)</span></pre>
+  <div class="note"><b>설계 의도:</b> <code>lib/scan</code>과 <code>lib/server</code>를 물리적으로 분리해 두 진입점의 책임 경계를 폴더로 강제한다. <code>collectors/</code>는 파일 1개=수집기 1개로 두어 인사이트 추가/제거(R-09 M4 등)가 다른 모듈에 영향을 주지 않는다(변화 격리).</div>
+</section>
+
+<section id="data">
+  <h2>8. 데이터 설계 (스키마)</h2>
+  <p>저장소는 <b>파일 기반 JSON</b> 2종(스냅샷·설정)이다. 단일 사용자·읽기 위주·동시성 없음이라 DB는 과설계이며(ADR-003), JSON으로 충분하다. 모든 스키마는 <code>schemaVersion</code>을 가져 향후 마이그레이션을 가능케 한다.</p>
+
+  <h3>8.1 스캔 결과 스냅샷 — <code>projects.json</code></h3>
+  <pre>{
+  "schemaVersion": 1,
+  "generatedAt": "2026-06-21T08:00:00.000Z",   <span class="c">// ISO8601, 스냅샷 신선도 표시용</span>
+  "scanRoots": ["D:\\work", "C:\\Users\\me\\dev"],
+  "durationMs": 18420,                          <span class="c">// 스캔 소요(콘솔 요약·벤치)</span>
+  "counts": { "projects": 187, "stale": 42, "errors": 3 },
+  "warnings": [ { "path": "...", "reason": "권한 없음" } ],  <span class="c">// N-05 항목 격리 기록</span>
+  "projects": [ /* Project[] */ ]
+}</pre>
+  <h4>Project 항목 필드</h4>
+  <table>
+    <tr><th style="width:150px;">필드</th><th style="width:120px;">타입</th><th>설명</th><th style="width:90px;">요구</th></tr>
+    <tr><td><code>id</code></td><td>string</td><td>경로 해시 기반 안정 식별자(API에서 경로 노출 최소화·연타 식별)</td><td><span class="rid">R-12</span></td></tr>
+    <tr><td><code>path</code></td><td>string(절대경로)</td><td>프로젝트 루트 절대경로. <b>화이트리스트의 원천</b></td><td><span class="nid">N-03</span></td></tr>
+    <tr><td><code>name</code></td><td>string</td><td>폴더명 또는 package.json name</td><td><span class="rid">R-10</span></td></tr>
+    <tr><td><code>description</code></td><td>string|null</td><td>package.json description. 없으면 null→UI에서 "(설명 없음)"</td><td><span class="rid">R-10</span></td></tr>
+    <tr><td><code>signals</code></td><td>string[]</td><td>탐지 신호(<code>git</code>/<code>package.json</code>/<code>vscode</code>)</td><td><span class="rid">R-01</span></td></tr>
+    <tr><td><code>language</code></td><td>{primary, breakdown}</td><td><code>primary</code>: 주 언어/스택(예: "Node.js"), <code>breakdown</code>: 확장자/스택 비율. 불명 "Unknown"</td><td><span class="rid">R-06</span></td></tr>
+    <tr><td><code>freshness</code></td><td>{lastModified, lastCommit, isStale}</td><td>ISO 시각 2종 + stale 불리언(기본 90일 초과)</td><td><span class="rid">R-07</span></td></tr>
+    <tr><td><code>git</code></td><td>{status, isRepo, branch, dirty, ahead, behind}</td><td><code>status</code>: 'ok'|'na'. na면 나머지 null(미설치/비저장소·R-13)</td><td><span class="rid">R-08</span> <span class="rid">R-13</span></td></tr>
+    <tr><td><code>size</code> <span class="pill m4">M4</span></td><td>{status, totalBytes, nodeModulesBytes, deps, devDeps}</td><td>R-09. MVP에서는 status='skipped'로 자리만 확보</td><td><span class="rid">R-09</span></td></tr>
+  </table>
+
+  <h3>8.2 설정 — <code>spip.config.json</code></h3>
+  <div class="note"><b>위치 확정(P1-2):</b> 설정과 캐시는 <b>단일 OS 앱 데이터 디렉터리</b>(<code>%APPDATA%\spip\</code> / <code>~/Library/Application Support/spip/</code> / <code>$XDG_CONFIG_HOME/spip/</code>) 아래 용도별 하위로 둔다 — 설정은 <code>config/spip.config.json</code>, 스냅샷은 <code>cache/projects.json</code>. <code>common/paths.js</code>가 <code>appDir()</code>·<code>configPath()</code>·<code>cachePath()</code>로 이 경로를 단일 해석하며, 두 파일 모두 소유자 전용 권한(0600 / Windows ACL, 디렉터리 0700)으로 생성한다(M-2). N-06은 결과 JSON만 규정하므로 설정 위치는 본 절에서 확정한다.</div>
+  <table>
+    <tr><th style="width:150px;">필드</th><th style="width:120px;">타입 / 기본값</th><th>설명</th><th style="width:90px;">요구</th></tr>
+    <tr><td><code>scanRoots</code></td><td>string[] / <b>[]</b></td><td>스캔 대상 루트 목록. <b>비어 있으면 자동 스캔 안 함 → 안내 후 종료</b>(확정 결정). <b>[L-2]</b> 각 항목은 절대경로 realpath 정규화(H-1과 일관)·타입/존재 검증 후 화이트리스트 원천이 됨</td><td><span class="rid">R-04</span></td></tr>
+    <tr><td><code>excludes</code></td><td>string[] / 내장 기본 목록</td><td>제외 폴더 추가분(내장 규칙에 병합). <b>[L-2]</b> 패턴 길이·개수 상한 적용(거대/악성 glob 방어)</td><td><span class="rid">R-02</span></td></tr>
+    <tr><td><code>staleDays</code></td><td>number / <b>90</b></td><td>stale 판정 기준일</td><td><span class="rid">R-07</span></td></tr>
+    <tr><td><code>port</code></td><td>number / <b>고정 기본값(예: 7421)</b></td><td>서버 바인딩 포트. 127.0.0.1 고정, 자동 오픈 없음. 점유 시 명확한 에러</td><td>PRD §10 <span class="nid">N-02</span></td></tr>
+    <tr><td><code>depthLimit</code> <span class="pill m4">M4</span></td><td>number / —</td><td><b>[P2-4]</b> <b>사용자 설정 가능한</b> 깊이 한도는 M4(R-03). MVP는 이 설정과 무관하게 walker 내장 안전 상한(고정값)을 항상 강제(N-05/M-3) — 두 단계를 구분</td><td><span class="rid">R-03</span></td></tr>
+  </table>
+  <div class="note">설정 로드 순서(우선순위 높은 순): <b>CLI 인자 → 설정 파일 → 내장 기본값</b>. <code>config.js</code>가 병합·검증을 담당하고, 잘못된 값은 경고 후 기본값으로 폴백한다(견고성). 설정 파일도 부분신뢰는 아니나(사용자 자신 작성) scanRoots는 화이트리스트 원천이므로 H-1 정규화를 일관 적용한다(L-2).</div>
+</section>
+
+<section id="api">
+  <h2>9. API / 인터페이스 계약</h2>
+  <p>모든 엔드포인트는 127.0.0.1 전용. 응답은 JSON(정적 자산 제외). 단일 사용자·로컬이라 인증은 없으나, <b>상태 변경 액션(POST)은 CSRF/리바인딩 방어를 위해 Host allowlist + Origin 검증 + 세션 토큰 검증</b>을 적용한다(§11.3, M-1). 경로 파라미터가 아닌 <code>id</code> 기반 식별을 우선해 경로 노출·조작 표면을 줄인다.</p>
+  <table>
+    <tr><th style="width:70px;">메서드</th><th style="width:160px;">경로</th><th>요청 shape</th><th>응답 shape (성공)</th><th style="width:80px;">요구</th></tr>
+    <tr><td><span class="pill get">GET</span></td><td><code>/</code></td><td>—</td><td><code>public/index.html</code> (정적) — P1-1 통일 규약</td><td><span class="rid">R-10</span></td></tr>
+    <tr><td><span class="pill get">GET</span></td><td><code>/static/&lt;asset&gt;</code></td><td>—</td><td>CSS/JS → <code>public/&lt;asset&gt;</code> 매핑(public 절대경로 하위로 정규화, MIME 지정). <code>/api/*</code> 외 GET은 모두 staticHandler가 처리</td><td><span class="rid">R-10</span></td></tr>
+    <tr><td><span class="pill get">GET</span></td><td><code>/api/projects</code></td><td>—</td><td><code>{ schemaVersion, generatedAt, hasSnapshot:boolean, projects: Project[] }</code></td><td><span class="rid">R-10</span></td></tr>
+    <tr><td><span class="pill get">GET</span></td><td><code>/api/stats</code></td><td>—</td><td><code>{ total, byLanguage:{...}, staleCount, totalBytes:null, generatedAt }</code> — <b>[P2-2]</b> MVP에서 <code>totalBytes</code>는 항상 <code>null</code>(size=M4), UI는 "미측정"으로 표시</td><td><span class="rid">R-10</span></td></tr>
+    <tr><td><span class="pill get">GET</span></td><td><code>/api/health</code></td><td>—</td><td><code>{ ok:true, hasSnapshot:boolean, codeCli:boolean, git:boolean }</code></td><td><span class="rid">R-13</span></td></tr>
+    <tr><td><span class="pill post">POST</span></td><td><code>/api/open</code></td><td><code>{ id: string }</code></td><td><code>{ ok:true, code:"OPENING", message:"VS Code에서 여는 중" }</code> — <b>[P2-3]</b> "성공" = spawn 시작 성공(=실행 중). 실제 창 오픈 확인은 비범위</td><td><span class="rid">R-12</span></td></tr>
+    <tr><td><span class="pill post">POST</span></td><td><code>/api/rescan</code> <span class="pill m4">M4</span></td><td><code>{}</code></td><td><b>[P3-3]</b> MVP에서는 <b>미마운트 → 404 NOT_FOUND</b>. M4 활성 시 <code>{ ok:true, counts:{...} }</code>(재스캔 후 스냅샷 갱신)</td><td><span class="rid">R-16</span></td></tr>
+  </table>
+  <h4>오류 응답 계약 (공통)</h4>
+  <table>
+    <tr><th style="width:90px;">HTTP</th><th>상황</th><th>응답 body</th><th style="width:80px;">근거</th></tr>
+    <tr><td>200 + ok:false</td><td>code CLI 미설치 / 실경로 소멸</td><td><code>{ ok:false, code:"CODE_CLI_NOT_FOUND" | "PATH_GONE", message }</code></td><td><span class="rid">R-13</span></td></tr>
+    <tr><td>403</td><td>경로가 화이트리스트(realpath) 밖 / 조작된 요청</td><td><code>{ ok:false, code:"PATH_NOT_ALLOWED" }</code> — 실행 안 함</td><td><span class="nid">N-03</span></td></tr>
+    <tr><td>403</td><td>Host/Origin 불일치·부재 / 세션토큰 누락(상태변경 POST)</td><td><code>{ ok:false, code:"FORBIDDEN_ORIGIN" }</code></td><td>M-1</td></tr>
+    <tr><td>404</td><td><b>[P2-3]</b> 요청한 <code>id</code>가 스냅샷에 없음</td><td><code>{ ok:false, code:"ID_NOT_FOUND" }</code></td><td>P2-3</td></tr>
+    <tr><td>404</td><td>존재하지 않는 엔드포인트/자산 / 미마운트 엔드포인트(rescan@MVP)</td><td><code>{ ok:false, code:"NOT_FOUND" }</code></td><td>P3-3</td></tr>
+    <tr><td>200 + 빈상태</td><td><b>[P2-5 통일]</b> 스냅샷 부재/손상 시 <code>/api/projects</code>·<code>/api/stats</code></td><td><code>{ ..., hasSnapshot:false, projects:[] }</code> — 200으로 응답, 프런트가 <code>hasSnapshot:false</code>로 빈 상태 안내</td><td><span class="rid">R-13</span></td></tr>
+    <tr><td>503</td><td><b>[P2-5]</b> 미사용으로 폐기 — 데이터 조회는 200+빈상태로 일관</td><td>—</td><td>P2-5</td></tr>
+  </table>
+  <div class="note"><b>[P2-5] 빈 상태 응답 통일:</b> 스냅샷 부재/손상 시에도 데이터 조회 엔드포인트는 <b>503이 아니라 200 + <code>hasSnapshot:false</code> + 빈 배열</b>로 응답한다. 프런트는 이 플래그를 트리거로 "먼저 spip 실행" 빈 상태를 띄운다(R-13 graceful AC 정합, §6.2 snapshotStore·§13과 일관). 기존 503 NO_SNAPSHOT 규정은 폐기.</div>
+  <div class="note"><b>[L-3] 에러 메시지 정책:</b> 모든 오류 응답의 <code>message</code>는 사람이 읽는 <b>고정 안내문</b>만 담는다. 원시 예외·스택·내부 절대경로는 응답에 넣지 않고 콘솔 로그로만 남긴다(경로 에코 최소화 — XSS 결합 정보수집 표면 차단).</div>
+  <div class="note"><b>설계 결정:</b> 필터/정렬/검색은 <b>API에 두지 않는다.</b> 200개 데이터를 한 번 받아 클라이언트 메모리에서 처리해야 200ms 응답(R-11)과 서버 단순화를 동시에 달성한다(F-4 "클라이언트 측 처리" 명시).</div>
+</section>
+
+<section id="stack">
+  <h2>10. 기술 스택 / 선정 근거</h2>
+  <table>
+    <tr><th style="width:140px;">계층</th><th style="width:200px;">선정</th><th>근거 (대안 비교는 ADR 참조)</th></tr>
+    <tr><td>런타임</td><td>Node.js 16+, CommonJS</td><td>확정 제약. <code>package.json type:commonjs</code> 골격과 일치</td></tr>
+    <tr><td>스캐너 I/O</td><td><code>fs</code> (내장)</td><td>외부 의존성 0 원칙(N-04). <code>fs.opendir</code>/<code>readdir withFileTypes</code>로 효율 순회</td></tr>
+    <tr><td>외부 프로세스</td><td><code>child_process.spawn</code> (내장)</td><td>git/code 호출. <b>shell:false + 인자 배열</b> 강제(N-03, ADR-002)</td></tr>
+    <tr><td>웹서버</td><td><code>http</code> (내장)</td><td>Express 등 불필요. 라우트 소수·로컬 전용이라 내장으로 충분(ADR-004)</td></tr>
+    <tr><td>데이터 저장</td><td>JSON 파일 (OS 캐시)</td><td>단일 사용자·읽기 위주. DB·SQLite 과설계(ADR-003)</td></tr>
+    <tr><td>프론트엔드</td><td>순수 HTML/CSS/JS (ES modules 가능)</td><td>빌드/프레임워크 없음 확정(N-04). <code>fetch</code>·DOM API로 충분</td></tr>
+    <tr><td>git 상태 수집</td><td>git CLI via spawn</td><td>순수 파싱 대비 정확·견고. 부재 시 graceful(ADR-002)</td></tr>
+    <tr><td>테스트</td><td>Node 내장 <code>node:test</code> + assert</td><td>외부 의존성 0 유지하며 벤치·회귀 자동화 가능</td></tr>
+  </table>
+  <div class="warn-box"><b>의존성 추가 정책:</b> 본 설계는 외부 npm 의존성 <b>0개</b>를 목표로 한다. 부득이 추가가 필요하면(예: 색약 안전 색상 토큰은 정적 CSS로 대체 가능하므로 불필요) 반드시 별도 ADR로 근거·대안·번들 영향을 남긴다(N-04).</div>
+</section>
+
+<section id="security">
+  <h2>11. 보안 설계 (신뢰 경계)</h2>
+  <p>로컬 단일 사용자 도구지만, "로컬이라 안전"이라는 가정을 배제한다. 신뢰 경계는 둘이다 — <b>TB-A(브라우저/네트워크)</b>와 <b>TB-B(스캔 대상 파일시스템·부분신뢰 입력)</b>. PM 확정(RC-2 인정)에 따라 스캔 대상에 악성 외부 클론 리포가 섞일 수 있다고 전제하고, <b>경로 순회·프로세스 인젝션·로컬 API 노출·부분신뢰 입력 파싱·저장형 XSS</b>를 구조적으로 차단한다. 본 절은 security-reviewer 위협 모델링 1회차(높음 3·중간 4·낮음 3)를 반영한 결과다.</p>
+  <div class="note"><b>보안검증 1회차 시정 항목 반영 위치 요약:</b> H-1 realpath 화이트리스트 → §5 pathGuard·walker 계약 + §11.1 · H-2 실행파일 절대경로 고정 → §5 safeExec 계약 + §11.2 · H-3 부분신뢰 입력 파싱 방어 → §5 collectors 계약 + §11.5 · M-1 Host allowlist·세션토큰 → §11.3 · M-2 파일 권한 → §11.4 · M-3 심링크 루프 방지 → §5 walker + §6.1 · M-4 spawn 타임아웃/상한 → §5 safeExec + §6.2 · L-1 XSS 이스케이프+CSP → §6.3 + §11.6 · L-2 config 검증 → §8.2 · L-3 에러 메시지 정책 → §9.</div>
+
+  <figure>
+    <svg viewBox="0 0 1080 600" width="100%" role="img" aria-label="신뢰 경계(TB-A·TB-B) 및 보안 통제 다이어그램">
+      <defs>
+        <marker id="sarr" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto">
+          <path d="M0,0 L8,4 L0,8 Z" fill="#38bdf8"/>
+        </marker>
+        <marker id="sarrR" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto">
+          <path d="M0,0 L8,4 L0,8 Z" fill="#f87171"/>
+        </marker>
+        <marker id="sarrY" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto">
+          <path d="M0,0 L8,4 L0,8 Z" fill="#fbbf24"/>
+        </marker>
+      </defs>
+
+      <!-- TB-A: 브라우저/네트워크 (차단 영역) -->
+      <rect x="20" y="30" width="210" height="270" rx="10" fill="#170d0d" stroke="#f87171" stroke-width="1.4" stroke-dasharray="6 5"/>
+      <text x="125" y="52" fill="#f87171" font-size="12" text-anchor="middle" font-family="Segoe UI" font-weight="bold">TB-A: 브라우저 / 네트워크</text>
+      <rect x="40" y="68" width="170" height="48" rx="8" fill="#0b1220" stroke="#f87171"/>
+      <text x="125" y="89" fill="#fecaca" font-size="10.5" text-anchor="middle" font-family="Segoe UI">외부 네트워크 / 리바인딩</text>
+      <text x="125" y="105" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">LAN·DNS 리바인딩 (M-1)</text>
+      <rect x="40" y="124" width="170" height="48" rx="8" fill="#0b1220" stroke="#f87171"/>
+      <text x="125" y="145" fill="#fecaca" font-size="10.5" text-anchor="middle" font-family="Segoe UI">악성 웹페이지 (CSRF)</text>
+      <text x="125" y="161" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">액션 트리거 시도</text>
+      <rect x="40" y="180" width="170" height="48" rx="8" fill="#0b1220" stroke="#f87171"/>
+      <text x="125" y="201" fill="#fecaca" font-size="10.5" text-anchor="middle" font-family="Segoe UI">조작된 요청(id/경로)</text>
+      <text x="125" y="217" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">../ 순회·심링크 우회</text>
+      <rect x="40" y="236" width="170" height="48" rx="8" fill="#0b1220" stroke="#64748b"/>
+      <text x="125" y="257" fill="#cbd5e1" font-size="10.5" text-anchor="middle" font-family="Segoe UI">동일머신 타 사용자</text>
+      <text x="125" y="273" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">RC-1 수용(MVP 비목표)</text>
+
+      <!-- TB-A 경계 통제 -->
+      <rect x="260" y="40" width="190" height="250" rx="10" fill="#0b1220" stroke="#fbbf24" stroke-width="1.6"/>
+      <text x="355" y="62" fill="#fbbf24" font-size="12" text-anchor="middle" font-family="Segoe UI" font-weight="bold">TB-A 경계 통제 (server.js)</text>
+      <rect x="276" y="74" width="158" height="46" rx="7" fill="#142035" stroke="#fbbf24"/>
+      <text x="355" y="93" fill="#e2e8f0" font-size="10" text-anchor="middle" font-family="Segoe UI">① 127.0.0.1 바인딩</text>
+      <text x="355" y="108" fill="#94a3b8" font-size="8.5" text-anchor="middle" font-family="Segoe UI">N-02</text>
+      <rect x="276" y="126" width="158" height="46" rx="7" fill="#142035" stroke="#fbbf24"/>
+      <text x="355" y="145" fill="#e2e8f0" font-size="10" text-anchor="middle" font-family="Segoe UI">② Host allowlist+Origin</text>
+      <text x="355" y="160" fill="#94a3b8" font-size="8.5" text-anchor="middle" font-family="Segoe UI">+세션토큰 (M-1)</text>
+      <rect x="276" y="178" width="158" height="46" rx="7" fill="#142035" stroke="#fbbf24"/>
+      <text x="355" y="197" fill="#e2e8f0" font-size="10" text-anchor="middle" font-family="Segoe UI">③ pathGuard(realpath)</text>
+      <text x="355" y="212" fill="#94a3b8" font-size="8.5" text-anchor="middle" font-family="Segoe UI">화이트리스트 정확일치 (H-1)</text>
+      <rect x="276" y="230" width="158" height="46" rx="7" fill="#142035" stroke="#fbbf24"/>
+      <text x="355" y="249" fill="#e2e8f0" font-size="10" text-anchor="middle" font-family="Segoe UI">④ safeExec(절대경로)</text>
+      <text x="355" y="264" fill="#94a3b8" font-size="8.5" text-anchor="middle" font-family="Segoe UI">shell:false·타임아웃 (H-2·M-4)</text>
+
+      <!-- TB-B: 스캔 대상 파일시스템 (부분신뢰, 차단 영역) -->
+      <rect x="20" y="320" width="210" height="250" rx="10" fill="#1a1206" stroke="#fbbf24" stroke-width="1.4" stroke-dasharray="6 5"/>
+      <text x="125" y="342" fill="#fbbf24" font-size="12" text-anchor="middle" font-family="Segoe UI" font-weight="bold">TB-B: 스캔 대상 (부분신뢰)</text>
+      <text x="125" y="360" fill="#cbd5e1" font-size="9.5" text-anchor="middle" font-family="Segoe UI">악성 클론 리포 섞일 수 있음(RC-2 인정)</text>
+      <rect x="40" y="372" width="170" height="44" rx="8" fill="#0b1220" stroke="#fbbf24"/>
+      <text x="125" y="391" fill="#fca5a5" font-size="10" text-anchor="middle" font-family="Segoe UI">거대/중첩 package.json</text>
+      <text x="125" y="407" fill="#94a3b8" font-size="8.5" text-anchor="middle" font-family="Segoe UI">JSON 폭탄·ReDoS (H-3)</text>
+      <rect x="40" y="420" width="170" height="44" rx="8" fill="#0b1220" stroke="#fbbf24"/>
+      <text x="125" y="439" fill="#fca5a5" font-size="10" text-anchor="middle" font-family="Segoe UI">위장 git.exe/.bat</text>
+      <text x="125" y="455" fill="#94a3b8" font-size="8.5" text-anchor="middle" font-family="Segoe UI">cwd 하이재킹 → RCE (H-2)</text>
+      <rect x="40" y="468" width="170" height="44" rx="8" fill="#0b1220" stroke="#fbbf24"/>
+      <text x="125" y="487" fill="#fca5a5" font-size="10" text-anchor="middle" font-family="Segoe UI">심링크/접합점·루프</text>
+      <text x="125" y="503" fill="#94a3b8" font-size="8.5" text-anchor="middle" font-family="Segoe UI">경계우회·DoS (H-1·M-3)</text>
+      <rect x="40" y="516" width="170" height="44" rx="8" fill="#0b1220" stroke="#fbbf24"/>
+      <text x="125" y="535" fill="#fca5a5" font-size="10" text-anchor="middle" font-family="Segoe UI">오염된 name/branch</text>
+      <text x="125" y="551" fill="#94a3b8" font-size="8.5" text-anchor="middle" font-family="Segoe UI">저장형 XSS 표면 (L-1)</text>
+
+      <!-- TB-B 경계 통제 -->
+      <rect x="260" y="330" width="190" height="240" rx="10" fill="#0b1220" stroke="#fbbf24" stroke-width="1.6"/>
+      <text x="355" y="352" fill="#fbbf24" font-size="12" text-anchor="middle" font-family="Segoe UI" font-weight="bold">TB-B 경계 통제</text>
+      <rect x="276" y="364" width="158" height="44" rx="7" fill="#142035" stroke="#fbbf24"/>
+      <text x="355" y="382" fill="#e2e8f0" font-size="10" text-anchor="middle" font-family="Segoe UI">⑤ 입력 파싱 가드</text>
+      <text x="355" y="397" fill="#94a3b8" font-size="8.5" text-anchor="middle" font-family="Segoe UI">크기·깊이·ReDoS-free (H-3)</text>
+      <rect x="276" y="412" width="158" height="44" rx="7" fill="#142035" stroke="#fbbf24"/>
+      <text x="355" y="430" fill="#e2e8f0" font-size="10" text-anchor="middle" font-family="Segoe UI">⑥ 실행파일 절대경로</text>
+      <text x="355" y="445" fill="#94a3b8" font-size="8.5" text-anchor="middle" font-family="Segoe UI">resolveBin·cwd 의존제거 (H-2)</text>
+      <rect x="276" y="460" width="158" height="44" rx="7" fill="#142035" stroke="#fbbf24"/>
+      <text x="355" y="478" fill="#e2e8f0" font-size="10" text-anchor="middle" font-family="Segoe UI">⑦ realpath 등록·루프차단</text>
+      <text x="355" y="493" fill="#94a3b8" font-size="8.5" text-anchor="middle" font-family="Segoe UI">방문 실경로 추적 (H-1·M-3)</text>
+      <rect x="276" y="508" width="158" height="44" rx="7" fill="#142035" stroke="#fbbf24"/>
+      <text x="355" y="526" fill="#e2e8f0" font-size="10" text-anchor="middle" font-family="Segoe UI">⑧ 출력 이스케이프+CSP</text>
+      <text x="355" y="541" fill="#94a3b8" font-size="8.5" text-anchor="middle" font-family="Segoe UI">textContent·문자열절단 (L-1)</text>
+
+      <!-- 신뢰 영역 -->
+      <rect x="480" y="40" width="580" height="530" rx="10" fill="#0d1726" stroke="#34d399" stroke-width="1.4" stroke-dasharray="6 5"/>
+      <text x="770" y="62" fill="#34d399" font-size="13" text-anchor="middle" font-family="Segoe UI" font-weight="bold">신뢰 경계 안 (로컬 런타임)</text>
+      <rect x="505" y="82" width="250" height="60" rx="8" fill="#0b1220" stroke="#34d399"/>
+      <text x="630" y="107" fill="#e2e8f0" font-size="11" text-anchor="middle" font-family="Segoe UI">server.js (API)</text>
+      <text x="630" y="125" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">스냅샷·핸들러</text>
+      <rect x="785" y="82" width="250" height="60" rx="8" fill="#0b1220" stroke="#34d399"/>
+      <text x="910" y="107" fill="#e2e8f0" font-size="11" text-anchor="middle" font-family="Segoe UI">화이트리스트 집합(realpath)</text>
+      <text x="910" y="125" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">스캔 등록 실경로만 (H-1)</text>
+      <rect x="505" y="160" width="250" height="60" rx="8" fill="#0b1220" stroke="#fbbf24"/>
+      <text x="630" y="185" fill="#e2e8f0" font-size="11" text-anchor="middle" font-family="Segoe UI">code / git (spawn 절대경로)</text>
+      <text x="630" y="203" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">인자 배열·타임아웃 (H-2·M-4)</text>
+      <rect x="785" y="160" width="250" height="60" rx="8" fill="#0b1220" stroke="#38bdf8"/>
+      <text x="910" y="180" fill="#e2e8f0" font-size="11" text-anchor="middle" font-family="Segoe UI">앱 폴더 JSON (config/·cache/)</text>
+      <text x="910" y="198" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">0600/ACL·외부전송 0 (M-2)</text>
+      <text x="910" y="213" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">메타데이터만(내용 미포함)</text>
+      <rect x="505" y="238" width="530" height="56" rx="8" fill="#0b1220" stroke="#64748b"/>
+      <text x="770" y="260" fill="#e2e8f0" font-size="11" text-anchor="middle" font-family="Segoe UI">스캔 페이즈: 프로젝트 폴더 읽기 전용, git 쓰기 안 함(§9.1 Won't)</text>
+      <text x="770" y="278" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">서빙 시에는 절대 노출 안 함(public만 /static/* 정적 서빙)</text>
+      <rect x="505" y="312" width="530" height="56" rx="8" fill="#0b1220" stroke="#34d399"/>
+      <text x="770" y="334" fill="#e2e8f0" font-size="11" text-anchor="middle" font-family="Segoe UI">브라우저 대시보드 — 동적 텍스트 textContent 렌더</text>
+      <text x="770" y="352" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">CSP 메타로 인라인/외부 스크립트 제한 (L-1)</text>
+
+      <!-- 차단 화살표 TB-A -->
+      <line x1="212" y1="92" x2="272" y2="97" stroke="#f87171" stroke-width="1.5" marker-end="url(#sarrR)"/>
+      <line x1="212" y1="148" x2="272" y2="149" stroke="#f87171" stroke-width="1.5" marker-end="url(#sarrR)"/>
+      <line x1="212" y1="204" x2="272" y2="201" stroke="#f87171" stroke-width="1.5" marker-end="url(#sarrR)"/>
+      <!-- 차단 화살표 TB-B -->
+      <line x1="212" y1="394" x2="272" y2="386" stroke="#fbbf24" stroke-width="1.5" marker-end="url(#sarrY)"/>
+      <line x1="212" y1="442" x2="272" y2="434" stroke="#fbbf24" stroke-width="1.5" marker-end="url(#sarrY)"/>
+      <line x1="212" y1="490" x2="272" y2="482" stroke="#fbbf24" stroke-width="1.5" marker-end="url(#sarrY)"/>
+      <line x1="212" y1="538" x2="272" y2="530" stroke="#fbbf24" stroke-width="1.5" marker-end="url(#sarrY)"/>
+      <!-- 통과 -->
+      <line x1="450" y1="150" x2="501" y2="120" stroke="#38bdf8" stroke-width="1.8" marker-end="url(#sarr)"/>
+      <text x="452" y="140" fill="#38bdf8" font-size="9" font-family="Segoe UI">검증 통과만</text>
+      <line x1="450" y1="430" x2="501" y2="265" stroke="#38bdf8" stroke-width="1.8" marker-end="url(#sarr)"/>
+      <text x="452" y="400" fill="#38bdf8" font-size="9" font-family="Segoe UI">가드 통과 데이터만</text>
+    </svg>
+    <div class="legend">
+      <span><span class="dot" style="background:#f87171"></span> TB-A 미신뢰 진입(차단)</span>
+      <span><span class="dot" style="background:#fbbf24"></span> TB-B 부분신뢰 / 경계 통제</span>
+      <span><span class="dot" style="background:#34d399"></span> 신뢰 영역</span>
+      <span><span class="dot" style="background:#38bdf8"></span> 허용 데이터</span>
+    </div>
+    <figcaption>그림 3. 두 신뢰 경계(TB-A 브라우저/네트워크, TB-B 스캔 대상 파일시스템·부분신뢰 입력)와 8중 통제. TB-A는 ①~④(바인딩·Host allowlist·realpath pathGuard·safeExec), TB-B는 ⑤~⑧(입력 파싱 가드·실행파일 절대경로·realpath 등록/루프차단·출력 이스케이프+CSP)로 막는다. RC-1(동일머신 타 사용자)은 수용된 리스크.</figcaption>
+  </figure>
+
+  <h3>11.1 경로 화이트리스트 — realpath 기준 (N-03 / 보안 H-1)</h3>
+  <ul>
+    <li><b>화이트리스트 원천:</b> 스냅샷 <code>projects[].path</code>를 <code>canonicalize()</code>(= <code>path.resolve</code> + <code>fs.realpath</code>)로 해소한 <b>실경로 집합</b>만 신뢰. 그 밖의 경로는 어떤 API도 접근/실행 안 함.</li>
+    <li><b>등록·검증 동일 규칙(H-1 핵심):</b> walker가 화이트리스트를 <b>등록하는 시점</b>과 pathGuard가 <b>검증하는 시점</b> 모두 같은 <code>canonicalize()</code>로 실경로를 만들어 대조한다. <code>path.resolve</code>만으로는 심볼릭 링크/Windows 접합점(junction)이 해소되지 않아, 등록 경로 자체가 심링크이거나 하위에 외부를 가리키는 링크가 있으면 "정확 일치"로도 스캔 루트 밖이 열린다. 실경로 정규화를 단일 진실의 원천으로 강제해 이를 차단한다(TOCTOU 표면도 축소).</li>
+    <li><b>정규화 규칙(필수 포함):</b> ① 대소문자 비민감 FS(Windows/macOS)는 비교용 폴드 적용 ② 유니코드 NFC 정규화(NFC/NFD 차이 흡수) ③ UNC(<code>\\server\share</code>)·드라이브 상대경로(<code>C:foo</code>)·확장경로(<code>\\?\</code>)는 정규화 또는 거부.</li>
+    <li><b>검증 방식:</b> 요청은 <code>id</code>로 받고 서버가 스냅샷에서 역참조한다(클라이언트 경로 조작 표면 제거). 실경로 해소 실패(경로 소멸)는 거부 → <code>PATH_GONE</code>/403.</li>
+    <li><b>정적 서빙:</b> <code>staticHandler</code>는 P1-1 규약(<code>/static/&lt;asset&gt;</code> → <code>public/&lt;asset&gt;</code>)으로 매핑 후 <code>public/</code> 절대경로 하위로 정규화, 이탈 시 404. 프로젝트 폴더는 정적 서빙 대상이 절대 아니다.</li>
+  </ul>
+
+  <h3>11.2 외부 프로세스 인젝션 / PATH 하이재킹 방지 (N-03 / 보안 H-2·M-4)</h3>
+  <ul>
+    <li>모든 외부 호출(<code>code</code>, <code>git</code>)은 <code>common/safeExec</code>를 통해 <code>spawn(absoluteBin, argsArray, {shell:false})</code>로만 실행. <b>경로·브랜치명 등 사용자/스캔 유래 입력을 셸 문자열로 연결하지 않는다.</b></li>
+    <li>인자는 항상 배열 요소로 전달(예: <code>['/path with space']</code>) — 공백·한글·특수문자 안전(F-2 엣지).</li>
+    <li><b>실행 파일 절대경로 고정(H-2 핵심):</b> 실행 파일명을 고정하는 것만으로는 부족하다. 기동/스캔 시작 시 <code>resolveBin('code'|'git')</code>으로 신뢰 PATH 기준 <b>절대경로를 1회 해석해 고정</b>하고, 이후 그 절대경로로만 spawn한다. git collector가 <code>cwd:projectPath</code>(부분신뢰 폴더)에서 돌더라도 절대경로 지정으로 폴더 내 위장 <code>git.exe</code>/<code>git.bat</code>가 선택되지 않는다. 가능하면 <code>git -C &lt;path&gt;</code>로 <b>cwd 의존 자체를 제거</b>한다.</li>
+    <li><b>Windows 특이사항:</b> <code>.bat/.cmd</code>의 PATHEXT 자동 확장 실행을 막고 절대경로 <code>.exe</code>만 실행한다.</li>
+    <li><b>자원 통제(M-4):</b> safeExec에 기본 타임아웃+초과 시 강제 kill, 출력 버퍼 상한을 둔다. <code>/api/open</code>은 id별 in-flight 상한으로 중복 spawn을 차단한다(클라 디바운스는 서버 보호가 아님).</li>
+  </ul>
+
+  <h3>11.3 로컬 API 노출 / CSRF / DNS 리바인딩 (N-02 / 보안 M-1)</h3>
+  <ul>
+    <li>서버는 <code>server.listen(port, '127.0.0.1')</code>로 <b>루프백 전용</b> 바인딩. <code>0.0.0.0</code> 금지.</li>
+    <li><b>Host allowlist(M-1 핵심):</b> 상태 변경 POST(<code>/api/open</code>)는 <code>Host</code> 헤더를 기대 <code>127.0.0.1:&lt;port&gt;</code>/<code>localhost:&lt;port&gt;</code> allowlist와 <b>정확 비교</b>한다 — DNS 리바인딩(공격 도메인을 127.0.0.1로 재바인딩)으로 Origin만으로는 막히지 않는 우회를 차단.</li>
+    <li><b>Origin 폐쇄 기본값:</b> <code>Origin</code>이 없거나 불일치하면 거부(<code>FORBIDDEN_ORIGIN</code>/403). <code>Content-Type: application/json</code> 요구는 보조 수단으로 유지.</li>
+    <li><b>세션 토큰(M-1 강화):</b> 서버 기동 시 1회 생성한 세션 토큰을 <code>index.html</code>에 주입하고, 상태변경 POST에 동봉·검증한다(동일머신 타 페이지/프로세스의 액션 트리거 표면 축소).</li>
+    <li>인증은 단일 사용자 원칙상 두지 않는다(§9.1 Won't). 대신 위 바인딩+Host allowlist+토큰으로 노출 표면을 한정한다.</li>
+  </ul>
+
+  <h3>11.4 민감 데이터 보호 / 파일 권한 (N-06 / 보안 M-2)</h3>
+  <ul>
+    <li>스캔 결과(경로·git 상태 등)는 OS 앱 데이터 폴더(<code>config/</code>·<code>cache/</code>)에만 저장, 외부 전송 0(N-02). 프로젝트 폴더 비오염.</li>
+    <li><b>파일 권한(M-2):</b> serializer/paths는 캐시·설정·임시 파일을 <b>소유자 전용 권한</b>(POSIX <code>0600</code>, 디렉터리 <code>0700</code>; Windows는 사용자 ACL)으로 생성한다. 원자적 쓰기의 임시 파일도 동일 권한·동일 디렉터리(rename 원자성)·실패 시 정리. RC-1(멀티유저 격리)이 MVP 비목표여도 본 권한은 적용한다.</li>
+    <li>스냅샷에는 파일 <b>내용</b>을 담지 않는다 — 메타데이터(경로·언어·시각·git 요약)만 보관해 노출 시 영향을 최소화.</li>
+  </ul>
+
+  <h3>11.5 부분신뢰 입력 파싱 방어 (TB-B / 보안 H-3·M-3 · RC-2 인정)</h3>
+  <ul>
+    <li><b>전제:</b> 스캔 대상(<code>package.json</code>·<code>.git</code>·폴더명·심링크)은 신뢰 경계 밖(TB-B)이며 악성 입력이 섞일 수 있다(RC-2 인정). graceful 격리(R-13/N-05)는 환경 부재·손상에 대응하지만 <b>적대적 입력</b>에는 부족하므로, 다음 가드를 격리보다 앞단에 둔다.</li>
+    <li><b>크기·깊이·바이트 가드(H-3):</b> 파싱 전 <code>fs.stat</code>로 파일 크기 상한(예: <code>package.json</code> 1MB) 검사 후 초과 시 읽지 않고 skip+warning. <code>JSON.parse</code> 입력은 바이트 한도·깊이 가드를 거친다(JSON 폭탄·과중첩 차단).</li>
+    <li><b>ReDoS 방어(H-3):</b> 언어 추정·확장자 비율 등 모든 정규식은 선형시간(역추적 폭발 없는) 패턴만 사용하거나 입력 길이를 먼저 제한.</li>
+    <li><b>문자열 정제(H-3·L-1):</b> 수집한 <code>name</code>·<code>description</code>·<code>branch</code>는 길이 절단 + 제어문자 제거 후 스냅샷에 담는다.</li>
+    <li><b>심링크 루프/깊이(M-3):</b> walker는 MVP에서 내장 안전 깊이 상한(고정값)을 항상 강제하고, 방문한 실경로(realpath) 집합을 추적해 재방문을 가지치기한다. 심링크는 기본 미추적(따라갈 경우 실경로가 루트 실경로 하위인지 재확인). 사용자 설정 depthLimit·심링크 정책 정교화는 M4(R-03).</li>
+  </ul>
+
+  <h3>11.6 대시보드 출력 이스케이프 / CSP (보안 L-1 — 저장형 XSS 차단, 필수)</h3>
+  <ul>
+    <li><b>저장형 XSS 표면:</b> 악성 리포의 <code>package.json</code> name/description, git 브랜치명에 <code>&lt;img onerror&gt;</code> 등 페이로드가 들어가면 스캔→스냅샷→<code>/api/projects</code>→DOM 경로로 저장형 XSS가 가능하다(RC-2 인정). 이를 필수 방어로 확정한다.</li>
+    <li><b>이스케이프(필수):</b> <code>app.js — view</code>의 모든 동적 텍스트는 <code>textContent</code>/명시적 이스케이프만 사용하고 <code>innerHTML</code> 직접 결합을 금지한다(§6.3 계약). §11.5의 문자열 정제(제어문자 제거)와 이중 방어.</li>
+    <li><b>CSP(필수):</b> <code>index.html</code>에 CSP 메타를 두어 인라인/외부 스크립트를 제한한다(예: <code>default-src 'self'</code>, 인라인 스크립트 금지). 자산은 P1-1 규약대로 동일 출처 <code>/static/*</code>에서만 로드.</li>
+  </ul>
+
+  <h3>11.7 수용된 리스크 (PM 위험 수용 확정)</h3>
+  <div class="warn-box"><b>RC-1 (멀티유저 OS 동일머신 타 사용자 격리) = MVP 비목표:</b> 제품 가정은 "로컬 단일 사용자 PC"다. 127.0.0.1 루프백은 동일 머신의 다른 로컬 사용자/프로세스에게 도달 가능하나(루프백은 사용자 격리를 하지 않음), <b>동일 머신 타 사용자로부터의 격리는 MVP 비목표로 수용</b>한다(공용 PC·터미널 서버는 지원 범위 밖). 단, 저비용 심층방어는 적용한다 — <b>캐시/설정 파일 권한(M-2, 0600/ACL)은 MVP에 적용</b>하고, 세션 토큰(M-1)도 함께 둔다. 이 환경을 지원 범위에 포함하려면 인증 부재(§9.1 Won't)를 재검토해야 하며 이는 향후 결정 사항이다.</div>
+  <div class="note"><b>RC-2 (스캔 대상 부분신뢰) = 인정:</b> 스캔 대상에 신뢰할 수 없는 외부 클론 리포가 섞일 수 있음을 명시 인정한다. 이에 따라 보안 H-2·H-3·L-1은 단순 권고가 아니라 <b>필수 방어로 확정</b>되어 §11.2·11.5·11.6 및 §5 계약에 반영됐다.</div>
+</section>
+
+<section id="nfr">
+  <h2>12. 비기능 대응 (구조로 어떻게 충족하는가)</h2>
+  <table>
+    <tr><th style="width:90px;">품질</th><th>구조적 대응</th><th style="width:90px;">근거</th></tr>
+    <tr><td>성능(스캔)</td><td><code>fs.readdir(withFileTypes)</code>로 stat 호출 절감, 제외 규칙으로 거대 폴더 가지치기, 용량(R-09)은 M4로 분리해 MVP 스캔을 가볍게 유지 → 200개 30초 달성 여지</td><td><span class="nid">N-01</span></td></tr>
+    <tr><td>성능(필터)</td><td>전체 데이터 1회 fetch 후 클라이언트 메모리 처리 + 디바운스 → 서버 왕복 0, 200ms 달성</td><td><span class="rid">R-11</span></td></tr>
+    <tr><td>성능(열기)</td><td>spawn은 비동기, 프로세스 detach 후 즉시 "실행 중" 피드백 → 2초 내 응답</td><td><span class="rid">R-12</span></td></tr>
+    <tr><td>견고성</td><td>수집기·항목 단위 try/격리, 실패는 throw 아닌 status로 반환, <code>warnings[]</code> 누적 → 전체 스캔 완주. <b>[적대적 입력 H-3]</b> 크기/깊이/바이트 가드·ReDoS-free 정규식을 격리 앞단에 둬 무한 루프·메모리 폭발·30초 SLA 초과를 방지(graceful 격리만으로는 부족)</td><td><span class="rid">R-13</span> <span class="nid">N-05</span> · H-3</td></tr>
+    <tr><td>보안</td><td>§11의 <b>8중 통제</b> — TB-A: ① 127.0.0.1 바인딩 ② Host allowlist+Origin+세션토큰 ③ realpath pathGuard ④ safeExec(절대경로·타임아웃); TB-B: ⑤ 입력 파싱 가드 ⑥ 실행파일 절대경로 ⑦ realpath 등록·루프차단 ⑧ 출력 이스케이프+CSP</td><td><span class="nid">N-02·03</span> · H-1·H-2·H-3·M-1~4·L-1~3</td></tr>
+    <tr><td>유지보수성</td><td>외부 의존성 0, 3-레이어 단방향 의존, 수집기 플러그형, 스키마 버전 필드</td><td><span class="nid">N-04</span></td></tr>
+    <tr><td>데이터/프라이버시</td><td>OS 캐시 영속화·원자적 쓰기, 메타데이터만 저장, 외부 전송 0</td><td><span class="nid">N-06</span></td></tr>
+    <tr><td>접근성 <span class="pill m4">M4</span></td><td>MVP 권고 수준: 배지에 색상+텍스트 라벨 병기, 기본 키보드 포커스. 정식 검증 M4</td><td><span class="nid">N-07</span></td></tr>
+  </table>
+</section>
+
+<section id="deploy">
+  <h2>13. 배포 / 실행 구성</h2>
+  <p>배포 토폴로지는 단일 PC 로컬 프로세스 2종이다. 서버 인프라·컨테이너·CI 파이프라인이 없으므로 "설치=npm link 또는 전역 설치, 실행=두 스크립트"로 끝난다.</p>
+  <table>
+    <tr><th style="width:160px;">단계</th><th>명령</th><th>동작</th></tr>
+    <tr><td>설치/링크</td><td><code>npm link</code> 또는 전역 설치</td><td><code>bin spip</code> → <code>scan.js</code> 등록</td></tr>
+    <tr><td>스캔(쓰기)</td><td><code>spip</code> / <code>npm run scan</code></td><td>루트 순회·수집 → OS 캐시 <code>projects.json</code> 생성 → 콘솔 요약</td></tr>
+    <tr><td>서빙(읽기)</td><td><code>npm run start</code></td><td>127.0.0.1:&lt;포트&gt; 바인딩 → 콘솔에 URL 출력(자동 오픈 없음)</td></tr>
+    <tr><td>개발 일괄</td><td><code>npm run dev</code></td><td><code>scan.js && server.js</code> 순차 — 스캔 후 바로 서빙</td></tr>
+  </table>
+  <div class="note"><b>실행 순서 의존:</b> 서버는 스냅샷이 없어도 graceful 기동한다(R-13). 즉 <code>start</code> 전 <code>scan</code> 미실행이어도 크래시하지 않고, 데이터 조회는 <b>200 + <code>hasSnapshot:false</code> + 빈 배열</b>로 응답하며(P2-5 통일, 503 폐기) 프런트가 "먼저 스캔하세요" 빈 상태를 표시한다.</div>
+</section>
+
+<section id="trace">
+  <h2>14. 추적성 기여 (요구 ID ↔ 설계)</h2>
+  <p>각 설계 산출물을 MVP 요구에 연결한다. 이후 PM이 <code>traceability.html</code>을 채울 입력이다.</p>
+  <table>
+    <tr><th style="width:90px;">요구 ID</th><th style="width:90px;">구분</th><th>대응 설계 요소</th></tr>
+    <tr><td><span class="rid">R-01</span></td><td><span class="pill mvp">MVP</span></td><td><code>lib/scan/detector.js</code> · Project.signals · §6.1</td></tr>
+    <tr><td><span class="rid">R-02</span></td><td><span class="pill mvp">MVP</span></td><td><code>walker.js</code>+<code>excludeRules.js</code> · config.excludes · §6.1</td></tr>
+    <tr><td><span class="rid">R-04</span></td><td><span class="pill mvp">MVP</span></td><td><code>common/config.js</code> · scanRoots 빈 배열 시 안내 종료 · §8.2</td></tr>
+    <tr><td><span class="rid">R-06</span></td><td><span class="pill mvp">MVP</span></td><td><code>collectors/language.js</code> · Project.language · /api/stats byLanguage</td></tr>
+    <tr><td><span class="rid">R-07</span></td><td><span class="pill mvp">MVP</span></td><td><code>collectors/freshness.js</code> · staleDays=90 · Project.freshness</td></tr>
+    <tr><td><span class="rid">R-08</span></td><td><span class="pill mvp">MVP</span></td><td><code>collectors/git.js</code> via safeExec · Project.git</td></tr>
+    <tr><td><span class="rid">R-10</span></td><td><span class="pill mvp">MVP</span></td><td><code>public/*</code> + <code>apiHandlers</code> · /api/projects·/api/stats · §6.3·§9</td></tr>
+    <tr><td><span class="rid">R-11</span></td><td><span class="pill mvp">MVP</span></td><td><code>app.js — filter</code> 클라이언트 처리 · §9 노트 · §12 성능</td></tr>
+    <tr><td><span class="rid">R-12</span></td><td><span class="pill mvp">MVP</span></td><td><code>actionHandlers</code> POST /api/open + pathGuard + safeExec</td></tr>
+    <tr><td><span class="rid">R-13</span></td><td><span class="pill mvp">MVP</span></td><td>수집기 status='na' 계약 · /api/health · snapshotStore graceful · §12</td></tr>
+    <tr><td><span class="rid">R-14</span></td><td><span class="pill mvp">MVP</span></td><td><code>scan.js</code>+<code>scanner.js</code> · bin spip · 콘솔 요약</td></tr>
+    <tr><td><span class="nid">N-01</span></td><td><span class="pill mvp">품질</span></td><td>스캔/서빙 분리·제외 가지치기·클라 필터 · test/fixtures 벤치 · §12</td></tr>
+    <tr><td><span class="nid">N-02</span></td><td><span class="pill mvp">MVP</span></td><td>server.listen(port,'127.0.0.1') · 외부 전송 0 · §11.3</td></tr>
+    <tr><td><span class="nid">N-03</span></td><td><span class="pill mvp">MVP</span></td><td><code>pathGuard.js</code>(realpath H-1)+<code>safeExec.js</code>(절대경로 H-2)+staticHandler · §11.1·11.2</td></tr>
+    <tr><td colspan="3" style="background:#142035;color:#94a3b8;"><b>보안 검증 1회차 시정 반영(필수·MVP):</b> <span class="rid">H-1</span> §5 pathGuard/walker·§11.1 · <span class="rid">H-2</span> §5 safeExec·§11.2 · <span class="rid">H-3</span> §5 collectors·§11.5 · <span class="rid">M-1</span> §11.3 · <span class="rid">M-2</span> §11.4 · <span class="rid">M-3</span> §5 walker·§11.5 · <span class="rid">M-4</span> §5 safeExec·§11.2 · <span class="rid">L-1</span> §6.3·§11.6 · <span class="rid">L-2</span> §8.2 · <span class="rid">L-3</span> §9 · 수용 리스크 <span class="rid">RC-1</span> §11.7</td></tr>
+    <tr><td><span class="nid">N-04</span></td><td><span class="pill mvp">MVP</span></td><td>외부 의존성 0 · 내장 모듈만 · 순수 HTML/CSS/JS · §10</td></tr>
+    <tr><td><span class="nid">N-05</span></td><td><span class="pill mvp">MVP</span></td><td>scanner 항목 격리 · warnings[] · 예외 흐름 처리 · §12</td></tr>
+    <tr><td><span class="nid">N-06</span></td><td><span class="pill mvp">MVP</span></td><td><code>common/paths.js</code> OS 캐시 해석 · serializer 원자적 쓰기 · §8</td></tr>
+    <tr><td colspan="3" style="background:#142035;color:#94a3b8;"><b>M4 후속(자리만 확보):</b> <span class="rid">R-03</span> depthLimit/walker · <span class="rid">R-05</span> --all-drives 옵션 · <span class="rid">R-09</span> collectors/size · <span class="rid">R-15</span> 진행 표시 · <span class="rid">R-16</span> /api/rescan · <span class="nid">N-07</span> 접근성 정식 검증</td></tr>
+  </table>
+</section>
+
+<section id="risk">
+  <h2>15. 리스크 및 가정 / 미해결 질문</h2>
+  <h3>가정</h3>
+  <ul>
+    <li>Node 16+ 설치·본인 권한 실행. <code>code</code>/<code>git</code> CLI는 있을 수도 없을 수도 있음(없으면 graceful, R-13).</li>
+    <li>고정 포트 기본값은 일반적으로 비어 있음. 점유 시 명확한 에러를 출력하고 설정으로 변경 가능(PRD §10).</li>
+    <li>스냅샷은 단일 PC 기준의 시점 데이터다. 실시간 watch·자동 재스캔은 범위 밖(§9.2 Could/M4).</li>
+    <li><b>스캔 대상은 부분신뢰(RC-2 인정)</b> — 악성 클론 리포가 섞일 수 있다고 가정하고 H-2·H-3·L-1 필수 방어를 적용(§11.5·11.6).</li>
+    <li><b>동일머신 타 사용자 격리는 MVP 비목표(RC-1 수용)</b> — 단일 사용자 PC 가정. 단 파일 권한(M-2)·세션 토큰(M-1)은 적용(§11.7).</li>
+  </ul>
+  <h3>리스크 및 완화</h3>
+  <div class="risk"><b>RA1 — 스캔 성능(N-01).</b> 깊은 트리·다수 git 호출로 30초 초과 위험. <b>완화:</b> 제외 가지치기 우선, git 호출은 프로젝트당 1회로 묶기, 용량(R-09)은 M4 분리, test/fixtures로 회귀 벤치.</div>
+  <div class="risk"><b>RA2 — git 수집 비용.</b> 프로젝트마다 git CLI spawn은 누적 비용이 큼. <b>완화:</b> 저장소 폴더만 대상, 단일 명령으로 필요한 상태를 한 번에 취득, 타임아웃·실패 격리.</div>
+  <div class="risk"><b>RA3 — 경로 보안(N-03).</b> 화이트리스트 검증 누락 시 임의 파일 노출/실행. <b>완화:</b> id 기반 역참조 + <b>realpath 정규화 정확 일치(H-1)</b>, staticHandler public 격리, security-reviewer 검토 반영.</div>
+  <div class="risk"><b>RA6 — 부분신뢰 입력으로 인한 RCE/DoS(H-2·H-3).</b> 악성 클론 리포의 위장 바이너리·JSON 폭탄·ReDoS·심링크 루프. <b>완화:</b> 실행파일 절대경로 고정+cwd 의존제거(H-2), 크기/깊이/바이트 가드+ReDoS-free 정규식(H-3), 방문 실경로 추적 루프차단(M-3), safeExec 타임아웃(M-4).</div>
+  <div class="risk"><b>RA7 — 저장형 XSS(L-1).</b> 오염된 메타데이터가 대시보드 DOM에 삽입. <b>완화:</b> view 전면 textContent/이스케이프·innerHTML 결합 금지, CSP 메타, 문자열 정제(§11.6).</div>
+  <div class="risk"><b>RA4 — 포트 점유.</b> 고정 포트가 이미 사용 중일 수 있음. <b>완화:</b> EADDRINUSE를 잡아 안내, config.port로 변경 지원.</div>
+  <div class="risk"><b>RA5 — 스냅샷-실제 불일치.</b> 스캔 후 폴더 삭제·이동 시 '열기' 실패. <b>완화:</b> 액션 시 경로 존재 재확인 → "재스캔 권장" 안내(F-2).</div>
+  <h3>미해결 질문 (설계 블로커 아님 · 구현팀 확정 사항)</h3>
+  <ul>
+    <li>고정 기본 포트 번호 구체값(설계는 예시 7421 사용, 충돌 가능성 낮은 값으로 구현팀 확정).</li>
+    <li>언어/스택 추정의 구체 우선순위(package.json deps vs 확장자 비율 가중치) — 탐지율 ≥95% 벤치로 튜닝.</li>
+    <li class="ok" style="color:#6ee7b7;"><b>[해소됨 — P1-2]</b> 설정 파일 위치는 단일 OS 앱 데이터 디렉터리 하위(<code>%APPDATA%\spip\config/</code>, 캐시는 <code>cache/</code>)로 확정. paths.js의 <code>appDir()</code>/<code>configPath()</code>/<code>cachePath()</code> 계약 결정(§8.2). 본 항목은 미해결에서 내림.</li>
+  </ul>
+</section>
+
+</main>
+<footer>Project-SPIP · 시스템 아키텍처 설계서 v1.0 (rev.2) · 검증 1회차(P1×2·P2×5) + 보안 1회차(H×3·M×4·L×3) + PM 위험수용(RC-1·RC-2) 반영 · 자족형 HTML · 구현 코드 미포함(청사진)</footer>
+</body>
+</html>

@@ -1,0 +1,2208 @@
+'use strict';
+/**
+ * SPIP 대시보드 클라이언트 — store / view / filter / actions (Claude Design 시안 재현)
+ * 요구ID: R-10(렌더) · R-11(필터·정렬·검색, 클라이언트 메모리 단일 출처) · R-12(열기 액션)
+ *
+ * 보안 L-1: 모든 스캔/서버 유래 문자열(name·path·description·branch·언어 등)은
+ *   textContent/createElement로만 렌더한다. innerHTML에 데이터 결합 절대 금지.
+ * CSP: 인라인 스크립트/이벤트 핸들러 0. 외부 자산 0. /static/* 만 참조.
+ *
+ * 순수 함수(매핑/필터/정렬/검색/통계/상대시간/언어퍼센트/에러매핑)는 DOM 비의존으로
+ * 분리하여 node:test로 검증한다(파일 하단 CommonJS export).
+ */
+
+/* =====================================================================
+ * 순수 로직 (DOM 비의존, 테스트 대상)
+ * ===================================================================== */
+
+/** 계약 Project shape를 안전한 표시용 뷰모델로 매핑. 결측/널 graceful 처리. */
+function toViewModel(p) {
+  // P2-5: 최상위 p가 null/원시값이면 빈 객체로 방어. 비정상 항목도 렌더 전체를 깨지 않도록.
+  p = (p && typeof p === 'object') ? p : {};
+  const git = (p && p.git) || {};
+  const lang = (p && p.language) || {};
+  const fresh = (p && p.freshness) || {};
+  const size = (p && p.size) || {};
+  // 실 git.dirty 는 boolean(개수 아님). status==='na'면 Git 아님.
+  const gitStatus = git.status === 'na' ? 'na' : (git.dirty === true ? 'dirty' : 'clean');
+  const ahead = gitStatus === 'na' ? null : (typeof git.ahead === 'number' ? git.ahead : null);
+  const behind = gitStatus === 'na' ? null : (typeof git.behind === 'number' ? git.behind : null);
+  return {
+    id: typeof p.id === 'string' ? p.id : '',
+    name: orName(p.name),
+    path: orName(p.path),
+    description: (typeof p.description === 'string' && p.description.trim()) ? p.description : null,
+    language: (typeof lang.primary === 'string' && lang.primary) ? lang.primary : '알 수 없음',
+    breakdown: (lang.breakdown && typeof lang.breakdown === 'object') ? lang.breakdown : {},
+    isStale: fresh.isStale === true,
+    lastModified: fresh.lastModified || null,
+    lastCommit: fresh.lastCommit || null,
+    gitStatus,                       // 'clean' | 'dirty' | 'na'
+    isRepo: gitStatus !== 'na',
+    branch: gitStatus === 'na' ? null : (git.branch || null),
+    dirty: gitStatus === 'na' ? null : (git.dirty === true),
+    ahead,
+    behind,
+    // size: MVP에서 status==='skipped' & 전부 null → "미측정"
+    sizeStatus: typeof size.status === 'string' ? size.status : 'skipped',
+    totalBytes: typeof size.totalBytes === 'number' ? size.totalBytes : null,
+    nodeModulesBytes: typeof size.nodeModulesBytes === 'number' ? size.nodeModulesBytes : null,
+    deps: typeof size.deps === 'number' ? size.deps : null,
+    devDeps: typeof size.devDeps === 'number' ? size.devDeps : null,
+  };
+}
+
+function orName(v) {
+  return (typeof v === 'string' && v.length) ? v : '(이름 없음)';
+}
+
+/**
+ * IPC 액션 실패를 사용자 친화 한국어 메시지로 매핑(BUG-2).
+ * `{ok:false, code}` 반환 객체를 호출처가 실패로 분기해 이 함수로 넘긴다.
+ * 인자: (data) 1개 — IPC 반환 객체. (구 시그니처 (status, data) 호환: 객체를 두 번째로도 허용)
+ */
+function describeError(data, maybeData) {
+  // 구 호출부 호환: describeError(status, data) 형태로 와도 객체 인자를 찾아낸다.
+  const obj = (data && typeof data === 'object') ? data
+    : (maybeData && typeof maybeData === 'object') ? maybeData : {};
+  const code = typeof obj.code === 'string' ? obj.code : '';
+  switch (code) {
+    case 'CODE_CLI_NOT_FOUND':
+      return 'VS Code CLI(code)를 찾을 수 없습니다. PATH에 추가하세요.';
+    case 'OPEN_FAILED':
+      return 'VS Code 실행에 실패했습니다.';
+    case 'PATH_GONE':
+      return '프로젝트 폴더가 더 이상 존재하지 않습니다.';
+    case 'ID_NOT_FOUND':
+      return '프로젝트를 찾을 수 없습니다. 다시 스캔해 보세요.';
+    case 'PATH_NOT_ALLOWED':
+      return '허용되지 않은 경로입니다.';
+    case 'NO_SCAN_ROOTS':
+      return '스캔할 루트 폴더가 없습니다. 폴더를 먼저 추가하세요.';
+    case 'SCAN_IN_PROGRESS':
+      return '이미 스캔이 진행 중입니다.';
+    case 'INVALID_PATH':
+      return '경로 형식이 올바르지 않습니다.';
+    case 'CANCELLED':
+      return '폴더 선택이 취소되었습니다.';
+    case 'NOT_FOUND':
+      return '해당 항목을 찾을 수 없습니다.';
+    case 'INTERNAL':
+      return '내부 오류가 발생했습니다. 잠시 후 다시 시도하세요.';
+    default:
+      return code ? ('알 수 없는 오류 (' + code + ')') : '요청을 처리하지 못했습니다.';
+  }
+}
+
+/** addRoots/pickFolders 의 rejected 항목 사유 토큰을 한국어로 매핑(§4.2 고정 토큰). */
+function describeRejectReason(reason) {
+  switch (reason) {
+    case 'NOT_FOUND': return '폴더를 찾을 수 없음';
+    case 'NOT_DIR': return '폴더가 아님';
+    case 'SYSTEM_DIR': return '시스템 폴더는 추가할 수 없음';
+    case 'DUP': return '이미 추가된 폴더';
+    default: return '추가 거부됨';
+  }
+}
+
+/** 정규화된 검색어 부분일치(이름·경로, 대소문자 무시, 리터럴). */
+function matchesSearch(vm, query) {
+  if (!query) return true;
+  const q = query.toLowerCase();
+  return vm.name.toLowerCase().includes(q) || vm.path.toLowerCase().includes(q);
+}
+
+/**
+ * 다중선택 패싯 AND/OR 필터.
+ * filters = { languages:[], freshness:[], git:[] }
+ * - languages: OR(선택 언어 중 하나라도). 빈 배열이면 통과.
+ * - freshness: OR. 'active'(활동중=!isStale) | 'stale'.
+ * - git: OR. 'clean'|'dirty'|'ahead'|'norepo' (vm의 gitKeys와 교집합).
+ * 카테고리 간에는 AND.
+ */
+function matchesFilters(vm, filters) {
+  filters = filters || {};
+  const langs = filters.languages || [];
+  const fresh = filters.freshness || [];
+  const git = filters.git || [];
+  if (langs.length && !langs.includes(vm.language)) return false;
+  if (fresh.length) {
+    const key = vm.isStale ? 'stale' : 'active';
+    if (!fresh.includes(key)) return false;
+  }
+  if (git.length) {
+    const keys = gitKeys(vm);
+    if (!keys.some((k) => git.includes(k))) return false;
+  }
+  return true;
+}
+
+/** 뷰모델의 Git 패싯 키 목록. norepo / clean / dirty / ahead 복합 가능. */
+function gitKeys(vm) {
+  if (vm.gitStatus === 'na') return ['norepo'];
+  const keys = [];
+  if (vm.gitStatus !== 'dirty' && !(vm.ahead > 0)) keys.push('clean');
+  if (vm.gitStatus === 'dirty') keys.push('dirty');
+  if (vm.ahead > 0) keys.push('ahead');
+  if (keys.length === 0) keys.push('clean');
+  return keys;
+}
+
+/** 필터(AND/OR) → 검색 → 정렬을 메모리에서 결합 적용. 원본 배열 불변. */
+function applyQuery(viewModels, state) {
+  const out = viewModels.filter(
+    (vm) => matchesFilters(vm, state.filters) && matchesSearch(vm, state.search || '')
+  );
+  return sortViewModels(out, state.sort || 'modified');
+}
+
+/**
+ * 정렬. 시안 키: 'modified'(최근수정순) | 'name'(이름순) | 'size'(용량순).
+ * 'size'는 MVP 미측정 → 데이터 없으면 자동으로 'modified' 폴백(호출부에서 안내).
+ * 결측 날짜(null lastModified)는 항상 말단.
+ */
+function sortViewModels(list, sortKey) {
+  const arr = list.slice();
+  const byName = (a, b) => a.name.localeCompare(b.name, 'ko');
+  if (sortKey === 'name') {
+    arr.sort(byName);
+  } else if (sortKey === 'size') {
+    // 용량 데이터가 모두 null이면 최근수정 폴백
+    const anySize = arr.some((v) => typeof v.totalBytes === 'number');
+    if (anySize) {
+      arr.sort((a, b) => (numOr(b.totalBytes, -1) - numOr(a.totalBytes, -1)) || byName(a, b));
+    } else {
+      arr.sort((a, b) => cmpDateDesc(a.lastModified, b.lastModified) || byName(a, b));
+    }
+  } else {
+    // 'modified' = 최근수정순(내림차순)
+    arr.sort((a, b) => cmpDateDesc(a.lastModified, b.lastModified) || byName(a, b));
+  }
+  return arr;
+}
+
+/** 용량 정렬이 실제로 가능한지(데이터 존재) 여부. */
+function canSortBySize(viewModels) {
+  return viewModels.some((v) => typeof v.totalBytes === 'number');
+}
+
+/** 최신순: 큰 날짜 먼저, null은 말단. */
+function cmpDateDesc(a, b) {
+  const ta = dateVal(a), tb = dateVal(b);
+  if (ta === null && tb === null) return 0;
+  if (ta === null) return 1;
+  if (tb === null) return -1;
+  return tb - ta;
+}
+function dateVal(iso) {
+  if (!iso) return null;
+  const t = Date.parse(iso);
+  return Number.isNaN(t) ? null : t;
+}
+
+/** 통계 응답에서 표시용 값 도출. totalBytes는 size 측정 스냅샷이면 실값(§4.3). */
+function deriveStats(stats, viewModels) {
+  const list = Array.isArray(viewModels) ? viewModels : [];
+  const byLang = (stats && stats.byLanguage && typeof stats.byLanguage === 'object')
+    ? stats.byLanguage : {};
+  const total = numOr(stats && stats.total, list.length);
+  const staleCount = numOr(stats && stats.staleCount, list.filter((v) => v.isStale).length);
+
+  // M4 §4.3: stats.totalBytes 가 number 면 실값. null/미존재면 viewModels 에서 합산 폴백.
+  //   (stats 가 아직 totalBytes 를 안 채우면 측정된 항목 합으로 KPI 채움 — graceful)
+  const statsTotal = (stats && typeof stats.totalBytes === 'number') ? stats.totalBytes : null;
+  const totalBytesNum = statsTotal != null ? statsTotal : sumTotalBytes(list);
+  const nmBytesNum = sumNodeModulesBytes(list);
+  return {
+    total,
+    staleCount,
+    activeCount: total - staleCount,
+    languageCount: Object.keys(byLang).length,
+    totalBytes: sizeLabel(totalBytesNum),         // number 면 "1.2 GB", 없으면 "미측정"
+    nodeModulesBytes: sizeLabel(nmBytesNum),
+    totalBytesMeasured: totalBytesNum != null,    // KPI 강조 분기용
+  };
+}
+
+/** 측정된(ok/partial) 항목들의 totalBytes 합. 모두 미측정이면 null. */
+function sumTotalBytes(viewModels) {
+  let sum = 0;
+  let any = false;
+  for (const v of (viewModels || [])) {
+    if (typeof v.totalBytes === 'number' && Number.isFinite(v.totalBytes)) { sum += v.totalBytes; any = true; }
+  }
+  return any ? sum : null;
+}
+/** 측정된 항목들의 nodeModulesBytes 합. 모두 미측정이면 null. */
+function sumNodeModulesBytes(viewModels) {
+  let sum = 0;
+  let any = false;
+  for (const v of (viewModels || [])) {
+    if (typeof v.nodeModulesBytes === 'number' && Number.isFinite(v.nodeModulesBytes)) { sum += v.nodeModulesBytes; any = true; }
+  }
+  return any ? sum : null;
+}
+function numOr(v, fallback) {
+  return typeof v === 'number' && Number.isFinite(v) ? v : fallback;
+}
+
+/** 빈 상태 판정 (P2-5): hasSnapshot=false 또는 projects 없음/빈 배열 → firstRun. */
+function isEmptySnapshot(payload) {
+  if (!payload) return true;
+  if (payload.hasSnapshot === false) return true;
+  if (!Array.isArray(payload.projects)) return true;
+  return payload.projects.length === 0;
+}
+
+/**
+ * 언어 패싯 집계: [{ lang, count }] 내림차순(동률은 이름).
+ * 사이드바/툴바 체크박스·KPI 막대/범례 공통 소스.
+ */
+function languageFacets(viewModels) {
+  const counts = {};
+  for (const vm of viewModels) counts[vm.language] = (counts[vm.language] || 0) + 1;
+  return Object.keys(counts)
+    .map((lang) => ({ lang, count: counts[lang] }))
+    .sort((a, b) => (b.count - a.count) || a.lang.localeCompare(b.lang, 'ko'));
+}
+
+/** Git 패싯별 개수: { clean, dirty, ahead, norepo }. */
+function gitFacetCounts(viewModels) {
+  const c = { clean: 0, dirty: 0, ahead: 0, norepo: 0 };
+  for (const vm of viewModels) {
+    for (const k of gitKeys(vm)) { if (k in c) c[k] += 1; }
+  }
+  return c;
+}
+
+/** KPI: 미커밋(dirty) 개수 / 미푸시(ahead>0) 개수. */
+function gitChangeCounts(viewModels) {
+  let dirty = 0, ahead = 0;
+  for (const vm of viewModels) {
+    if (vm.gitStatus === 'dirty') dirty += 1;
+    if (vm.ahead > 0) ahead += 1;
+  }
+  return { dirty, ahead };
+}
+
+/**
+ * 언어 비율(breakdown: {lang:0~1}) → [{ name, pct }] 퍼센트 내림차순.
+ * 합이 1이 아니어도 그대로 환산(반올림). 빈 breakdown은 primary 100%.
+ */
+function langPercents(vm) {
+  const bd = vm.breakdown || {};
+  const keys = Object.keys(bd);
+  if (keys.length === 0) {
+    return [{ name: vm.language, pct: 100 }];
+  }
+  return keys
+    .map((name) => ({ name, pct: Math.round((bd[name] || 0) * 100) }))
+    .sort((a, b) => b.pct - a.pct);
+}
+
+/** 언어별 도트 색상(시안 팔레트). 미지정은 중립색. */
+function langColor(lang) {
+  const m = {
+    'TypeScript': '#3178c6', 'JavaScript': '#cba70f', 'Node.js': '#5b8a2e',
+    'Python': '#3572A5', 'Go': '#00a7c4', 'Rust': '#c46a36', 'C++': '#6e40c9',
+    'C': '#6e40c9', 'Shell': '#5b8a2e', 'HTML': '#e34c26', 'CSS': '#9b59b6',
+    'Java': '#b07219', 'Ruby': '#701516', 'PHP': '#4F5D95', 'Vue': '#41b883',
+    'Swift': '#F05138', 'Kotlin': '#A97BFF', 'Markdown': '#78716c',
+  };
+  return m[lang] || '#a8a29e';
+}
+
+/**
+ * 상대시간(ISO|null, now=Date) → '오늘'/'어제'/'N일 전'/'N주 전'/'N개월 전'/'N년 전' | 'N/A'.
+ */
+function relTime(iso, now) {
+  const t = dateVal(iso);
+  if (t === null) return 'N/A';
+  const base = (now instanceof Date) ? now.getTime() : Date.now();
+  const days = Math.floor((base - t) / 86400000);
+  if (days <= 0) return '오늘';
+  if (days === 1) return '어제';
+  if (days < 7) return days + '일 전';
+  if (days < 30) return Math.floor(days / 7) + '주 전';
+  if (days < 365) return Math.floor(days / 30) + '개월 전';
+  return Math.floor(days / 365) + '년 전';
+}
+
+/** 절대일자(ISO|null) → 'YYYY-MM-DD' | '—'. */
+function fmtDate(iso) {
+  const t = dateVal(iso);
+  if (t === null) return '—';
+  const d = new Date(t);
+  const p = (n) => String(n).padStart(2, '0');
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+}
+
+/** 바이트 → 사람이 읽는 용량(미측정이면 그대로 '미측정'). */
+function sizeLabel(bytes) {
+  if (typeof bytes !== 'number' || !Number.isFinite(bytes)) return '미측정';
+  if (bytes >= 1 << 30) return (bytes / (1 << 30)).toFixed(1) + ' GB';
+  if (bytes >= 1 << 20) return (bytes / (1 << 20)).toFixed(0) + ' MB';
+  if (bytes >= 1 << 10) return (bytes / (1 << 10)).toFixed(0) + ' KB';
+  return bytes + ' B';
+}
+
+/**
+ * M4 §4.2: size.data.status 별 표시 라벨.
+ *   ok       → "1.2 GB"
+ *   partial  → "≈ 1.2 GB (부분)"        (예산/상한 도달 — 근사)
+ *   error    → "측정 실패"
+ *   skipped  → "미측정"   (또는 totalBytes 없음)
+ * 색만으로 구분하지 않도록 텍스트로 상태를 병기(N-07 색 외 텍스트, WCAG 1.4.1).
+ */
+function sizeStatusLabel(status, bytes) {
+  if (status === 'error') return '측정 실패';
+  if (status === 'partial') {
+    return (typeof bytes === 'number' && Number.isFinite(bytes))
+      ? ('≈ ' + sizeLabel(bytes) + ' (부분)')
+      : '부분 측정';
+  }
+  if (status === 'ok' && typeof bytes === 'number' && Number.isFinite(bytes)) {
+    return sizeLabel(bytes);
+  }
+  // skipped / null / 알 수 없음
+  return sizeLabel(typeof bytes === 'number' ? bytes : null);
+}
+
+/* =====================================================================
+ * M4 R-15: 스캔 진행 폴링 상태 머신 / 포맷 (순수, 테스트 대상)
+ * ===================================================================== */
+
+/**
+ * Electron 전환(R-15): 1초 폴링 폐기 → main→renderer 이벤트 푸시(onScanProgress) 구독.
+ * 폴링 상태머신(nextPollAction)을 push 모델에 맞게 재정의한다 — 입력원만 교체되고
+ * scanId 대조(M4-L-1)·phase 전이(done→refetch / error / scanning→render)는 보존한다.
+ * push 모델에서는 타이머·idle 상한이 사라지므로 'continue'/'stop' 액션은 제거하고,
+ * 진행 미관측(idle/null)은 'render'(현 진행 패널 유지)로 단순화한다.
+ *
+ *   ctx = { ownScanId:string|null }
+ *     - ownScanId : rescan 성공(SCAN_STARTED)에서 받은 scanId. null 이면 대조 생략(이미 진행 중 따라붙기).
+ *   payload = ScanProgress | null    — onScanProgress 콜백이 받은 객체(또는 getScanStatus 동기화)
+ * 반환 { action, reason } :
+ *   action='render'   진행 패널 갱신(scanning/finalizing/idle — 계속 구독)
+ *   action='refetch'  phase=done → 구독 해제 + getProjects/getStats 재조회
+ *   action='error'    phase=error → 구독 해제 + 오류 표시
+ *   action='foreign'  scanId 불일치(다른 스캔) → 무시
+ */
+function nextScanAction(ctx, payload) {
+  ctx = ctx || {};
+  if (!payload || typeof payload !== 'object') {
+    return { action: 'render', reason: 'no-status' };
+  }
+  const phase = typeof payload.phase === 'string' ? payload.phase : 'idle';
+  // scanId 대조: 양쪽 모두 있고 다르면 다른 스캔으로 간주(혼선 방지, M4-L-1).
+  if (ctx.ownScanId && payload.scanId && payload.scanId !== ctx.ownScanId) {
+    return { action: 'foreign', reason: 'scanId-mismatch' };
+  }
+  if (phase === 'done') return { action: 'refetch', reason: 'done' };
+  if (phase === 'error') return { action: 'error', reason: 'error' };
+  // scanning / finalizing / idle / 알 수 없는 phase — 진행 패널 갱신하며 계속 구독
+  return { action: 'render', reason: phase };
+}
+
+/**
+ * ScanProgress → 진행 패널 표시 뷰모델(순수). 모든 문자열 textContent 대상(L-1, M4-L-2).
+ *   pct 는 서버가 안 주므로(설계상 dirs/found만) found 진척이 아닌 "불확정 진행"으로 처리:
+ *   - done/finalizing → 100
+ *   - scanning → null(불확정) — 호출부가 indeterminate 바 표시
+ */
+function progressView(status) {
+  const s = (status && typeof status === 'object') ? status : {};
+  const phase = typeof s.phase === 'string' ? s.phase : 'idle';
+  const dirs = numOr(s.dirs, 0);
+  const found = numOr(s.found, 0);
+  const elapsedMs = numOr(s.elapsedMs, 0);
+  const done = phase === 'done';
+  const finalizing = phase === 'finalizing';
+  return {
+    phase,
+    running: phase === 'scanning',
+    finalizing,
+    done,
+    error: phase === 'error',
+    dirs,
+    found,
+    elapsedSec: Math.max(0, Math.floor(elapsedMs / 1000)),
+    pct: (done || finalizing) ? 100 : null,   // null = indeterminate
+    // currentPath / note 는 서버 유래 문자열 → 호출부에서 textContent 로만 렌더
+    currentPath: typeof s.currentPath === 'string' ? s.currentPath : null,
+    note: typeof s.note === 'string' ? s.note : null,
+    title: progressTitle(phase),
+    counts: (s.counts && typeof s.counts === 'object') ? s.counts : null,
+  };
+}
+function progressTitle(phase) {
+  switch (phase) {
+    case 'scanning': return '프로젝트 스캔 중…';
+    case 'finalizing': return '마무리 중…';
+    case 'done': return '스캔 완료';
+    case 'error': return '스캔 실패';
+    default: return '스캔 준비 중…';
+  }
+}
+
+/** 정수 천단위 콤마(진행 카운트 표시용). */
+function fmtCount(n) {
+  if (typeof n !== 'number' || !Number.isFinite(n)) return '0';
+  return Math.round(n).toLocaleString('en-US');
+}
+
+/** 경과(초) → "12s" / "1m 03s". */
+function fmtElapsed(sec) {
+  const s = typeof sec === 'number' && Number.isFinite(sec) ? Math.max(0, Math.floor(sec)) : 0;
+  if (s < 60) return s + 's';
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  return m + 'm ' + String(r).padStart(2, '0') + 's';
+}
+
+/**
+ * rescan IPC 반환 → 액션 분류(순수). 진행 구독 시작/토스트 분기용.
+ * IPC 계약(§4.1): 성공 `{ok:true, code:'SCAN_STARTED', scanId, startedAt}`,
+ *   실패 `{ok:false, code:'SCAN_IN_PROGRESS'|'NO_SCAN_ROOTS', scanId?, message?}`.
+ * HTTP 상태코드가 없어졌으므로 ok/code 만으로 분류한다(인자 1개).
+ *   반환 { action, code, scanId? }
+ *     'start'        SCAN_STARTED → 진행 구독 시작
+ *     'in-progress'  SCAN_IN_PROGRESS → 안내(이미 진행 중, 따라붙어 구독)
+ *     'no-roots'     NO_SCAN_ROOTS → 폴더 추가 안내
+ *     'error'        기타 실패(INTERNAL 등)
+ */
+function classifyRescan(data) {
+  const d = (data && typeof data === 'object') ? data : {};
+  const code = typeof d.code === 'string' ? d.code : '';
+  const scanId = typeof d.scanId === 'string' ? d.scanId : null;
+  if (d.ok === true && (code === 'SCAN_STARTED' || code === '')) {
+    return { action: 'start', code: code || 'SCAN_STARTED', scanId };
+  }
+  if (code === 'SCAN_IN_PROGRESS') return { action: 'in-progress', code, scanId };
+  if (code === 'NO_SCAN_ROOTS') return { action: 'no-roots', code };
+  return { action: 'error', code: code || 'INTERNAL' };
+}
+
+/**
+ * P2-1: 네이티브 메뉴 명령(onMenu cb 가 받는 {action}) → renderer 핸들러 토큰(순수).
+ * preload `window.spip.onMenu(cb)` 가 main/menu 의 `spip:menu:*` send 를 받아 cb({action}) 로
+ * 전달한다(공유 계약). 여기서는 action 문자열을 핸들러 식별 토큰으로 결정론적으로 매핑한다 —
+ * 디스패치 부수효과는 호출부(initBrowser)가 담당하고, 매핑 자체만 헤드리스로 단위테스트한다.
+ *   action ∈ pickFolders | rescan | refresh | about
+ *   반환 { handler:'pickFolders'|'rescan'|'refresh'|'about'|null }
+ *     null = 알 수 없는/누락 action(graceful 무시). cb 가 객체가 아니거나 action 비문자열이어도 null.
+ */
+function dispatchMenuAction(msg) {
+  const action = (msg && typeof msg === 'object' && typeof msg.action === 'string') ? msg.action : '';
+  switch (action) {
+    case 'pickFolders': return { handler: 'pickFolders' };
+    case 'rescan':      return { handler: 'rescan' };
+    case 'refresh':     return { handler: 'refresh' };
+    case 'about':       return { handler: 'about' };
+    default:            return { handler: null };
+  }
+}
+
+/**
+ * P2-6: 스캔 done→대시보드 전환 뷰 결정(순수, 결정론적).
+ * 기존엔 done 후 1100ms 고정 타이머로 dashboard 전환 → 사용자 뷰 전환과 레이스(매직넘버).
+ * 데이터 재조회(getProjects)가 끝난 시점에 스냅샷 내용만으로 다음 뷰를 결정한다 — 타이머 제거.
+ *   payload  = getProjects 결과(스냅샷) 또는 null
+ *   반환 { view:'dashboard'|'firstRun', empty:boolean }
+ *     empty 스냅샷 → firstRun, 아니면 dashboard. 재조회 완료 == 전환 시점(결정적).
+ */
+function resolveScanReloadView(payload) {
+  const empty = isEmptySnapshot(payload);
+  return { view: empty ? 'firstRun' : 'dashboard', empty };
+}
+
+/* =====================================================================
+ * Electron 적응: 옵션 매핑 · 루트 관리 · 폴더 선택 결과 (순수, 테스트 대상)
+ * ===================================================================== */
+
+/**
+ * 재스캔 옵션 정규화(순수). UI 상태 → rescan(opts) 인자.
+ *   - withSize: Boolean 강제
+ *   - allDrives: Boolean 강제, 단 allowAllDrives 게이트가 false 면 항상 false 로 강등.
+ *     (main 도 config.allowAllDrives 로 재게이트하지만, UI 도 동일 규칙으로 미리 강등해
+ *      비활성 옵션이 새어나가지 않게 한다 — §4.2 정합.)
+ *   uiOpts = { withSize?, allDrives? } / cfg = getConfig() 결과(또는 null)
+ */
+function sanitizeRescanOpts(uiOpts, cfg) {
+  const o = (uiOpts && typeof uiOpts === 'object') ? uiOpts : {};
+  const allowAll = !!(cfg && cfg.allowAllDrives === true);
+  return {
+    withSize: !!o.withSize,
+    allDrives: allowAll ? !!o.allDrives : false,
+  };
+}
+
+/**
+ * getConfig() 응답 → 옵션 UI 표시용 뷰모델(순수). 결측 graceful.
+ * 계약(§4.1): { scanRoots:string[], staleDays:number, allowAllDrives:boolean,
+ *               size:{enabled:boolean, maxBytes:number, maxEntries:number} }
+ */
+function configView(cfg) {
+  const c = (cfg && typeof cfg === 'object') ? cfg : {};
+  const size = (c.size && typeof c.size === 'object') ? c.size : {};
+  const roots = Array.isArray(c.scanRoots)
+    ? c.scanRoots.filter((p) => typeof p === 'string' && p.length)
+    : [];
+  return {
+    scanRoots: roots,
+    rootCount: roots.length,
+    staleDays: numOr(c.staleDays, 90),
+    allowAllDrives: c.allowAllDrives === true,
+    sizeEnabled: size.enabled === true,
+    sizeMaxBytes: typeof size.maxBytes === 'number' ? size.maxBytes : null,
+    sizeMaxEntries: typeof size.maxEntries === 'number' ? size.maxEntries : null,
+  };
+}
+
+/**
+ * 경로 직접 입력 텍스트 → addRoots 인자 배열(순수). 줄바꿈/구분 처리·trim·빈줄 제거.
+ * 한 줄 입력(단일 경로)도 배열로. main 이 전량 재검증하므로 여기선 분리만 한다.
+ */
+function parseRootInput(text) {
+  if (typeof text !== 'string') return [];
+  return text
+    .split(/[\r\n]+/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+}
+
+/**
+ * addRoots/pickFolders 결과 → 사용자 토스트/표시 요약(순수).
+ * 계약: { ok:true, added:string[], rejected?:[{path,reason}], roots:string[] }
+ *       | { ok:false, code:'INVALID_PATH'|'CANCELLED' }
+ *   반환 { ok, kind, addedCount, rejected:[{path,reason,label}], roots, message }
+ *     kind='added'    1개 이상 추가됨
+ *     kind='none'     추가 0(전부 거부/중복)
+ *     kind='cancelled' 사용자 취소
+ *     kind='error'    INVALID_PATH 등
+ */
+function summarizeAddResult(res) {
+  const r = (res && typeof res === 'object') ? res : {};
+  if (r.ok !== true) {
+    const code = typeof r.code === 'string' ? r.code : 'INTERNAL';
+    return {
+      ok: false,
+      kind: code === 'CANCELLED' ? 'cancelled' : 'error',
+      addedCount: 0, rejected: [], roots: [],
+      message: code === 'CANCELLED' ? '폴더 선택이 취소되었습니다.' : describeError(r),
+    };
+  }
+  const added = Array.isArray(r.added) ? r.added.filter((p) => typeof p === 'string') : [];
+  const roots = Array.isArray(r.roots) ? r.roots.filter((p) => typeof p === 'string') : [];
+  const rejected = (Array.isArray(r.rejected) ? r.rejected : [])
+    .filter((x) => x && typeof x === 'object' && typeof x.path === 'string')
+    .map((x) => ({
+      path: x.path,
+      reason: typeof x.reason === 'string' ? x.reason : '',
+      label: describeRejectReason(typeof x.reason === 'string' ? x.reason : ''),
+    }));
+  const addedCount = added.length;
+  let message;
+  if (addedCount > 0) {
+    message = addedCount + '개 폴더를 추가했습니다.'
+      + (rejected.length ? (' (' + rejected.length + '개 거부됨)') : '');
+  } else if (rejected.length) {
+    message = '추가된 폴더가 없습니다. ' + rejected.length + '개 항목이 거부되었습니다.';
+  } else {
+    message = '추가된 폴더가 없습니다.';
+  }
+  return {
+    ok: true,
+    kind: addedCount > 0 ? 'added' : 'none',
+    addedCount, rejected, roots, message,
+  };
+}
+
+/* =====================================================================
+ * 브라우저 전용 (DOM / fetch / 이벤트)
+ * ===================================================================== */
+function initBrowser() {
+  const SVG_NS = 'http://www.w3.org/2000/svg';
+  const STALE_DAYS = 90; // 계약상 isStale은 서버 판정. 안내 문구용 기본값.
+
+  /** store: 단일 출처 메모리(/api 1회 fetch). 필터/정렬/검색은 메모리에서만. */
+  const store = {
+    raw: [],
+    viewModels: [],
+    stats: null,
+    now: new Date(),
+    state: {
+      view: 'loading',           // 'loading' | 'dashboard' | 'firstRun' | 'scanning' | 'error'
+      density: 'cards',          // 'cards' | 'table'
+      layout: 'sidebar',         // 'sidebar' | 'toolbar'
+      search: '',
+      sort: 'modified',
+      filters: { languages: [], freshness: [], git: [] },
+      selectedId: null,
+      opening: {},               // id -> true(연타 방지)
+      rescanning: false,         // 재스캔 요청 in-flight(버튼 비활성)
+    },
+    // R-15: 진행 통지 컨텍스트(Electron push 모델 — 폴링 타이머 제거)
+    scan: {
+      ownScanId: null,           // rescan SCAN_STARTED scanId(M4-L-1 대조)
+      progress: null,            // 마지막 ScanProgress
+      unsubscribe: null,         // onScanProgress 구독 해제 함수
+      returnView: 'dashboard',   // 진행 끝나면 돌아갈 뷰(dashboard/firstRun)
+      startedAt: 0,              // 로컬 시작 시각(경과 폴백)
+    },
+    // 설정/루트 관리 상태(Electron 신규)
+    config: null,                // getConfig() 마지막 결과(configView 입력)
+    roots: [],                   // 현재 scanRoots(루트 관리 UI 표시)
+    rootInput: '',               // 경로 직접 입력 필드 값(컨트롤드)
+    lastRejected: [],            // 직전 addRoots/pickFolders 거부 항목(표시)
+    busyFolders: false,          // 폴더 추가/선택/삭제 in-flight(버튼 비활성)
+    showSettings: false,         // 설정 패널(드로어형) 열림 여부
+    opts: { withSize: false, allDrives: false }, // 재스캔 옵션 UI 상태
+    menuUnsubscribe: null,       // P2-1: spip.onMenu 구독 해제 함수(teardown 시 호출)
+  };
+
+  const app = document.getElementById('app');
+  const toastEl = document.getElementById('toast');
+
+  /* =====================================================================
+   * 전송 어댑터 (Electron IPC — window.spip.*). HTTP/fetch/세션토큰 전부 제거.
+   *   preload allowlist 만 호출. 응답 shape 은 불변(Project·stats·ScanProgress).
+   *   window.spip 부재(브라우저 직접 열람 등) 시 graceful 오류 객체 반환.
+   * ===================================================================== */
+  const spip = (typeof window !== 'undefined' && window.spip) ? window.spip : null;
+  function hasBridge() { return !!spip; }
+  function bridgeMissing() {
+    return { ok: false, code: 'INTERNAL', message: 'Electron 환경이 아닙니다(window.spip 없음).' };
+  }
+  async function ipc(method, ...args) {
+    if (!spip || typeof spip[method] !== 'function') return bridgeMissing();
+    try {
+      return await spip[method](...args);
+    } catch (err) {
+      // L-3: 절대경로·스택 비노출. 사용자에겐 고정 메시지.
+      return { ok: false, code: 'INTERNAL', message: (err && err.message) ? err.message : 'IPC 오류' };
+    }
+  }
+
+  /* ---- DOM 빌더 헬퍼 (L-1: 텍스트는 항상 textContent) ---- */
+  function el(tag, opts) {
+    const node = document.createElement(tag);
+    opts = opts || {};
+    if (opts.cls) node.className = opts.cls;
+    if (opts.text != null) node.textContent = opts.text; // L-1
+    if (opts.attrs) for (const k in opts.attrs) node.setAttribute(k, opts.attrs[k]);
+    if (opts.title != null) node.title = opts.title;
+    if (opts.on) for (const ev in opts.on) node.addEventListener(ev, opts.on[ev]);
+    if (opts.children) for (const c of opts.children) if (c) node.appendChild(c);
+    return node;
+  }
+  function svg(paths, opts) {
+    opts = opts || {};
+    const s = document.createElementNS(SVG_NS, 'svg');
+    s.setAttribute('viewBox', '0 0 24 24');
+    s.setAttribute('width', String(opts.size || 16));
+    s.setAttribute('height', String(opts.size || 16));
+    s.setAttribute('fill', 'none');
+    s.setAttribute('stroke', opts.stroke || 'currentColor');
+    s.setAttribute('stroke-width', String(opts.sw || 2));
+    s.setAttribute('stroke-linecap', 'round');
+    s.setAttribute('stroke-linejoin', 'round');
+    if (opts.cls) s.setAttribute('class', opts.cls);
+    s.setAttribute('aria-hidden', 'true');
+    for (const d of paths) {
+      const el2 = document.createElementNS(SVG_NS, d.t || 'path');
+      for (const k in d) if (k !== 't') el2.setAttribute(k, d[k]);
+      s.appendChild(el2);
+    }
+    return s;
+  }
+  function dot(lang, size) {
+    const s = el('span', { cls: 'lang-dot' });
+    s.style.background = langColor(lang);
+    if (size) { s.style.width = size + 'px'; s.style.height = size + 'px'; }
+    return s;
+  }
+  function colorDot(color, size) {
+    const s = el('span', { cls: 'status-dot' });
+    s.style.background = color;
+    if (size) { s.style.width = size + 'px'; s.style.height = size + 'px'; }
+    return s;
+  }
+  function badge(cls, text) {
+    return el('span', { cls: 'badge ' + cls, text });
+  }
+
+  /* ---- 상대시간(now 고정) ---- */
+  const rel = (iso) => relTime(iso, store.now);
+
+  /* =====================================================================
+   * 메인 렌더 디스패치
+   * ===================================================================== */
+  function render() {
+    app.replaceChildren();
+    const v = store.state.view;
+    if (v === 'loading') { app.appendChild(renderLoading()); return; }
+    if (v === 'error') { app.appendChild(renderError()); return; }
+    if (v === 'scanning') { app.appendChild(renderScanning()); return; }
+    if (v === 'firstRun') { app.appendChild(renderFirstRun()); return; }
+    app.appendChild(renderDashboard());
+  }
+
+  /* ---- 로딩 / 에러 ---- */
+  function renderLoading() {
+    return el('div', {
+      cls: 'centered-screen',
+      children: [el('div', {
+        cls: 'panel-card panel-card--sm',
+        children: [
+          el('div', { cls: 'spinner' }),
+          el('div', { cls: 'centered-title', text: '프로젝트를 불러오는 중…' }),
+        ],
+      })],
+    });
+  }
+  function renderError() {
+    return el('div', {
+      cls: 'centered-screen',
+      children: [el('div', {
+        cls: 'panel-card panel-card--sm',
+        children: [
+          el('div', { cls: 'centered-title', text: '데이터를 불러오지 못했습니다' }),
+          el('div', { cls: 'centered-sub', text: store._errorMsg || '잠시 후 다시 시도하세요.' }),
+          el('button', {
+            cls: 'btn btn--dark', text: '다시 시도',
+            on: { click: () => load() },
+          }),
+        ],
+      })],
+    });
+  }
+
+  /* =====================================================================
+   * R-15: 스캔 진행 화면 (시안 scanning 재현 + 실 폴링 연동)
+   *   - aria-live(polite) 영역에 진행 텍스트 갱신(N-07 4.1.3)
+   *   - 모든 서버 유래 문자열(currentPath·note)은 textContent(L-1, M4-L-2)
+   * ===================================================================== */
+  function renderScanning() {
+    const pv = progressView(store.scan.progress);
+    const card = el('div', { cls: 'panel-card scanview', attrs: { role: 'status', 'aria-live': 'polite', 'aria-atomic': 'true' } });
+
+    // 헤더: 스피너/완료 아이콘 + 제목 + 카운트 + (불확정이면 % 숨김)
+    const head = el('div', { cls: 'scanview__head' });
+    if (pv.done) {
+      const okIcon = el('div', { cls: 'scanview__icon scanview__icon--ok' });
+      okIcon.appendChild(svg([{ t: 'path', d: 'M5 12l4 4 10-10' }], { size: 18, stroke: '#15803d', sw: 2.6 }));
+      head.appendChild(okIcon);
+    } else if (pv.error) {
+      const errIcon = el('div', { cls: 'scanview__icon scanview__icon--err' });
+      errIcon.appendChild(svg([{ t: 'line', x1: '6', y1: '6', x2: '18', y2: '18' }, { t: 'line', x1: '18', y1: '6', x2: '6', y2: '18' }], { size: 18, stroke: '#b91c1c', sw: 2.6 }));
+      head.appendChild(errIcon);
+    } else {
+      head.appendChild(el('div', { cls: 'scanview__spinner' }));
+    }
+
+    const titleWrap = el('div', { cls: 'scanview__titlewrap' });
+    titleWrap.appendChild(el('div', { cls: 'scanview__title', text: pv.title }));
+    titleWrap.appendChild(el('div', {
+      cls: 'scanview__counts',
+      text: fmtCount(pv.dirs) + ' 폴더 탐색 · ' + fmtCount(pv.found) + ' 프로젝트 발견',
+    }));
+    head.appendChild(titleWrap);
+    head.appendChild(el('div', { cls: 'spacer' }));
+    card.appendChild(head);
+
+    // 진행바: pct=null 이면 indeterminate(불확정), 아니면 100%
+    const track = el('div', { cls: 'scanview__track' });
+    const barCls = 'scanview__bar' + (pv.pct == null && !pv.error ? ' scanview__bar--indet' : '') + (pv.error ? ' scanview__bar--err' : '');
+    const bar = el('div', { cls: barCls });
+    if (pv.pct != null) bar.style.width = pv.pct + '%';
+    track.appendChild(bar);
+    card.appendChild(track);
+
+    // 현재 경로 / 완료·오류 메시지 (textContent)
+    const pathRow = el('div', { cls: 'scanview__path mono' });
+    if (pv.done) {
+      pathRow.appendChild(el('span', { cls: 'scanview__path-ok', text: '✓' }));
+      pathRow.appendChild(el('span', { text: '스캔 완료 — 결과를 캐시에 저장했습니다' }));
+    } else if (pv.error) {
+      pathRow.appendChild(el('span', { cls: 'scanview__path-err', text: '!' }));
+      pathRow.appendChild(el('span', { text: pv.note || '스캔에 실패했습니다. 다시 시도하세요.' }));
+    } else if (pv.finalizing) {
+      pathRow.appendChild(el('span', { cls: 'scanview__path-cur', text: '▸' }));
+      pathRow.appendChild(el('span', { text: '스냅샷 마무리 중…' }));
+    } else {
+      pathRow.appendChild(el('span', { cls: 'scanview__path-cur', text: '▸' }));
+      // currentPath 는 서버 유래(basename 축약) → textContent
+      pathRow.appendChild(el('span', { cls: 'scanview__path-txt', text: pv.currentPath || '탐색 시작…' }));
+    }
+    card.appendChild(pathRow);
+
+    // note(예: all-drives 강등 안내) — 진행 중에도 표기
+    if (pv.note && !pv.error) {
+      card.appendChild(el('div', { cls: 'scanview__note', text: pv.note }));
+    }
+
+    // 풋: 경과 + 액션
+    const foot = el('div', { cls: 'scanview__foot' });
+    foot.appendChild(el('div', { cls: 'scanview__elapsed mono', text: '경과 ' + fmtElapsed(pv.elapsedSec) }));
+    foot.appendChild(el('div', { cls: 'spacer' }));
+    if (pv.done) {
+      foot.appendChild(el('button', { cls: 'btn btn--dark', text: '대시보드 열기 →', on: { click: () => { store.state.view = 'dashboard'; render(); } } }));
+    } else if (pv.error) {
+      foot.appendChild(el('button', { cls: 'btn', text: '돌아가기', on: { click: () => { store.state.view = store.scan.returnView; render(); } } }));
+      foot.appendChild(el('button', { cls: 'btn btn--dark', text: '다시 시도', on: { click: () => triggerRescan() } }));
+    } else {
+      // 진행 중에는 취소(=뷰만 벗어남, 서버 스캔은 백그라운드 단일 락이라 계속됨)
+      foot.appendChild(el('button', { cls: 'btn', text: '백그라운드로', on: { click: () => { store.state.view = store.scan.returnView; render(); } } }));
+    }
+    card.appendChild(foot);
+
+    return el('div', { cls: 'centered-screen', children: [card] });
+  }
+
+  /* =====================================================================
+   * firstRun / 빈 상태 (Electron 실동작: 네이티브 폴더 선택 + 경로 직접 입력 + 루트 목록)
+   *   - CLI 안내 제거. spip.pickFolders()/addRoots()/removeRoot()/rescan() 으로 실동작.
+   *   - 모든 경로 문자열은 textContent(L-1). 키보드/포커스/aria(N-07) 적용.
+   * ===================================================================== */
+  function renderFirstRun() {
+    const card = el('div', { cls: 'panel-card firstrun' });
+
+    const brand = el('div', { cls: 'firstrun__brand', children: [
+      el('div', { cls: 'logo-mark', text: 'S' }),
+      el('div', { cls: 'logo-text', text: 'Project-SPIP' }),
+      badge('badge--local', 'LOCAL'),
+    ]});
+    card.appendChild(brand);
+
+    const hasRoots = store.roots.length > 0;
+    card.appendChild(el('h1', { cls: 'firstrun__title', text: hasRoots ? '스캔 준비 완료' : '스캔할 폴더를 추가하세요' }));
+    card.appendChild(el('p', { cls: 'firstrun__lead', text: hasRoots
+      ? '아래 폴더를 스캔하면 대시보드가 채워집니다. 스캔은 이 PC에서 로컬로만 수행됩니다.'
+      : '프로젝트가 들어 있는 폴더를 추가하면 스캔할 수 있습니다. 폴더 선택과 스캔은 이 PC에서 로컬로만 수행됩니다.' }));
+
+    // 루트 관리 블록(공통 컴포넌트)
+    card.appendChild(renderRootManager());
+
+    // 1차 액션: 스캔 시작(루트가 있어야 의미)
+    const startBtn = el('button', {
+      cls: 'btn btn--dark btn--block', text: store.state.rescanning ? '스캔 시작 중…' : '스캔 시작',
+      attrs: { 'aria-label': '추가된 폴더 스캔 시작' },
+      on: { click: () => triggerRescan('firstRun') },
+    });
+    if (!store.state.rescanning) {
+      startBtn.prepend(svg([{ t: 'path', d: 'M21 12a9 9 0 1 1-2.64-6.36' }, { t: 'path', d: 'M21 3v6h-6' }], { size: 15 }));
+    }
+    if (store.state.rescanning || !hasRoots || store.busyFolders) startBtn.disabled = true;
+    card.appendChild(startBtn);
+
+    if (!hasRoots) {
+      card.appendChild(el('p', { cls: 'firstrun__note', text: '폴더를 1개 이상 추가하면 스캔할 수 있습니다.' }));
+    }
+
+    const sec = el('div', { cls: 'firstrun__security', children: [
+      svg([{ t: 'rect', x: '4', y: '11', width: '16', height: '9', rx: '2' }, { t: 'path', d: 'M8 11V8a4 4 0 0 1 8 0v3' }], { size: 13, stroke: '#a8a29e' }),
+      el('span', { text: '로컬 전용 · 외부로 어떤 데이터도 전송하지 않습니다' }),
+    ]});
+    card.appendChild(sec);
+
+    return el('div', { cls: 'centered-screen', children: [card] });
+  }
+
+  /* =====================================================================
+   * 루트 관리 컴포넌트 (firstRun · 설정 공용)
+   *   - 네이티브 폴더 선택(pickFolders) · 경로 직접 입력(addRoots) · 목록/삭제(removeRoot)
+   *   - 거부(rejected) 결과 표시. 키보드·aria-live·focus-visible(N-07).
+   * ===================================================================== */
+  function renderRootManager() {
+    const wrap = el('div', { cls: 'rootmgr', attrs: { 'aria-label': '스캔 폴더 관리' } });
+
+    // 동작 버튼: 네이티브 선택 + 직접 입력 토글은 항상 표시
+    const actions = el('div', { cls: 'rootmgr__actions' });
+    const pickBtn = el('button', {
+      cls: 'btn', text: '폴더 선택…',
+      attrs: { 'aria-label': '네이티브 대화상자로 폴더 선택' },
+      on: { click: onPickFolders },
+    });
+    pickBtn.prepend(svg([{ t: 'path', d: 'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z' }], { size: 14 }));
+    if (store.busyFolders) pickBtn.disabled = true;
+    actions.appendChild(pickBtn);
+    wrap.appendChild(actions);
+
+    // 경로 직접 입력(키보드/붙여넣기 편의 — N-07)
+    const inputRow = el('div', { cls: 'rootmgr__inputrow' });
+    const pathInput = el('input', {
+      cls: 'rootmgr__input',
+      attrs: {
+        type: 'text', placeholder: '폴더 절대경로 직접 입력 (예: E:\\projects)',
+        'aria-label': '폴더 경로 직접 입력', autocomplete: 'off', spellcheck: 'false',
+      },
+    });
+    pathInput.value = store.rootInput;
+    pathInput.addEventListener('input', (e) => { store.rootInput = e.target.value || ''; });
+    pathInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); onAddRoot(); } });
+    const addBtn = el('button', {
+      cls: 'btn', text: '추가', attrs: { 'aria-label': '입력한 경로 추가' }, on: { click: onAddRoot },
+    });
+    if (store.busyFolders) { pathInput.disabled = true; addBtn.disabled = true; }
+    inputRow.appendChild(pathInput);
+    inputRow.appendChild(addBtn);
+    wrap.appendChild(inputRow);
+
+    // 루트 목록(경로는 textContent — L-1)
+    const listLabel = el('div', { cls: 'rootmgr__label', text: '추가된 폴더 (' + store.roots.length + ')' });
+    wrap.appendChild(listLabel);
+    if (store.roots.length === 0) {
+      wrap.appendChild(el('div', { cls: 'rootmgr__empty', text: '아직 추가된 폴더가 없습니다.' }));
+    } else {
+      const ul = el('ul', { cls: 'rootmgr__list', attrs: { role: 'list' } });
+      for (const p of store.roots) {
+        const li = el('li', { cls: 'rootmgr__item' });
+        li.appendChild(el('span', { cls: 'rootmgr__path mono', text: p, title: p })); // L-1 textContent
+        const rm = el('button', {
+          cls: 'rootmgr__remove', text: '삭제',
+          attrs: { type: 'button', 'aria-label': '폴더 제거: ' + p },
+          on: { click: () => onRemoveRoot(p) },
+        });
+        if (store.busyFolders) rm.disabled = true;
+        li.appendChild(rm);
+        ul.appendChild(li);
+      }
+      wrap.appendChild(ul);
+    }
+
+    // 거부 결과(aria-live 로 안내 — 경로는 textContent)
+    if (store.lastRejected.length) {
+      const rej = el('div', { cls: 'rootmgr__rejected', attrs: { role: 'status', 'aria-live': 'polite' } });
+      rej.appendChild(el('div', { cls: 'rootmgr__rejected-title', text: '추가하지 못한 항목' }));
+      const rl = el('ul', { cls: 'rootmgr__rejected-list', attrs: { role: 'list' } });
+      for (const r of store.lastRejected) {
+        const li = el('li', { cls: 'rootmgr__rejected-item' });
+        li.appendChild(el('span', { cls: 'mono rootmgr__rejected-path', text: r.path, title: r.path })); // L-1
+        li.appendChild(el('span', { cls: 'rootmgr__rejected-reason', text: r.label }));
+        rl.appendChild(li);
+      }
+      rej.appendChild(rl);
+      wrap.appendChild(rej);
+    }
+
+    return wrap;
+  }
+
+  /* =====================================================================
+   * 대시보드
+   * ===================================================================== */
+  function renderDashboard() {
+    const root = el('div', { cls: 'dash' });
+    root.appendChild(renderHeader());
+    root.appendChild(renderToolbar());
+    root.appendChild(renderKpis());
+
+    const body = el('div', { cls: 'dash__body' });
+    if (store.state.layout === 'sidebar') body.appendChild(renderSidebar());
+
+    const main = el('main', { cls: 'dash__main spip-scroll', attrs: { id: 'main' } });
+    if (store.state.layout === 'toolbar') main.appendChild(renderToolbarFacets());
+    main.appendChild(renderResults());
+    body.appendChild(main);
+    root.appendChild(body);
+
+    if (store.state.selectedId) root.appendChild(renderDrawer());
+    if (store.showSettings) root.appendChild(renderSettings());
+    return root;
+  }
+
+  /* =====================================================================
+   * 설정 드로어 (폴더 관리 + 재스캔 옵션). 드로어 패턴(포커스 트랩·Esc·복귀) 재사용.
+   * ===================================================================== */
+  function openSettings() {
+    store._settingsOpener = (typeof document !== 'undefined') ? document.activeElement : null;
+    store.showSettings = true;
+    store.lastRejected = [];
+    render();
+    // 최신 config/roots 동기화(비동기 — 끝나면 재렌더)
+    refreshConfig();
+  }
+  function closeSettings() {
+    store.showSettings = false;
+    const opener = store._settingsOpener;
+    store._settingsOpener = null;
+    render();
+    if (opener && typeof opener.focus === 'function' && document.contains(opener)) {
+      try { opener.focus(); } catch (_) { /* ignore */ }
+    }
+  }
+
+  function renderSettings() {
+    const titleId = 'settings-title';
+    const overlay = el('div', { cls: 'drawer-overlay', on: { click: closeSettings } });
+    const aside = el('aside', {
+      cls: 'drawer drawer--settings spip-scroll',
+      attrs: { role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': titleId },
+    });
+    aside.addEventListener('click', (e) => e.stopPropagation());
+
+    const head = el('div', { cls: 'drawer__head' });
+    head.appendChild(el('div', { cls: 'drawer__titlewrap', children: [
+      el('div', { cls: 'drawer__name', text: '설정', attrs: { id: titleId } }),
+      el('div', { cls: 'drawer__path', text: '스캔 폴더와 옵션을 관리합니다' }),
+    ]}));
+    const close = el('button', { cls: 'drawer__close', text: '×', attrs: { 'aria-label': '닫기' }, on: { click: closeSettings } });
+    head.appendChild(close);
+    aside.appendChild(head);
+
+    const body = el('div', { cls: 'drawer__body' });
+
+    // 1) 폴더 관리
+    body.appendChild(el('div', { cls: 'insight', children: [
+      el('div', { cls: 'insight__title', text: '스캔 폴더' }),
+      renderRootManager(),
+    ]}));
+
+    // 2) 재스캔 옵션 (getConfig 기반)
+    body.appendChild(renderScanOptions());
+
+    aside.appendChild(body);
+    overlay.appendChild(aside);
+
+    // 키보드: Esc 닫기 + 포커스 트랩(N-07)
+    aside.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { e.preventDefault(); closeSettings(); return; }
+      if (e.key !== 'Tab') return;
+      const items = getTabbables(aside);
+      if (items.length === 0) { e.preventDefault(); return; }
+      const first = items[0];
+      const last = items[items.length - 1];
+      const active = document.activeElement;
+      if (e.shiftKey) {
+        if (active === first || !aside.contains(active)) { e.preventDefault(); last.focus(); }
+      } else {
+        if (active === last || !aside.contains(active)) { e.preventDefault(); first.focus(); }
+      }
+    });
+    setTimeout(() => { try { close.focus(); } catch (_) { /* ignore */ } }, 0);
+    return overlay;
+  }
+
+  /** 재스캔 옵션 UI: withSize · allDrives(allowAllDrives 게이트) · 정책 표시(getConfig). */
+  function renderScanOptions() {
+    const cv = configView(store.config);
+    const block = el('div', { cls: 'insight', children: [el('div', { cls: 'insight__title', text: '스캔 옵션' })] });
+
+    // withSize
+    block.appendChild(optionRow({
+      id: 'opt-withsize',
+      label: '용량(size) 수집',
+      sub: cv.sizeEnabled ? '디렉터리 용량·node_modules 측정 (느려질 수 있음)' : '설정에서 size 수집이 비활성 상태입니다',
+      checked: store.opts.withSize,
+      disabled: false,
+      onChange: (v) => { store.opts.withSize = v; },
+    }));
+
+    // allDrives — allowAllDrives 게이트
+    block.appendChild(optionRow({
+      id: 'opt-alldrives',
+      label: '전체 드라이브 스캔',
+      sub: cv.allowAllDrives ? '연결된 모든 드라이브를 스캔합니다' : '설정(allowAllDrives)이 꺼져 있어 사용할 수 없습니다',
+      checked: cv.allowAllDrives && store.opts.allDrives,
+      disabled: !cv.allowAllDrives,
+      onChange: (v) => { store.opts.allDrives = v; },
+    }));
+
+    // 정책 표시(읽기 전용)
+    const policy = el('div', { cls: 'rootmgr__label', text: '현재 정책' });
+    block.appendChild(policy);
+    const kv = el('div', { cls: 'settings__kv' });
+    kv.appendChild(kvRow('방치 기준', el('span', { cls: 'mono kv__v', text: cv.staleDays + '일' })));
+    kv.appendChild(kvRow('용량 수집', el('span', { cls: 'kv__v', text: cv.sizeEnabled ? '활성' : '비활성' })));
+    kv.appendChild(kvRow('전체 드라이브 허용', el('span', { cls: 'kv__v', text: cv.allowAllDrives ? '허용' : '미허용' })));
+    block.appendChild(kv);
+
+    // 옵션 적용 재스캔
+    const applyBtn = el('button', {
+      cls: 'btn btn--dark btn--block', text: store.state.rescanning ? '재스캔 중…' : '이 옵션으로 재스캔',
+      attrs: { 'aria-label': '선택한 옵션으로 재스캔' },
+      on: { click: () => { closeSettings(); triggerRescan('dashboard'); } },
+    });
+    if (store.state.rescanning || store.roots.length === 0) applyBtn.disabled = true;
+    block.appendChild(applyBtn);
+    if (store.roots.length === 0) {
+      block.appendChild(el('p', { cls: 'firstrun__note', text: '폴더를 1개 이상 추가해야 재스캔할 수 있습니다.' }));
+    }
+
+    return block;
+  }
+
+  function optionRow(o) {
+    const input = el('input', { attrs: { type: 'checkbox', id: o.id }, cls: 'facet__check' });
+    input.checked = !!o.checked;
+    if (o.disabled) input.disabled = true;
+    input.addEventListener('change', () => { o.onChange(input.checked); render(); });
+    const label = el('label', { cls: 'settings__opt' + (o.disabled ? ' is-disabled' : ''), attrs: { for: o.id } });
+    label.appendChild(input);
+    const txt = el('div', { cls: 'settings__opt-txt' });
+    txt.appendChild(el('div', { cls: 'settings__opt-label', text: o.label }));
+    txt.appendChild(el('div', { cls: 'settings__opt-sub', text: o.sub }));
+    label.appendChild(txt);
+    return label;
+  }
+
+  /* ---- 헤더 ---- */
+  function renderHeader() {
+    const header = el('header', { cls: 'topbar' });
+
+    const brand = el('div', { cls: 'topbar__brand', children: [
+      el('div', { cls: 'logo-mark', text: 'S' }),
+      el('div', { cls: 'logo-text', text: 'Project-SPIP' }),
+      badge('badge--local', 'LOCAL'),
+    ]});
+    header.appendChild(brand);
+
+    const searchWrap = el('div', { cls: 'topbar__search' });
+    searchWrap.appendChild(svg(
+      [{ t: 'circle', cx: '11', cy: '11', r: '7' }, { t: 'line', x1: '21', y1: '21', x2: '16.5', y2: '16.5' }],
+      { size: 15, stroke: '#a8a29e', cls: 'topbar__search-icon' }
+    ));
+    const searchInput = el('input', {
+      cls: 'topbar__search-input',
+      attrs: { type: 'search', placeholder: '이름 · 경로 검색', 'aria-label': '프로젝트 검색', autocomplete: 'off', spellcheck: 'false' },
+    });
+    searchInput.value = store.state.search;
+    const debounced = debounce(() => render(), 120);
+    searchInput.addEventListener('input', (e) => { store.state.search = e.target.value || ''; debounced(); });
+    searchWrap.appendChild(searchInput);
+    header.appendChild(searchWrap);
+
+    header.appendChild(el('div', { cls: 'spacer' }));
+
+    const actions = el('div', { cls: 'topbar__actions' });
+    if (store._snapshotLabel) {
+      actions.appendChild(el('span', { cls: 'muted snapshot-label', text: store._snapshotLabel }));
+    }
+    // 설정(폴더 관리 + 옵션) 버튼
+    const settingsBtn = el('button', {
+      cls: 'btn', text: '설정',
+      attrs: { 'aria-label': '폴더 및 스캔 설정 열기' },
+      on: { click: openSettings },
+    });
+    settingsBtn.prepend(svg([
+      { t: 'circle', cx: '12', cy: '12', r: '3' },
+      { t: 'path', d: 'M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z' },
+    ], { size: 13, sw: 1.8 }));
+    actions.appendChild(settingsBtn);
+
+    const rescanning = store.state.rescanning;
+    const rescan = el('button', {
+      cls: 'btn btn--dark', text: rescanning ? '재스캔 중…' : '재스캔',
+      attrs: { 'aria-label': '프로젝트 다시 스캔' },
+      on: { click: onRescan },
+    });
+    if (rescanning) rescan.disabled = true;
+    else rescan.prepend(svg([{ t: 'path', d: 'M21 12a9 9 0 1 1-2.64-6.36' }, { t: 'path', d: 'M21 3v6h-6' }], { size: 13, sw: 2.2 }));
+    actions.appendChild(rescan);
+    header.appendChild(actions);
+    return header;
+  }
+
+  /* ---- 툴바(표시개수·칩·정렬·뷰 토글) ---- */
+  function renderToolbar() {
+    const st = store.state;
+    const list = applyQuery(store.viewModels, st);
+    const bar = el('div', { cls: 'toolbar' });
+
+    const count = el('div', { cls: 'toolbar__count', children: [
+      el('b', { text: String(list.length) }),
+      el('span', { cls: 'muted', text: ' / ' + store.viewModels.length + ' 프로젝트' }),
+    ]});
+    bar.appendChild(count);
+
+    // 활성 필터 칩
+    for (const chip of activeChips()) {
+      const b = el('button', { cls: 'chip', on: { click: chip.remove } });
+      b.appendChild(el('span', { text: chip.label }));
+      b.appendChild(el('span', { cls: 'chip__x', text: '×' }));
+      bar.appendChild(b);
+    }
+    if (hasFilters()) {
+      bar.appendChild(el('button', { cls: 'link-btn', text: '초기화', on: { click: clearFilters } }));
+    }
+
+    bar.appendChild(el('div', { cls: 'spacer' }));
+
+    // 정렬
+    const sortWrap = el('div', { cls: 'toolbar__sort' });
+    sortWrap.appendChild(el('span', { cls: 'toolbar__label', text: '정렬' }));
+    const sizeOk = canSortBySize(store.viewModels);
+    const sel = el('select', { cls: 'select', attrs: { 'aria-label': '정렬 기준' } });
+    [['modified', '최근 수정순'], ['name', '이름순'], ['size', sizeOk ? '용량순' : '용량순 (미측정)']].forEach(([val, label]) => {
+      const opt = el('option', { text: label, attrs: { value: val } });
+      if (val === 'size' && !sizeOk) opt.disabled = true;
+      if (st.sort === val) opt.selected = true;
+      sel.appendChild(opt);
+    });
+    sel.addEventListener('change', (e) => {
+      const v = e.target.value;
+      if (v === 'size' && !sizeOk) { toast('용량 데이터가 아직 측정되지 않아 최근 수정순으로 표시합니다.'); }
+      st.sort = v;
+      render();
+    });
+    sortWrap.appendChild(sel);
+    bar.appendChild(sortWrap);
+
+    // 카드/표 토글
+    bar.appendChild(segToggle([
+      ['cards', '카드', st.density === 'cards', () => { st.density = 'cards'; render(); }],
+      ['table', '표', st.density === 'table', () => { st.density = 'table'; render(); }],
+    ]));
+    // 사이드바/툴바 토글
+    bar.appendChild(segToggle([
+      ['sidebar', '사이드바', st.layout === 'sidebar', () => { st.layout = 'sidebar'; render(); }],
+      ['toolbar', '툴바', st.layout === 'toolbar', () => { st.layout = 'toolbar'; render(); }],
+    ]));
+
+    return bar;
+  }
+  function segToggle(items) {
+    const group = el('div', { cls: 'seg' });
+    for (const [, label, active, on] of items) {
+      group.appendChild(el('button', {
+        cls: 'seg__btn' + (active ? ' is-active' : ''),
+        text: label,
+        attrs: { 'aria-pressed': active ? 'true' : 'false' },
+        on: { click: on },
+      }));
+    }
+    return group;
+  }
+
+  /* ---- KPI 5종 ---- */
+  function renderKpis() {
+    const s = deriveStats(store.stats, store.viewModels);
+    const gc = gitChangeCounts(store.viewModels);
+    const grid = el('div', { cls: 'kpis' });
+
+    // 1. 전체
+    grid.appendChild(kpi('전체 프로젝트', [
+      el('div', { cls: 'kpi__value', text: String(s.total) }),
+      el('div', { cls: 'kpi__sub', text: s.activeCount + ' 활동 · ' + s.staleCount + ' 방치' }),
+    ]));
+
+    // 2. Git 변경 (dirty boolean → 개수 집계)
+    const gitRow = el('div', { cls: 'kpi__dual' });
+    gitRow.appendChild(el('div', { children: [
+      el('span', { cls: 'kpi__value kpi__value--warn', text: String(gc.dirty) }),
+      el('span', { cls: 'kpi__unit', text: ' 미커밋' }),
+    ]}));
+    gitRow.appendChild(el('div', { children: [
+      el('span', { cls: 'kpi__value kpi__value--push', text: String(gc.ahead) }),
+      el('span', { cls: 'kpi__unit', text: ' 미푸시' }),
+    ]}));
+    grid.appendChild(kpi('Git 변경', [gitRow, el('div', { cls: 'kpi__sub', text: '커밋·푸시 잊은 프로젝트' })]));
+
+    // 3. 방치
+    grid.appendChild(kpi('방치(Stale)', [
+      el('div', { cls: 'kpi__value kpi__value--muted', text: String(s.staleCount) }),
+      el('div', { cls: 'kpi__sub', text: '기준 ' + STALE_DAYS + '일 무활동' }),
+    ]));
+
+    // 4. 언어 분포
+    const facets = languageFacets(store.viewModels);
+    const totalForBar = store.viewModels.length || 1;
+    const bar = el('div', { cls: 'langbar' });
+    for (const f of facets) {
+      const seg = el('div', { cls: 'langbar__seg' });
+      seg.style.width = (f.count / totalForBar * 100) + '%';
+      seg.style.background = langColor(f.lang);
+      seg.title = f.lang + ' ' + f.count;
+      bar.appendChild(seg);
+    }
+    const legend = el('div', { cls: 'langlegend' });
+    for (const f of facets.slice(0, 4)) {
+      legend.appendChild(el('span', { cls: 'langlegend__item', children: [
+        dot(f.lang),
+        el('span', { text: f.lang }),
+        el('span', { cls: 'mono muted', text: String(f.count) }),
+      ]}));
+    }
+    grid.appendChild(kpi('언어 분포 · ' + facets.length + '종', [bar, legend]));
+
+    // 5. 디스크 (size 측정 스냅샷이면 실값, 아니면 미측정)
+    const diskValCls = 'kpi__value' + (s.totalBytesMeasured ? '' : ' kpi__value--na');
+    grid.appendChild(kpi('디스크 사용', [
+      el('div', { cls: diskValCls, text: s.totalBytes }),
+      el('div', { cls: 'kpi__sub', text: 'node_modules ' + s.nodeModulesBytes }),
+    ]));
+
+    return grid;
+  }
+  function kpi(label, children) {
+    return el('div', { cls: 'kpi', children: [
+      el('div', { cls: 'kpi__label', text: label }),
+      ...children,
+    ]});
+  }
+
+  /* ---- 사이드바 패싯 ---- */
+  function renderSidebar() {
+    const aside = el('aside', { cls: 'sidebar spip-scroll', attrs: { 'aria-label': '필터' } });
+    aside.appendChild(facetBlockLanguages('list'));
+    aside.appendChild(el('div', { cls: 'sidebar__divider' }));
+    aside.appendChild(facetBlockFreshness('list'));
+    aside.appendChild(el('div', { cls: 'sidebar__divider' }));
+    aside.appendChild(facetBlockGit('list'));
+    return aside;
+  }
+
+  /* ---- 툴바 레이아웃 패싯 바 ---- */
+  function renderToolbarFacets() {
+    const bar = el('div', { cls: 'facetbar spip-scroll' });
+    bar.appendChild(el('span', { cls: 'facetbar__label', text: '언어' }));
+    for (const node of facetChips('languages', languageFacets(store.viewModels).map((f) => ({ key: f.lang, label: f.lang, count: f.count, lang: f.lang })))) bar.appendChild(node);
+    bar.appendChild(el('div', { cls: 'facetbar__sep' }));
+    bar.appendChild(el('span', { cls: 'facetbar__label', text: '신선도' }));
+    for (const node of facetChips('freshness', freshnessItems())) bar.appendChild(node);
+    bar.appendChild(el('div', { cls: 'facetbar__sep' }));
+    bar.appendChild(el('span', { cls: 'facetbar__label', text: 'Git' }));
+    for (const node of facetChips('git', gitItems())) bar.appendChild(node);
+    return bar;
+  }
+
+  function freshnessItems() {
+    const s = deriveStats(store.stats, store.viewModels);
+    return [
+      { key: 'active', label: '활동 중', count: s.activeCount },
+      { key: 'stale', label: '방치(' + STALE_DAYS + '일+)', count: s.staleCount },
+    ];
+  }
+  function gitItems() {
+    const c = gitFacetCounts(store.viewModels);
+    return [
+      { key: 'clean', label: '정상', count: c.clean, color: '#15803d' },
+      { key: 'dirty', label: '미커밋 변경', count: c.dirty, color: '#b45309' },
+      { key: 'ahead', label: '미푸시(ahead)', count: c.ahead, color: '#1d4ed8' },
+      { key: 'norepo', label: 'Git 아님', count: c.norepo, color: '#d6d3d1' },
+    ];
+  }
+
+  function facetBlockLanguages() {
+    const block = el('div', { cls: 'facet' });
+    block.appendChild(el('div', { cls: 'facet__title', text: '언어' }));
+    for (const f of languageFacets(store.viewModels)) {
+      block.appendChild(facetCheckRow('languages', f.lang, f.lang, f.count, { lang: f.lang }));
+    }
+    return block;
+  }
+  function facetBlockFreshness() {
+    const block = el('div', { cls: 'facet' });
+    block.appendChild(el('div', { cls: 'facet__title', text: '신선도' }));
+    for (const it of freshnessItems()) {
+      block.appendChild(facetCheckRow('freshness', it.key, it.label, it.count, {}));
+    }
+    return block;
+  }
+  function facetBlockGit() {
+    const block = el('div', { cls: 'facet' });
+    block.appendChild(el('div', { cls: 'facet__title', text: 'Git 상태' }));
+    for (const it of gitItems()) {
+      block.appendChild(facetCheckRow('git', it.key, it.label, it.count, { color: it.color }));
+    }
+    return block;
+  }
+
+  /** 사이드바 체크 행. */
+  function facetCheckRow(group, key, label, count, opts) {
+    opts = opts || {};
+    const checked = store.state.filters[group].includes(key);
+    const input = el('input', { attrs: { type: 'checkbox' }, cls: 'facet__check' });
+    input.checked = checked;
+    input.addEventListener('change', () => { toggleFilter(group, key); });
+    const row = el('label', { cls: 'facet__row' });
+    row.appendChild(input);
+    if (opts.lang) row.appendChild(dot(opts.lang));
+    else if (opts.color) row.appendChild(colorDot(opts.color, 8));
+    row.appendChild(el('span', { cls: 'facet__name', text: label }));
+    row.appendChild(el('span', { cls: 'mono facet__count', text: String(count) }));
+    return row;
+  }
+
+  /** 툴바 칩(체크박스 포함). */
+  function facetChips(group, items) {
+    return items.map((it) => {
+      const checked = store.state.filters[group].includes(it.key);
+      const input = el('input', { attrs: { type: 'checkbox' }, cls: 'facet__check' });
+      input.checked = checked;
+      input.addEventListener('change', () => toggleFilter(group, it.key));
+      const label = el('label', { cls: 'facetchip' + (checked ? ' is-active' : '') });
+      label.appendChild(input);
+      if (it.lang) label.appendChild(dot(it.lang));
+      else if (it.color) label.appendChild(colorDot(it.color, 7));
+      label.appendChild(el('span', { text: it.label }));
+      label.appendChild(el('span', { cls: 'mono muted facetchip__count', text: String(it.count) }));
+      return label;
+    });
+  }
+
+  /* ---- 결과(카드/표/무결과) ---- */
+  function renderResults() {
+    const list = applyQuery(store.viewModels, store.state);
+    if (list.length === 0) return renderNoResults();
+    return store.state.density === 'table' ? renderTable(list) : renderCards(list);
+  }
+
+  function renderNoResults() {
+    const wrap = el('div', { cls: 'noresults' });
+    const icon = el('div', { cls: 'noresults__icon', children: [
+      svg([{ t: 'circle', cx: '11', cy: '11', r: '7' }, { t: 'line', x1: '21', y1: '21', x2: '16.5', y2: '16.5' }], { size: 22, stroke: '#a8a29e' }),
+    ]});
+    wrap.appendChild(icon);
+    wrap.appendChild(el('div', { cls: 'noresults__title', text: '조건에 맞는 프로젝트가 없습니다' }));
+    wrap.appendChild(el('div', { cls: 'noresults__sub', text: '필터나 검색어를 조정해 보세요.' }));
+    wrap.appendChild(el('button', { cls: 'btn', text: '필터 초기화', on: { click: clearFilters } }));
+    return wrap;
+  }
+
+  function renderCards(list) {
+    const grid = el('div', { cls: 'cards' });
+    for (const vm of list) grid.appendChild(buildCard(vm));
+    return grid;
+  }
+
+  function buildCard(vm) {
+    const card = el('article', { cls: 'card' });
+
+    const head = el('div', { cls: 'card__head' });
+    head.appendChild(dot(vm.language));
+    // 키보드 도달 가능한 버튼(N-07 2.1.1) — 제목 클릭으로 상세 드로어
+    const titleWrap = el('button', {
+      cls: 'card__titlewrap',
+      attrs: { type: 'button', 'aria-label': '상세 보기: ' + vm.name },
+      on: { click: () => openDrawer(vm.id) },
+    });
+    titleWrap.appendChild(el('div', { cls: 'card__name', text: vm.name, title: vm.name }));
+    titleWrap.appendChild(el('div', { cls: 'card__path mono', text: vm.path, title: vm.path }));
+    head.appendChild(titleWrap);
+    card.appendChild(head);
+
+    card.appendChild(el('div', { cls: 'card__desc', text: vm.description || '설명 없음' }));
+
+    const badges = el('div', { cls: 'card__badges' });
+    badges.appendChild(badge('badge--lang mono', vm.language));
+    appendGitBadges(badges, vm, false);
+    if (vm.isStale) badges.appendChild(badge('badge--stale', '방치'));
+    card.appendChild(badges);
+
+    const footer = el('div', { cls: 'card__footer' });
+    const meta = el('div', { cls: 'card__meta mono', children: [
+      el('span', { text: rel(vm.lastModified) }),
+      el('span', { cls: 'card__meta-sep', text: '·' }),
+      el('span', { text: sizeStatusLabel(vm.sizeStatus, vm.totalBytes) }),
+    ]});
+    footer.appendChild(meta);
+    const acts = el('div', { cls: 'card__acts' });
+    acts.appendChild(el('button', { cls: 'btn btn--ghost', text: '상세', on: { click: () => openDrawer(vm.id) } }));
+    acts.appendChild(openButton(vm, 'btn btn--dark'));
+    footer.appendChild(acts);
+    card.appendChild(footer);
+
+    return card;
+  }
+
+  /** Git 배지들(카드/표 공용). table=true면 컴팩트 클래스. */
+  function appendGitBadges(container, vm, table) {
+    const pfx = table ? 'badge--t ' : '';
+    if (vm.gitStatus === 'na') { container.appendChild(badge(pfx + 'badge--git-na', 'Git 아님')); return; }
+    if (vm.gitStatus === 'dirty') container.appendChild(badge(pfx + 'badge--git-dirty', '미커밋'));
+    if (vm.ahead > 0) container.appendChild(badge(pfx + 'badge--git-ahead', '미푸시 ' + vm.ahead));
+    if (vm.gitStatus !== 'dirty' && !(vm.ahead > 0)) container.appendChild(badge(pfx + 'badge--git-clean', '정상'));
+  }
+
+  function renderTable(list) {
+    const wrap = el('div', { cls: 'table-wrap' });
+    const table = el('table', { cls: 'table' });
+    const thead = el('thead');
+    const trh = el('tr');
+    ['프로젝트', '경로', '언어', '최종 수정', 'Git', '크기', ''].forEach((h, i) => {
+      const th = el('th', { text: h });
+      if (i === 5) th.className = 'ta-right';
+      trh.appendChild(th);
+    });
+    thead.appendChild(trh);
+    table.appendChild(thead);
+
+    const tbody = el('tbody');
+    for (const vm of list) {
+      const tr = el('tr', { cls: 'table__row', on: { click: () => openDrawer(vm.id) } });
+
+      const tdName = el('td');
+      // 키보드 도달 가능한 이름 버튼(N-07 2.1.1)
+      const nameBtn = el('button', {
+        cls: 'table__name table__name-btn',
+        attrs: { type: 'button', 'aria-label': '상세 보기: ' + vm.name },
+        children: [dot(vm.language), el('span', { text: vm.name })],
+        on: { click: (e) => { e.stopPropagation(); openDrawer(vm.id); } },
+      });
+      tdName.appendChild(nameBtn);
+      tr.appendChild(tdName);
+
+      tr.appendChild(el('td', { cls: 'table__path mono', text: vm.path, title: vm.path }));
+      tr.appendChild(el('td', { cls: 'table__lang', text: vm.language }));
+
+      const tdMod = el('td', { cls: 'table__mod mono' });
+      tdMod.appendChild(el('span', { text: rel(vm.lastModified) }));
+      if (vm.isStale) tdMod.appendChild(badge('badge--stale badge--t', '방치'));
+      tr.appendChild(tdMod);
+
+      const tdGit = el('td');
+      const gb = el('div', { cls: 'table__git' });
+      appendGitBadges(gb, vm, true);
+      tdGit.appendChild(gb);
+      tr.appendChild(tdGit);
+
+      tr.appendChild(el('td', { cls: 'ta-right mono table__size', text: sizeStatusLabel(vm.sizeStatus, vm.totalBytes) }));
+
+      const tdAct = el('td', { cls: 'ta-right' });
+      const btn = openButton(vm, 'btn btn--ghost btn--sm');
+      // 행 클릭(드로어)와 분리
+      tdAct.appendChild(btn);
+      tr.appendChild(tdAct);
+
+      tbody.appendChild(tr);
+    }
+    table.appendChild(tbody);
+    wrap.appendChild(table);
+    return wrap;
+  }
+
+  /** VS Code 열기 버튼(상태 라벨 포함, 연타 방지). */
+  function openButton(vm, cls) {
+    const opening = !!store.state.opening[vm.id];
+    const btn = el('button', { cls, text: opening ? '여는 중…' : '열기' });
+    btn.setAttribute('aria-label', 'VS Code로 열기: ' + vm.name);
+    if (!vm.id || opening) btn.disabled = true;
+    btn.addEventListener('click', (e) => { e.stopPropagation(); openProject(vm.id); });
+    return btn;
+  }
+
+  /* =====================================================================
+   * 상세 드로어 (4 인사이트)
+   * ===================================================================== */
+  function openDrawer(id) {
+    // 포커스 복귀(N-07 2.4.3): 현재 포커스(=여는 버튼/행)를 기억
+    store._drawerOpener = (typeof document !== 'undefined') ? document.activeElement : null;
+    store.state.selectedId = id;
+    render();
+  }
+  function closeDrawer() {
+    store.state.selectedId = null;
+    const opener = store._drawerOpener;
+    store._drawerOpener = null;
+    render();
+    // 닫은 뒤 여는 버튼으로 포커스 복귀(요소가 재렌더로 사라졌으면 무시)
+    if (opener && typeof opener.focus === 'function' && document.contains(opener)) {
+      try { opener.focus(); } catch (_) { /* ignore */ }
+    }
+  }
+
+  /** 컨테이너 내 tabbable 요소 목록(포커스 트랩용). */
+  function getTabbables(container) {
+    const sel = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+    return Array.prototype.slice.call(container.querySelectorAll(sel))
+      .filter((n) => n.offsetParent !== null || n === document.activeElement);
+  }
+
+  function renderDrawer() {
+    const vm = store.viewModels.find((v) => v.id === store.state.selectedId);
+    if (!vm) { store.state.selectedId = null; return el('div'); }
+
+    const overlay = el('div', { cls: 'drawer-overlay', on: { click: closeDrawer } });
+    const titleId = 'drawer-title';
+    const aside = el('aside', { cls: 'drawer spip-scroll', attrs: { role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': titleId } });
+    aside.addEventListener('click', (e) => e.stopPropagation());
+
+    // header
+    const head = el('div', { cls: 'drawer__head' });
+    head.appendChild(dot(vm.language, 9));
+    const nameEl = el('div', { cls: 'drawer__name', text: vm.name, attrs: { id: titleId } });
+    head.appendChild(el('div', { cls: 'drawer__titlewrap', children: [
+      nameEl,
+      el('div', { cls: 'drawer__path mono', text: vm.path }),
+    ]}));
+    const close = el('button', { cls: 'drawer__close', text: '×', attrs: { 'aria-label': '닫기' }, on: { click: closeDrawer } });
+    head.appendChild(close);
+    aside.appendChild(head);
+
+    const bodyWrap = el('div', { cls: 'drawer__body' });
+
+    // open button + desc
+    const openBtn = openButton(vm, 'btn btn--dark btn--block');
+    openBtn.textContent = store.state.opening[vm.id] ? '여는 중…' : 'VS Code로 열기';
+    openBtn.prepend(svg([{ t: 'path', d: 'M5 12h14M13 6l6 6-6 6' }], { size: 14 }));
+    bodyWrap.appendChild(openBtn);
+    bodyWrap.appendChild(el('div', { cls: 'drawer__desc', text: vm.description || '설명 없음' }));
+
+    // insight 1: language
+    bodyWrap.appendChild(insightLanguage(vm));
+    // insight 2: freshness
+    bodyWrap.appendChild(insightFreshness(vm));
+    // insight 3: git
+    bodyWrap.appendChild(insightGit(vm));
+    // insight 4: size
+    bodyWrap.appendChild(insightSize(vm));
+
+    aside.appendChild(bodyWrap);
+    overlay.appendChild(aside);
+
+    // 키보드: Esc 닫기 + Tab/Shift+Tab 포커스 트랩(N-07 2.4.3·1.3.2)
+    aside.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { e.preventDefault(); closeDrawer(); return; }
+      if (e.key !== 'Tab') return;
+      const items = getTabbables(aside);
+      if (items.length === 0) { e.preventDefault(); return; }
+      const first = items[0];
+      const last = items[items.length - 1];
+      const active = document.activeElement;
+      if (e.shiftKey) {
+        if (active === first || !aside.contains(active)) { e.preventDefault(); last.focus(); }
+      } else {
+        if (active === last || !aside.contains(active)) { e.preventDefault(); first.focus(); }
+      }
+    });
+    // 초기 포커스: 닫기 버튼(드로어 내부)
+    setTimeout(() => { try { close.focus(); } catch (_) { /* ignore */ } }, 0);
+    return overlay;
+  }
+
+  function insightCard(title, rows) {
+    return el('div', { cls: 'insight', children: [
+      el('div', { cls: 'insight__title', text: title }),
+      ...rows,
+    ]});
+  }
+  function kvRow(k, valueNode) {
+    const row = el('div', { cls: 'kv' });
+    row.appendChild(el('span', { cls: 'kv__k', text: k }));
+    row.appendChild(valueNode);
+    return row;
+  }
+
+  function insightLanguage(vm) {
+    const head = el('div', { cls: 'insight__langhead', children: [dot(vm.language, 9), el('span', { cls: 'insight__langname', text: vm.language })] });
+    const percents = langPercents(vm);
+    const bar = el('div', { cls: 'mixbar' });
+    for (const m of percents) {
+      const seg = el('div', { cls: 'mixbar__seg' });
+      seg.style.width = m.pct + '%';
+      seg.style.background = langColor(m.name);
+      bar.appendChild(seg);
+    }
+    const list = el('div', { cls: 'mixlist' });
+    for (const m of percents) {
+      list.appendChild(el('div', { cls: 'mixlist__row', children: [
+        dot(m.name), el('span', { cls: 'mixlist__name', text: m.name }), el('span', { cls: 'mono muted', text: m.pct + '%' }),
+      ]}));
+    }
+    return insightCard('언어 / 스택', [head, bar, list]);
+  }
+
+  function insightFreshness(vm) {
+    const modVal = el('span', { cls: 'kv__v', children: [
+      el('span', { text: fmtDate(vm.lastModified) }),
+      el('span', { cls: 'mono muted kv__rel', text: ' (' + rel(vm.lastModified) + ')' }),
+    ]});
+    const commitVal = el('span', { cls: 'kv__v', children: [
+      el('span', { text: fmtDate(vm.lastCommit) }),
+      el('span', { cls: 'mono muted kv__rel', text: ' (' + rel(vm.lastCommit) + ')' }),
+    ]});
+    const statusBadge = vm.isStale
+      ? badge('badge--stale', '방치 · ' + STALE_DAYS + '일+ 무활동')
+      : badge('badge--git-clean', '활동 중');
+    return insightCard('활동 / 신선도', [
+      kvRow('최종 파일 수정', modVal),
+      el('div', { cls: 'kv__divider' }),
+      kvRow('최근 커밋', commitVal),
+      el('div', { cls: 'kv__divider' }),
+      kvRow('상태', statusBadge),
+    ]);
+  }
+
+  function insightGit(vm) {
+    if (vm.gitStatus === 'na') {
+      return insightCard('Git 상태', [el('div', { cls: 'git-na', children: [
+        colorDot('#d6d3d1', 8), el('span', { text: 'Git 저장소가 아닙니다 — N/A' }),
+      ]})]);
+    }
+    const branchVal = el('span', { cls: 'mono pill', text: vm.branch || '(브랜치 미상)' });
+    const dirtyVal = vm.dirty
+      ? el('span', { cls: 'kv__v kv__v--warn', text: '있음(미커밋 변경)' })
+      : el('span', { cls: 'kv__v kv__v--ok', text: '없음' });
+    const aheadBehind = el('span', { cls: 'mono kv__v', text: '↑' + (vm.ahead || 0) + ' ↓' + (vm.behind || 0) });
+    return insightCard('Git 상태', [
+      kvRow('브랜치', branchVal),
+      el('div', { cls: 'kv__divider' }),
+      kvRow('미커밋 변경', dirtyVal),
+      el('div', { cls: 'kv__divider' }),
+      kvRow('원격 대비', aheadBehind),
+    ]);
+  }
+
+  function insightSize(vm) {
+    // size.status 별 실값/근사/실패/미측정 (N-07: 색 외 텍스트 병기)
+    const measured = vm.sizeStatus === 'ok' || vm.sizeStatus === 'partial';
+    const totalCls = 'mono kv__v' + (measured ? '' : ' kv__v--na');
+    const totalVal = el('span', { cls: totalCls, text: sizeStatusLabel(vm.sizeStatus, vm.totalBytes) });
+    const nmText = (typeof vm.nodeModulesBytes === 'number')
+      ? sizeStatusLabel(vm.sizeStatus, vm.nodeModulesBytes)
+      : '미측정';
+    const nmCls = 'mono kv__v' + (typeof vm.nodeModulesBytes === 'number' ? '' : ' kv__v--na');
+    const depsHas = (typeof vm.deps === 'number' || typeof vm.devDeps === 'number');
+    return insightCard('규모 / 의존성', [
+      kvRow('총 용량', totalVal),
+      el('div', { cls: 'kv__divider' }),
+      kvRow('node_modules', el('span', { cls: nmCls, text: nmText })),
+      el('div', { cls: 'kv__divider' }),
+      kvRow('의존성', el('span', { cls: 'mono kv__v' + (depsHas ? '' : ' kv__v--na'), text: depsLabel(vm) })),
+    ]);
+  }
+  function depsLabel(vm) {
+    if (typeof vm.deps !== 'number' && typeof vm.devDeps !== 'number') return '미측정';
+    return (vm.deps || 0) + ' deps · ' + (vm.devDeps || 0) + ' devDeps';
+  }
+
+  /* =====================================================================
+   * 필터 상태 조작 (메모리)
+   * ===================================================================== */
+  function toggleFilter(group, key) {
+    const arr = store.state.filters[group];
+    const i = arr.indexOf(key);
+    if (i >= 0) arr.splice(i, 1); else arr.push(key);
+    render();
+  }
+  function clearFilters() {
+    store.state.search = '';
+    store.state.filters = { languages: [], freshness: [], git: [] };
+    render();
+  }
+  function hasFilters() {
+    const f = store.state.filters;
+    return !!(store.state.search.trim() || f.languages.length || f.freshness.length || f.git.length);
+  }
+  function activeChips() {
+    const chips = [];
+    const f = store.state.filters;
+    f.languages.forEach((l) => chips.push({ label: l, remove: () => toggleFilter('languages', l) }));
+    const freshLabel = { active: '활동 중', stale: '방치' };
+    f.freshness.forEach((k) => chips.push({ label: freshLabel[k] || k, remove: () => toggleFilter('freshness', k) }));
+    const gitLabel = { clean: '정상', dirty: '미커밋', ahead: '미푸시', norepo: 'Git 아님' };
+    f.git.forEach((k) => chips.push({ label: gitLabel[k] || k, remove: () => toggleFilter('git', k) }));
+    if (store.state.search.trim()) chips.push({ label: '"' + store.state.search.trim() + '"', remove: () => { store.state.search = ''; render(); } });
+    return chips;
+  }
+
+  /* =====================================================================
+   * 액션
+   * ===================================================================== */
+  function onRescan() { triggerRescan('dashboard'); }
+
+  /**
+   * R-16 + R-15: spip.rescan(opts) → SCAN_STARTED 면 scanning 뷰 + onScanProgress 구독.
+   *   returnView = 진행 끝나면 돌아갈 뷰(현재 firstRun/dashboard).
+   *   M4-L-1: SCAN_STARTED 의 scanId 를 보관해 push 응답과 대조.
+   *   옵션: store.opts(withSize/allDrives)를 config 게이트로 정규화해 전달(§4.2).
+   */
+  async function triggerRescan(returnView) {
+    if (store.state.rescanning) return;
+    store.state.rescanning = true;
+    const rv = returnView || (store.state.view === 'firstRun' ? 'firstRun' : 'dashboard');
+    store.scan.returnView = rv;
+    render(); // 버튼 비활성 반영
+
+    const opts = sanitizeRescanOpts(store.opts, store.config);
+    const data = await ipc('rescan', opts);
+    const cls = classifyRescan(data);
+    store.state.rescanning = false;
+
+    if (cls.action === 'start' || cls.action === 'in-progress') {
+      store.scan.ownScanId = cls.scanId || null;
+      store.scan.progress = { phase: 'scanning', scanId: cls.scanId || null, dirs: 0, found: 0, currentPath: null, elapsedMs: 0 };
+      store.scan.startedAt = Date.now();
+      store.state.view = 'scanning';
+      if (cls.action === 'in-progress') toast('이미 스캔이 진행 중입니다. 진행 상황을 표시합니다.');
+      render();
+      subscribeScan();
+      return;
+    }
+    if (cls.action === 'no-roots') {
+      toast((data && data.message) || '스캔할 폴더가 없습니다. 설정에서 폴더를 추가하세요.', true);
+      render();
+      return;
+    }
+    toast(describeError(data), true);
+    render();
+  }
+
+  /**
+   * R-15 push: spip.onScanProgress(cb) 구독. 1초 폴링·타이머 제거.
+   *   cb 가 ScanProgress 를 받아 nextScanAction 으로 분기 → scanning 뷰 갱신 /
+   *   done → getProjects/getStats 재조회 / error·foreign 가드.
+   *   초기 1회 getScanStatus 로 동기화(놓친 첫 이벤트 보완).
+   */
+  function subscribeScan() {
+    unsubscribeScan();
+    if (!hasBridge() || typeof spip.onScanProgress !== 'function') {
+      // 브리지 없음(비-Electron) — 진행 통지 불가, 동기 상태만 시도
+      syncScanStatusOnce();
+      return;
+    }
+    store.scan.unsubscribe = spip.onScanProgress((payload) => handleScanProgress(payload));
+    // 구독 직후 현재 상태 1회 동기화(이미 진행 중인 스캔 따라잡기)
+    syncScanStatusOnce();
+  }
+  function unsubscribeScan() {
+    if (typeof store.scan.unsubscribe === 'function') {
+      try { store.scan.unsubscribe(); } catch (_) { /* ignore */ }
+    }
+    store.scan.unsubscribe = null;
+  }
+  async function syncScanStatusOnce() {
+    const status = await ipc('getScanStatus');
+    if (status && typeof status === 'object' && status.ok !== false) handleScanProgress(status);
+  }
+
+  /** onScanProgress 콜백 본체(push 1건 처리). */
+  function handleScanProgress(payload) {
+    const act = nextScanAction({ ownScanId: store.scan.ownScanId }, payload);
+    if (payload && typeof payload === 'object') store.scan.progress = mergeElapsed(payload);
+
+    if (act.action === 'foreign') {
+      // 다른 스캔 — 구독 해제, 화면 유지(혼선 방지)
+      unsubscribeScan();
+      return;
+    }
+    if (act.action === 'render') {
+      if (store.state.view === 'scanning') render();
+      return;
+    }
+    if (act.action === 'error') {
+      unsubscribeScan();
+      if (store.state.view === 'scanning') render();
+      return;
+    }
+    if (act.action === 'refetch') {
+      // done → 구독 해제 + done 화면 잠깐 표시 후 데이터 재조회
+      unsubscribeScan();
+      if (store.state.view === 'scanning') render();
+      reloadAfterScan();
+      return;
+    }
+  }
+
+  /** elapsedMs 가 push 페이로드에 없으면 로컬 시작시각으로 폴백. */
+  function mergeElapsed(status) {
+    const s = Object.assign({}, status);
+    if (typeof s.elapsedMs !== 'number' || !Number.isFinite(s.elapsedMs)) {
+      s.elapsedMs = store.scan.startedAt ? (Date.now() - store.scan.startedAt) : 0;
+    }
+    return s;
+  }
+
+  /** phase=done 이후 getProjects/getStats 재조회 후 대시보드 갱신(R-11). */
+  async function reloadAfterScan() {
+    try {
+      const payload = await ipc('getProjects');
+      if (!payload || payload.ok === false || !Array.isArray(payload.projects)) {
+        if (payload && payload.ok === false) throw new Error(describeError(payload));
+        // 빈 스냅샷도 graceful
+      }
+      const stats = await ipc('getStats');
+      store.stats = (stats && stats.ok !== false) ? stats : null;
+      store.now = new Date();
+      store._snapshotLabel = (payload && payload.generatedAt) ? ('스냅샷 ' + fmtDate(payload.generatedAt)) : '';
+
+      // P2-6: 고정 1100ms 타이머 race 제거 — 재조회 완료 시점에 결정론적으로 전환.
+      const next = resolveScanReloadView(payload);
+      if (next.empty) {
+        store.raw = []; store.viewModels = [];
+        await refreshConfig(); // 루트 표시 갱신
+      } else {
+        store.raw = payload.projects;
+        store.viewModels = payload.projects.map(toViewModel);
+      }
+      // scanning(스캔 done) 또는 dashboard/firstRun(메뉴 새로고침)에서만 결과 뷰로 전환.
+      // 그 외(error/loading 등)는 현 뷰 유지 — 사용자 컨텍스트 보존.
+      const v = store.state.view;
+      if (v === 'scanning' || v === 'dashboard' || v === 'firstRun') store.state.view = next.view;
+      store.scan.ownScanId = null; // P2-3 보강: 잔여 구독 재진입 차단(전환 완료 후 리셋)
+      render();
+    } catch (err) {
+      toast('스캔은 끝났지만 결과를 불러오지 못했습니다: ' + (err && err.message ? err.message : '오류'), true);
+    }
+  }
+
+  /* =====================================================================
+   * P2-1: 네이티브 메뉴 구독 (spip.onMenu → 액션 디스패치)
+   *   menu.js/main.js 가 보내는 spip:menu:* 가 preload 에서 onMenu(cb) 로 합쳐져
+   *   cb({action}) 로 도착한다. dispatchMenuAction 으로 핸들러를 결정해 실행한다.
+   *   onMenu 부재(웹/테스트) 시 graceful — 구독 생략.
+   * ===================================================================== */
+  function subscribeMenu() {
+    unsubscribeMenu();
+    if (!hasBridge() || typeof spip.onMenu !== 'function') return; // graceful
+    const unsub = spip.onMenu((msg) => onMenuCommand(msg));
+    store.menuUnsubscribe = (typeof unsub === 'function') ? unsub : null;
+  }
+  function unsubscribeMenu() {
+    if (typeof store.menuUnsubscribe === 'function') {
+      try { store.menuUnsubscribe(); } catch (_) { /* ignore */ }
+    }
+    store.menuUnsubscribe = null;
+  }
+  /** onMenu 콜백 본체 — action 토큰을 핸들러로 디스패치(매핑은 순수 dispatchMenuAction). */
+  function onMenuCommand(msg) {
+    const { handler } = dispatchMenuAction(msg);
+    switch (handler) {
+      case 'pickFolders': onPickFolders(); break;          // 폴더 선택 흐름
+      case 'rescan':      triggerRescan('dashboard'); break;
+      case 'refresh':     refreshDashboard(); break;        // getProjects/getStats 재조회
+      case 'about':       showAbout(); break;
+      default: /* 알 수 없는 action — graceful 무시 */ break;
+    }
+  }
+
+  /** 메뉴 '새로고침' — 진행 중 스캔이 없을 때 대시보드 데이터 재조회(getProjects/getStats). */
+  async function refreshDashboard() {
+    if (store.state.view === 'scanning') return; // 스캔 중엔 push 가 갱신
+    await reloadAfterScan();
+  }
+
+  /** 메뉴 '정보' — 간단한 정보 토스트(L-1: textContent). */
+  function showAbout() {
+    toast('Project-SPIP — 로컬 프로젝트 스캐너 (Electron)');
+  }
+
+  /** R-12: spip.open(id). 연타 방지(opening map). */
+  async function openProject(id) {
+    if (!id || store.state.opening[id]) return;
+    store.state.opening[id] = true;
+    render();
+    try {
+      const data = await ipc('open', id);
+      if (data && data.ok) toast('VS Code에서 여는 중');
+      else toast(describeError(data), true);
+    } finally {
+      setTimeout(() => { delete store.state.opening[id]; render(); }, 800);
+    }
+  }
+
+  /* =====================================================================
+   * 폴더/루트 관리 액션 (Electron 신규)
+   * ===================================================================== */
+
+  /** getConfig() 동기화 → store.config / store.roots 갱신 후 재렌더. */
+  async function refreshConfig() {
+    const cfg = await ipc('getConfig');
+    if (cfg && cfg.ok !== false) {
+      store.config = cfg;
+      const cv = configView(cfg);
+      store.roots = cv.scanRoots;
+      if (!cv.allowAllDrives) store.opts.allDrives = false; // 게이트 강등
+    }
+    render();
+  }
+
+  /** 네이티브 폴더 선택(pickFolders) → 채택/거부 표시 + 루트 갱신. */
+  async function onPickFolders() {
+    if (store.busyFolders) return;
+    store.busyFolders = true;
+    render();
+    const res = await ipc('pickFolders');
+    store.busyFolders = false;
+    applyAddResult(res);
+  }
+
+  /** 경로 직접 입력(addRoots) → 채택/거부 표시 + 루트 갱신. */
+  async function onAddRoot() {
+    if (store.busyFolders) return;
+    const paths = parseRootInput(store.rootInput);
+    if (paths.length === 0) { toast('추가할 경로를 입력하세요.', true); return; }
+    store.busyFolders = true;
+    render();
+    const res = await ipc('addRoots', paths);
+    store.busyFolders = false;
+    if (res && res.ok) store.rootInput = ''; // 성공 시 입력 비움
+    applyAddResult(res);
+  }
+
+  /** addRoots/pickFolders 결과 공통 처리. */
+  function applyAddResult(res) {
+    const sum = summarizeAddResult(res);
+    if (sum.ok) {
+      store.roots = sum.roots;
+      store.lastRejected = sum.rejected;
+      toast(sum.message, sum.kind === 'none');
+    } else if (sum.kind === 'cancelled') {
+      store.lastRejected = [];
+      // 취소는 조용히(토스트 생략 가능하나 안내)
+    } else {
+      store.lastRejected = [];
+      toast(sum.message, true);
+    }
+    render();
+  }
+
+  /** 루트 삭제(removeRoot). */
+  async function onRemoveRoot(path) {
+    if (store.busyFolders) return;
+    store.busyFolders = true;
+    render();
+    const res = await ipc('removeRoot', path);
+    store.busyFolders = false;
+    if (res && res.ok && Array.isArray(res.roots)) {
+      store.roots = res.roots.filter((p) => typeof p === 'string');
+      store.lastRejected = [];
+      toast('폴더를 제거했습니다.');
+    } else {
+      toast(describeError(res), true);
+    }
+    render();
+  }
+
+  let toastTimer = null;
+  function toast(message, isError) {
+    toastEl.textContent = message; // L-1: 서버 유래 일부 포함 가능 → textContent
+    toastEl.className = 'toast' + (isError ? ' toast--error' : '');
+    toastEl.hidden = false;
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { toastEl.hidden = true; }, 3500);
+  }
+
+  function debounce(fn, ms) {
+    let t = null;
+    return function (...args) { if (t) clearTimeout(t); t = setTimeout(() => fn.apply(this, args), ms); };
+  }
+
+  /* =====================================================================
+   * 데이터 로드 (단일 출처, 1회 fetch)
+   * ===================================================================== */
+  async function load() {
+    store.state.view = 'loading';
+    store.state.selectedId = null;
+    store.showSettings = false;
+    render();
+
+    if (!hasBridge()) {
+      store._errorMsg = 'Electron 환경에서만 동작합니다. (window.spip 브리지를 찾을 수 없습니다)';
+      store.state.view = 'error';
+      render();
+      return;
+    }
+
+    try {
+      const payload = await ipc('getProjects');
+      if (payload && payload.ok === false) throw new Error(describeError(payload));
+      const stats = await ipc('getStats');
+      store.stats = (stats && stats.ok !== false) ? stats : null;
+      store.now = new Date();
+
+      store._snapshotLabel = (payload && payload.generatedAt)
+        ? ('스냅샷 ' + fmtDate(payload.generatedAt))
+        : '';
+
+      if (isEmptySnapshot(payload)) {
+        store.raw = [];
+        store.viewModels = [];
+        await refreshConfig(); // firstRun 의 루트 목록 표시용
+        store.state.view = 'firstRun';
+        render();
+        return;
+      }
+
+      store.raw = payload.projects;
+      store.viewModels = payload.projects.map(toViewModel);
+      store.state.view = 'dashboard';
+      // 설정 패널/재스캔에서 쓸 config 를 비동기로 미리 적재(렌더 비블로킹)
+      ipc('getConfig').then((cfg) => {
+        if (cfg && cfg.ok !== false) {
+          store.config = cfg;
+          store.roots = configView(cfg).scanRoots;
+        }
+      });
+      render();
+    } catch (err) {
+      store._errorMsg = '데이터를 불러오지 못했습니다. (' + (err && err.message ? err.message : '오류') + ')';
+      store.state.view = 'error';
+      render();
+    }
+  }
+
+  // 전역 ESC로 드로어/설정 닫기(접근성)
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    if (store.state.selectedId) { closeDrawer(); return; }
+    if (store.showSettings) { closeSettings(); }
+  });
+
+  // P2-1: 네이티브 메뉴 구독(앱 1회). 부재 시 graceful — subscribeMenu 내부 가드.
+  subscribeMenu();
+
+  // teardown: 창 unload 시 구독 해제(누수 방지 — 메뉴·진행 구독 모두).
+  function teardown() {
+    unsubscribeMenu();
+    unsubscribeScan();
+  }
+  if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+    window.addEventListener('pagehide', teardown);
+    window.addEventListener('beforeunload', teardown);
+  }
+
+  load();
+}
+
+/* =====================================================================
+ * 환경 분기
+ * ===================================================================== */
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = {
+    toViewModel,
+    describeError,
+    matchesSearch,
+    matchesFilters,
+    gitKeys,
+    applyQuery,
+    sortViewModels,
+    canSortBySize,
+    deriveStats,
+    isEmptySnapshot,
+    languageFacets,
+    gitFacetCounts,
+    gitChangeCounts,
+    langPercents,
+    langColor,
+    relTime,
+    fmtDate,
+    sizeLabel,
+    // M4 추가
+    sizeStatusLabel,
+    sumTotalBytes,
+    sumNodeModulesBytes,
+    progressView,
+    progressTitle,
+    fmtCount,
+    fmtElapsed,
+    classifyRescan,
+    // Electron 적응 추가
+    describeRejectReason,
+    dispatchMenuAction,
+    resolveScanReloadView,
+    nextScanAction,
+    sanitizeRescanOpts,
+    configView,
+    parseRootInput,
+    summarizeAddResult,
+  };
+} else if (typeof document !== 'undefined') {
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initBrowser);
+  } else {
+    initBrowser();
+  }
+}

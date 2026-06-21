@@ -1,0 +1,814 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project-SPIP — Electron 설치형 데스크톱 이전 설계서</title>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#1e293b; --text:#e2e8f0; --sub:#94a3b8;
+    --accent:#34d399; --ref:#38bdf8; --line:#334155; --warn:#fbbf24; --danger:#f87171;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:"Segoe UI","Malgun Gothic",system-ui,sans-serif;line-height:1.7;}
+  header{padding:48px 32px 36px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#13203b,#0f172a);}
+  header h1{margin:0 0 8px;font-size:30px;}
+  header .tag{display:inline-block;background:rgba(52,211,153,.12);color:var(--accent);
+    border:1px solid rgba(52,211,153,.4);border-radius:999px;padding:3px 12px;font-size:13px;margin-right:8px;}
+  header p{margin:14px 0 0;color:var(--sub);max-width:960px;}
+  .meta{margin-top:16px;font-size:13px;color:var(--sub);}
+  main{max-width:1140px;margin:0 auto;padding:32px;}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:24px 28px;margin:22px 0;}
+  h2{margin:0 0 16px;font-size:21px;color:var(--accent);border-left:4px solid var(--accent);
+    padding-left:12px;}
+  h3{font-size:16px;color:var(--ref);margin:22px 0 10px;}
+  h4{font-size:14px;color:var(--text);margin:16px 0 6px;}
+  p{margin:8px 0;}
+  ul,ol{margin:8px 0;padding-left:22px;}
+  li{margin:5px 0;}
+  code{background:#0b1220;color:var(--ref);padding:1px 6px;border-radius:5px;font-size:13px;}
+  pre{background:#0b1220;border:1px solid var(--line);border-radius:8px;padding:14px 16px;
+    overflow-x:auto;font-size:13px;color:#cbd5e1;font-family:Consolas,monospace;line-height:1.55;}
+  pre .c{color:#64748b;}
+  pre .k{color:#7dd3fc;}
+  pre .s{color:#86efac;}
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13.5px;}
+  th,td{border:1px solid var(--line);padding:9px 11px;text-align:left;vertical-align:top;}
+  th{background:#142035;color:var(--accent);}
+  tr:nth-child(even) td{background:rgba(255,255,255,.02);}
+  .rid{font-family:Consolas,monospace;color:var(--accent);font-weight:700;white-space:nowrap;}
+  .nid{font-family:Consolas,monospace;color:var(--warn);font-weight:700;white-space:nowrap;}
+  .mono{font-family:Consolas,monospace;font-size:12.5px;}
+  .pill{font-size:11px;font-weight:700;padding:2px 9px;border-radius:6px;white-space:nowrap;}
+  .keep{background:rgba(52,211,153,.16);color:#6ee7b7;border:1px solid rgba(52,211,153,.5);}
+  .wrap{background:rgba(56,189,248,.16);color:#7dd3fc;border:1px solid rgba(56,189,248,.45);}
+  .drop{background:rgba(248,113,113,.16);color:#fca5a5;border:1px solid rgba(248,113,113,.5);}
+  .new{background:rgba(251,191,36,.16);color:#fcd34d;border:1px solid rgba(251,191,36,.45);}
+  .inv{background:rgba(52,211,153,.16);color:#6ee7b7;border:1px solid rgba(52,211,153,.5);}
+  .evt{background:rgba(251,191,36,.16);color:#fcd34d;border:1px solid rgba(251,191,36,.45);}
+  .note{background:rgba(56,189,248,.08);border:1px solid rgba(56,189,248,.3);border-radius:8px;
+    padding:12px 16px;font-size:13.5px;color:#bae6fd;}
+  .warn-box{background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.3);border-radius:8px;
+    padding:12px 16px;font-size:13.5px;color:#fde68a;}
+  .danger-box{background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.35);border-radius:8px;
+    padding:12px 16px;font-size:13.5px;color:#fecaca;}
+  figure{margin:18px 0;background:#0b1220;border:1px solid var(--line);border-radius:10px;padding:18px;}
+  figcaption{color:var(--sub);font-size:12.5px;margin-top:10px;text-align:center;}
+  .legend{display:flex;gap:18px;flex-wrap:wrap;font-size:12.5px;color:var(--sub);margin-top:10px;justify-content:center;}
+  .legend span{display:inline-flex;align-items:center;gap:6px;}
+  .dot{width:11px;height:11px;border-radius:3px;display:inline-block;}
+  .toc a{color:var(--ref);text-decoration:none;}
+  .toc a:hover{text-decoration:underline;}
+  .toc ol{columns:2;}
+  .adr{border-left:3px solid var(--ref);padding-left:14px;margin:16px 0;}
+  .adr h4{color:var(--ref);margin-top:0;}
+  footer{text-align:center;color:var(--sub);font-size:12.5px;padding:30px;border-top:1px solid var(--line);}
+</style>
+</head>
+<body>
+<header>
+  <span class="tag">마이그레이션 설계서</span><span class="tag">v1.1 (검증 반영)</span><span class="tag">Electron 설치형 데스크톱</span>
+  <h1>Project-SPIP — Electron 설치형 데스크톱 이전 설계서</h1>
+  <p>현재 "터미널 <code>npm start</code> + 브라우저 별도 접속" 형태의 로컬 HTTP 웹앱을, <b>더블클릭 실행 + OS 네이티브 폴더 대화상자</b>를 제공하는 <b>Electron 설치형 데스크톱 앱</b>으로 이전하기 위한 마이그레이션 청사진이다. 핵심 전략은 <b>검증된 <code>lib/</code> 도메인 코드(스캐너·수집기·scanController·pathGuard·safeExec)를 그대로 보존</b>하고, HTTP 전송 계층(<code>server.js</code>·router·staticHandler)만 Electron <b>main/preload/renderer</b> + <b>IPC</b>로 교체하는 점진 이전이다. 본 문서는 설계이며 구현 코드를 포함하지 않는다.</p>
+  <div class="meta">문서 유형: 마이그레이션 설계서 · 작성: 수석 아키텍트 · 작성일: 2026-06-21 · 입력: architecture.html(§11 보안)·m4-design.html·api-contract.md·기존 코드(lib/·server.js·scan.js·public/) · 결정: PM 확정(Electron 채택, 외부 의존성 0 원칙은 데스크톱 전환 위해 의도적 포기)</div>
+  <div class="warn-box" style="margin-top:18px;"><b>v1.1 변경 요약 (검증 1회차 반영):</b> 독립 검증 <b>FAIL(P1×1·P2×4·P3×3)</b> + 보안 <b>조건부 PASS(높음 1)</b>를 반영했다. 핵심 정정 — <b>① 보안 EM-H-1(게이트):</b> §4.2에 <b>전 IPC 채널의 main 재검증</b>을 인자 스키마·화이트리스트·실패 모드·반환 shape까지 못박음. <b><code>browseDir</code> 채널은 드롭 확정</b>(인앱 디렉터리 브라우저 제거 — PM 확정 Q2). <b>② 정합 F-1(P1):</b> <code>scanController.start()</code>가 <code>onProgress</code>를 인자로 안 받고 내부 <code>_merge</code> 하드코딩(코드 167행)하므로 "무수정 중계"가 불가 → <b>PM 확정 (A) <code>start(opts)</code>에 <code>onProgress</code> 파라미터 1개 추가</b>(최소 수정)로 정정, scanController를 "최소 수정"으로 재분류, 사적 <code>_merge</code> 직접 호출 제거. <b>③</b> EM-M-1(file:// CSP 강화)·EM-M-2(발신자 검증)·EM-M-3(fuses·미서명 수용)·EM-L-1/L-2(외부링크 금지·sandbox 필수)·F-5(addRoots 거부 래퍼)·F-2(actionHandlers 결합 절단)·F-3(헤드리스 검증 분리)·F-4(PM 확정 본문 승격)·P3(테스트수 출처·getConfig size shape) 반영.</div>
+</header>
+
+<main>
+
+<section class="toc">
+  <h2>목차</h2>
+  <ol>
+    <li><a href="#overview">1. 개요 / 이전 동인</a></li>
+    <li><a href="#process">2. 프로세스 모델 (main · preload · renderer)</a></li>
+    <li><a href="#map">3. 재사용 / 교체 / 드롭 매핑</a></li>
+    <li><a href="#ipc">4. IPC 계약 (api-contract 대체)</a></li>
+    <li><a href="#folder">5. 네이티브 폴더 선택</a></li>
+    <li><a href="#security">6. 보안 모델 전환 (신뢰 경계 갱신)</a></li>
+    <li><a href="#lifecycle">7. 앱 생명주기 · 패키징</a></li>
+    <li><a href="#deps">8. 의존성 정책 · package.json</a></li>
+    <li><a href="#tree">9. 디렉터리 구조 (전/후)</a></li>
+    <li><a href="#migration">10. 마이그레이션 단계 · 테스트 보존</a></li>
+    <li><a href="#trace">11. 추적성 (요구 ID ↔ IPC/모듈)</a></li>
+    <li><a href="#adr">12. ADR</a></li>
+    <li><a href="#risk">13. 리스크 · 가정 · 미해결 질문</a></li>
+  </ol>
+</section>
+
+<section id="overview">
+  <h2>1. 개요 / 이전 동인</h2>
+  <p>기존 시스템은 <b>스캔(쓰기) / 서빙(읽기)</b>을 프로세스로 분리한 파이프라인-앤-대시보드 구조다(architecture.html §4). 데스크톱 이전은 이 핵심 설계를 유지한 채, <b>"서빙" 경로만</b> HTTP에서 Electron IPC로 바꾼다. 스캔 도메인(<code>lib/scan/*</code>)·공용 유틸(<code>lib/common/*</code>)·스냅샷/액션/재스캔 도메인(<code>lib/server/snapshotStore·scanController</code> 등)은 전송 방식과 무관하므로 무손상 재사용한다.</p>
+  <table>
+    <tr><th style="width:230px;">현재 불편 (동인)</th><th>Electron 해법</th><th style="width:120px;">충족 요구</th></tr>
+    <tr><td>① 터미널에서 <code>npm start</code> 실행 + 브라우저를 따로 열어 <code>127.0.0.1:7421</code> 접속해야 함</td><td>설치본 더블클릭 → main이 BrowserWindow를 띄워 <code>loadFile('public/index.html')</code>. 터미널·브라우저 불필요</td><td>UX(신규)</td></tr>
+    <tr><td>② 브라우저 보안 모델상 폴더 <b>절대경로를 얻을 수 없음</b> → scanRoots 등록이 수동 설정 파일 편집뿐</td><td>main에서 <code>dialog.showOpenDialog({properties:['openDirectory','multiSelections']})</code> → 절대경로 획득 → config.scanRoots 영속</td><td><span class="rid">R-04</span></td></tr>
+    <tr><td>로컬 HTTP 노출 표면(127.0.0.1 포트·DNS 리바인딩·CSRF·세션토큰)</td><td>네트워크 리스닝 소켓 자체를 제거. IPC는 OS 내부 채널 → 외부/타 프로세스 도달 불가</td><td><span class="nid">N-02</span></td></tr>
+  </table>
+  <div class="warn-box"><b>의도적 원칙 변경:</b> 기존 "외부 npm 의존성 0개"(<span class="nid">N-04</span>, ADR-001)는 <b>데스크톱 전환을 위해 의도적으로 포기</b>한다 — <code>electron</code>·<code>electron-builder</code>를 도입한다. 단 이 둘은 <b>devDependencies</b>이며, <b>런타임 추가 의존성은 electron 외 0개</b>를 유지한다(우리 <code>lib/</code> + Node/Electron 내장 모듈만). ADR-EM-1 참조.</div>
+  <div class="danger-box"><b>보존되는 핵심 보안 전제(RC-2, 그대로 유효):</b> 스캔 대상 폴더에는 <b>신뢰할 수 없는 외부 클론 리포가 섞일 수 있다</b>. 따라서 부분신뢰(TB-B) 입력 방어(pathGuard realpath·safeExec 절대경로·H-3 입력 가드·M-3 깊이/심링크·L-1 textContent)는 <b>전송 계층과 무관하게 전부 유지</b>한다. HTTP→IPC 전환은 TB-A(네트워크 경계)만 바꾸고 TB-B는 손대지 않는다.</div>
+</section>
+
+<section id="process">
+  <h2>2. 프로세스 모델 (main · preload · renderer)</h2>
+  <p>Electron은 3개 실행 컨텍스트로 나뉜다. <b>무엇이 어디서 도는가</b>가 이전의 핵심이다 — 무거운 I/O(스캐너·수집기·scanController)·OS 접근(dialog·spawn·파일)은 <b>main(Node 전권)</b>에서, UI는 <b>renderer(Chromium, Node 없음)</b>에서 돌고, 그 사이는 <b>preload가 화이트리스트한 IPC API</b>로만 연결된다. renderer는 직접 <code>require</code>·<code>fs</code>·<code>child_process</code>에 접근할 수 없다.</p>
+
+  <figure>
+    <svg viewBox="0 0 1100 600" width="100%" role="img" aria-label="Electron 프로세스 모델: main · preload · renderer 및 IPC">
+      <defs>
+        <marker id="ipc" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 Z" fill="#34d399"/></marker>
+        <marker id="evt" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 Z" fill="#fbbf24"/></marker>
+        <marker id="os" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 Z" fill="#38bdf8"/></marker>
+      </defs>
+
+      <!-- MAIN -->
+      <rect x="30" y="40" width="430" height="500" rx="12" fill="#0b1220" stroke="#34d399" stroke-width="1.8"/>
+      <text x="245" y="66" fill="#34d399" font-size="15" text-anchor="middle" font-weight="bold" font-family="Segoe UI">Main 프로세스 (Node 전권)</text>
+      <text x="245" y="84" fill="#94a3b8" font-size="10" text-anchor="middle" font-family="Segoe UI">electron/main.js — 단일 인스턴스, 창·메뉴·생명주기</text>
+
+      <rect x="50" y="100" width="390" height="64" rx="8" fill="#101a30" stroke="#475569"/>
+      <text x="245" y="122" fill="#e2e8f0" font-size="12" text-anchor="middle" font-family="Segoe UI" font-weight="bold">ipcMain 핸들러 레이어 (전송 어댑터, 신규 얇은 층)</text>
+      <text x="245" y="140" fill="#94a3b8" font-size="9.5" text-anchor="middle" font-family="Segoe UI">spip:getProjects · getStats · open · rescan · pickFolders …</text>
+      <text x="245" y="155" fill="#94a3b8" font-size="9.5" text-anchor="middle" font-family="Segoe UI">입력 검증 → lib 호출 → 결과/이벤트 반환</text>
+
+      <rect x="50" y="180" width="185" height="60" rx="8" fill="#101a30" stroke="#475569"/>
+      <text x="142" y="202" fill="#7dd3fc" font-size="11" text-anchor="middle" font-family="Segoe UI" font-weight="bold">lib/scan/* (재사용)</text>
+      <text x="142" y="218" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">walker·detector·collectors</text>
+      <text x="142" y="231" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">scanner·serializer·driveEnum</text>
+
+      <rect x="255" y="180" width="185" height="60" rx="8" fill="#101a30" stroke="#475569"/>
+      <text x="347" y="202" fill="#7dd3fc" font-size="11" text-anchor="middle" font-family="Segoe UI" font-weight="bold">lib/server/* (선별 재사용)</text>
+      <text x="347" y="218" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">snapshotStore·scanController</text>
+      <text x="347" y="231" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">(router·staticHandler 제외)</text>
+
+      <rect x="50" y="256" width="390" height="56" rx="8" fill="#101a30" stroke="#475569"/>
+      <text x="245" y="278" fill="#7dd3fc" font-size="11" text-anchor="middle" font-family="Segoe UI" font-weight="bold">lib/common/* (재사용)</text>
+      <text x="245" y="295" fill="#94a3b8" font-size="9.5" text-anchor="middle" font-family="Segoe UI">paths · config · pathGuard · safeExec · logger</text>
+
+      <rect x="50" y="330" width="390" height="56" rx="8" fill="#101a30" stroke="#38bdf8"/>
+      <text x="245" y="352" fill="#38bdf8" font-size="11" text-anchor="middle" font-family="Segoe UI" font-weight="bold">Electron OS API (main 전용)</text>
+      <text x="245" y="369" fill="#94a3b8" font-size="9.5" text-anchor="middle" font-family="Segoe UI">dialog(폴더 선택) · Menu · app · shell · BrowserWindow</text>
+
+      <rect x="50" y="404" width="390" height="120" rx="8" fill="#101a30" stroke="#f87171" stroke-dasharray="4 3"/>
+      <text x="245" y="426" fill="#fca5a5" font-size="11" text-anchor="middle" font-family="Segoe UI" font-weight="bold">OS 자원 (main만 접근)</text>
+      <text x="245" y="446" fill="#94a3b8" font-size="9.5" text-anchor="middle" font-family="Segoe UI">파일시스템(스캔 대상 TB-B) · spawn(code/git, shell:false)</text>
+      <text x="245" y="461" fill="#94a3b8" font-size="9.5" text-anchor="middle" font-family="Segoe UI">앱 데이터 폴더(config/cache, 0600/0700)</text>
+      <text x="245" y="476" fill="#94a3b8" font-size="9.5" text-anchor="middle" font-family="Segoe UI">네이티브 폴더 대화상자 → 절대경로</text>
+      <text x="245" y="500" fill="#64748b" font-size="9" text-anchor="middle" font-family="Segoe UI">renderer는 이 영역에 직접 도달 불가(contextIsolation·sandbox)</text>
+
+      <!-- PRELOAD -->
+      <rect x="490" y="160" width="150" height="260" rx="12" fill="#1a1206" stroke="#fbbf24" stroke-width="1.8"/>
+      <text x="565" y="186" fill="#fbbf24" font-size="13" text-anchor="middle" font-weight="bold" font-family="Segoe UI">Preload</text>
+      <text x="565" y="204" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">electron/preload.js</text>
+      <text x="565" y="228" fill="#e2e8f0" font-size="10" text-anchor="middle" font-family="Segoe UI">contextBridge</text>
+      <text x="565" y="244" fill="#e2e8f0" font-size="10" text-anchor="middle" font-family="Segoe UI">.exposeInMainWorld</text>
+      <text x="565" y="268" fill="#fcd34d" font-size="10" text-anchor="middle" font-family="Segoe UI">window.spip = {…}</text>
+      <text x="565" y="290" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">화이트리스트</text>
+      <text x="565" y="304" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">API만 노출</text>
+      <text x="565" y="328" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">ipcRenderer를</text>
+      <text x="565" y="342" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">직접 노출 안 함</text>
+      <text x="565" y="372" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">채널명·인자</text>
+      <text x="565" y="386" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">고정·검증</text>
+
+      <!-- RENDERER -->
+      <rect x="690" y="40" width="380" height="500" rx="12" fill="#0b1220" stroke="#38bdf8" stroke-width="1.8"/>
+      <text x="880" y="66" fill="#38bdf8" font-size="15" text-anchor="middle" font-weight="bold" font-family="Segoe UI">Renderer (Chromium, Node 없음)</text>
+      <text x="880" y="84" fill="#94a3b8" font-size="10" text-anchor="middle" font-family="Segoe UI">public/index.html (loadFile, 로컬 전용)</text>
+
+      <rect x="710" y="110" width="340" height="60" rx="8" fill="#142035" stroke="#475569"/>
+      <text x="880" y="132" fill="#e2e8f0" font-size="11" text-anchor="middle" font-family="Segoe UI" font-weight="bold">public/app.js (UI — 거의 그대로)</text>
+      <text x="880" y="149" fill="#94a3b8" font-size="9.5" text-anchor="middle" font-family="Segoe UI">store·view·filter·actions (R-10·R-11)</text>
+      <text x="880" y="162" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">L-1 textContent 렌더 유지</text>
+
+      <rect x="710" y="186" width="340" height="56" rx="8" fill="#142035" stroke="#fbbf24"/>
+      <text x="880" y="208" fill="#fcd34d" font-size="11" text-anchor="middle" font-family="Segoe UI" font-weight="bold">전송 어댑터 (신규 얇은 층)</text>
+      <text x="880" y="225" fill="#94a3b8" font-size="9.5" text-anchor="middle" font-family="Segoe UI">window.spip.* 호출 (preload allowlist만)</text>
+      <text x="880" y="237" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">renderer 폴링 폐기 → onScanProgress 구독</text>
+
+      <rect x="710" y="258" width="340" height="56" rx="8" fill="#142035" stroke="#475569"/>
+      <text x="880" y="280" fill="#e2e8f0" font-size="11" text-anchor="middle" font-family="Segoe UI" font-weight="bold">window.spip (preload가 주입)</text>
+      <text x="880" y="297" fill="#94a3b8" font-size="9.5" text-anchor="middle" font-family="Segoe UI">getProjects() · open(id) · rescan(opts) …</text>
+      <text x="880" y="309" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">onScanProgress(cb) — 이벤트 구독</text>
+
+      <rect x="710" y="396" width="340" height="120" rx="8" fill="#170d0d" stroke="#f87171" stroke-dasharray="4 3"/>
+      <text x="880" y="418" fill="#fca5a5" font-size="11" text-anchor="middle" font-family="Segoe UI" font-weight="bold">renderer 보안 베이스라인</text>
+      <text x="880" y="438" fill="#94a3b8" font-size="9.5" text-anchor="middle" font-family="Segoe UI">contextIsolation:true · nodeIntegration:false</text>
+      <text x="880" y="453" fill="#94a3b8" font-size="9.5" text-anchor="middle" font-family="Segoe UI">sandbox:true(필수) · CSP 강화·헤더 이중주입</text>
+      <text x="880" y="468" fill="#94a3b8" font-size="9.5" text-anchor="middle" font-family="Segoe UI">원격 콘텐츠 미로드 · will-navigate 차단</text>
+      <text x="880" y="483" fill="#94a3b8" font-size="9.5" text-anchor="middle" font-family="Segoe UI">setWindowOpenHandler: deny</text>
+      <text x="880" y="503" fill="#64748b" font-size="9" text-anchor="middle" font-family="Segoe UI">DOM 외에는 OS 권한 0 (preload API만)</text>
+
+      <!-- 화살표: renderer -> preload -> main (IPC invoke) -->
+      <line x1="710" y1="286" x2="642" y2="286" stroke="#34d399" stroke-width="2" marker-end="url(#ipc)"/>
+      <line x1="490" y1="286" x2="442" y2="135" stroke="#34d399" stroke-width="2" marker-end="url(#ipc)"/>
+      <text x="455" y="248" fill="#34d399" font-size="9" font-family="Segoe UI">invoke</text>
+      <!-- 화살표: main -> renderer (event push) -->
+      <line x1="148" y1="100" x2="148" y2="92" stroke="#fbbf24" stroke-width="0"/>
+      <path d="M442 122 Q670 60 712 132" fill="none" stroke="#fbbf24" stroke-width="2" marker-end="url(#evt)"/>
+      <text x="560" y="78" fill="#fbbf24" font-size="9" font-family="Segoe UI">webContents.send (진행 푸시)</text>
+      <!-- main 내부: 핸들러 -> lib -->
+      <line x1="142" y1="164" x2="142" y2="178" stroke="#94a3b8" stroke-width="1.4" marker-end="url(#ipc)"/>
+      <line x1="347" y1="164" x2="347" y2="178" stroke="#94a3b8" stroke-width="1.4" marker-end="url(#ipc)"/>
+      <!-- main -> OS -->
+      <line x1="245" y1="386" x2="245" y2="402" stroke="#38bdf8" stroke-width="1.6" marker-end="url(#os)"/>
+    </svg>
+    <div class="legend">
+      <span><span class="dot" style="background:#34d399"></span> IPC invoke/handle (req/res)</span>
+      <span><span class="dot" style="background:#fbbf24"></span> 이벤트 푸시 (main→renderer)</span>
+      <span><span class="dot" style="background:#38bdf8"></span> OS 접근(main 전용)</span>
+      <span><span class="dot" style="border:1px dashed #f87171;width:9px;height:9px;"></span> 신뢰/권한 경계</span>
+    </div>
+    <figcaption>그림 1. 프로세스 모델. 스캐너·수집기·scanController·OS 접근은 main, UI는 renderer, 사이는 preload가 화이트리스트한 IPC. renderer는 OS 자원에 직접 도달 불가.</figcaption>
+  </figure>
+
+  <h3>역할 분담</h3>
+  <table>
+    <tr><th style="width:130px;">컨텍스트</th><th>책임</th><th>접근 권한</th></tr>
+    <tr><td><b>main</b> <code>electron/main.js</code></td><td>앱 생명주기·단일 인스턴스 락·BrowserWindow 생성·메뉴. <b>ipcMain 핸들러 등록 → lib 호출</b>. dialog·spawn·파일·scanController 구동. <code>server.js</code>가 하던 "조립(composition root)" 역할을 승계</td><td>Node 전권 + Electron OS API</td></tr>
+    <tr><td><b>preload</b> <code>electron/preload.js</code></td><td><code>contextBridge.exposeInMainWorld('spip', {...})</code>로 <b>화이트리스트 API만</b> renderer에 노출. 채널명·인자 형태 고정, <code>ipcRenderer</code> 원본은 노출 금지</td><td>제한된 ipcRenderer (격리 world)</td></tr>
+    <tr><td><b>renderer</b> <code>public/*</code></td><td>대시보드 렌더·필터/정렬/검색(클라 메모리)·사용자 액션. <code>fetch</code> → <code>window.spip.*</code>로 호출 경로만 교체. L-1 textContent 렌더 유지</td><td>DOM만. Node·OS 접근 0</td></tr>
+  </table>
+</section>
+
+<section id="map">
+  <h2>3. 재사용 / 교체 / 드롭 매핑</h2>
+  <p>이전의 핵심 원칙: <b>전송(HTTP)과 도메인을 분리</b>해 도메인은 손대지 않는다. 아래 분류 — <span class="pill keep">그대로 재사용</span> 코드 무수정 · <span class="pill wrap">IPC로 감싸 재사용</span> 도메인 코드는 유지하되 호출자를 ipcMain 핸들러로 교체 · <span class="pill drop">드롭</span> HTTP 전송 전용이라 제거 · <span class="pill new">신규</span> Electron 골격.</p>
+  <table>
+    <tr><th style="width:230px;">기존 파일/모듈</th><th style="width:120px;">처리</th><th>이유 / 비고</th></tr>
+    <tr><td><code>lib/scan/walker·detector·scanner·serializer·excludeRules·driveEnum</code></td><td><span class="pill keep">재사용</span></td><td>전송과 무관한 순수 도메인. 무수정. 단위테스트 그대로 유지</td></tr>
+    <tr><td><code>lib/scan/collectors/*</code> (language·freshness·git·size·_safeParse)</td><td><span class="pill keep">재사용</span></td><td>H-3 입력 가드 포함, 무수정. main 프로세스에서 동일하게 동작</td></tr>
+    <tr><td><code>lib/common/paths·config·pathGuard·safeExec·logger</code></td><td><span class="pill keep">재사용</span></td><td>OS 경로·설정·realpath 가드·shell:false spawn — 전부 main에서 유지. <b>주의:</b> <code>paths.appDir()</code>는 OS 규약 경로(<code>%APPDATA%\spip</code>)를 직접 계산 → 데이터 폴더명 <code>spip</code> 고정(productName 무관, F-7), <code>app.getPath('userData')</code> 정합은 ADR-EM-4(Q3 잔여 구현확인) 참조</td></tr>
+    <tr><td><code>lib/server/snapshotStore.js</code></td><td><span class="pill wrap">IPC로 감싸 재사용</span></td><td>메모리 적재·realpath 화이트리스트(H-1)·hasSnapshot graceful 유지. <code>getProjects/getById/getAllowKeySet</code>을 ipcMain 핸들러가 호출. 무수정 가능</td></tr>
+    <tr><td><code>lib/server/scanController.js</code></td><td><span class="pill new">최소 수정 (onProgress 1개 추가)</span></td><td>단일 in-flight 락·watchdog·세대 가드·shortenPath(M4-H-1) 그대로. <b>F-1 정정:</b> 실측 <code>start(opts)</code>는 <code>onProgress</code>를 <b>인자로 받지 않고</b> 내부에서 <code>onProgress:(p)=&gt;this._merge(p,myScanId)</code>를 <b>하드코딩</b>(scanController.js:167). 따라서 "무수정 중계"는 성립 불가. <b>PM 확정 (A):</b> <code>start(opts)</code>에 <b>선택적 <code>onProgress</code> 파라미터 1개를 추가</b>(기존 <code>_merge</code> 호출은 유지하고, 사용자 콜백을 그 뒤에 추가 호출). main은 이 공개 콜백으로 <code>webContents.send('spip:scanProgress', …)</code> push(§4.3). 사적 <code>_merge</code> 직접 호출은 하지 않는다(캡슐화 보존, P3/F-9 해소). 컨트롤러 1점 수정 + 그에 대응하는 단위테스트 1건 추가</td></tr>
+    <tr><td><code>lib/server/apiHandlers.js</code></td><td><span class="pill wrap">로직만 재사용</span></td><td>집계 로직(getStats byLanguage/staleCount, getHealth resolveBin 판정)은 ipcMain 핸들러로 이식. <b>HTTP 부분</b>(<code>sendJson</code>·<code>res.writeHead</code>)은 드롭 — IPC는 객체를 그대로 반환</td></tr>
+    <tr><td><code>lib/server/actionHandlers.js</code></td><td><span class="pill wrap">로직만 재사용</span></td><td><code>open</code>(id→역참조→pathGuard→safeExec)·<code>rescan</code>(게이트·락·start) 핵심 흐름 이식. <code>readJsonBody</code>·HTTP 응답 코드 매핑은 드롭(IPC는 인자를 직접 받고 객체 반환). H-1·H-2·M-4 검증은 전부 유지. <b>F-2 정정:</b> 실측 actionHandlers는 상단에서 <code>const { sendJson } = require('./apiHandlers')</code>(actionHandlers.js:25)로 apiHandlers에 <b>결합</b>돼 있다. 로직을 <code>(args,ctx)→result</code>로 추출하는 단계 4에서 <b>이 <code>sendJson</code> 결합을 함께 끊는다</b>(IPC 어댑터는 응답 객체를 반환할 뿐 sendJson을 호출하지 않음) — 단계 4 산출에 명시(§10.1)</td></tr>
+    <tr><td><code>lib/server/security.js</code></td><td><span class="pill drop">드롭</span></td><td>Host allowlist·Origin·세션토큰·CSRF·checkReadAccess 전부 <b>HTTP 전용 통제</b>. IPC는 OS 내부 채널이라 네트워크 위협 부재 → 불필요(§6)</td></tr>
+    <tr><td><code>lib/server/router.js</code></td><td><span class="pill drop">드롭</span></td><td>HTTP 메서드·경로 디스패치. ipcMain 채널 등록이 대체</td></tr>
+    <tr><td><code>lib/server/staticHandler.js</code></td><td><span class="pill drop">드롭</span></td><td>정적 파일 HTTP 서빙·MIME·public 이탈 차단. <code>loadFile()</code> + <code>file://</code> 로컬 로드가 대체(CSP는 index.html 메타로 유지)</td></tr>
+    <tr><td><code>server.js</code></td><td><span class="pill drop">드롭(보존 후 삭제) → main이 승계</span></td><td>http.createServer·listen·세션토큰 발급 제거. composition root(config 로드·store 적재·scanController 생성·ctx 조립) 역할은 <code>electron/main.js</code>가 승계. <b>PM 확정 Q1:</b> 마이그레이션 <b>완료까지 <code>serve:http</code>로 보존 후 삭제</b>(헤드리스/디버깅 과도기용)</td></tr>
+    <tr><td><code>scan.js</code> (bin: spip)</td><td><span class="pill keep">유지</span></td><td>CLI 자동화·CI·헤드리스 스캔용으로 보존(<code>npm run scan</code>·<code>spip</code> bin). lib만 쓰므로 무수정</td></tr>
+    <tr><td><code>public/index.html·styles.css</code></td><td><span class="pill keep">재사용</span></td><td>UI 골격·테마 그대로. 세션토큰 메타 태그는 제거(불필요), CSP 메타는 유지·강화(§6)</td></tr>
+    <tr><td><code>public/app.js</code></td><td><span class="pill wrap">전송 어댑터만 교체</span></td><td>store/view/filter/actions 로직 유지. <code>fetch('/api/*')</code> 호출과 1초 <code>setInterval</code> 폴링만 <code>window.spip.*</code>·<code>onScanProgress</code> 구독으로 교체(§4·§10)</td></tr>
+    <tr><td>—</td><td><span class="pill new">신규</span></td><td><code>electron/main.js</code>·<code>electron/preload.js</code>·<code>electron/ipc/*</code>(핸들러 등록)·<code>electron/menu.js</code>·<code>build/</code>(아이콘·NSIS 리소스)·<code>electron-builder.yml</code></td></tr>
+  </table>
+  <div class="note"><b>설계 의도:</b> ipcMain 핸들러는 <b>얇은 어댑터</b>로 둔다 — 검증·정규화 후 기존 도메인 함수를 호출하고 결과 객체를 반환할 뿐, 비즈니스 로직을 새로 넣지 않는다. apiHandlers/actionHandlers의 "핸들러 함수"를 <code>(req,res,ctx)</code>에서 <code>(args,ctx) → result</code> 형태로 가볍게 추출하면 단위테스트도 HTTP mock 없이 더 쉬워진다(§10 테스트 보존).</div>
+</section>
+
+<section id="ipc">
+  <h2>4. IPC 계약 (api-contract.md 대체)</h2>
+  <p>renderer↔main 통신은 두 패턴을 쓴다 — <span class="pill inv">invoke/handle</span> 요청/응답(<code>ipcRenderer.invoke</code> ↔ <code>ipcMain.handle</code>, Promise 반환) · <span class="pill evt">on/send</span> main→renderer 단방향 푸시(<code>webContents.send</code> ↔ <code>ipcRenderer.on</code>). <b>진행 표시는 기존 1초 폴링(GET /api/scan-status)을 폐기하고 main→renderer 이벤트 푸시로 단순화</b>한다(R-15). 모든 채널은 preload가 <code>window.spip</code>에 화이트리스트 함수로만 노출한다.</p>
+
+  <h3>4.1 채널 목록</h3>
+  <table>
+    <tr><th style="width:185px;">채널 / preload API</th><th style="width:95px;">방향</th><th>요청 shape</th><th>응답 / 페이로드 shape</th><th>대체된 HTTP</th></tr>
+    <tr><td><code>spip:getProjects</code><br><span class="mono">spip.getProjects()</span></td><td><span class="pill inv">invoke</span></td><td>—</td><td><code>{ schemaVersion, generatedAt, hasSnapshot, projects: Project[] }</code></td><td>GET /api/projects</td></tr>
+    <tr><td><code>spip:getStats</code><br><span class="mono">spip.getStats()</span></td><td><span class="pill inv">invoke</span></td><td>—</td><td><code>{ total, byLanguage:{lang:count}, staleCount, totalBytes:number|null, generatedAt }</code></td><td>GET /api/stats</td></tr>
+    <tr><td><code>spip:getHealth</code><br><span class="mono">spip.getHealth()</span></td><td><span class="pill inv">invoke</span></td><td>—</td><td><code>{ ok:true, hasSnapshot, codeCli:boolean, git:boolean }</code></td><td>GET /api/health</td></tr>
+    <tr><td><code>spip:openInVsCode</code><br><span class="mono">spip.open(id)</span></td><td><span class="pill inv">invoke</span></td><td><code>{ id:string }</code></td><td><code>{ ok:true, code:'OPENING' }</code> 또는 <code>{ ok:false, code:'ID_NOT_FOUND'|'PATH_NOT_ALLOWED'|'PATH_GONE'|'CODE_CLI_NOT_FOUND'|'OPEN_FAILED' }</code></td><td>POST /api/open</td></tr>
+    <tr><td><code>spip:rescan</code><br><span class="mono">spip.rescan(opts)</span></td><td><span class="pill inv">invoke</span></td><td><code>{ withSize?:boolean, allDrives?:boolean }</code></td><td><code>{ ok:true, code:'SCAN_STARTED', scanId, startedAt }</code> 또는 <code>{ ok:false, code:'SCAN_IN_PROGRESS'|'NO_SCAN_ROOTS', scanId?, message? }</code></td><td>POST /api/rescan</td></tr>
+    <tr><td><code>spip:getScanStatus</code><br><span class="mono">spip.getScanStatus()</span></td><td><span class="pill inv">invoke</span></td><td>—</td><td><code>ScanProgress</code> (아래) — 초기 1회 동기화/재구독용. 평상시는 이벤트 푸시 사용</td><td>GET /api/scan-status</td></tr>
+    <tr><td><code>spip:scanProgress</code><br><span class="mono">spip.onScanProgress(cb)</span></td><td><span class="pill evt">on/send</span></td><td>(구독: cb 등록)</td><td>main→renderer 푸시: <code>ScanProgress{ phase, scanId, dirs, found, currentPath, elapsedMs, startedAt, counts, note }</code></td><td>1초 폴링 폐기</td></tr>
+    <tr><td><code>spip:pickFolders</code><br><span class="mono">spip.pickFolders()</span></td><td><span class="pill inv">invoke</span></td><td>—</td><td><code>{ ok:true, added:string[], roots:string[] }</code> 또는 <code>{ ok:false, code:'CANCELLED' }</code> — 네이티브 대화상자(§5)</td><td>신규 (브라우저 불가)</td></tr>
+    <tr><td><code>spip:getConfig</code><br><span class="mono">spip.getConfig()</span></td><td><span class="pill inv">invoke</span></td><td>—</td><td><code>{ scanRoots:string[], staleDays:number, allowAllDrives:boolean, size:{ enabled:boolean, maxBytes:number, maxEntries:number } }</code> — 민감하지 않은 설정 뷰. <b>P3/F-8 정정:</b> <code>size</code> 하위 노출 필드를 위와 같이 <b>명시</b>(설정의 size 정책만 노출, 경로·시크릿·내부 캐시 메타는 비노출). 누락 시 구현팀 추정 방지</td><td>신규</td></tr>
+    <tr><td><code>spip:addRoots</code><br><span class="mono">spip.addRoots(paths)</span></td><td><span class="pill inv">invoke</span></td><td><code>{ paths:string[] }</code></td><td><code>{ ok:true, added:string[], rejected:[{path:string,reason:string}], roots:string[] }</code> 또는 입력 타입 불량 시 <code>{ ok:false, code:'INVALID_PATH' }</code> — 경로 직접 입력 보조(§5). <b>F-5 정정:</b> <code>rejected</code>는 재사용 <code>normalizeScanRoots</code>가 거부분을 안 돌려주므로(config.js:90~127, <code>continue</code>+로그) <b>얇은 래퍼(<code>addRootsResolve</code>)</b>가 산출(아래 §4.2·§5)</td><td>신규</td></tr>
+    <tr><td><code>spip:removeRoot</code><br><span class="mono">spip.removeRoot(path)</span></td><td><span class="pill inv">invoke</span></td><td><code>{ path:string }</code></td><td><code>{ ok:true, roots:string[] }</code> 또는 <code>{ ok:false, code:'NOT_FOUND' }</code></td><td>신규</td></tr>
+  </table>
+  <div class="danger-box"><b>EM-H-1 / PM 확정 Q2 — <code>browseDir</code> 채널 드롭:</b> 이전 초안의 인앱 디렉터리 브라우저 채널(<code>spip:browseDir(dir)</code>)은 <b>제거(드롭)한다</b>. renderer가 임의 디렉터리 경로를 던져 파일시스템 트리를 열람하는 채널은, RC-2(부분신뢰 리포)+저장형 XSS 가정에서 화이트리스트 밖 임의 경로 정보노출 표면이 된다. <b>임의 디렉터리 열람 채널을 둔다는 발상 자체를 폐기</b>한다. 폴더 선택은 (1) 네이티브 <code>dialog.showOpenDialog</code>(§5) 또는 (2) 경로 직접 입력(<code>addRoots</code>) 두 경로만 두고, <b>둘 다 main에서 <code>pathGuard.canonicalize</code>/<code>realpathSync.native</code>·존재·디렉터리·시스템 폴더 제외 검증을 통과한 것만</b> config에 영속한다.</div>
+  <div class="note"><b>Project 항목 shape는 불변</b>(api-contract.md §"Project 항목 shape" 그대로). 스냅샷 스키마·필드(<code>id·path·name·language·freshness·git·size</code> 등)는 도메인 산출물이므로 전송 방식과 무관하게 동일하다. <code>ScanProgress.currentPath</code>는 여전히 <code>shortenPath</code> 축약(M4-H-1·L-3) — 절대경로 미노출.</div>
+
+  <h3>4.2 채널별 main 측 재검증 (EM-H-1 게이트 — renderer는 신뢰하지 않는다)</h3>
+  <div class="danger-box"><b>전제 (EM-H-1):</b> renderer는 부분신뢰(RC-2) 콘텐츠를 렌더하며 <b>저장형 XSS가 성립할 수 있다고 가정</b>한다. 따라서 <b>모든 IPC 채널의 인자는 main에서 전량 재검증</b>한다 — preload allowlist는 표면 축소일 뿐 신뢰 근거가 아니다. 아래 표는 <b>전 채널</b>(인자 없는 읽기 채널 포함)에 대해 ① 인자 스키마(타입·길이·개수 상한) ② 화이트리스트 제약 ③ 실패 모드(고정 code) ④ 반환 shape를 못박는다. <b>경로 인자는 절대 renderer가 만든 문자열을 그대로 신뢰하지 않고</b> main에서 canonicalize/realpath·디렉터리·시스템 폴더 제외를 통과한 것만 영속한다.</div>
+  <table>
+    <tr><th style="width:150px;">채널</th><th style="width:330px;">인자 스키마 / 화이트리스트 제약</th><th>실패 모드 (고정 code) / 반환 shape</th></tr>
+    <tr><td><code>spip:getProjects</code></td><td>인자 없음. 인자가 와도 무시</td><td>성공: <code>{schemaVersion,generatedAt,hasSnapshot,projects[]}</code>. 예외→<code>{ok:false,code:'INTERNAL'}</code></td></tr>
+    <tr><td><code>spip:getStats</code></td><td>인자 없음</td><td>성공: <code>{total,byLanguage,staleCount,totalBytes,generatedAt}</code>. 예외→<code>INTERNAL</code></td></tr>
+    <tr><td><code>spip:getHealth</code></td><td>인자 없음</td><td>성공: <code>{ok:true,hasSnapshot,codeCli,git}</code>. 예외→<code>INTERNAL</code></td></tr>
+    <tr><td><code>spip:getConfig</code></td><td>인자 없음</td><td>성공: §4.1 명시 shape(<code>size:{enabled,maxBytes,maxEntries}</code>만). 경로 외 시크릿·캐시 메타 비노출. 예외→<code>INTERNAL</code></td></tr>
+    <tr><td><code>spip:getScanStatus</code></td><td>인자 없음. 재구독·초기 동기화용</td><td>성공: <code>ScanProgress</code>(currentPath는 shortenPath 축약). 예외→<code>INTERNAL</code></td></tr>
+    <tr><td><code>spip:openInVsCode(id)</code></td><td>① <code>{id}</code> 객체, <code>typeof id==='string' &amp;&amp; 0&lt;id.length≤512</code>. 그 외 즉시 거부. <b>경로를 인자로 받지 않음</b> — id로만 역참조</td><td>② <code>store.getById(id)</code> 미존재→<code>ID_NOT_FOUND</code> ③ <code>pathGuard.canonicalize(path)</code> null→<code>PATH_GONE</code> ④ <code>pathGuard.isAllowed(path,allowKeySet)</code> 불일치→<code>PATH_NOT_ALLOWED</code>(H-1) ⑤ <code>resolveBin('code')</code> 없음→<code>CODE_CLI_NOT_FOUND</code> ⑥ <code>safeExec(codeBin,[real],{shell:false,detached:true})</code>+id별 in-flight 상한 초과→<code>OPEN_FAILED</code>(M-4). 성공: <code>{ok:true,code:'OPENING'}</code>. <b>actionHandlers.open 4~6단계 그대로 이식</b></td></tr>
+    <tr><td><code>spip:rescan(opts)</code></td><td>① <code>opts</code>는 <b>plain object만</b>(아니면 <code>{}</code>로 강등), <b>키 화이트리스트 <code>{withSize,allDrives}</code></b>만 채택하고 <code>Boolean()</code>으로 강제. 그 외 키 무시. <b>경로·roots를 인자로 받지 않음</b>(config에서만, H-1 정합)</td><td>② scanRoots 비면→<code>NO_SCAN_ROOTS</code> ③ <code>allDrives</code>는 <b><code>config.allowAllDrives</code> 게이트 전용</b>(인자만으로 못 켬, 강등+note) ④ <code>scanController.acquire()</code> 실패→<code>SCAN_IN_PROGRESS</code>(현 scanId 동봉) ⑤ <code>start({...,onProgress})</code> 백그라운드. 성공: <code>{ok:true,code:'SCAN_STARTED',scanId,startedAt}</code></td></tr>
+    <tr><td><code>spip:addRoots(paths)</code></td><td>① <code>{paths}</code>의 <code>paths</code>가 <b>배열</b> 아니면→<code>{ok:false,code:'INVALID_PATH'}</code> ② <b>개수 상한 ≤<code>LIMITS.maxScanRoots</code>(현 64)</b>·각 항목 <code>typeof==='string' &amp;&amp; 0&lt;len≤4096</code>(초과분 절단·거부) ③ 각 path를 <b>canonicalize/realpath·존재·디렉터리·시스템 폴더(드라이브 루트·<code>%WINDIR%</code>·<code>%ProgramFiles%</code> 등) 제외</b> 검증</td><td>통과분만 config.scanRoots에 병합·영속(0600 원자적, M-2). <b>F-5:</b> 얇은 래퍼 <code>addRootsResolve</code>가 채택/거부를 모두 산출(아래 의사코드). 성공: <code>{ok:true,added[],rejected:[{path,reason}],roots[]}</code>. 거부 사유 <code>reason</code>은 <b>고정 토큰</b>(<code>NOT_FOUND·NOT_DIR·SYSTEM_DIR·DUP</code>)만 — 절대경로 외 내부정보 비노출(L-3)</td></tr>
+    <tr><td><code>spip:removeRoot(path)</code></td><td>① <code>{path}</code> <code>typeof==='string' &amp;&amp; len≤4096</code> ② 입력 path를 <b>canonicalize</b>해 현재 scanRoots의 realpath와 <b>정확 일치하는 항목만</b> 제거(임의 문자열로 무관 항목 제거 불가)</td><td>일치 없음→<code>{ok:false,code:'NOT_FOUND'}</code>. 성공: <code>{ok:true,roots[]}</code>(축소된 화이트리스트는 다음 스캔/적재에 자동 반영)</td></tr>
+    <tr><td><code>spip:pickFolders</code></td><td>인자 없음. main에서 <code>dialog.showOpenDialog</code> 호출 → <b>경로 출처가 OS(신뢰)</b>. renderer가 경로 문자열을 만들지 않음</td><td>반환 절대경로를 <code>addRootsResolve</code>와 <b>동일 정규화·검증</b> 후 영속. 취소→<code>{ok:false,code:'CANCELLED'}</code>. 성공: <code>{ok:true,added[],roots[]}</code></td></tr>
+    <tr><td><b>모든 채널 (공통)</b></td><td>① 핸들러는 <code>try/catch</code> 래핑, 예외 시 고정 <code>{ok:false,code:'INTERNAL'}</code>(L-3, 절대경로·스택은 반환 객체 금지·로그로만) ② <b>발신자 검증(EM-M-2)</b>: <code>event.senderFrame</code>이 메인 윈도우의 신뢰 로컬 file URL인지 확인, 불일치 시 무시 ③ preload는 <code>ipcRenderer</code> 원본·범용 <code>invoke(channel,…)</code>를 노출하지 않고 채널명 하드코딩(<b>MUST</b>)</td><td>—</td></tr>
+  </table>
+  <pre><span class="c">// === main: ipc/folders.js — addRootsResolve 얇은 래퍼 (의사코드, F-5 해소) ===</span>
+<span class="c">// normalizeScanRoots는 거부분을 안 돌려주므로(config.js:90~127), 래퍼가 입력 대비</span>
+<span class="c">// 채택/거부를 직접 산출한다. normalizeScanRoots는 무수정 유지.</span>
+<span class="k">function</span> addRootsResolve(rawPaths, currentRoots, logger) {
+  <span class="k">if</span> (!Array.isArray(rawPaths)) <span class="k">return</span> { ok:<span class="k">false</span>, code:<span class="s">'INVALID_PATH'</span> };
+  <span class="k">const</span> added = [], rejected = [];
+  <span class="k">for</span> (<span class="k">const</span> raw <span class="k">of</span> rawPaths.slice(0, LIMITS.maxScanRoots)) {
+    <span class="k">if</span> (<span class="k">typeof</span> raw !== <span class="s">'string'</span> || raw.length === 0 || raw.length &gt; 4096) { rejected.push({ path:String(raw).slice(0,256), reason:<span class="s">'NOT_FOUND'</span> }); <span class="k">continue</span>; }
+    <span class="k">const</span> real = canonicalizeDir(raw);              <span class="c">// resolve→realpathSync.native→statSync.isDirectory</span>
+    <span class="k">if</span> (!real)        { rejected.push({ path:raw, reason:<span class="s">'NOT_FOUND'</span> }); <span class="k">continue</span>; }
+    <span class="k">if</span> (isSystemDir(real)) { rejected.push({ path:raw, reason:<span class="s">'SYSTEM_DIR'</span> }); <span class="k">continue</span>; }  <span class="c">// 드라이브 루트·WINDIR·ProgramFiles 제외</span>
+    <span class="k">if</span> (currentRoots.includes(real) || added.includes(real)) { rejected.push({ path:raw, reason:<span class="s">'DUP'</span> }); <span class="k">continue</span>; }
+    added.push(real);
+  }
+  <span class="c">// 최종 영속은 normalizeScanRoots(merge)로 한 번 더 통과시켜 단일 화이트리스트 원천 유지</span>
+  <span class="k">const</span> roots = config.normalizeScanRoots([...currentRoots, ...added], logger);
+  persistConfig({ ...currentConfig, scanRoots: roots });   <span class="c">// 0600 원자적(M-2)</span>
+  <span class="k">return</span> { ok:<span class="k">true</span>, added, rejected, roots };
+}</pre>
+
+  <h3>4.3 진행 통지 — 폴링 폐기 (R-15) · F-1/F-9 정정</h3>
+  <p>기존: renderer가 <code>POST /api/rescan</code> 202 수신 후 <code>setInterval(1000)</code>로 <code>GET /api/scan-status</code> 폴링(app.js 라인 ~1505). 이전 후: <b>renderer 폴링을 폐기</b>하고 main→renderer 이벤트 푸시로 단순화한다. renderer는 구독만 한다.</p>
+  <div class="warn-box"><b>F-1 정정 (PM 확정 A):</b> 실측 <code>scanController.start(opts)</code>는 <code>{config,withSize,allDrives,roots,store,logger,cachePath}</code>만 받고 <code>onProgress</code>를 <b>인자로 받지 않으며</b>, 내부에서 <code>onProgress:(p)=&gt;this._merge(p,myScanId)</code>를 <b>하드코딩</b>한다(scanController.js:167). 따라서 "main이 가로챌 onProgress 훅"은 존재하지 않고, 사적 <code>_merge</code>를 외부에서 부르는 것은 캡슐화 위반(F-9)이다. <b>해법:</b> <code>start(opts)</code>에 <b>선택적 공개 파라미터 <code>opts.onProgress</code> 1개를 추가</b>한다(컨트롤러 최소 수정). 컨트롤러 내부는 기존 <code>_merge</code>를 그대로 호출한 뒤, <code>opts.onProgress</code>가 있으면 그 콜백을 <b>추가로</b> 호출한다(아래 컨트롤러 변경 의사코드). main은 이 공개 콜백으로만 push하며 <code>_merge</code>를 직접 호출하지 않는다.</div>
+  <pre><span class="c">// === scanController.start 내부 1점 변경 (의사코드) — 167행 onProgress 래핑 ===</span>
+<span class="c">// 변경 전:  onProgress: (p) =&gt; this._merge(p, myScanId)</span>
+<span class="c">// 변경 후:</span>
+onProgress: (p) =&gt; {
+  <span class="k">this</span>._merge(p, myScanId);                 <span class="c">// 기존 내부 동작 보존(무변경)</span>
+  <span class="k">if</span> (<span class="k">typeof</span> opts.onProgress === <span class="s">'function'</span> &amp;&amp; <span class="k">this</span>._isActive(myScanId)) {
+    <span class="k">try</span> { opts.onProgress(<span class="k">this</span>.status()); } <span class="k">catch</span> (_) { <span class="c">/* 구독자 예외 격리 */</span> }
+  }
+},
+<span class="c">// status()는 shortenPath 축약된 currentPath만 반환(M4-H-1) → push 페이로드도 절대경로 미노출</span></pre>
+  <pre><span class="c">// === main: ipc/scan.js (의사코드, 구현 아님) ===</span>
+<span class="k">ipcMain</span>.handle(<span class="s">'spip:rescan'</span>, (evt, opts) => {
+  <span class="c">// (공통) 발신자 검증 + 키 화이트리스트(§4.2)</span>
+  <span class="k">const</span> { withSize, allDrives } = sanitizeRescanOpts(opts);
+  <span class="k">if</span> (!ctx.config.scanRoots.length) <span class="k">return</span> { ok:<span class="k">false</span>, code:<span class="s">'NO_SCAN_ROOTS'</span> };
+  <span class="k">const</span> acquired = scanController.acquire({ note });
+  <span class="k">if</span> (!acquired) <span class="k">return</span> { ok:<span class="k">false</span>, code:<span class="s">'SCAN_IN_PROGRESS'</span>, scanId: scanController.status().scanId };
+  scanController.start({
+    config: ctx.config, store: ctx.store, cachePath: ctx.cachePath, logger,
+    withSize, allDrives,                       <span class="c">// allDrives는 config.allowAllDrives 게이트로 강등(§4.2)</span>
+    onProgress: (snap) =&gt; win.webContents.send(<span class="s">'spip:scanProgress'</span>, snap),  <span class="c">// ★ 공개 콜백으로 push</span>
+  });
+  <span class="k">return</span> { ok:<span class="k">true</span>, code:<span class="s">'SCAN_STARTED'</span>, scanId: acquired.scanId, startedAt: acquired.startedAt };
+});
+<span class="c">// phase 전이(scanning→finalizing→done/error)는 onProgress가 status()를 그대로 실어 push하므로</span>
+<span class="c">// 별도 watcher 불필요. renderer는 phase==='done'이면 getProjects/getStats 재조회.</span></pre>
+  <pre><span class="c">// === preload: preload.js (의사코드) ===</span>
+<span class="k">const</span> { contextBridge, ipcRenderer } = require(<span class="s">'electron'</span>);
+contextBridge.exposeInMainWorld(<span class="s">'spip'</span>, {
+  getProjects: () => ipcRenderer.invoke(<span class="s">'spip:getProjects'</span>),
+  getStats:    () => ipcRenderer.invoke(<span class="s">'spip:getStats'</span>),
+  open:    (id)   => ipcRenderer.invoke(<span class="s">'spip:openInVsCode'</span>, { id: String(id) }),
+  rescan:  (o)    => ipcRenderer.invoke(<span class="s">'spip:rescan'</span>, { withSize:!!(o&amp;&amp;o.withSize), allDrives:!!(o&amp;&amp;o.allDrives) }),
+  pickFolders: () => ipcRenderer.invoke(<span class="s">'spip:pickFolders'</span>),
+  <span class="c">// 이벤트 구독: 콜백만 받고 ipcRenderer 원본은 노출하지 않음(보안)</span>
+  onScanProgress: (cb) => {
+    <span class="k">const</span> h = (_evt, payload) => cb(payload);
+    ipcRenderer.on(<span class="s">'spip:scanProgress'</span>, h);
+    <span class="k">return</span> () => ipcRenderer.removeListener(<span class="s">'spip:scanProgress'</span>, h); <span class="c">// 해제 함수 반환</span>
+  },
+});</pre>
+  <div class="note"><b>renderer 적응 최소화:</b> app.js의 폴링 상태머신(<code>pollOnce</code>·<code>nextPollAction</code>)은 <b>입력원만 교체</b>된다 — <code>setInterval+fetch</code> 대신 <code>spip.onScanProgress(payload => applyProgress(payload))</code>. <code>phase==='done'</code>이면 기존처럼 <code>getProjects</code>/<code>getStats</code> 재조회(R-11). 상태머신 자체 로직은 보존되어 회귀 위험이 작다.</div>
+</section>
+
+<section id="folder">
+  <h2>5. 네이티브 폴더 선택 (R-04)</h2>
+  <p>브라우저가 절대경로를 못 얻던 근본 제약을 OS 네이티브 대화상자로 해소한다. <b>대화상자 호출과 경로 정규화·영속은 전부 main에서</b> 수행하고, renderer는 트리거만 한다(경로 문자열을 renderer가 생성·전송하지 않음 → 신뢰 출처 유지).</p>
+  <pre><span class="c">// === main: ipc/folders.js (의사코드) ===</span>
+<span class="k">ipcMain</span>.handle(<span class="s">'spip:pickFolders'</span>, <span class="k">async</span> (evt) => {
+  <span class="k">const</span> { canceled, filePaths } = <span class="k">await</span> dialog.showOpenDialog(win, {
+    title: <span class="s">'스캔할 프로젝트 폴더 선택'</span>,
+    properties: [<span class="s">'openDirectory'</span>, <span class="s">'multiSelections'</span>],   <span class="c">// 여러 루트 한 번에</span>
+  });
+  <span class="k">if</span> (canceled || !filePaths.length) <span class="k">return</span> { ok:<span class="k">false</span>, code:<span class="s">'CANCELLED'</span> };
+
+  <span class="c">// filePaths는 OS가 준 절대경로(신뢰 출처) → addRootsResolve로 직접 입력과 동일 검증·정규화(§4.2)</span>
+  <span class="c">// canonicalize/realpath·디렉터리·시스템폴더 제외·dedup을 거친 것만 영속(L-2/H-1/M-2)</span>
+  <span class="k">const</span> r = addRootsResolve(filePaths, currentConfig.scanRoots, logger);
+  <span class="k">return</span> { ok:<span class="k">true</span>, added: r.added, roots: r.roots };
+});</pre>
+  <table>
+    <tr><th style="width:170px;">항목</th><th>설계</th></tr>
+    <tr><td>다중 선택</td><td><code>properties:['openDirectory','multiSelections']</code> — 여러 루트를 한 번에 추가(R-04)</td></tr>
+    <tr><td>영속</td><td>추가된 루트는 <code>config/spip.config.json</code>의 <code>scanRoots</code>에 병합·영속. 다음 실행에도 유지. CLI(<code>scan.js</code>)와 동일 설정 파일 공유 → 일관</td></tr>
+    <tr><td>정규화 일관</td><td>대화상자 결과·직접 입력 모두 <b><code>addRootsResolve</code> 단일 경로</b>로만 채택 — 그 안에서 <code>config.normalizeScanRoots</code> 규칙(절대경로 realpath·디렉터리 검증·dedup, L-2)에 더해 <b>시스템 폴더 제외</b>를 적용. 화이트리스트 원천을 한 곳으로 유지(H-1)</td></tr>
+    <tr><td>인앱 디렉터리 브라우저</td><td><b>드롭 확정(PM Q2 / EM-H-1).</b> 임의 디렉터리를 열람하는 <code>spip:browseDir</code> 채널 자체를 제거한다. 네이티브 대화상자 + 경로 직접 입력 두 경로만 둔다. 임의 경로 열람 표면(저장형 XSS가 호출 가능한)을 없앤다</td></tr>
+    <tr><td>경로 직접 입력(보조)</td><td><b>허용</b>. <code>spip:addRoots(paths)</code>로 텍스트 입력 경로도 받되, <b>동일 정규화·검증(canonicalize·디렉터리·시스템폴더 제외)을 통과한 것만</b> 채택(나머지는 <code>rejected:[{path,reason}]</code>). 키보드 사용자·붙여넣기 편의(N-07 접근성 정합)</td></tr>
+    <tr><td>루트 제거</td><td><code>spip:removeRoot(path)</code> — 입력 path를 canonicalize해 <b>현재 scanRoots와 정확 일치하는 항목만</b> 제거(임의 문자열로 무관 항목 제거 불가). 화이트리스트가 다음 스캔/적재에서 자동 축소</td></tr>
+  </table>
+</section>
+
+<section id="security">
+  <h2>6. 보안 모델 전환 (신뢰 경계 갱신)</h2>
+  <p>전송 계층 교체로 <b>TB-A(네트워크) 위협 표면이 통째로 사라지고</b>, 그 자리를 <b>Electron 보안 베이스라인</b>이 대체한다. 반면 <b>TB-B(스캔 대상 부분신뢰 파일시스템) 통제는 전부 유지</b>된다 — 도메인 코드를 안 바꿨기 때문이다.</p>
+
+  <figure>
+    <svg viewBox="0 0 1100 560" width="100%" role="img" aria-label="Electron 신뢰 경계 및 보안 통제 전환 다이어그램">
+      <defs>
+        <marker id="b1" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#34d399"/></marker>
+        <marker id="b2" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#fbbf24"/></marker>
+      </defs>
+
+      <!-- 사라진 영역 (TB-A 네트워크) -->
+      <rect x="20" y="30" width="250" height="170" rx="10" fill="#170d0d" stroke="#64748b" stroke-width="1.2" stroke-dasharray="6 5"/>
+      <text x="145" y="52" fill="#94a3b8" font-size="12" text-anchor="middle" font-weight="bold" font-family="Segoe UI">TB-A: 네트워크 (제거됨)</text>
+      <text x="145" y="76" fill="#64748b" font-size="10" text-anchor="middle" font-family="Segoe UI">127.0.0.1 리스닝 소켓 없음</text>
+      <text x="145" y="96" fill="#64748b" font-size="9.5" text-anchor="middle" font-family="Segoe UI">DNS 리바인딩 · CSRF</text>
+      <text x="145" y="112" fill="#64748b" font-size="9.5" text-anchor="middle" font-family="Segoe UI">악성 웹페이지 액션 트리거</text>
+      <text x="145" y="132" fill="#64748b" font-size="9.5" text-anchor="middle" font-family="Segoe UI">→ 도달 경로 자체가 사라짐</text>
+      <text x="145" y="160" fill="#fca5a5" font-size="9.5" text-anchor="middle" font-family="Segoe UI">사라진 통제(불필요):</text>
+      <text x="145" y="178" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">Host allowlist·Origin·세션토큰·CSRF</text>
+
+      <!-- 신규 Electron 베이스라인 -->
+      <rect x="300" y="30" width="320" height="290" rx="10" fill="#0b1220" stroke="#fbbf24" stroke-width="1.6"/>
+      <text x="460" y="52" fill="#fbbf24" font-size="12" text-anchor="middle" font-weight="bold" font-family="Segoe UI">신규: Electron 보안 베이스라인</text>
+      <rect x="316" y="64" width="288" height="38" rx="7" fill="#142035" stroke="#fbbf24"/>
+      <text x="460" y="82" fill="#e2e8f0" font-size="10" text-anchor="middle" font-family="Segoe UI">contextIsolation:true · nodeIntegration:false</text>
+      <text x="460" y="96" fill="#94a3b8" font-size="8.5" text-anchor="middle" font-family="Segoe UI">renderer에 Node 노출 0</text>
+      <rect x="316" y="108" width="288" height="38" rx="7" fill="#142035" stroke="#fbbf24"/>
+      <text x="460" y="126" fill="#e2e8f0" font-size="10" text-anchor="middle" font-family="Segoe UI">sandbox:true (필수 MUST)</text>
+      <text x="460" y="140" fill="#94a3b8" font-size="8.5" text-anchor="middle" font-family="Segoe UI">renderer OS 권한 박탈 (EM-L-2)</text>
+      <rect x="316" y="152" width="288" height="38" rx="7" fill="#142035" stroke="#fbbf24"/>
+      <text x="460" y="170" fill="#e2e8f0" font-size="10" text-anchor="middle" font-family="Segoe UI">preload allowlist + main 전 채널 재검증</text>
+      <text x="460" y="184" fill="#94a3b8" font-size="8.5" text-anchor="middle" font-family="Segoe UI">window.spip만 · ipcRenderer 비노출 · senderFrame 검증</text>
+      <rect x="316" y="196" width="288" height="38" rx="7" fill="#142035" stroke="#fbbf24"/>
+      <text x="460" y="214" fill="#e2e8f0" font-size="10" text-anchor="middle" font-family="Segoe UI">원격 콘텐츠 미로드 (loadFile, file://)</text>
+      <text x="460" y="228" fill="#94a3b8" font-size="8.5" text-anchor="middle" font-family="Segoe UI">http(s)·외부 URL 로드 0</text>
+      <rect x="316" y="240" width="288" height="38" rx="7" fill="#142035" stroke="#fbbf24"/>
+      <text x="460" y="258" fill="#e2e8f0" font-size="10" text-anchor="middle" font-family="Segoe UI">will-navigate 차단 · setWindowOpenHandler:deny</text>
+      <text x="460" y="272" fill="#94a3b8" font-size="8.5" text-anchor="middle" font-family="Segoe UI">탐색·팝업 탈출 차단</text>
+      <rect x="316" y="282" width="288" height="32" rx="7" fill="#142035" stroke="#fbbf24"/>
+      <text x="460" y="302" fill="#e2e8f0" font-size="10" text-anchor="middle" font-family="Segoe UI">CSP 강화(default-src 'none') + 헤더 이중주입</text>
+
+      <!-- IPC 경계 (main 검증) -->
+      <rect x="650" y="30" width="200" height="170" rx="10" fill="#0b1220" stroke="#34d399" stroke-width="1.6"/>
+      <text x="750" y="52" fill="#34d399" font-size="12" text-anchor="middle" font-weight="bold" font-family="Segoe UI">유지: IPC 경계 검증</text>
+      <text x="750" y="74" fill="#cbd5e1" font-size="9.5" text-anchor="middle" font-family="Segoe UI">(main ipcMain 핸들러)</text>
+      <rect x="666" y="84" width="168" height="34" rx="6" fill="#142035" stroke="#34d399"/>
+      <text x="750" y="100" fill="#e2e8f0" font-size="9" text-anchor="middle" font-family="Segoe UI">전 채널 인자 스키마·화이트리스트</text>
+      <text x="750" y="112" fill="#94a3b8" font-size="8" text-anchor="middle" font-family="Segoe UI">senderFrame 발신자 검증(EM-M-2)</text>
+      <rect x="666" y="122" width="168" height="34" rx="6" fill="#142035" stroke="#34d399"/>
+      <text x="750" y="143" fill="#e2e8f0" font-size="9.5" text-anchor="middle" font-family="Segoe UI">pathGuard.canonicalize/realpath (H-1)</text>
+      <rect x="666" y="160" width="168" height="32" rx="6" fill="#142035" stroke="#34d399"/>
+      <text x="750" y="180" fill="#e2e8f0" font-size="9.5" text-anchor="middle" font-family="Segoe UI">L-3 고정 code/message · browseDir 없음</text>
+
+      <!-- TB-B 유지 (그대로) -->
+      <rect x="650" y="220" width="430" height="180" rx="10" fill="#1a1206" stroke="#fbbf24" stroke-width="1.4" stroke-dasharray="6 5"/>
+      <text x="865" y="242" fill="#fbbf24" font-size="12" text-anchor="middle" font-weight="bold" font-family="Segoe UI">TB-B: 스캔 대상 (부분신뢰) — 통제 전부 유지</text>
+      <text x="865" y="260" fill="#cbd5e1" font-size="9.5" text-anchor="middle" font-family="Segoe UI">RC-2 그대로 유효 — 악성 클론 리포 섞일 수 있음</text>
+      <rect x="666" y="272" width="195" height="54" rx="7" fill="#0b1220" stroke="#fbbf24"/>
+      <text x="763" y="292" fill="#e2e8f0" font-size="9.5" text-anchor="middle" font-family="Segoe UI">pathGuard realpath 화이트리스트 (H-1)</text>
+      <text x="763" y="308" fill="#94a3b8" font-size="8.5" text-anchor="middle" font-family="Segoe UI">safeExec resolveBin 절대경로·shell:false (H-2)</text>
+      <text x="763" y="320" fill="#94a3b8" font-size="8.5" text-anchor="middle" font-family="Segoe UI">M-4 타임아웃·in-flight 상한</text>
+      <rect x="869" y="272" width="195" height="54" rx="7" fill="#0b1220" stroke="#fbbf24"/>
+      <text x="966" y="292" fill="#e2e8f0" font-size="9.5" text-anchor="middle" font-family="Segoe UI">H-3 입력 가드(크기·깊이·ReDoS)</text>
+      <text x="966" y="308" fill="#94a3b8" font-size="8.5" text-anchor="middle" font-family="Segoe UI">M-3 깊이/심링크 루프 차단</text>
+      <text x="966" y="320" fill="#94a3b8" font-size="8.5" text-anchor="middle" font-family="Segoe UI">L-1 textContent·M-2 0600 원자적 쓰기</text>
+      <rect x="666" y="336" width="398" height="48" rx="7" fill="#0b1220" stroke="#fbbf24"/>
+      <text x="865" y="356" fill="#e2e8f0" font-size="9.5" text-anchor="middle" font-family="Segoe UI">currentPath shortenPath 축약(M4-H-1) · L-3 에러 메시지 정책</text>
+      <text x="865" y="372" fill="#94a3b8" font-size="8.5" text-anchor="middle" font-family="Segoe UI">→ 전송 방식과 무관 = 코드 무수정으로 전부 보존</text>
+
+      <!-- 흐름 화살표 -->
+      <line x1="620" y1="180" x2="648" y2="120" stroke="#34d399" stroke-width="1.6" marker-end="url(#b1)"/>
+      <line x1="750" y1="200" x2="763" y2="270" stroke="#fbbf24" stroke-width="1.6" marker-end="url(#b2)"/>
+      <text x="245" y="360" fill="#64748b" font-size="11" font-family="Segoe UI">요약: TB-A는 제거(통제 불필요), Electron 베이스라인 신규,</text>
+      <text x="245" y="378" fill="#64748b" font-size="11" font-family="Segoe UI">IPC 경계 검증 유지, TB-B 통제는 전부 보존.</text>
+    </svg>
+    <div class="legend">
+      <span><span class="dot" style="background:#64748b"></span> 제거(불필요)</span>
+      <span><span class="dot" style="background:#fbbf24"></span> 신규/유지(부분신뢰)</span>
+      <span><span class="dot" style="background:#34d399"></span> IPC 경계 검증(유지)</span>
+    </div>
+    <figcaption>그림 2. 보안 모델 전환. HTTP 전용 통제(Host/Origin/세션토큰/CSRF)는 사라지고 Electron 베이스라인이 대체. TB-B 부분신뢰 통제는 전부 유지.</figcaption>
+  </figure>
+
+  <h3>6.1 사라지는 통제 (HTTP 전용 → IPC에선 불필요)</h3>
+  <table>
+    <tr><th style="width:230px;">기존 통제 (architecture §11.3 / M-1)</th><th>왜 불필요한가</th></tr>
+    <tr><td>127.0.0.1 바인딩 (N-02)</td><td>리스닝 소켓 자체가 없음. IPC는 OS 프로세스 내부 채널 → 외부/타 프로세스 도달 경로 부재</td></tr>
+    <tr><td>Host allowlist (DNS 리바인딩)</td><td>HTTP Host 헤더 개념이 IPC에 없음</td></tr>
+    <tr><td>Origin 검증 (CSRF)</td><td>악성 웹페이지가 IPC 채널에 도달할 수 없음(renderer는 우리 로컬 콘텐츠뿐, 원격 미로드)</td></tr>
+    <tr><td>세션 토큰 X-SPIP-Token / checkStateChange / checkReadAccess</td><td>위조 출처가 없으므로 토큰 불필요. index.html 토큰 메타 주입도 제거</td></tr>
+    <tr><td>CSP-as-defense (HTTP 헤더로서의)</td><td>HTTP 응답 헤더 CSP는 사라짐. 단 <b>renderer CSP는 메타 태그 + Electron 세션 헤더(<code>onHeadersReceived</code>)로 유지·강화</b>(EM-M-1, §6.2). 기존 staticHandler CSP 수준 이상으로 전 디렉티브 복원</td></tr>
+  </table>
+
+  <h3>6.2 신규 통제 (Electron 보안 베이스라인)</h3>
+  <table>
+    <tr><th style="width:230px;">통제</th><th>설계</th></tr>
+    <tr><td><code>contextIsolation:true</code></td><td>preload와 renderer의 JS 컨텍스트 분리 → renderer가 preload 내부·Electron 내부 변조 불가</td></tr>
+    <tr><td><code>nodeIntegration:false</code></td><td>renderer에서 <code>require</code>·<code>process</code>·Node API 접근 차단. 오염된 리포 메타데이터가 renderer에 흘러도 RCE로 승격 불가</td></tr>
+    <tr><td><code>sandbox:true</code> <b>(필수, MUST)</b></td><td><b>EM-L-2 격상:</b> "권장"→<b>"필수"</b>. renderer를 OS 샌드박스에 가둠. 본 설계는 모든 로직을 main에 두고 preload는 순수 <code>contextBridge</code>+<code>ipcRenderer</code>만 쓰므로 <b>이미 sandbox와 완전 호환</b> — 강제해도 비용 0. 구현 게이트에서 sandbox on 상태 스모크 검증 의무화(EC-5)</td></tr>
+    <tr><td>preload 최소 allowlist</td><td><code>window.spip</code>에 §4 채널 함수만 노출. <code>ipcRenderer</code> 원본·임의 채널 <code>invoke(channel,…)</code>는 <b>노출 금지(MUST)</b> — 채널명 하드코딩. <code>browseDir</code> 등 임의경로 채널은 존재하지 않음(드롭)</td></tr>
+    <tr><td>원격 콘텐츠 미로드</td><td><code>loadFile('public/index.html')</code>만. http(s)·외부 URL 로드 금지. <code>webPreferences.webSecurity</code> 기본 유지</td></tr>
+    <tr><td><b>file:// 자산 경로 전략 (EM-M-1)</b></td><td><code>loadFile</code>로 로컬 로드 시 현행 <code>index.html</code>의 <code>/static/styles.css</code>·<code>/static/app.js</code> <b>절대경로는 file 루트(드라이브 루트) 기준이 되어 로드 실패</b>한다(staticHandler가 사라지므로 <code>/static</code> 매핑 부재). <b>정정:</b> 자산 참조를 <code>./static/</code> 상대경로(또는 <code>public/</code> 평탄화)로 재작성하거나, 안정성을 위해 <b>커스텀 프로토콜 <code>protocol.handle('app://')</code>로 <code>public/</code> 루트를 매핑</b>하고 <code>loadURL('app://index.html')</code>로 로드한다(권장 — origin이 <code>app://</code>로 명확해져 CSP <code>'self'</code> 의미가 분명). 둘 중 택1을 단계 1에서 확정</td></tr>
+    <tr><td>탐색/팝업 차단</td><td><code>webContents.on('will-navigate', e=>e.preventDefault())</code> + <code>setWindowOpenHandler(()=>({action:'deny'}))</code> + <code>will-attach-webview</code> 거부(sub-frame·webview 생성 금지). <b>EM-L-1:</b> <code>shell.openExternal</code>은 <b>기본 금지(미사용)</b> — 임의 URL 스킴 실행 표면 차단. 향후 도입 시 <code>https:</code> 스킴 allowlist + 사용자 확인을 전제로만</td></tr>
+    <tr><td><b>IPC 발신자 검증 (EM-M-2)</b></td><td>모든 <code>ipcMain.handle</code>에서 <code>event.senderFrame</code>(또는 webContents)이 <b>메인 윈도우의 신뢰 로컬 origin</b>(<code>app://</code> 또는 <code>file://</code> 우리 index)인지 확인하고, 불일치 시 무시. M-1(Origin/토큰) 제거가 만든 공백의 심층방어 — will-navigate 차단이 실패하거나 미래에 외부 프레임이 유입돼도 main이 무차별 수신하지 않게 함</td></tr>
+    <tr><td>renderer CSP <b>강화 (EM-M-1)</b></td><td>index.html <code>&lt;meta http-equiv="Content-Security-Policy"&gt;</code>를 <b>현행 전 디렉티브 보존+강화</b>(축약 금지 — 누락은 약화다). 권장 정책:<br><code>default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'</code><br>(IPC만 쓰므로 <code>connect-src</code>는 <code>'none'</code> 가능). 추가로 Electron <code>session.webRequest.onHeadersReceived</code>로 <b>동일 CSP를 응답 헤더로도 주입</b>해 메타 누락/우회를 이중 차단. staticHandler의 CSP 상수 기준이 사라지므로 단일 출처를 index.html 메타 + 세션 헤더로 재정의. L-1 저장형 XSS 2차 방어선 유지·강화</td></tr>
+  </table>
+
+  <h3>6.3 유지되는 통제 (TB-B 부분신뢰 — 코드 무수정 보존)</h3>
+  <ul>
+    <li><b>pathGuard</b> canonicalize/realpath 화이트리스트 정확 일치(H-1) — IPC <code>open</code> 핸들러가 여전히 호출. id→경로 역참조·realpath 검증 동일</li>
+    <li><b>safeExec</b> resolveBin 절대경로·<code>shell:false</code>·타임아웃·maxBuffer(H-2·M-4) — code/git 실행 그대로</li>
+    <li><b>H-3 입력 가드</b> collectors의 크기·깊이·ReDoS-free·문자열 절단 — 스캐너가 main에서 동일 동작</li>
+    <li><b>M-3</b> walker 내장 안전 깊이 상한·방문 realpath 추적(심링크 루프 차단)</li>
+    <li><b>L-1 textContent</b> 렌더 — app.js 보존. 오염된 name/description/branch 저장형 XSS 차단(RC-2)</li>
+    <li><b>M-2</b> config/cache 0600·0700 원자적 쓰기 — serializer/paths 그대로</li>
+    <li><b>L-3</b> 에러 메시지 정책 — IPC 반환 객체도 고정 code/message만, 절대경로·스택 비노출</li>
+    <li><b>M4-H-1</b> ScanProgress.currentPath shortenPath 축약 — 진행 이벤트 push에도 동일 적용</li>
+  </ul>
+  <div class="danger-box"><b>RC-2 그대로 유효:</b> 데스크톱 전환은 신뢰 불가 리포 위협을 줄이지 않는다. 오히려 nodeIntegration:false·sandbox로 <b>renderer 측 폭발 반경을 추가로 축소</b>한다. main은 여전히 부분신뢰 파일을 파싱·실행하므로 TB-B 통제가 1차 방어선이며 필수 보존.</div>
+</section>
+
+<section id="lifecycle">
+  <h2>7. 앱 생명주기 · 패키징</h2>
+  <h3>7.1 main 생명주기</h3>
+  <pre><span class="c">// === electron/main.js (의사코드, 흐름만) ===</span>
+<span class="c">// 1) 단일 인스턴스 락 — 두 번째 실행은 기존 창에 포커스</span>
+<span class="k">if</span> (!app.requestSingleInstanceLock()) { app.quit(); <span class="k">return</span>; }
+app.on(<span class="s">'second-instance'</span>, () => { <span class="k">if</span> (win) { <span class="k">if</span> (win.isMinimized()) win.restore(); win.focus(); } });
+
+app.whenReady().then(() => {
+  <span class="c">// 2) composition root (server.js 승계): config 로드 → store 적재 → scanController 생성</span>
+  ctx = buildContext({ logger });   <span class="c">// { config, store, scanController, cachePath, logger }</span>
+  registerIpcHandlers(ctx);         <span class="c">// §4 채널 등록</span>
+  <span class="c">// 3) 창 생성 — 보안 webPreferences</span>
+  win = <span class="k">new</span> BrowserWindow({
+    width:1200, height:800, show:<span class="k">false</span>,
+    webPreferences: { preload: pathToPreload, contextIsolation:<span class="k">true</span>, nodeIntegration:<span class="k">false</span>, sandbox:<span class="k">true</span> },
+  });
+  win.loadURL(<span class="s">'app://index.html'</span>);                 <span class="c">// 커스텀 프로토콜로 public/ 매핑(EM-M-1) — 또는 loadFile+상대경로</span>
+  win.once(<span class="s">'ready-to-show'</span>, () => win.show());   <span class="c">// 흰 화면 깜빡임 방지</span>
+  Menu.setApplicationMenu(buildMenu(ctx));         <span class="c">// 재스캔·폴더추가·종료·도움말</span>
+  hardenWebContents(win);                          <span class="c">// will-navigate·setWindowOpenHandler:deny·will-attach-webview 거부(§6.2)</span>
+  applyCspHeaders(win.webContents.session);        <span class="c">// onHeadersReceived로 CSP 헤더 이중주입(EM-M-1)</span>
+
+  <span class="c">// 종료 시 스캔 진행 중이면 확인 다이얼로그(PM 확정 Q4)</span>
+  win.on(<span class="s">'close'</span>, (e) => {
+    <span class="k">const</span> phase = scanController.status().phase;
+    <span class="k">if</span> (phase === <span class="s">'scanning'</span> || phase === <span class="s">'finalizing'</span>) {
+      e.preventDefault();
+      <span class="k">const</span> choice = dialog.showMessageBoxSync(win, { type:<span class="s">'question'</span>, buttons:[<span class="s">'종료'</span>,<span class="s">'취소'</span>], defaultId:1, cancelId:1,
+        message:<span class="s">'스캔이 진행 중입니다. 종료하시겠습니까?'</span> });
+      <span class="k">if</span> (choice === 0) { win.destroy(); }   <span class="c">// 확인 시 종료(스캔은 프로세스 종료로 중단)</span>
+    }
+  });
+});
+
+<span class="c">// 환경변수 악용 차단(EM-M-3): RUN_AS_NODE로 기동되면 즉시 종료</span>
+<span class="k">if</span> (process.env.ELECTRON_RUN_AS_NODE) { app.quit(); }
+
+app.on(<span class="s">'window-all-closed'</span>, () => { <span class="k">if</span> (process.platform !== <span class="s">'darwin'</span>) app.quit(); });
+app.on(<span class="s">'activate'</span>, () => { <span class="k">if</span> (BrowserWindow.getAllWindows().length === 0) createWindow(); }); <span class="c">// macOS</span></pre>
+  <table>
+    <tr><th style="width:170px;">항목</th><th>설계</th></tr>
+    <tr><td>단일 인스턴스 락</td><td><code>requestSingleInstanceLock()</code> — 중복 실행 방지. 둘째 실행은 기존 창 포커스. scanController 단일 in-flight 락 전제와 정합</td></tr>
+    <tr><td>창 생성</td><td><code>show:false</code> + <code>ready-to-show</code>로 깜빡임 방지. 보안 webPreferences(§6.2). 최소 크기 지정</td></tr>
+    <tr><td>메뉴</td><td>네이티브 메뉴: 파일(폴더 추가→pickFolders·종료) · 스캔(재스캔·all-drives 토글은 게이트 표시) · 보기(새로고침·개발자도구는 dev만) · 도움말. 접근성(N-07) 보조</td></tr>
+    <tr><td>종료 (PM 확정 Q4)</td><td><b>F-4 정정 — "조용히 중단" 서술 제거.</b> 종료 시점에 <code>scanController.status().phase</code>가 진행 중(<code>scanning</code>/<code>finalizing</code>)이면 <code>win.on('close', e=>{...})</code>에서 <code>e.preventDefault()</code> 후 <b>네이티브 확인 다이얼로그</b>(<code>dialog.showMessageBox</code>, "스캔이 진행 중입니다. 종료하시겠습니까?")를 띄운다. 사용자가 확인하면 종료, 취소하면 창을 유지. 진행 중이 아니면 즉시 종료. <code>window-all-closed</code> → quit(비 macOS)</td></tr>
+    <tr><td>진행 중 스캔과 종료</td><td>scanController는 협조적 취소 미지원 → <b>사용자가 종료를 확인하면</b> 백그라운드 스캔은 프로세스 종료로 중단된다. 영속 스냅샷은 finalizing 완료분만 반영(부분 결과 없음 → 데이터 손상 없음). watchdog는 비정상 장기 실행 시 락 정리용으로 별개 동작(종료 처리와 무관)</td></tr>
+  </table>
+
+  <h3>7.2 패키징 (electron-builder)</h3>
+  <table>
+    <tr><th style="width:170px;">항목</th><th>설계</th></tr>
+    <tr><td>빌드 도구</td><td><code>electron-builder</code> (devDependency). <code>electron-builder.yml</code> 또는 package.json <code>build</code> 키로 설정</td></tr>
+    <tr><td>Windows 타깃</td><td><b>NSIS 설치본</b>(시작메뉴·바탕화면 바로가기·언인스톨러) + <b>포터블</b>(설치 없이 실행) 2종 산출</td></tr>
+    <tr><td>포함 파일</td><td><code>files: [electron/**, lib/**, public/**, package.json]</code>. <code>test/·docs/</code> 제외. <code>asar:true</code>(기본)로 소스 패킹. <b>주의:</b> asar는 패킹일 뿐 무결성 보장이 아님(추출·변조 가능) → 아래 fuses·integrity 병행</td></tr>
+    <tr><td>appId·productName (PM 확정 Q6)</td><td><b>확정:</b> <code>appId: com.spip.app</code>, <code>productName: Project-SPIP</code>. 버전은 package.json version 승계</td></tr>
+    <tr><td>아이콘</td><td><code>build/icon.ico</code>(Win). 항목만 — 실제 에셋은 디자인 단계</td></tr>
+    <tr><td><b>Electron fuses (EM-M-3)</b></td><td>빌드 산출물에 <b>fuses 적용을 베이스라인으로 고정</b>: <code>RunAsNode</code> <b>비활성</b>·<code>EnableNodeCliInspectArguments</code> 비활성·<code>OnlyLoadAppFromAsar</code> 활성·<code>EnableEmbeddedAsarIntegrityValidation</code> 활성. 추가로 런타임에서 <code>ELECTRON_RUN_AS_NODE</code> 환경변수를 <b>무력화</b>(앱 시작 시 검사·차단) — 패킹된 앱 바이너리를 임의 Node 실행기로 악용하는 우회 표면 제거</td></tr>
+    <tr><td><b>쓰기 가능 위치 분리 (EM-M-3)</b></td><td>config/cache(0600/0700) 등 <b>쓰기 데이터는 설치 디렉터리가 아닌 앱 데이터 폴더</b>(<code>%APPDATA%\spip</code>, ADR-EM-4)에만 둔다. 설치 디렉터리(Program Files 등)는 읽기 전용 — 변조·권한 상승 표면 축소</td></tr>
+    <tr><td>코드 서명 (PM 확정 Q5)</td><td><b>항목만(실서명 제외) — 미서명 배포를 위험 수용으로 확정.</b> 미서명 시 Windows <b>SmartScreen 경고</b>가 발생하며, 변조·악성 재배포(위장/변조) 위험을 수용한다(단일 사용자 내부 도구). 설치 안내에 SmartScreen "추가 정보→실행" 안내를 포함. 서명 인증서 확보·도입 시점은 후속 결정(ADR-EM-5)</td></tr>
+    <tr><td>자동 업데이트</td><td><b>범위 외</b>(단일 사용자 로컬 도구). 필요 시 후속 ADR</td></tr>
+  </table>
+  <div class="warn-box"><b>EM-M-3 위험 수용 명시:</b> 미서명 배포는 SmartScreen 경고·변조 위험을 동반하나, 1차 타깃이 단일 사용자 내부 도구이고 fuses(RunAsNode off·OnlyLoadAppFromAsar·asar integrity)·<code>ELECTRON_RUN_AS_NODE</code> 무력화로 런타임 악용 표면을 줄이므로 <b>현 단계에서 수용한다</b>(PM 확정 Q5). 외부 배포 확대 시 코드 서명을 재검토한다.</div>
+</section>
+
+<section id="deps">
+  <h2>8. 의존성 정책 · package.json</h2>
+  <table>
+    <tr><th style="width:200px;">구분</th><th>패키지</th><th>정책</th></tr>
+    <tr><td>devDependencies</td><td><code>electron</code>, <code>electron-builder</code></td><td>개발·빌드 전용. 설치본에는 electron 런타임이 번들되지만 npm <code>dependencies</code>로 두지 않음(electron-builder 관례)</td></tr>
+    <tr><td>dependencies (런타임)</td><td><b>0개</b></td><td>우리 <code>lib/</code> + Node/Electron 내장 모듈(fs·path·child_process·crypto·os)만. electron 외 런타임 추가 금지 원칙 유지</td></tr>
+    <tr><td>기존 test</td><td><code>node:test</code> (내장)</td><td>그대로. 외부 테스트 의존성 0 유지</td></tr>
+  </table>
+  <pre><span class="c">// package.json (설계 — 변경분만)</span>
+{
+  <span class="s">"name"</span>: <span class="s">"project-spip"</span>,
+  <span class="s">"version"</span>: <span class="s">"1.0.0"</span>,
+  <span class="s">"main"</span>: <span class="s">"electron/main.js"</span>,          <span class="c">// ★ 신규: Electron 진입점</span>
+  <span class="s">"type"</span>: <span class="s">"commonjs"</span>,
+  <span class="s">"bin"</span>: { <span class="s">"spip"</span>: <span class="s">"scan.js"</span> },        <span class="c">// 유지: CLI 자동화</span>
+  <span class="s">"scripts"</span>: {
+    <span class="s">"start"</span>: <span class="s">"electron ."</span>,             <span class="c">// ★ 변경: node server.js → electron .</span>
+    <span class="s">"build"</span>: <span class="s">"electron-builder"</span>,       <span class="c">// ★ 신규: 설치본 산출</span>
+    <span class="s">"build:portable"</span>: <span class="s">"electron-builder --win portable"</span>,
+    <span class="s">"scan"</span>: <span class="s">"node scan.js"</span>,           <span class="c">// 유지</span>
+    <span class="s">"serve:http"</span>: <span class="s">"node server.js"</span>,    <span class="c">// 과도기 HTTP 보존(Q1 확정: 완료까지 보존 후 삭제)</span>
+    <span class="s">"test"</span>: <span class="s">"node --test \"test/**/*.test.js\""</span>  <span class="c">// 유지</span>
+  },
+  <span class="s">"devDependencies"</span>: { <span class="s">"electron"</span>: <span class="s">"^&lt;LTS&gt;"</span>, <span class="s">"electron-builder"</span>: <span class="s">"^&lt;latest&gt;"</span> },
+  <span class="s">"build"</span>: {                            <span class="c">// electron-builder 설정(또는 electron-builder.yml)</span>
+    <span class="s">"appId"</span>: <span class="s">"com.spip.app"</span>,
+    <span class="s">"productName"</span>: <span class="s">"Project-SPIP"</span>,
+    <span class="s">"files"</span>: [<span class="s">"electron/**"</span>, <span class="s">"lib/**"</span>, <span class="s">"public/**"</span>, <span class="s">"package.json"</span>],
+    <span class="s">"win"</span>: { <span class="s">"target"</span>: [<span class="s">"nsis"</span>, <span class="s">"portable"</span>], <span class="s">"icon"</span>: <span class="s">"build/icon.ico"</span> }
+  }
+}</pre>
+  <div class="warn-box"><b>engines 주의:</b> 현재 <code>engines.node &gt;=18</code>. Electron은 자체 Node 런타임을 번들하므로 설치본 사용자에겐 Node 설치가 불필요해진다(불편 ① 해소). CLI(<code>spip</code>) 사용자만 Node 필요 — engines는 CLI 기준으로 유지.</div>
+</section>
+
+<section id="tree">
+  <h2>9. 디렉터리 구조 (전 / 후)</h2>
+  <pre>project-spip/
+├─ package.json              <span class="c"># main:"electron/main.js" · start:"electron ." · build 추가</span>
+├─ scan.js                   <span class="c"># [유지] CLI 진입점(spip bin) — 자동화/CI</span>
+├─ server.js                 <span class="c"># [드롭 또는 과도기 보존] HTTP 서버. main이 composition root 승계</span>
+├─ electron/                 <span class="c"># ★ 신규: Electron 프로세스 골격</span>
+│  ├─ main.js                <span class="c"># main: 단일인스턴스·창·메뉴·ctx 조립·ipc 등록 (server.js 승계)</span>
+│  ├─ preload.js             <span class="c"># contextBridge로 window.spip 화이트리스트 노출(최소)</span>
+│  ├─ menu.js                <span class="c"># 네이티브 메뉴 정의</span>
+│  └─ ipc/                   <span class="c"># ipcMain 핸들러(얇은 전송 어댑터)</span>
+│     ├─ data.js             <span class="c"># getProjects·getStats·getHealth (apiHandlers 로직 이식)</span>
+│     ├─ actions.js          <span class="c"># openInVsCode·rescan (actionHandlers 로직 이식, H-1/H-2/M-4)</span>
+│     ├─ scan.js             <span class="c"># getScanStatus·scanProgress 푸시(scanController.start의 신규 onProgress 콜백, F-1)</span>
+│     └─ folders.js          <span class="c"># pickFolders(dialog)·addRootsResolve·removeRoot·getConfig (R-04, browseDir 없음)</span>
+├─ lib/                      <span class="c"># [재사용] 도메인 — 무수정</span>
+│  ├─ scan/                  <span class="c"># walker·detector·collectors·scanner·serializer·excludeRules·driveEnum (그대로)</span>
+│  ├─ server/                <span class="c"># snapshotStore·scanController [재사용] / router·staticHandler·security [드롭]</span>
+│  │                         <span class="c"># apiHandlers·actionHandlers [로직만 ipc/로 이식, 파일은 단위테스트 동안 유지 가능]</span>
+│  └─ common/                <span class="c"># paths·config·pathGuard·safeExec·logger [재사용]</span>
+├─ public/                   <span class="c"># [재사용] renderer 콘텐츠 — loadFile로 로드</span>
+│  ├─ index.html             <span class="c"># 세션토큰 메타 제거, CSP 메타 유지·강화</span>
+│  ├─ styles.css             <span class="c"># 그대로</span>
+│  └─ app.js                 <span class="c"># 전송 어댑터만 교체: fetch→window.spip.*, 폴링→onScanProgress</span>
+├─ build/                    <span class="c"># ★ 신규: 패키징 리소스(icon.ico 등)</span>
+├─ test/                     <span class="c"># [유지] lib 단위테스트 + HTTP→IPC 테스트로 이관(§10)</span>
+└─ docs/architecture/        <span class="c"># 설계 산출물(본 문서 포함)</span>
+
+<span class="c"># 런타임 데이터(리포 밖·설치 디렉터리 밖, 그대로 — N-06/M-2/EM-M-3):</span>
+<span class="c">#   Win %APPDATA%\spip\{config/spip.config.json, cache/projects.json}  (0600/0700)</span>
+<span class="c">#   ※ 데이터 폴더명은 spip로 고정(productName=Project-SPIP와 무관, F-7) — CLI(scan.js)와 공유</span>
+<span class="c">#   ※ Electron app.getPath('userData')는 비공유 용도(로그/임시)로만(ADR-EM-4·Q3)</span></pre>
+  <div class="note"><b>설계 의도:</b> <code>electron/</code>을 새 전송 레이어로 격리하고 <code>lib/server/</code>의 도메인(snapshotStore·scanController)은 그 자리에 둔다. <code>electron/ipc/*</code>는 <b>얇은 어댑터</b>로, 검증→lib 호출→객체 반환만 한다. 이로써 도메인 변화 격리(architecture §7 원칙)를 전송 교체에도 유지한다.</div>
+</section>
+
+<section id="migration">
+  <h2>10. 마이그레이션 단계 · 테스트 보존</h2>
+  <h3>10.1 단계 (점진 이전 — 각 단계 후 동작 확인)</h3>
+  <div class="note"><b>F-3 — 검증 방식 분리:</b> GUI·OS 대화상자·실제 <code>spawn</code>이 필요한 단계(0·2·4·6·8)는 CI/헤드리스에서 자동 검증이 불가하다. 아래 "검증" 칸에 <b>[자동]</b>(ctx 주입·Electron API 모킹으로 단위테스트 가능)과 <b>[수동 GUI]</b>(사용자 PC 스모크 필요)를 태깅한다. <b>모킹 경계:</b> ipcMain 핸들러 로직은 <code>(args,ctx)→result</code> 순수함수로 추출해 <code>dialog</code>·<code>webContents</code>·<code>shell</code>·<code>BrowserWindow</code>를 ctx 주입으로 모킹 → 검증·정규화·실패 모드를 <b>자동</b> 단위테스트. main.js의 창·메뉴·생명주기 wiring과 실제 dialog/spawn 결과는 <b>수동 GUI 스모크</b>로만 확인.</div>
+  <table>
+    <tr><th style="width:50px;">단계</th><th style="width:175px;">내용</th><th>산출 / 검증 [자동 / 수동 GUI]</th></tr>
+    <tr><td><b>0</b></td><td>의존성·스캐폴드</td><td><code>electron</code>·<code>electron-builder</code> devDep 추가. <code>electron/</code> 폴더·빈 main/preload 생성. <code>main</code> 진입점·<code>start</code> 스크립트 변경. <b>[수동 GUI]</b> 빈 창이 뜨는지 / <b>[자동]</b> 스크립트·진입점 설정 검증</td></tr>
+    <tr><td><b>1</b></td><td>골격 + composition root 이식</td><td><code>main.js</code>가 <code>buildContext</code>(config 로드·store 적재·scanController 생성)로 server.js의 조립 로직 승계. <code>app://</code> 프로토콜 등록 + 자산 경로 전략 확정(EM-M-1). <b>[자동]</b> buildContext 반환 ctx 형태(<code>{config,store,scanController,cachePath,logger}</code>) 단위테스트 / <b>[수동 GUI]</b> 기존 UI 표시</td></tr>
+    <tr><td><b>2</b></td><td>preload + 읽기 IPC</td><td><code>preload.js</code> contextBridge. <code>spip:getProjects·getStats·getHealth</code> 핸들러(apiHandlers 로직 이식). <b>[자동]</b> 핸들러를 ctx 주입으로 직접 호출해 반환 shape 검증 / <b>[수동 GUI]</b> 대시보드 카드 렌더</td></tr>
+    <tr><td><b>3</b></td><td>renderer 전송 어댑터 교체</td><td>app.js의 <code>fetch('/api/*')</code>를 <code>window.spip.*</code>로 교체(얇은 어댑터 함수 1곳에 모음). 세션토큰 메타·코드 제거. 필터/정렬/검색 등 UI 로직은 무변경. <b>[수동 GUI]</b> 목록·필터 동작</td></tr>
+    <tr><td><b>4</b></td><td>액션 IPC</td><td><code>spip:openInVsCode</code>(open, H-1/H-2/M-4) · <code>spip:rescan</code>(게이트·락). <b>F-2:</b> actionHandlers 로직 추출 시 <code>require('./apiHandlers').sendJson</code> <b>결합을 절단</b>(어댑터는 객체 반환만). <b>[자동]</b> 추출 순수함수의 검증 체인·실패 code 단위테스트(safeExec 모킹) / <b>[수동 GUI]</b> 실제 VS Code 열기·재스캔 시작</td></tr>
+    <tr><td><b>5</b></td><td>진행 이벤트 푸시(폴링 폐기)</td><td><b>F-1:</b> <code>scanController.start(opts)</code>에 <b>선택적 <code>onProgress</code> 파라미터 추가</b>(1점 수정) + 해당 단위테스트. main이 그 콜백으로 <code>webContents.send('spip:scanProgress')</code>. app.js 폴링 <code>setInterval</code> 제거 → <code>onScanProgress</code> 구독. <b>[자동]</b> start에 콜백 주입 시 진행 객체가 콜백으로 전달되는지·기존 <code>_merge</code> 동작 보존 단위테스트 / <b>[수동 GUI]</b> 진행 표시·완료 갱신(R-15)</td></tr>
+    <tr><td><b>6</b></td><td>네이티브 폴더 선택</td><td><code>spip:pickFolders</code>(dialog) + <code>addRootsResolve</code>·removeRoot·getConfig. <b>[자동]</b> <code>addRootsResolve</code>의 채택/거부(<code>rejected[{path,reason}]</code>)·시스템폴더 제외 단위테스트(fs 모킹), dialog 모킹 시 영속 경로 검증 / <b>[수동 GUI]</b> 메뉴/버튼 폴더 추가→재스캔 E2E(R-04)</td></tr>
+    <tr><td><b>7</b></td><td>생명주기·메뉴·하드닝</td><td>단일 인스턴스 락·메뉴·will-navigate/setWindowOpenHandler/webview 차단·CSP 강화+헤더 주입·senderFrame 검증·sandbox 필수·종료 확인 다이얼로그(Q4). <b>[자동]</b> senderFrame 검증·CSP 문자열 단위테스트 / <b>[수동 GUI]</b> 탐색·팝업 차단·종료 다이얼로그 스모크</td></tr>
+    <tr><td><b>8</b></td><td>패키징</td><td><code>electron-builder.yml</code>·아이콘·<b>fuses(RunAsNode off 등)·asar integrity</b>(EM-M-3). NSIS + 포터블 산출. <b>[수동 GUI]</b> 설치본 더블클릭 동작·SmartScreen 안내 / <b>[자동]</b> 빌드 산출물에 fuses 반영 여부 검사</td></tr>
+  </table>
+
+  <h3>10.2 기존 테스트 보존 전략</h3>
+  <div class="note"><b>P3/F-6 — 테스트 수치 출처:</b> 본 문서의 "213"은 <b><code>node --test</code>로 실행되는 케이스 총계</b>(<code>test/</code> 18개 파일의 <code>test()</code>/<code>it()</code> 및 subtest 포함 누계)를 가리킨다. 이 수치는 회귀 위험 평가의 분모일 뿐이며, 마이그레이션 착수 직전 <code>node --test</code> 실행 결과로 <b>실측 갱신</b>한다(설계 시점 추정치). 정확 검증 강도는 케이스 수가 아니라 "도메인·재사용 모듈 테스트 무손상 유지"라는 구조적 보장에 있다.</div>
+  <table>
+    <tr><th style="width:240px;">테스트 부류</th><th>전략</th></tr>
+    <tr><td>lib/scan·common 단위테스트 (대다수)</td><td><b>그대로 유지</b> — 도메인 무수정이므로 회귀 0. 가장 큰 검증 자산 보존</td></tr>
+    <tr><td>snapshotStore·scanController·pathGuard·safeExec 테스트</td><td><b>그대로 유지</b> — 재사용 모듈이라 무변경</td></tr>
+    <tr><td>HTTP 서버 테스트(router·security·apiHandlers·actionHandlers via http)</td><td><b>IPC 테스트로 이관</b>. apiHandlers/actionHandlers 로직을 <code>(args,ctx)→result</code> 순수 함수로 추출하면 <b>HTTP/IPC mock 없이</b> 직접 호출 단위테스트 가능 → 검증 강도 보존·향상</td></tr>
+    <tr><td>security.js 테스트(Host/Origin/토큰)</td><td><b>제거 또는 보관</b> — 통제가 사라지므로. 단 <code>server.js</code>를 과도기 보존(Q1)하면 해당 테스트도 유지</td></tr>
+    <tr><td>신규: IPC 어댑터 테스트</td><td>ipcMain 핸들러를 ctx 주입으로 직접 호출해 검증(전기 함수 추출 덕). main/preload 자체는 통합/스모크로 최소 검증</td></tr>
+  </table>
+  <div class="note"><b>핵심:</b> 전체 케이스 중 도메인·재사용 모듈 테스트(대다수)는 무손상 유지된다. HTTP 전용 테스트만 IPC로 이관/대체하면 된다. 함수 추출(req/res→args/return)이 이관과 테스트를 동시에 단순화한다. <b>신규 추가:</b> scanController <code>onProgress</code> 파라미터 단위테스트(F-1), <code>addRootsResolve</code> 채택/거부 테스트(F-5), senderFrame 검증·CSP 테스트(EM-M-2/M-1).</div>
+</section>
+
+<section id="trace">
+  <h2>11. 추적성 (요구 ID ↔ IPC/모듈)</h2>
+  <table>
+    <tr><th style="width:90px;">요구</th><th>의미</th><th>Electron 충족 경로</th></tr>
+    <tr><td><span class="rid">R-04</span></td><td>스캔 루트 지정</td><td><b>네이티브 대화상자</b> <code>spip:pickFolders</code>(dialog showOpenDialog) + <code>spip:addRoots</code>/<code>removeRoot</code> → config.scanRoots 영속(normalizeScanRoots 동일 규칙). 브라우저 절대경로 제약 해소(불편 ②)</td></tr>
+    <tr><td><span class="rid">R-05</span></td><td>전체 드라이브 스캔</td><td><code>spip:rescan({allDrives:true})</code> → config.allowAllDrives 게이트 → <code>driveEnum.enumerateRoots</code>(재사용). 게이트 규칙 동일</td></tr>
+    <tr><td><span class="rid">R-09</span></td><td>규모/의존성(size)</td><td><code>spip:rescan({withSize:true})</code> → scanner withSize → size collector(재사용). getStats.totalBytes 승격 동일</td></tr>
+    <tr><td><span class="rid">R-12</span></td><td>VS Code로 열기</td><td><code>spip:openInVsCode(id)</code> → snapshotStore.getById → pathGuard(H-1) → safeExec(resolveBin 'code', H-2). 2초 피드백은 invoke Promise 즉시 resolve로 충족</td></tr>
+    <tr><td><span class="rid">R-15</span></td><td>진행 표시</td><td><b>main→renderer 이벤트 푸시</b> <code>spip:scanProgress</code>. <b>F-1:</b> scanController.start에 추가한 <b>공개 onProgress 파라미터</b>로 main이 push(사적 _merge 미사용). renderer 1초 폴링 폐기 → 더 단순·즉시. currentPath shortenPath(M4-H-1)</td></tr>
+    <tr><td><span class="rid">R-16</span></td><td>재스캔</td><td><code>spip:rescan(opts)</code> → scanController.acquire/start(재사용). 단일 in-flight 락·watchdog·세대 가드 그대로</td></tr>
+    <tr><td><span class="rid">R-10·R-11</span></td><td>목록 표시·클라 필터</td><td><code>spip:getProjects</code>/<code>getStats</code> 1회 조회 → app.js 메모리 필터/정렬/검색(무변경). 200ms 목표 유지</td></tr>
+    <tr><td><span class="rid">R-13</span></td><td>견고성(graceful)</td><td>snapshotStore hasSnapshot graceful·collector 격리(재사용). IPC 핸들러 try/catch + 고정 code</td></tr>
+    <tr><td><span class="nid">N-02</span></td><td>로컬·프라이버시</td><td>리스닝 소켓 제거·원격 미로드. 외부 전송 0 강화</td></tr>
+    <tr><td><span class="nid">N-04</span></td><td>의존성 최소</td><td><b>의도적 완화</b>: electron·electron-builder(devDep) 도입, 런타임 dep 0 유지(ADR-EM-1)</td></tr>
+    <tr><td><span class="nid">N-06</span></td><td>프로젝트 폴더 비오염</td><td>config/cache는 앱 데이터 폴더(paths.js 재사용). app.getPath 정합은 Q3</td></tr>
+  </table>
+</section>
+
+<section id="adr">
+  <h2>12. ADR (아키텍처 결정 기록)</h2>
+
+  <div class="adr">
+    <h4>ADR-EM-1 — Electron 채택 + 외부 의존성 0 원칙 의도적 완화</h4>
+    <p><b>상태:</b> 승인(PM 확정)</p>
+    <p><b>맥락:</b> 사용자는 (1) 터미널+브라우저 이중 실행, (2) 브라우저의 폴더 절대경로 미획득으로 불편. 기존 N-04(외부 의존성 0)는 데스크톱 전환과 충돌.</p>
+    <p><b>고려한 대안:</b></p>
+    <ul>
+      <li><b>A. 로컬 HTTP 유지 + 런처 스크립트/PWA</b>: 의존성 0 유지하나 폴더 절대경로 문제(②) 미해결, 더블클릭 설치 경험 부족.</li>
+      <li><b>B. Electron</b>: 기존 Node 백엔드·vanilla 프론트 재사용 최적. dialog로 ② 해결. 번들 크기 큼·런타임 추가.</li>
+      <li><b>C. Tauri(Rust)</b>: 경량 번들이나 Rust 백엔드 재작성 필요 → lib 재사용 불가, 검증 자산 폐기.</li>
+    </ul>
+    <p><b>결정:</b> <b>B(Electron)</b>. 단 electron·electron-builder는 devDependencies, 런타임 dep 0 유지.</p>
+    <p><b>근거:</b> 핵심 자산(검증된 Node lib 213 테스트·vanilla UI)을 무손상 재사용하면서 두 불편을 동시 해결. C는 재작성 비용이 과대, A는 ②를 못 풂.</p>
+    <p><b>결과:</b> (+) lib 무수정 재사용·즉시 더블클릭·네이티브 dialog. (−) 설치본 크기 증가(~100MB대)·Electron 버전 추적/보안 패치 부담. 단일 사용자 로컬 도구라 수용.</p>
+  </div>
+
+  <div class="adr">
+    <h4>ADR-EM-2 — 전송 계층: HTTP 폐기 후 IPC 전면 채택 (로컬 HTTP 병존 안 함)</h4>
+    <p><b>상태:</b> 승인</p>
+    <p><b>맥락:</b> Electron 내에서 renderer↔main 통신을 (a) 기존 로컬 HTTP 서버 유지(BrowserWindow가 127.0.0.1 로드) vs (b) IPC 전환 중 선택.</p>
+    <p><b>고려한 대안:</b></p>
+    <ul>
+      <li><b>a. 로컬 HTTP 유지</b>: 코드 변경 최소(router/security/fetch 그대로). 그러나 리스닝 소켓·DNS 리바인딩·CSRF·세션토큰 통제를 계속 짊어짐. Electron 안에서 불필요한 네트워크 표면.</li>
+      <li><b>b. IPC 전환</b>: 네트워크 표면 0. preload allowlist로 노출 최소화. 진행은 이벤트 푸시로 단순화. 전송 어댑터 교체 비용 발생.</li>
+    </ul>
+    <p><b>결정:</b> <b>b(IPC 전면 채택)</b>. server.js/router/staticHandler/security 드롭, ipcMain 핸들러로 대체.</p>
+    <p><b>근거:</b> 데스크톱 전환의 보안 이득(네트워크 표면 제거)을 온전히 취함. 폴링→푸시로 진행 로직도 단순화. 도메인 무수정이라 어댑터 교체 비용이 작음.</p>
+    <p><b>결과:</b> (+) 보안 표면 축소·진행 단순화·테스트 순수함수화 용이. (−) app.js 전송부·HTTP 테스트 이관 필요. <b>과도기 HTTP는 완료까지 보존 후 삭제(PM 확정 Q1).</b></p>
+  </div>
+
+  <div class="adr">
+    <h4>ADR-EM-3 — Electron 보안 베이스라인 (contextIsolation·sandbox·preload allowlist)</h4>
+    <p><b>상태:</b> 승인</p>
+    <p><b>맥락:</b> RC-2(신뢰 불가 리포)가 유효한 상태에서 renderer가 오염 메타데이터를 다룬다. Electron 기본 설정은 안전하지 않을 수 있음.</p>
+    <p><b>고려한 대안:</b> (a) nodeIntegration:true 편의 우선 — renderer에서 직접 fs/spawn(위험, 거부). (b) contextIsolation+nodeIntegration:false만. (c) (b)+sandbox:true+preload 최소 allowlist.</p>
+    <p><b>결정:</b> <b>(c)</b>. contextIsolation:true·nodeIntegration:false·<b>sandbox:true(필수 MUST — EM-L-2 격상)</b>·preload는 window.spip 화이트리스트만(ipcRenderer 원본·범용 invoke 비노출)·원격 미로드·will-navigate/setWindowOpenHandler/webview 차단·renderer CSP <b>강화(default-src 'none' + 전 디렉티브) + 세션 헤더 이중주입(EM-M-1)</b>.</p>
+    <p><b>근거:</b> 저장형 XSS가 발생해도 renderer에서 OS로 승격 불가(폭발 반경 최소). TB-B 통제(pathGuard·safeExec·H-3)는 main에서 그대로 1차 방어선. sandbox는 본 설계가 이미 호환하므로 "권장"이 아닌 "필수"로 강제할 수 있다(비용 0).</p>
+    <p><b>결과:</b> (+) RCE 승격 차단·심층 방어. (−) sandbox 채택 시 preload에서 우리 모듈 require 불가 → 모든 로직 main 강제(본 설계가 이미 준수). dialog 결과 외 renderer발 경로 전부 검증 필요.</p>
+  </div>
+
+  <div class="adr">
+    <h4>ADR-EM-6 — IPC 노출면 최소화: 전 채널 main 재검증 + browseDir 드롭 (EM-H-1)</h4>
+    <p><b>상태:</b> 승인(PM 확정 Q2 — 보안 게이트 EM-H-1 해소)</p>
+    <p><b>맥락:</b> 초안은 preload allowlist를 "원칙"으로 선언하고 §4.2 검증을 일부 채널만 명세했다. 특히 인앱 디렉터리 브라우저(<code>spip:browseDir(dir)</code>)는 renderer가 임의 디렉터리 경로를 던지는 신규 임의경로 채널로, RC-2(부분신뢰)+저장형 XSS 가정에서 화이트리스트 밖 파일시스템 정보노출 표면이 된다.</p>
+    <p><b>고려한 대안:</b></p>
+    <ul>
+      <li><b>A. browseDir 유지 + scanRoots 하위로만 열람 제약</b>: 구현·검증 복잡, 여전히 임의경로 입력 표면이 존재.</li>
+      <li><b>B. browseDir 드롭 + 네이티브 dialog·직접입력만</b>: 임의경로 열람 채널 자체를 제거. 폴더 선택은 OS 대화상자(신뢰 출처)와 검증된 직접 입력으로 충분.</li>
+    </ul>
+    <p><b>결정:</b> <b>B</b>. <code>browseDir</code> 채널을 드롭하고, <b>전 IPC 채널의 main 재검증을 §4.2에 못박는다</b>(인자 스키마·길이/개수 상한·화이트리스트·고정 실패 code·반환 shape). renderer는 신뢰하지 않으며(XSS 가정), 경로는 canonicalize/realpath·디렉터리·시스템 폴더 제외를 통과한 것만 영속한다. 발신자 검증(<code>senderFrame</code>, EM-M-2)을 공통 통제로 추가한다.</p>
+    <p><b>근거:</b> 임의 디렉터리 열람 채널을 두지 않는 것이 가장 단순하고 안전하다. 네이티브 dialog는 경로 출처가 OS라 신뢰 가능하고, 직접 입력은 동일 검증을 거친다. preload allowlist는 표면 축소일 뿐, 신뢰 근거는 main 재검증에 둔다.</p>
+    <p><b>결과:</b> (+) 임의경로 정보노출 표면 제거·보안 게이트 해소. (−) 인앱 트리 탐색 UX 부재(네이티브 대화상자로 대체). 모든 채널에 검증 코드 필요(어댑터 얇게 유지).</p>
+  </div>
+
+  <div class="adr">
+    <h4>ADR-EM-4 — 앱 데이터 경로: paths.js 유지 + app.getPath 정합 결정</h4>
+    <p><b>상태:</b> 제안(PM/구현 확인 필요)</p>
+    <p><b>맥락:</b> 기존 <code>paths.appDir()</code>는 OS 규약 경로(<code>%APPDATA%\spip</code>)를 직접 계산. Electron은 <code>app.getPath('userData')</code>로 <code>%APPDATA%\&lt;productName&gt;</code>를 제공. 두 경로가 다르면 CLI(scan.js)와 앱이 다른 캐시를 봄.</p>
+    <p><b>고려한 대안:</b> (a) paths.js 그대로 — CLI/앱이 <code>spip</code> 폴더 공유, app.getPath 미사용. (b) paths.js를 app.getPath로 전환 — Electron 관례 정합하나 CLI는 Electron 없이 동작해야 해 분기 필요.</p>
+    <p><b>결정(권고):</b> <b>(a) paths.js 유지</b> + electron-builder <code>productName</code>을 경로와 무관하게 두고, <b>CLI와 앱이 동일한 <code>spip</code> 앱 폴더를 공유</b>. app.getPath는 로그/임시 등 비공유 용도로만.</p>
+    <p><b>근거:</b> CLI 스캔 결과를 앱이 즉시 읽어야 함(단일 출처). paths.js는 Electron 비의존이라 CLI 호환 유지.</p>
+    <p><b>결과:</b> (+) CLI↔앱 캐시 일관·재사용 무수정. (−) Electron 관례(userData)와 약간 어긋남 — 문서화로 해소. 구현 시 실제 경로 일치 테스트 필요(Q3).</p>
+  </div>
+
+  <div class="adr">
+    <h4>ADR-EM-5 — 패키징: electron-builder · NSIS + 포터블</h4>
+    <p><b>상태:</b> 승인(서명 정책 제외)</p>
+    <p><b>맥락:</b> Windows 설치형 배포 필요. 단일 사용자 도구.</p>
+    <p><b>고려한 대안:</b> (a) electron-builder(NSIS/포터블/다양한 타깃·서명·업데이트 통합). (b) electron-packager(저수준, 설치본 직접 구성). (c) Squirrel.Windows(자동업데이트 강하나 설정 복잡).</p>
+    <p><b>결정:</b> <b>(a) electron-builder</b>, Windows 타깃 <b>NSIS + portable</b> 2종. <b>Electron fuses(RunAsNode off·OnlyLoadAppFromAsar·asar integrity)·<code>ELECTRON_RUN_AS_NODE</code> 무력화</b>를 베이스라인으로 포함(EM-M-3). <b>미서명 배포는 위험 수용으로 확정</b>(PM Q5).</p>
+    <p><b>근거:</b> 설정 간결·설치/언인스톨·포터블 동시 산출·향후 서명/업데이트 확장 용이. asar는 무결성 보장이 아니므로 fuses·integrity로 런타임 악용 표면을 줄인다.</p>
+    <p><b>결과:</b> (+) 더블클릭 설치 경험·런타임 악용 표면 축소. (−) 미서명 시 SmartScreen 경고(수용 — 설치 안내 포함). 외부 배포 확대 시 코드 서명 재검토. 자동 업데이트는 범위 외.</p>
+  </div>
+</section>
+
+<section id="risk">
+  <h2>13. 리스크 · 가정 · 미해결 질문</h2>
+  <h3>리스크 / 완화</h3>
+  <table>
+    <tr><th style="width:240px;">리스크</th><th>완화</th></tr>
+    <tr><td>sandbox:true 채택 시 preload에서 우리 모듈 require 제약</td><td>본 설계는 모든 로직을 main에 두고 preload는 순수 contextBridge+ipcRenderer만 사용 → 영향 없음. 구현 시 sandbox on/off로 스모크 검증</td></tr>
+    <tr><td>app.js 전송부 교체 중 회귀(필터/진행 상태머신)</td><td>전송 어댑터를 한 곳(함수 1군)에 모으고 UI 로직 무변경. 단계 3·5에서 독립 검증. onScanProgress는 폴링 상태머신의 입력원만 교체</td></tr>
+    <tr><td>CLI↔앱 캐시 경로 불일치(ADR-EM-4)</td><td>paths.js 공유 유지 + 실제 경로 일치 통합테스트(Q3)</td></tr>
+    <tr><td>설치본 크기 증가(~100MB대)</td><td>단일 사용자 로컬 도구로 수용. asar 패킹·불필요 파일 제외(files allowlist)</td></tr>
+    <tr><td>미서명 배포 SmartScreen 경고</td><td><b>위험 수용 확정(Q5).</b> fuses·asar integrity·<code>ELECTRON_RUN_AS_NODE</code> 무력화로 런타임 악용 표면 축소. 설치 안내에 SmartScreen 우회 절차 포함. 외부 배포 확대 시 서명 재검토(EM-M-3)</td></tr>
+    <tr><td>진행 중 스캔 도중 앱 종료</td><td><b>확정(Q4): 진행 중이면 종료 확인 다이얼로그.</b> 사용자 확인 시 프로세스 종료로 중단, finalizing 완료분만 영속(부분 결과 미반영) — 데이터 손상 없음(§7.1)</td></tr>
+    <tr><td>IPC 임의경로 정보노출(browseDir)</td><td><b>확정(Q2): browseDir 드롭.</b> 임의 디렉터리 열람 채널 제거 + 전 채널 main 재검증(§4.2, ADR-EM-6)</td></tr>
+  </table>
+  <h3>가정</h3>
+  <ul>
+    <li>1차 타깃 OS는 Windows(NSIS/포터블). macOS/Linux 패키징은 후속(설계는 paths.js로 이미 크로스 OS 대응).</li>
+    <li>renderer는 우리 로컬 콘텐츠만 로드하며 외부 URL을 열 필요가 없다(현재 UI 기준).</li>
+    <li>VS Code/git CLI 존재 여부는 기존 graceful(resolveBin) 로직으로 동일하게 처리된다.</li>
+  </ul>
+  <h3>PM 확정 결정 (본문 승격 — 더 이상 미해결 아님, F-4)</h3>
+  <table>
+    <tr><th style="width:90px;">항목</th><th>확정 내용</th><th style="width:150px;">반영 위치</th></tr>
+    <tr><td><b>Q1</b></td><td><b>server.js·security.js는 마이그레이션 완료까지 보존 후 삭제.</b> 과도기 동안 <code>serve:http</code> 스크립트로 유지(헤드리스/디버깅), 완료 시 제거</td><td>§3 server.js 행·§8 scripts·§9 트리</td></tr>
+    <tr><td><b>Q2</b></td><td><b>인앱 디렉터리 브라우저 드롭 · <code>spip:browseDir</code> 채널 제거.</b> 네이티브 dialog + 경로 직접 입력만</td><td>§4.1·§4.2·§5·ADR-EM-6</td></tr>
+    <tr><td><b>Q4</b></td><td><b>종료 시 스캔 진행 중이면 확인 다이얼로그.</b> "조용히 중단" 서술 제거</td><td>§7.1 종료 행·생명주기 의사코드</td></tr>
+    <tr><td><b>Q5</b></td><td><b>미서명 배포 위험 수용</b>(서명 항목만 유지, SmartScreen 안내). fuses·integrity 병행</td><td>§7.2·ADR-EM-5·리스크표</td></tr>
+    <tr><td><b>Q6</b></td><td><b><code>productName: Project-SPIP</code>, <code>appId: com.spip.app</code> 확정.</b> 단 앱 데이터 폴더명은 <code>spip</code> 고정(productName과 무관, F-7 — CLI 공유 위해 ADR-EM-4)</td><td>§7.2·§8·§9 주석</td></tr>
+  </table>
+  <h3>잔여 구현 확인 항목 (PM/구현 — 차단 아님)</h3>
+  <ul>
+    <li><b>Q3 — 앱 데이터 경로 정합:</b> paths.js의 <code>spip</code> 폴더를 정본으로 공유(ADR-EM-4 권고). 구현 시 CLI(scan.js)↔앱 캐시 경로 일치 통합테스트로 실증(EC-6). <code>app.getPath('userData')</code>는 productName 기반(<code>Project-SPIP</code>)이라 경로명이 다르므로, <b>데이터 폴더명은 <code>spip</code>로 고정</b>하고 userData는 비공유 용도(로그/임시)로만 사용한다(F-7).</li>
+    <li><b>EM-M-1 자산 경로 전략 택1:</b> <code>app://</code> 커스텀 프로토콜(권장) vs <code>loadFile</code>+상대경로. 단계 1에서 확정.</li>
+    <li><b>구현 보안 게이트 이월(EC-1~EC-6):</b> 전 IPC 핸들러 스키마 거부·CSP 실차단·senderFrame 검증·fuses 반영·sandbox on 스모크·CLI↔앱 캐시 일치를 코드 단계에서 실증.</li>
+  </ul>
+</section>
+
+<footer>
+  Project-SPIP — Electron 설치형 데스크톱 이전 설계서 v1.1 · 수석 아키텍트 · 2026-06-21 · 검증 1회차(FAIL P1×1·P2×4·P3×3) + 보안 조건부 PASS(높음 1, EM-H-1) 반영 · 본 문서는 설계 청사진이며 구현 코드를 포함하지 않는다.
+</footer>
+
+</main>
+</body>
+</html>

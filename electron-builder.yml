@@ -1,0 +1,41 @@
+# electron-builder 설정 (electron-migration §7.2, PM 확정 Q5/Q6)
+appId: com.spip.app
+productName: Project-SPIP
+
+# 패킹 파일 — test/·docs/ 제외(§7.2). asar 기본 활성.
+files:
+  - electron/**/*
+  - lib/**/*
+  - public/**/*
+  - package.json
+  - "!test/**/*"
+  - "!docs/**/*"
+asar: true
+
+# 쓰기 데이터는 설치 디렉터리가 아닌 %APPDATA%\spip(paths.appDir)에만(EM-M-3).
+# 설치 디렉터리는 읽기 전용.
+directories:
+  buildResources: build
+  output: dist
+
+# fuses 적용(EM-M-3): RunAsNode off·OnlyLoadAppFromAsar·asar integrity 등.
+afterPack: build/afterPack.js
+
+win:
+  target:
+    - nsis
+    - portable
+  icon: build/icon.ico
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+
+portable:
+  artifactName: ${productName}-${version}-portable.${ext}
+
+# 코드 서명: 미서명 배포(위험 수용, PM 확정 Q5). SmartScreen 경고 안내는 설치 문서로.
+# 자동 업데이트: 범위 외(단일 사용자 로컬 도구).

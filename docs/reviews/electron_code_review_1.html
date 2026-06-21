@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Project-SPIP — Electron 마이그레이션 코드 품질 리뷰 1회차</title>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#1e293b; --panel2:#243044; --text:#e2e8f0; --muted:#94a3b8;
+    --accent:#34d399; --ref:#38bdf8; --warn:#fbbf24; --danger:#f87171; --border:#334155;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:"Segoe UI","Malgun Gothic",system-ui,sans-serif;line-height:1.6;font-size:15px;}
+  header{background:linear-gradient(135deg,#1e293b,#0f172a);padding:32px 40px;border-bottom:2px solid var(--accent);}
+  header h1{margin:0 0 6px;font-size:25px;}
+  header .sub{color:var(--muted);font-size:13.5px;}
+  main{max-width:1180px;margin:0 auto;padding:24px 40px 80px;}
+  section{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:22px 26px;margin:20px 0;}
+  h2{color:var(--accent);font-size:20px;margin-top:0;border-bottom:1px solid var(--border);padding-bottom:10px;}
+  h3{color:var(--ref);font-size:16px;margin-top:24px;}
+  a{color:var(--ref);}
+  code{background:#0b1220;color:#7dd3fc;padding:1px 6px;border-radius:5px;font-family:Consolas,monospace;font-size:12.5px;}
+  pre{background:#0b1220;border:1px solid var(--border);border-radius:8px;padding:12px 14px;overflow-x:auto;
+    color:#cbd5e1;font-family:Consolas,monospace;font-size:12.5px;line-height:1.5;}
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13px;}
+  th,td{border:1px solid var(--border);padding:8px 10px;text-align:left;vertical-align:top;}
+  th{background:var(--panel2);color:#e2e8f0;}
+  tr:nth-child(even) td{background:#1a2536;}
+  .sev{display:inline-block;padding:1px 9px;border-radius:10px;font-size:11.5px;font-weight:700;white-space:nowrap;}
+  .p1{background:#3a0b0b;color:#fca5a5;border:1px solid #f87171;}
+  .p2{background:#3a2a0b;color:#fcd34d;border:1px solid #fbbf24;}
+  .p3{background:#0b2a3a;color:#7dd3fc;border:1px solid #38bdf8;}
+  .verdict{font-size:22px;font-weight:800;}
+  .pass{color:var(--accent);}
+  .fail{color:var(--danger);}
+  .loc{color:var(--muted);font-family:Consolas,monospace;font-size:12px;}
+  .note{background:#0b2a3a;border-left:4px solid var(--ref);padding:10px 14px;border-radius:0 8px 8px 0;margin:12px 0;font-size:13px;}
+  .ok-box{background:#0b2a1f;border-left:4px solid var(--accent);padding:10px 14px;border-radius:0 8px 8px 0;margin:12px 0;font-size:13px;}
+  .warn-box{background:#3a2a0b;border-left:4px solid var(--warn);padding:10px 14px;border-radius:0 8px 8px 0;margin:12px 0;font-size:13px;}
+  .danger-box{background:#3a0b0b;border-left:4px solid var(--danger);padding:10px 14px;border-radius:0 8px 8px 0;margin:12px 0;font-size:13px;}
+  ul.tight{margin:6px 0;} li{margin:3px 0;}
+  .summary-grid{display:flex;gap:16px;flex-wrap:wrap;margin-top:14px;}
+  .stat{background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:14px 20px;min-width:120px;}
+  .stat .n{font-size:28px;font-weight:800;}
+  .stat .l{color:var(--muted);font-size:12px;}
+  svg{background:#0b1220;border:1px solid var(--border);border-radius:10px;width:100%;height:auto;}
+  .file{color:var(--accent);font-weight:600;}
+</style>
+</head>
+<body>
+<header>
+  <h1>Project-SPIP — Electron 마이그레이션 코드 품질 리뷰 (1회차)</h1>
+  <div class="sub">
+    대상: <code>electron/main.js·preload.js·context.js·security.js·menu.js·ipc/{data,actions,scan,folders,register}.js</code> 신규 ·
+    <code>lib/server/scanController.js</code>(onProgress) · <code>public/{index.html,app.js}</code>(IPC 어댑터·push·폴더UI) ·
+    <code>package.json·electron-builder.yml·build/afterPack.js</code>
+    &nbsp;|&nbsp; 2026-06-21 &nbsp;|&nbsp; 리뷰어: code-reviewer
+    &nbsp;|&nbsp; 기준: docs/architecture/electron-migration.html(§3·§4·§6·§7), 기존 CommonJS 스타일
+    &nbsp;|&nbsp; 범위: 코드 품질만(동작=qa / 보안=security 별도)
+  </div>
+</header>
+<main>
+
+<section id="verdict">
+  <h2>0. 종합 판정</h2>
+  <p class="verdict fail">판정: FAIL</p>
+  <p>
+    신규 IPC 계층은 전반적으로 깔끔하다 — 도메인(<code>lib</code>)과 전송(<code>electron</code>)의 분리가 잘 지켜졌고,
+    핵심 로직이 순수 함수로 분리되어 헤드리스로 단위테스트(61건 전부 PASS)된다. <code>scanController.start(opts).onProgress</code>
+    의 세대 가드·예외 격리는 견고하다. 그러나 <b>프론트 IPC 어댑터가 존재하지 않는 브리지 메서드(<code>spip.open</code>)를 호출</b>해
+    "VS Code로 열기" 액션이 영구히 실패하는 <b>정확성 결함(P1)</b>이 있어 통과시킬 수 없다. 또한 네이티브 메뉴가
+    renderer로 보내는 명령 이벤트를 아무도 수신하지 않아 메뉴 대부분이 무동작인 결함성 항목이 있다.
+  </p>
+  <div class="summary-grid">
+    <div class="stat"><div class="n" style="color:var(--danger)">1</div><div class="l">P1 정확성 결함</div></div>
+    <div class="stat"><div class="n" style="color:var(--warn)">6</div><div class="l">P2 개선</div></div>
+    <div class="stat"><div class="n" style="color:var(--ref)">5</div><div class="l">P3 사소</div></div>
+    <div class="stat"><div class="n" style="color:var(--accent)">61/61</div><div class="l">단위테스트 PASS</div></div>
+  </div>
+  <div class="danger-box">
+    <b>차단 사유(P1-1):</b> <code>public/app.js</code>의 전송 어댑터가 <code>ipc('open', id)</code>를 호출하지만,
+    <code>preload.js</code>는 해당 채널을 <code>openInVsCode</code>로만 노출한다. <code>spip.open</code>은 존재하지 않으므로
+    어댑터의 <code>typeof spip[method] !== 'function'</code> 가드가 항상 참 → <code>bridgeMissing()</code> 반환.
+    결과적으로 카드·표·드로어의 "열기" 버튼이 항상 "내부 오류"를 띄운다. (qa의 GUI 스모크에서 잡혀야 하나 코드 레벨에서 확정 가능.)
+  </div>
+</section>
+
+<section id="map">
+  <h2>1. 모듈 경계 흐름(전송 vs 도메인)</h2>
+  <svg viewBox="0 0 1100 300" role="img" aria-label="IPC 경계 흐름도">
+    <rect x="20" y="40" width="200" height="220" rx="10" fill="#162033" stroke="#334155"/>
+    <text x="120" y="64" text-anchor="middle" fill="#34d399" font-size="14" font-weight="700">renderer (public/)</text>
+    <text x="120" y="92" text-anchor="middle" fill="#cbd5e1" font-size="11">app.js 전송 어댑터</text>
+    <text x="120" y="112" text-anchor="middle" fill="#cbd5e1" font-size="11">ipc(method,...args)</text>
+    <text x="120" y="150" text-anchor="middle" fill="#f87171" font-size="11">ipc('open') ✗</text>
+    <text x="120" y="170" text-anchor="middle" fill="#94a3b8" font-size="10">(spip.open 미존재)</text>
+
+    <rect x="300" y="40" width="200" height="220" rx="10" fill="#162033" stroke="#334155"/>
+    <text x="400" y="64" text-anchor="middle" fill="#38bdf8" font-size="14" font-weight="700">preload.js</text>
+    <text x="400" y="92" text-anchor="middle" fill="#cbd5e1" font-size="11">contextBridge allowlist</text>
+    <text x="400" y="116" text-anchor="middle" fill="#cbd5e1" font-size="11">openInVsCode / rescan</text>
+    <text x="400" y="136" text-anchor="middle" fill="#cbd5e1" font-size="11">onScanProgress(unsub)</text>
+
+    <rect x="580" y="40" width="220" height="220" rx="10" fill="#162033" stroke="#334155"/>
+    <text x="690" y="64" text-anchor="middle" fill="#34d399" font-size="14" font-weight="700">electron/ (전송)</text>
+    <text x="690" y="92" text-anchor="middle" fill="#cbd5e1" font-size="11">register.js (gate·검증)</text>
+    <text x="690" y="116" text-anchor="middle" fill="#cbd5e1" font-size="11">ipc/{data,actions,scan,</text>
+    <text x="690" y="132" text-anchor="middle" fill="#cbd5e1" font-size="11">folders}.js (순수)</text>
+    <text x="690" y="160" text-anchor="middle" fill="#cbd5e1" font-size="11">context.js (조립)</text>
+
+    <rect x="880" y="40" width="200" height="220" rx="10" fill="#162033" stroke="#334155"/>
+    <text x="980" y="64" text-anchor="middle" fill="#38bdf8" font-size="14" font-weight="700">lib/ (도메인)</text>
+    <text x="980" y="92" text-anchor="middle" fill="#cbd5e1" font-size="11">scanController(onProgress)</text>
+    <text x="980" y="116" text-anchor="middle" fill="#cbd5e1" font-size="11">snapshotStore·pathGuard</text>
+    <text x="980" y="140" text-anchor="middle" fill="#cbd5e1" font-size="11">safeExec·config·paths</text>
+    <text x="980" y="172" text-anchor="middle" fill="#fbbf24" font-size="11">apiHandlers/actionHandlers</text>
+    <text x="980" y="188" text-anchor="middle" fill="#94a3b8" font-size="10">(HTTP — 중복 유지)</text>
+
+    <line x1="220" y1="120" x2="300" y2="120" stroke="#475569" stroke-width="2" marker-end="url(#a)"/>
+    <line x1="500" y1="120" x2="580" y2="120" stroke="#475569" stroke-width="2" marker-end="url(#a)"/>
+    <line x1="800" y1="120" x2="880" y2="120" stroke="#475569" stroke-width="2" marker-end="url(#a)"/>
+    <defs><marker id="a" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#475569"/></marker></defs>
+  </svg>
+  <p style="font-size:13px;color:var(--muted)">
+    전송/도메인 분리는 설계대로 지켜졌다. 다만 renderer→preload 채널명 계약이 한 곳(<code>open</code> vs <code>openInVsCode</code>)에서 어긋났고,
+    과도기 HTTP 핸들러(<code>apiHandlers/actionHandlers</code>)가 동일 로직을 이중 보유한다.
+  </p>
+</section>
+
+<section id="p1">
+  <h2>2. P1 — 정확성 결함 (차단)</h2>
+  <table>
+    <tr><th style="width:60px">ID</th><th>무엇 / 위치</th><th>왜 문제</th><th>권고</th></tr>
+    <tr>
+      <td><span class="sev p1">P1-1</span></td>
+      <td>
+        <b>존재하지 않는 브리지 메서드 호출 — "VS Code 열기" 영구 실패</b><br>
+        <span class="loc">public/app.js:1917 <code>const data = await ipc('open', id)</code></span><br>
+        <span class="loc">preload.js:22 <code>openInVsCode: (id) =&gt; ipcRenderer.invoke('spip:openInVsCode', {id})</code></span><br>
+        <span class="loc">app.js:643 <code>if (!spip || typeof spip[method] !== 'function') return bridgeMissing();</code></span>
+      </td>
+      <td>
+        어댑터는 <code>spip[method]</code>로 디스패치하는데 method가 <code>'open'</code>이다. preload는 <code>open</code>을
+        노출하지 않고 <code>openInVsCode</code>만 노출한다 → <code>spip.open</code>은 <code>undefined</code> →
+        가드가 항상 <code>bridgeMissing()</code>(=<code>{ok:false,code:'INTERNAL'}</code>)를 반환.
+        <code>openProject()</code>는 매번 "내부 오류" 토스트만 띄우고 실제 IPC가 발사되지 않는다.
+        핵심 기능(R-12)이 죽은 채로 통과될 수 없다.
+      </td>
+      <td>
+        둘 중 하나로 계약을 일치시킨다: ⓐ app.js에서 <code>ipc('openInVsCode', id)</code>로 호출,
+        또는 ⓑ preload에 <code>open</code> 별칭 추가. ⓐ를 권장(채널명 단일 원천 유지).
+        <b>회귀 방지로 "app.js가 호출하는 모든 method가 preload allowlist에 존재한다"는 정합 테스트를 추가</b>한다.
+      </td>
+    </tr>
+  </table>
+  <div class="note">
+    검증 근거: app.js의 IPC 호출은 <code>open·rescan·getScanStatus·getProjects·getStats·getConfig·pickFolders·addRoots·removeRoot</code> 9종.
+    이 중 <code>open</code>만 preload allowlist(<code>openInVsCode</code>)와 불일치. 나머지 8종은 일치(정상).
+  </div>
+</section>
+
+<section id="p2">
+  <h2>3. P2 — 개선</h2>
+  <table>
+    <tr><th style="width:60px">ID</th><th>무엇 / 위치</th><th>왜 문제 / 권고</th></tr>
+    <tr>
+      <td><span class="sev p2">P2-1</span></td>
+      <td>
+        <b>네이티브 메뉴 명령 이벤트를 아무도 수신하지 않음(dead wiring)</b><br>
+        <span class="loc">main.js:135·139 <code>send('spip:menu:refresh')</code> / <code>send('spip:menu:rescan')</code></span><br>
+        <span class="loc">menu.js:29·37·43·51 <code>send('spip:menu:pickFolders'|'rescan'|'refresh'|'about')</code></span>
+      </td>
+      <td>
+        main/menu가 renderer로 <code>spip:menu:*</code> 채널을 send하지만, preload는 이를 구독할 함수를 노출하지 않고
+        app.js에도 <code>spip:menu:*</code> 리스너가 전혀 없다(grep 0건). 결과적으로 메뉴의 "재스캔/새로고침/정보"가 무동작이고,
+        "폴더 추가"만 main이 직접 처리(<code>onPickFolders</code>)해 동작한다. 메뉴 절반이 죽은 wiring이다.<br>
+        <b>권고:</b> preload에 <code>onMenu(channel, cb)</code> 또는 채널별 <code>onMenuRescan/onMenuRefresh/onMenuAbout</code>를
+        최소 노출하고 app.js init에서 구독하여 <code>triggerRescan/load/about</code>에 연결한다.
+        구현 전이면 menu.js에서 미구현 항목을 <code>enabled:false</code>로 두거나 send 자체를 제거해 죽은 채널을 남기지 않는다.
+      </td>
+    </tr>
+    <tr>
+      <td><span class="sev p2">P2-2</span></td>
+      <td>
+        <b>도메인 로직 이중 유지 — HTTP 핸들러와 IPC 핸들러 중복</b><br>
+        <span class="loc">lib/server/apiHandlers.js getStats/getHealth/getConfig ↔ electron/ipc/data.js</span><br>
+        <span class="loc">lib/server/actionHandlers.js open/rescan ↔ electron/ipc/actions.js</span>
+      </td>
+      <td>
+        <code>getStats</code>의 byLanguage·staleCount 집계, <code>open</code>의 H-1/H-2/M-4 검증 체인,
+        <code>rescan</code>의 게이트·드라이브 열거 로직이 HTTP판과 IPC판에 거의 그대로 복제되어 있다(상수
+        <code>MAX_INFLIGHT_PER_ID</code>도 양쪽 정의). 한쪽만 고치면 표류한다.<br>
+        <b>권고:</b> 집계·검증 같은 순수 코어를 <code>lib/server/</code>(또는 <code>lib/core/</code>)의 (ctx)→result 함수로 추출해
+        HTTP/IPC 양쪽이 얇게 위임하도록 단일화. 또는 과도기 HTTP 경로 폐기 일정을 명시(P3-1 참조).
+      </td>
+    </tr>
+    <tr>
+      <td><span class="sev p2">P2-3</span></td>
+      <td>
+        <b>idle/foreign phase 처리 시 구독이 계속 살아있음(잠재적 영구 구독)</b><br>
+        <span class="loc">app.js:1847 <code>nextScanAction</code> render 분기 — idle도 'render'</span><br>
+        <span class="loc">app.js:1842 foreign → unsubscribe(정상)</span>
+      </td>
+      <td>
+        push 모델에서 done/error만 <code>unsubscribeScan()</code>한다. 스캔이 <code>error</code>로 강제 종료(watchdog)된 뒤
+        컨트롤러 status가 <code>error</code>를 한 번이라도 push하면 해제되지만, 만약 main이 마지막 진행만 보내고
+        종료 push를 놓치면(창 닫힘 레이스) 구독이 남는다. 단일 창·단일 락이라 실害는 작으나,
+        <code>load()</code> 재진입 시 <code>subscribeScan</code>이 기존 구독을 먼저 해제(<code>unsubscribeScan()</code> 선호출)하므로 누수는 1개로 제한된다.<br>
+        <b>권고:</b> 앱 종료/창 unload 시 <code>unsubscribeScan()</code> 호출 경로 확인(현재 명시 없음), 또는
+        done 후 <code>reloadAfterScan</code> 완료 시점에 <code>ownScanId=null</code> 리셋을 추가해 잔여 구독의 재진입을 차단.
+      </td>
+    </tr>
+    <tr>
+      <td><span class="sev p2">P2-4</span></td>
+      <td>
+        <b>main.js close 핸들러: 진행 중이 아닐 때 closed 정리 의존</b><br>
+        <span class="loc">main.js:147-160 <code>win.on('close', ...)</code></span>
+      </td>
+      <td>
+        스캔 중이면 <code>e.preventDefault()</code> 후 다이얼로그를 띄우고 "종료" 선택 시 <code>win.destroy()</code>한다.
+        진행 중이 아니면 기본 흐름으로 닫히지만, 이때 진행 중 스캔의 onProgress 콜백(<code>makeProgressSender</code>)이
+        파괴된 webContents로 send를 시도할 수 있다 — 이는 scan.js에서 <code>isDestroyed()</code> 가드로 격리되어 안전하다(확인됨).
+        다만 <code>ctx</code>·<code>scanController</code>의 watchdog 타이머가 종료 시 정리되지 않아(앱 프로세스 종료에 의존)
+        장시간 hang 스캔에서 깔끔한 종료가 아니다.<br>
+        <b>권고:</b> <code>app.on('before-quit')</code> 또는 <code>window-all-closed</code>에서 진행 중 스캔/watchdog 정리 훅을
+        명시하거나, "프로세스 종료로 충분"을 주석으로 근거화.
+      </td>
+    </tr>
+    <tr>
+      <td><span class="sev p2">P2-5</span></td>
+      <td>
+        <b>app:// 프로토콜 핸들러의 동기 fs 호출(<code>existsSync</code>/<code>statSync</code>)</b><br>
+        <span class="loc">main.js:83 <code>!fs.existsSync(resolved) || !fs.statSync(resolved).isFile()</code></span>
+      </td>
+      <td>
+        protocol.handle 콜백 안에서 동기 fs를 호출한다. 자산 서빙 빈도가 낮아 실害는 작지만,
+        <code>statSync</code>가 <code>existsSync</code>와 TOCTOU·중복 stat(2회 syscall)이다.
+        <b>권고:</b> <code>try { st = fs.statSync(resolved); } catch { 404 }</code> 단일 호출로 합치고
+        디렉터리/파일 판정을 한 번에. (정규화 이탈 차단 로직 자체는 견고 — 유지.)
+      </td>
+    </tr>
+    <tr>
+      <td><span class="sev p2">P2-6</span></td>
+      <td>
+        <b>reloadAfterScan의 done→dashboard 전환을 setTimeout(1100ms) 마법수로 처리</b><br>
+        <span class="loc">app.js:1894-1903</span>
+      </td>
+      <td>
+        done 화면을 "잠깐 보여주고" 1100ms 뒤 대시보드로 넘기는데, 그 사이 사용자가 "대시보드 열기" 버튼을 눌러
+        뷰를 바꾸면 timer가 뒤늦게 또 render를 호출할 수 있다(가드 <code>store.scan.progress.phase==='done' &amp;&amp; view==='scanning'</code>로
+        대부분 방어되나 race 여지). <b>권고:</b> timer 핸들을 store에 보관해 뷰 전환 시 clear, 또는 사용자 명시 클릭만으로 전환.
+      </td>
+    </tr>
+  </table>
+</section>
+
+<section id="p3">
+  <h2>4. P3 — 사소 / 일관성</h2>
+  <table>
+    <tr><th style="width:60px">ID</th><th>무엇 / 위치</th><th>왜 / 권고</th></tr>
+    <tr>
+      <td><span class="sev p3">P3-1</span></td>
+      <td><b>과도기 HTTP 서버 자산 잔존</b><br><span class="loc">server.js·lib/server/{router,staticHandler,security,apiHandlers,actionHandlers}.js, package.json <code>start:web/serve:http</code></span></td>
+      <td>electron-builder는 이들을 패킹에서 제외하지 않는다(<code>lib/**/*</code> 포함). 코드 품질 관점에서 죽은/혼선 표면. 폐기 일정 또는 <code>!lib/server/{router,staticHandler,...}</code> 제외를 명시 권장.</td>
+    </tr>
+    <tr>
+      <td><span class="sev p3">P3-2</span></td>
+      <td><b><code>applyCspHeaders</code> 호출 시그니처 불일치(무해)</b><br><span class="loc">main.js:113 <code>applyCspHeaders(session, {trustedOrigin})</code> ↔ security.js:37 <code>function applyCspHeaders(session)</code></span></td>
+      <td>두 번째 인자를 함수가 받지 않아 조용히 무시된다. 동작엔 영향 없으나 "trustedOrigin이 CSP에 반영된다"는 오해 소지. 인자 제거 또는 시그니처 정합.</td>
+    </tr>
+    <tr>
+      <td><span class="sev p3">P3-3</span></td>
+      <td><b>preload <code>removeRoot(path)</code> 파라미터가 변수명 <code>path</code> 사용</b><br><span class="loc">preload.js:33 <code>removeRoot: (path) =&gt; ...String(path)</code></span></td>
+      <td>가독성/혼동(노드 <code>path</code> 모듈 연상). 기능 무해. <code>p</code> 또는 <code>rawPath</code> 권장.</td>
+    </tr>
+    <tr>
+      <td><span class="sev p3">P3-4</span></td>
+      <td><b>register.js <code>TRUSTED_ORIGIN</code>와 main.js <code>TRUSTED_ORIGIN</code> 상수 이중 정의</b><br><span class="loc">main.js:36 ↔ register.js:24</span></td>
+      <td>두 곳에 같은 <code>'app://'</code> 리터럴. main이 deps로 전달하므로 register의 기본값은 폴백. 한 곳(security 또는 공용 상수)에서 export해 단일 원천화 권장.</td>
+    </tr>
+    <tr>
+      <td><span class="sev p3">P3-5</span></td>
+      <td><b>data.js <code>getConfig</code> maxBytes 주석 vs 코드 불일치</b><br><span class="loc">data.js:76-90</span></td>
+      <td>주석은 "config.size에 maxBytes 없어 null로 노출"이라 하나 코드는 <code>typeof size.maxBytes==='number' ? ... : null</code>로 실제 값이 있으면 노출. 주석을 코드에 맞춰 정정(혹은 의도 확인).</td>
+    </tr>
+  </table>
+</section>
+
+<section id="good">
+  <h2>5. 잘한 점(유지)</h2>
+  <div class="ok-box">
+    <ul class="tight">
+      <li><b>도메인/전송 분리</b>: ipc/*는 Electron API를 import하지 않고 (args,ctx)→result 순수 함수로, register.js만 wiring·발신자 검증을 담당. 헤드리스 단위테스트 61건 전부 PASS.</li>
+      <li><b>scanController onProgress(F-1)</b>: 기존 <code>_merge</code> 무변경 + 세대 가드(<code>_isActive</code>)로 버려진 run의 늦은 콜백 차단, <code>try/catch</code>로 구독자 예외 격리. 회귀(미지정 호출) 테스트까지 포함 — 모범적.</li>
+      <li><b>입력 재검증</b>: actions.sanitizeOpenId/sanitizeRescanOpts가 renderer 입력을 main에서 재검증(키 화이트리스트·Boolean 강제·길이 상한). preload 1차 고정과 이중 방어.</li>
+      <li><b>folders 영속</b>: 임시파일→fsync→rename, 0600, 기존 키 보존 병합, 실패 시 tmp/fd 정리 — 리소스 누수·부분쓰기 방어가 견고.</li>
+      <li><b>makeProgressSender</b>: <code>isDestroyed()</code> 가드 + try/catch로 창 닫힘 레이스에서 안전. preload onScanProgress는 unsubscribe 함수를 정확히 반환.</li>
+      <li><b>L-1 일관</b>: 프론트 전 경로/서버 문자열을 textContent로만 렌더, CSP 메타·헤더 이중주입 정합.</li>
+    </ul>
+  </div>
+</section>
+
+<section id="confirm">
+  <h2>6. 확인 필요(설계 의도)</h2>
+  <ul class="tight">
+    <li><b>메뉴 범위(P2-1)</b>: 네이티브 메뉴의 재스캔/새로고침/정보가 MVP 범위인가? 범위면 renderer 구독 wiring이 누락, 범위 외면 죽은 채널 제거 필요.</li>
+    <li><b>HTTP 경로 폐기(P2-2/P3-1)</b>: server.js·lib/server HTTP 모듈은 과도기 보존인가 영구 병행인가? 영구면 코어 단일화로 중복 제거가 필요.</li>
+    <li><b>open 채널명(P1-1)</b>: 정합 방향을 app.js(<code>openInVsCode</code> 호출) / preload(<code>open</code> 별칭) 중 어느 쪽으로 통일할지.</li>
+  </ul>
+</section>
+
+<section id="files">
+  <h2>7. 검토 파일 / 산출</h2>
+  <ul class="tight">
+    <li>본 보고서: <span class="file">E:\03.프로젝트\Project-SPIP\docs\reviews\electron_code_review_1.html</span></li>
+    <li>P1 대상: <span class="file">public/app.js:1917</span>, <span class="file">electron/preload.js:22</span></li>
+    <li>단위테스트: <code>node --test test/{ipc-*,electron-*,scanController-onprogress}.test.js</code> → 61 pass / 0 fail</li>
+  </ul>
+</section>
+
+</main>
+</body>
+</html>

@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project-SPIP — 기획 검증 보고서 (1회차)</title>
+<style>
+  :root{--bg:#0f172a;--panel:#1e293b;--text:#e2e8f0;--sub:#94a3b8;
+    --accent:#34d399;--ref:#38bdf8;--line:#334155;--warn:#fbbf24;--danger:#f87171;}
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:"Segoe UI","Malgun Gothic",system-ui,sans-serif;line-height:1.7;}
+  header{padding:44px 32px 30px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#13203b,#0f172a);}
+  header h1{margin:0 0 8px;font-size:28px;}
+  header .tag{display:inline-block;border-radius:999px;padding:3px 12px;font-size:13px;margin-right:8px;
+    background:rgba(52,211,153,.12);color:var(--accent);border:1px solid rgba(52,211,153,.4);}
+  header .verdict{display:inline-block;border-radius:999px;padding:4px 16px;font-size:15px;font-weight:800;margin-right:8px;
+    background:rgba(248,113,113,.16);color:#fca5a5;border:1px solid rgba(248,113,113,.5);}
+  header p{margin:14px 0 0;color:var(--sub);max-width:900px;}
+  .meta{margin-top:14px;font-size:13px;color:var(--sub);}
+  main{max-width:1080px;margin:0 auto;padding:30px;}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px 28px;margin:20px 0;}
+  h2{margin:0 0 14px;font-size:20px;color:var(--accent);border-left:4px solid var(--accent);padding-left:12px;}
+  h3{font-size:15px;color:var(--ref);margin:18px 0 8px;}
+  p{margin:8px 0;}
+  code{background:#0b1220;color:var(--ref);padding:1px 6px;border-radius:5px;font-size:13px;}
+  table{width:100%;border-collapse:collapse;margin:12px 0;font-size:13.5px;}
+  th,td{border:1px solid var(--line);padding:9px 11px;text-align:left;vertical-align:top;}
+  th{background:#142035;color:var(--accent);}
+  tr:nth-child(even) td{background:rgba(255,255,255,.02);}
+  .rid{font-family:Consolas,monospace;color:var(--accent);font-weight:700;white-space:nowrap;}
+  .pill{font-size:11px;font-weight:700;padding:2px 9px;border-radius:6px;white-space:nowrap;}
+  .p1{background:rgba(248,113,113,.16);color:#fca5a5;border:1px solid rgba(248,113,113,.45);}
+  .p2{background:rgba(251,191,36,.16);color:#fcd34d;border:1px solid rgba(251,191,36,.45);}
+  .p3{background:rgba(56,189,248,.16);color:#7dd3fc;border:1px solid rgba(56,189,248,.45);}
+  .pass{color:var(--accent);font-weight:700;}
+  .fail{color:var(--danger);font-weight:700;}
+  .warn{color:var(--warn);font-weight:700;}
+  .note{background:rgba(56,189,248,.08);border:1px solid rgba(56,189,248,.3);border-radius:8px;padding:12px 16px;font-size:13.5px;color:#bae6fd;}
+  .danger-box{background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.3);border-radius:8px;padding:12px 16px;font-size:13.5px;color:#fecaca;}
+  ul,ol{margin:8px 0;padding-left:22px;}li{margin:5px 0;}
+  figure{margin:16px 0;background:#0b1220;border:1px solid var(--line);border-radius:10px;padding:16px;}
+  figcaption{color:var(--sub);font-size:12.5px;margin-top:10px;text-align:center;}
+  footer{text-align:center;color:var(--sub);font-size:12.5px;padding:28px;border-top:1px solid var(--line);}
+  .small{font-size:12.5px;color:var(--sub);}
+</style>
+</head>
+<body>
+<header>
+  <span class="tag">기획 검증</span><span class="tag">1회차</span>
+  <h1>Project-SPIP — 기획 산출물 독립 검증 보고서</h1>
+  <div style="margin-top:14px;"><span class="verdict">판정: FAIL</span></div>
+  <p>검증 대상: <code>docs/PRD.html</code>, <code>docs/FeatureSpec.html</code>, <code>docs/UserStories.html</code> · 정합성 비교: <code>package.json</code>, <code>README.md</code>.
+  전반적으로 구조·수용 기준·범위 정의의 완성도는 높으나, <b>추적성 누락(비기능 요구 미연결)</b>, <b>MVP 경계 문서 간 불일치</b>, <b>수용 기준 기준값의 상하위 문서 역전</b>, <b>몇몇 정량 기준의 검증 불가능성</b>이 확인되어 반영이 필요하다.</p>
+  <div class="meta">검증자: 독립 리뷰어 · 검증일: 2026-06-21 · 기준 폴더(docs/Planning/) 부재 → 일반 기획 기준 + 제품 컨텍스트 룰로 검증</div>
+</header>
+<main>
+
+<section>
+  <h2>1. 요약</h2>
+  <p>확정 요구(인사이트 4종, 스캔 2모드, 순수 HTML/JS, VS Code 열기, git 연동, CLI)는 모두 R-ID로 반영되어 있고 셸 인젝션·경로 순회·로컬 바인딩 등 핵심 보안 리스크도 다뤄졌다. 그러나 다음 4개 영역에서 <b>FAIL 사유</b>가 발견됐다.</p>
+  <ul>
+    <li><b>추적성 단절:</b> 비기능 요구 <span class="rid">N-01</span>(성능)·<span class="rid">N-06</span>(데이터)·<span class="rid">N-07</span>(접근성/UX)이 UserStories의 어떤 스토리에도 연결되지 않아 백로그에서 누락 → 구현·테스트로 추적 불가.</li>
+    <li><b>MVP 경계 불일치:</b> PRD 내부(M3 vs "MVP 정의" 노트)와 PRD↔UserStories 간 MVP 구성 요구 집합이 서로 다르다(특히 <span class="rid">R-13</span>, <span class="rid">N-07</span>).</li>
+    <li><b>수용 기준 역전:</b> FeatureSpec의 "2초 이내" 등 정량 기준이 상위 문서 PRD에 없는데 하위 문서가 신설 → 단일 출처 위반.</li>
+    <li><b>검증 불가능한 기준:</b> "체감 &lt;200ms", "2초 이내" 등 측정 주체·조건이 불명확하거나 임의값.</li>
+  </ul>
+  <div class="danger-box"><b>결론:</b> 설계 착수 전 아래 P1 항목(추적성·MVP 경계)을 반드시 정리해야 한다. P2/P3는 설계와 병행 정리 가능하나 명시 권고.</div>
+</section>
+
+<section>
+  <h2>2. 체크리스트 판정 요약</h2>
+  <table>
+    <tr><th style="width:230px;">검증 항목</th><th style="width:80px;">판정</th><th>핵심 근거</th></tr>
+    <tr><td>1. 완결성 (확정 요구 R-ID 반영)</td><td class="pass">PASS*</td><td>인사이트 4종(R-06~09), 스캔 2모드(R-04/05), 순수 HTML/JS(N-04), VS Code 열기(R-12), git(R-08/13), CLI(R-14) 모두 ID 부여. (*N-01/06/07 백로그 미연결은 추적성에서 FAIL)</td></tr>
+    <tr><td>2. 일관성 (문서 간·package.json)</td><td class="fail">FAIL</td><td>MVP 구성 R-ID 집합이 PRD 내부/PRD↔US 간 불일치. package.json 구조(bin spip→scan.js, scripts)와는 정합.</td></tr>
+    <tr><td>3. 수용 기준 검증가능성</td><td class="fail">FAIL</td><td>"체감 &lt;200ms", "2초 이내", "≥95% 탐지" 등 측정 주체/모집단/조건 미정의. 일부는 하위 문서가 임의 신설.</td></tr>
+    <tr><td>4. 범위 명확성 (MoSCoW/OoS)</td><td class="warn">CONCERN</td><td>OoS 명시는 우수. 단 OoS의 "watch/메타 편집"이 <span class="pill could">Could</span>로 분류돼 "범위 밖"과 모순. README가 R-09·git 상태 등 인사이트를 누락 기술(외부 정합).</td></tr>
+    <tr><td>5. 리스크/보안 누락</td><td class="pass">PASS</td><td>전체 드라이브 성능(R1), 셸 인젝션(엣지·인자 배열 전달), 경로 순회(N-03/R4), 로컬 바인딩(N-02) 모두 다룸. 일부 강화 권고만.</td></tr>
+    <tr><td>6. 추적성 준비</td><td class="fail">FAIL</td><td>R-ID/US-ID 체계는 양호하나 N-01/06/07 미연결, FeatureSpec이 R-10·R-11 미상세(2개 기능만 명세)로 화면 요구 추적 공백.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>3. 추적성 매트릭스 (요구 → 스토리 교차 대조)</h2>
+  <p class="small">PRD 요구 ID가 UserStories 백로그 및 FeatureSpec에 연결됐는지 기계적으로 대조한 결과.</p>
+  <table>
+    <tr><th>요구 ID</th><th>UserStory 연결</th><th>FeatureSpec 연결</th><th>상태</th></tr>
+    <tr><td class="rid">R-01,02,03,04,05</td><td>US-A1~A5</td><td>F-1</td><td class="pass">OK</td></tr>
+    <tr><td class="rid">R-06,07,08,09</td><td>US-B1~B4</td><td>F-1(요약)</td><td class="pass">OK</td></tr>
+    <tr><td class="rid">R-10</td><td>US-C1</td><td class="fail">없음(미상세)</td><td class="warn">화면 명세 공백</td></tr>
+    <tr><td class="rid">R-11</td><td>US-C2</td><td class="fail">없음(미상세)</td><td class="warn">화면 명세 공백</td></tr>
+    <tr><td class="rid">R-12,13</td><td>US-D1,D2</td><td>F-2</td><td class="pass">OK</td></tr>
+    <tr><td class="rid">R-14,15,16</td><td>US-A1, D3, C3</td><td>F-1</td><td class="pass">OK</td></tr>
+    <tr><td class="rid">N-02,03,04,05</td><td>US-E1,E2,E3,D2</td><td>F-2(N-03)</td><td class="pass">OK</td></tr>
+    <tr><td class="rid">N-01 (성능)</td><td class="fail">연결 없음</td><td class="fail">없음</td><td class="fail">누락</td></tr>
+    <tr><td class="rid">N-06 (데이터/인증)</td><td class="fail">연결 없음</td><td class="fail">없음</td><td class="fail">누락</td></tr>
+    <tr><td class="rid">N-07 (접근성/UX)</td><td class="fail">연결 없음</td><td class="fail">없음</td><td class="fail">누락</td></tr>
+  </table>
+  <div class="note">N-01의 30초 기준은 PRD 본문(성공지표·N-01)에 있으나, <b>백로그 스토리로 분해되지 않아</b> 스프린트·테스트 케이스로 흘러가지 못한다. N-06(단일 사용자/인증 없음)·N-07(키보드/색상 비의존 배지)도 동일.</div>
+</section>
+
+<section>
+  <h2>4. MVP 경계 불일치 상세</h2>
+  <table>
+    <tr><th>출처</th><th>MVP에 포함한다고 명시한 요구</th></tr>
+    <tr><td>PRD §12 M1+M2+M3 (단계 표)</td><td>R-01,02,04,06,07,08,10,11,12 + N-02,03,04,05,07 (M2에 R-13)</td></tr>
+    <tr><td>PRD §12 "MVP 정의" 노트</td><td>R-01·02·04·06·07·08·10·11·12·13·14 (= "모든 Must"). <b>N-07 누락, R-14 포함</b></td></tr>
+    <tr><td>UserStories §MVP 스프린트 (S1+S2+S3)</td><td>US-A1,A2,A3,D2,E3 / B1,B2,B3 / C1,C2,D1,E1,E2 → R-01,02,04,14,13,N-04,N-05,06,07,08,10,11,12,N-02,N-03. <b>N-07 누락, R-13은 D2로 포함</b></td></tr>
+  </table>
+  <div class="danger-box">세 출처의 MVP 요구 집합이 서로 다르다. 대표 충돌: (a) <span class="rid">N-07</span>(접근성)은 PRD 단계표 M3엔 있으나 "MVP 정의" 노트와 US 스프린트엔 없음. (b) <span class="rid">R-13</span>은 PRD 단계표상 M2(인사이트)인데 노트는 Must로 MVP, US는 S1(D2)에서 다룸 — 단계 귀속이 제각각. (c) PRD 단계표 M3 완료기준에 "VS Code로 열기"는 있으나 R-13 명시 없음.</div>
+</section>
+
+<section>
+  <h2>5. 반영 항목 (생산자 수정 지시) — 우선순위순</h2>
+  <table>
+    <tr><th style="width:54px;">순위</th><th style="width:150px;">무엇</th><th style="width:160px;">위치</th><th>문제 / 권고</th></tr>
+    <tr>
+      <td><span class="pill p1">P1</span></td>
+      <td>N-01/N-06/N-07 백로그 미연결</td>
+      <td>UserStories.html EPIC E(또는 신규 스토리)</td>
+      <td><b>문제:</b> 비기능 요구 3종이 스토리로 분해되지 않아 추적·테스트 불가.<br><b>권고:</b> US-E4(성능, N-01: "200개 루트 30초 이내" AC), US-E5(데이터/인증, N-06), US-E6(접근성, N-07: 키보드 포커스·색상 비의존 배지)를 추가하고 R-ID 컬럼에 연결.</td>
+    </tr>
+    <tr>
+      <td><span class="pill p1">P1</span></td>
+      <td>MVP 경계 3중 불일치</td>
+      <td>PRD §12 (단계표 + "MVP 정의" 노트), UserStories §MVP 스프린트</td>
+      <td><b>문제:</b> MVP 구성 요구 집합이 세 곳에서 다름(N-07 포함 여부, R-13/R-14 단계 귀속).<br><b>권고:</b> MVP 요구 집합을 단일 표로 확정하고 세 문서가 동일 집합을 참조하도록 통일. 특히 (i) N-07을 MVP에 넣을지 결정, (ii) R-13의 단계 귀속을 한 곳으로 고정, (iii) "MVP 정의" 노트와 단계표 완료기준의 R-ID 목록을 일치시킬 것.</td>
+    </tr>
+    <tr>
+      <td><span class="pill p1">P1</span></td>
+      <td>FeatureSpec 화면 기능 미상세</td>
+      <td>FeatureSpec.html (현재 F-1, F-2만)</td>
+      <td><b>문제:</b> R-10(대시보드 표시)·R-11(필터/정렬/검색)이 명세서에 정상/예외/엣지 흐름으로 상세화되지 않음. 헤더는 "두 개 핵심 기능"이라 의도된 축소이나, MVP Must 기능의 화면 명세 공백은 구현 모호성을 남김.<br><b>권고:</b> F-3(대시보드 목록·통계, R-10)·F-4(필터/정렬/검색, R-11)를 추가하거나, 최소한 PRD/US에서 화면 동작(빈 상태, 0건, 필터 AND 동작, 정렬 키)을 충분히 확정.</td>
+    </tr>
+    <tr>
+      <td><span class="pill p2">P2</span></td>
+      <td>수용 기준값 상하위 역전</td>
+      <td>FeatureSpec F-2("2초 이내"), F-1 AC</td>
+      <td><b>문제:</b> "버튼 클릭 후 2초 이내 code 실행" 기준이 상위 PRD R-12에 없는데 하위 명세가 신설. 단일 출처 원칙 위반(상위와 충돌 시 추적 혼선).<br><b>권고:</b> 시간 기준을 PRD R-12 수용 기준에 먼저 정의하거나, FeatureSpec은 "PRD R-12 기준 준수"로만 참조하고 임의 수치 제거.</td>
+    </tr>
+    <tr>
+      <td><span class="pill p2">P2</span></td>
+      <td>검증 불가능한 정량 기준</td>
+      <td>PRD R-11("체감 &lt;200ms"), §3 탐지정확도 "≥95%"</td>
+      <td><b>문제:</b> "체감"은 측정 주체·방법 불명. "탐지 ≥95%"는 분모(전체 실제 프로젝트 모집단) 정의가 없어 테스트 불가.<br><b>권고:</b> (i) 200ms는 "필터 조작 입력→리스트 재렌더 완료 N건 기준"으로 측정 조건 명시 또는 정성 기준으로 강등. (ii) 95%는 "사전 정의된 검증용 프로젝트 세트 대비 탐지율"로 모집단·측정 절차 명시.</td>
+    </tr>
+    <tr>
+      <td><span class="pill p2">P2</span></td>
+      <td>OoS와 MoSCoW 분류 모순</td>
+      <td>PRD §9 범위 밖 표</td>
+      <td><b>문제:</b> "watch/자동 재스캔", "태그/메모 편집"을 "범위 밖" 섹션에 두면서 <span class="pill p3">Could</span>로 분류 — "범위 밖"인데 이번 버전 후보라는 모순.<br><b>권고:</b> 섹션 제목을 "MVP 범위 밖(후속 후보 포함)"으로 바꾸거나, 진짜 제외(Won't)와 후속 후보(Could)를 표에서 시각적으로 분리.</td>
+    </tr>
+    <tr>
+      <td><span class="pill p3">P3</span></td>
+      <td>R-16 우선순위 vs 마일스톤 정합</td>
+      <td>PRD §12 M4, FeatureSpec F-1 트리거</td>
+      <td><b>문제:</b> R-16(재스캔)은 <span class="pill p3">Could</span>인데 FeatureSpec F-1 트리거에 "대시보드 재스캔(R-16)"이 동등 기재 → Could 기능이 핵심 기능 트리거로 보일 소지.<br><b>권고:</b> F-1 트리거에서 R-16을 "(Could, 후속)"로 표기.</td>
+    </tr>
+    <tr>
+      <td><span class="pill p3">P3</span></td>
+      <td>README ↔ PRD 기능 범위 불일치</td>
+      <td>README.md "주요 기능"</td>
+      <td><b>문제:</b> README는 인사이트를 "요약 정보(최종 수정 시각 등)"로만 기술 — git 상태(R-08)·언어 분포(R-06)·규모(R-09)·필터/검색(R-11)·VS Code 열기(R-12)가 빠져 PRD 범위와 어긋남.<br><b>권고:</b> README 주요 기능을 PRD R-06~R-12 기준으로 동기화(외부 산출물 정합).</td>
+    </tr>
+    <tr>
+      <td><span class="pill p3">P3</span></td>
+      <td>보안 리스크 강화 명시(누락 아님)</td>
+      <td>PRD N-03, FeatureSpec F-2 엣지</td>
+      <td><b>문제(경미):</b> 셸 인젝션 방지는 "인자 배열 전달"로 다뤘으나, R-16/재스캔 시 사용자 입력 루트 경로의 검증, 그리고 git CLI 호출 인자(브랜치명 등)에 대한 인젝션 표면은 명시 안 됨.<br><b>권고:</b> N-03에 "모든 외부 프로세스 호출(code/git)은 shell:false + 인자 배열"을 일반 규칙으로 승격. (상세 보안 판정은 security-reviewer 영역)</td>
+    </tr>
+  </table>
+</section>
+
+<section>
+  <h2>6. 확인 필요 (사용자/PM 판단 쟁점)</h2>
+  <ul>
+    <li><b>MVP에 N-07(접근성)을 포함할 것인가?</b> 세 문서가 엇갈리는 핵심 원인. 단일 사용자 로컬 도구 특성상 MVP에서 제외(Should 강등)도 합리적 — 결정 후 통일 필요.</li>
+    <li><b>FeatureSpec 상세 범위:</b> 의도적으로 2개 기능만 명세한 것인지, R-10/R-11도 명세 대상인지. 설계 모호성 감소 차원에서 추가 권고.</li>
+    <li>PRD §11 미해결 질문 Q1~Q4(기본 루트, stale 90일, 포트, 영속 위치)는 가정으로 남겨 두었으나, 일부(기본 루트·영속 위치)는 설계 착수 전 확정 권고.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>7. 통과한 항목 (재확인)</h2>
+  <ul>
+    <li>확정 요구의 R-ID 부여 자체는 빠짐없음(인사이트 4종/스캔 2모드/순수 HTML·JS/열기/git/CLI).</li>
+    <li>핵심 보안 리스크 4종(드라이브 성능·셸 인젝션·경로 순회·로컬 바인딩)이 N-02/N-03/R-02/R-03 및 엣지 케이스로 다뤄짐.</li>
+    <li>package.json(bin: spip→scan.js, scripts: scan/start/dev, engines node&gt;=16, type commonjs)이 PRD N-04 및 R-14와 정합.</li>
+    <li>Given/When/Then 형식의 수용 기준 다수가 측정 가능하게 작성됨(R-01 중첩 1건, R-02 재귀 차단, R-08 git N/A 등).</li>
+  </ul>
+</section>
+
+<footer>Project-SPIP · 기획 검증 보고서 1회차 · 독립 리뷰어 · 판정 FAIL(P1 3건) · 자족형 HTML</footer>
+</body>
+</html>

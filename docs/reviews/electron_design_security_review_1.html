@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project-SPIP — Electron 이전 설계 보안 검증 보고서 (위협 모델링) 1회차</title>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#1e293b; --text:#e2e8f0; --sub:#94a3b8;
+    --accent:#34d399; --ref:#38bdf8; --line:#334155; --warn:#fbbf24; --danger:#f87171;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:"Segoe UI","Malgun Gothic",system-ui,sans-serif;line-height:1.7;}
+  header{padding:48px 32px 36px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#13203b,#0f172a);}
+  header h1{margin:0 0 8px;font-size:27px;}
+  header .tag{display:inline-block;background:rgba(52,211,153,.12);color:var(--accent);
+    border:1px solid rgba(52,211,153,.4);border-radius:999px;padding:3px 12px;font-size:13px;margin-right:8px;}
+  header p{margin:14px 0 0;color:var(--sub);max-width:990px;}
+  .meta{margin-top:16px;font-size:13px;color:var(--sub);}
+  main{max-width:1140px;margin:0 auto;padding:32px;}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:24px 28px;margin:22px 0;}
+  h2{margin:0 0 16px;font-size:21px;color:var(--accent);border-left:4px solid var(--accent);padding-left:12px;}
+  h3{font-size:16px;color:var(--ref);margin:22px 0 10px;}
+  h4{font-size:14px;color:var(--text);margin:16px 0 6px;}
+  p{margin:8px 0;}
+  ul,ol{margin:8px 0;padding-left:22px;}li{margin:5px 0;}
+  code{background:#0b1220;color:var(--ref);padding:1px 6px;border-radius:5px;font-size:13px;font-family:Consolas,monospace;}
+  pre{background:#0b1220;border:1px solid var(--line);border-radius:8px;padding:14px 16px;
+    overflow-x:auto;font-size:13px;color:#cbd5e1;font-family:Consolas,monospace;line-height:1.55;}
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13.5px;}
+  th,td{border:1px solid var(--line);padding:9px 11px;text-align:left;vertical-align:top;}
+  th{background:#142035;color:var(--accent);}
+  tr:nth-child(even) td{background:rgba(255,255,255,.02);}
+  .fid{font-family:Consolas,monospace;font-weight:700;white-space:nowrap;}
+  .sev{font-size:11px;font-weight:700;padding:2px 9px;border-radius:6px;white-space:nowrap;display:inline-block;}
+  .crit{background:rgba(248,113,113,.18);color:#fecaca;border:1px solid rgba(248,113,113,.6);}
+  .high{background:rgba(251,146,60,.16);color:#fdba74;border:1px solid rgba(251,146,60,.55);}
+  .med{background:rgba(251,191,36,.14);color:#fcd34d;border:1px solid rgba(251,191,36,.5);}
+  .low{background:rgba(56,189,248,.14);color:#7dd3fc;border:1px solid rgba(56,189,248,.5);}
+  .pass{background:rgba(52,211,153,.16);color:#6ee7b7;border:1px solid rgba(52,211,153,.5);}
+  .resolved{background:rgba(52,211,153,.16);color:#6ee7b7;border:1px solid rgba(52,211,153,.5);}
+  .verdict{display:inline-block;border-radius:999px;padding:6px 22px;font-size:18px;font-weight:800;}
+  .v-cond{background:rgba(251,191,36,.16);color:#fcd34d;border:1px solid rgba(251,191,36,.6);}
+  .v-pass{background:rgba(52,211,153,.16);color:#6ee7b7;border:1px solid rgba(52,211,153,.6);}
+  .v-fail{background:rgba(248,113,113,.18);color:#fecaca;border:1px solid rgba(248,113,113,.6);}
+  .note{background:rgba(56,189,248,.08);border:1px solid rgba(56,189,248,.3);border-radius:8px;
+    padding:12px 16px;font-size:13.5px;color:#bae6fd;margin:10px 0;}
+  .warn-box{background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.3);border-radius:8px;
+    padding:12px 16px;font-size:13.5px;color:#fde68a;margin:10px 0;}
+  .danger-box{background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.35);border-radius:8px;
+    padding:12px 16px;font-size:13.5px;color:#fecaca;margin:10px 0;}
+  .ok-box{background:rgba(52,211,153,.08);border:1px solid rgba(52,211,153,.3);border-radius:8px;
+    padding:12px 16px;font-size:13.5px;color:#bbf7d0;margin:10px 0;}
+  figure{margin:18px 0;background:#0b1220;border:1px solid var(--line);border-radius:10px;padding:18px;}
+  figcaption{color:var(--sub);font-size:12.5px;margin-top:10px;text-align:center;}
+  .legend{display:flex;gap:18px;flex-wrap:wrap;font-size:12.5px;color:var(--sub);margin-top:10px;justify-content:center;}
+  .legend span{display:inline-flex;align-items:center;gap:6px;}
+  .dot{width:11px;height:11px;border-radius:3px;display:inline-block;}
+  .finding{border-left:3px solid var(--accent);padding:6px 0 6px 14px;margin:20px 0;}
+  .finding.high-f{border-left-color:#fb923c;}
+  .finding.med-f{border-left-color:#fbbf24;}
+  .finding.low-f{border-left-color:#38bdf8;}
+  .finding h4{margin:0 0 8px;font-size:15px;color:var(--text);}
+  .kv{font-size:13px;margin:3px 0;}
+  .kv b{color:var(--sub);font-weight:600;display:inline-block;min-width:104px;vertical-align:top;}
+  footer{text-align:center;color:var(--sub);font-size:12.5px;padding:30px;border-top:1px solid var(--line);}
+  .scorecard{display:flex;gap:14px;flex-wrap:wrap;margin:16px 0;}
+  .scard{flex:1;min-width:104px;background:#0b1220;border:1px solid var(--line);border-radius:10px;padding:14px;text-align:center;}
+  .scard .n{font-size:28px;font-weight:800;}
+  .scard .l{font-size:12px;color:var(--sub);margin-top:4px;}
+</style>
+</head>
+<body>
+<header>
+  <span class="tag">보안 검증 보고서</span><span class="tag">위협 모델링 (STRIDE)</span><span class="tag">Electron 이전 설계 · 1회차</span>
+  <h1>Project-SPIP — Electron 이전 설계 보안 검증 보고서</h1>
+  <p>HTTP 로컬서버 → Electron 설치형 데스크톱 이전 설계서(<code>electron-migration.html</code>)의 <b>보안 모델 전환</b>을 적대적 관점으로 위협 모델링했다. 핵심 질문 6가지 — (1) renderer 격리(contextIsolation/nodeIntegration/sandbox), (2) preload 노출면 최소화, (3) IPC 입력의 main 측 재검증, (4) 네비게이션/콘텐츠 잠금, (5) TB-B 부분신뢰 통제(H-1/H-2/H-3/M-3/L-1/M-2/M4-H-1) 보존, (6) M-1 제거 공백·신규 표면(폴더 대화상자·config 영속·패키징/서명) — 을 베이스라인(<code>architecture_security_review_2.html</code> 8중 통제·TB-A/TB-B·RC-1/RC-2 / <code>m4_design_security_review_2.html</code> M4-H-1·H-2)에 대조했다. <b>중요:</b> 이번 검증 시점에는 <code>lib/</code>·<code>public/</code>·<code>server.js</code>·<code>scan.js</code>가 <b>실제 코드로 존재</b>하므로(과거 아키텍처 검증은 코드 부재 가정), 설계가 "무수정 재사용"을 주장하는 모듈을 <code>Read</code>/<code>Grep</code>으로 교차확인해 설계 주장이 코드에 접지(grounded)되는지까지 점검했다.</p>
+  <div class="meta">검증자: Security Reviewer · 일자: 2026-06-21 · 입력: docs/architecture/electron-migration.html(§2 프로세스모델·§4 IPC·§5 폴더·§6 보안전환·§7 패키징·§12 ADR) / 베이스라인 architecture_security_review_2.html·m4_design_security_review_2.html / 실제 코드 교차확인(config.js·safeExec.js·actionHandlers.js·git.js·public/index.html·public/app.js) · 방법: 자산·신뢰경계 식별 → STRIDE 위협 도출 → 코드 접지 검증 → 등급화 → 종합 판정 · docs/Development 부재 → 표준 체크리스트 적용</div>
+</header>
+
+<main>
+
+<!-- ===================== 판정 ===================== -->
+<section id="verdict">
+  <h2>0. 종합 판정</h2>
+  <p style="font-size:16px;">판정: <span class="verdict v-cond">조건부 PASS</span> <span style="color:var(--sub);font-size:13px;">(치명 0 · 높음 1 · 중간 3 · 낮음 2 · PASS(보존확인) 8)</span></p>
+  <p>전송 계층 전환의 <b>보안 방향성은 옳다</b> — TB-A(네트워크) 표면을 통째로 제거하고 그 자리를 Electron 보안 베이스라인(contextIsolation·nodeIntegration:false·sandbox·preload allowlist·원격 미로드·will-navigate/팝업 차단·CSP)으로 대체하며, TB-B(부분신뢰 스캔 대상) 통제(H-1 pathGuard realpath·H-2 safeExec resolveBin 절대경로·H-3 입력가드·M-3·L-1·M-2·M4-H-1)는 도메인 코드 무수정으로 보존한다. 코드 교차확인 결과 <code>config.normalizeScanRoots</code>(L90)·<code>safeExec.resolveBin</code>/<code>safeExec</code>(detached 모드 포함)·<code>actionHandlers.open</code>의 H-1/H-2/M-4 검증 체인·git collector의 <code>git -C &lt;path&gt;</code> cwd 의존 제거가 <b>실제로 존재</b>하여 "무수정 재사용으로 통제가 보존된다"는 주장은 접지된다.</p>
+  <p>그러나 <b>높음 1건</b>이 게이트를 막는다. <span class="fid">EM-H-1</span> — 설계가 <b>preload allowlist를 "원칙"으로만 선언</b>하고, IPC 검증 규칙(§4.2)에 <code>open</code>·<code>rescan</code>·<code>pickFolders</code>만 명세한 채 <b><code>addRoots</code>·<code>removeRoot</code>·<code>browseDir</code>의 main 측 재검증·인자 스키마·실패 모드</b>를 충분히 못박지 않았다. 특히 <code>browseDir(dir)</code>는 renderer가 임의 디렉터리 경로를 던지는 <b>신규 임의 경로 입력 채널</b>인데, 화이트리스트(scanRoots 하위) 제약·realpath 검증·반환 메타 정보노출 한계가 설계에 없다 — RC-2(부분신뢰) 환경에서 renderer 측 저장형 XSS가 발생하면(L-1은 표시만 막고 페이로드는 메모리에 존재) preload API를 호출해 파일시스템을 열람·열기할 수 있는 정보노출/권한 표면이 된다. 중간 3건은 (1) <code>loadFile</code>+<code>file://</code> 전환 시 현행 <code>index.html</code>의 <code>/static/*</code> 절대경로·<code>connect-src 'self'</code> CSP가 깨지거나 약화되는 문제, (2) M-1 제거 공백(IPC 발신자 검증·<code>senderFrame</code> 확인 부재), (3) 패키징 무결성(asar·미서명) 미통제다. 낮음 2건은 외부 링크/shell.openExternal 정책과 sandbox "권장(권장)" 표현의 비강제성이다.</p>
+
+  <div class="scorecard">
+    <div class="scard"><div class="n" style="color:#fecaca">0</div><div class="l">치명</div></div>
+    <div class="scard"><div class="n" style="color:#fdba74">1</div><div class="l">높음</div></div>
+    <div class="scard"><div class="n" style="color:#fcd34d">3</div><div class="l">중간</div></div>
+    <div class="scard"><div class="n" style="color:#7dd3fc">2</div><div class="l">낮음</div></div>
+    <div class="scard"><div class="n" style="color:#6ee7b7">8</div><div class="l">보존 PASS</div></div>
+  </div>
+
+  <div class="warn-box"><b>게이트 결과:</b> 치명 0 · <b>높음 1건(EM-H-1)</b>이 남아 보안 게이트를 <b>통과시키지 않는다(조건부 PASS)</b>. EM-H-1을 설계에 반영(전 IPC 채널의 main 재검증 명세 + browseDir 화이트리스트 제약 또는 드롭 확정)하고, 중간 EM-M-1(file:// CSP/경로)·EM-M-2(IPC sender 검증)를 보강하면 PASS 상향 가능하다. 본 판정은 <b>설계 청사진</b> 수준이며, sandbox·preload allowlist·IPC 검증의 실효성은 구현 보안 게이트(아래 §5 V/C 항목)에서 실증해야 한다.</div>
+</section>
+
+<!-- ===================== 신뢰 경계 SVG ===================== -->
+<section id="boundary">
+  <h2>1. 갱신된 신뢰 경계 (Electron 전환 후)</h2>
+  <p>HTTP→IPC 전환으로 신뢰 경계가 재편된다. <b>TB-A(네트워크)는 제거</b>되고, 그 자리에 <b>새 경계 TB-C(renderer↔main IPC)</b>가 생긴다. <b>TB-B(스캔 대상 부분신뢰)는 그대로 유지</b>된다. 아래 SVG는 각 경계의 통제·잔여 위협을 요약한다.</p>
+  <figure>
+    <svg viewBox="0 0 1080 470" width="100%" role="img" aria-label="Electron 전환 후 신뢰 경계 및 통제">
+      <defs>
+        <marker id="ag" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 Z" fill="#34d399"/></marker>
+        <marker id="aw" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 Z" fill="#fbbf24"/></marker>
+        <marker id="ar" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 Z" fill="#f87171"/></marker>
+      </defs>
+
+      <!-- TB-A removed -->
+      <rect x="20" y="30" width="220" height="100" rx="10" fill="#170d0d" stroke="#64748b" stroke-width="1.2" stroke-dasharray="6 5"/>
+      <text x="130" y="52" fill="#94a3b8" font-size="11.5" text-anchor="middle" font-weight="bold" font-family="Segoe UI">TB-A 네트워크 (제거됨)</text>
+      <text x="130" y="74" fill="#64748b" font-size="9.5" text-anchor="middle" font-family="Segoe UI">소켓·DNS리바인딩·CSRF·토큰</text>
+      <text x="130" y="92" fill="#64748b" font-size="9.5" text-anchor="middle" font-family="Segoe UI">→ 도달 경로 자체 소멸</text>
+      <text x="130" y="114" fill="#fca5a5" font-size="9" text-anchor="middle" font-family="Segoe UI">M-1 통제 폐기(소켓 없음)</text>
+
+      <!-- Renderer -->
+      <rect x="20" y="150" width="220" height="290" rx="10" fill="#0b1220" stroke="#38bdf8" stroke-width="1.4"/>
+      <text x="130" y="172" fill="#38bdf8" font-size="12" text-anchor="middle" font-weight="bold" font-family="Segoe UI">Renderer (미신뢰 콘텐츠)</text>
+      <text x="130" y="192" fill="#cbd5e1" font-size="9.5" text-anchor="middle" font-family="Segoe UI">RC-2: 오염 메타 표시(저장형 XSS 표면)</text>
+      <text x="130" y="214" fill="#6ee7b7" font-size="9.5" text-anchor="middle" font-family="Segoe UI">contextIsolation · nodeIntegration:false</text>
+      <text x="130" y="232" fill="#6ee7b7" font-size="9.5" text-anchor="middle" font-family="Segoe UI">sandbox(권장) · CSP 메타</text>
+      <text x="130" y="250" fill="#6ee7b7" font-size="9.5" text-anchor="middle" font-family="Segoe UI">L-1 textContent 렌더</text>
+      <text x="130" y="272" fill="#fdba74" font-size="9.5" text-anchor="middle" font-family="Segoe UI">잔여: XSS→preload API 호출(EM-H-1)</text>
+      <text x="130" y="290" fill="#fcd34d" font-size="9.5" text-anchor="middle" font-family="Segoe UI">잔여: file:// CSP/경로(EM-M-1)</text>
+      <text x="130" y="312" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">window.spip API만(Node 접근 0)</text>
+
+      <!-- TB-C IPC boundary (preload + ipcMain) -->
+      <rect x="300" y="120" width="220" height="250" rx="10" fill="#1a1206" stroke="#fbbf24" stroke-width="1.5"/>
+      <text x="410" y="142" fill="#fbbf24" font-size="12" text-anchor="middle" font-weight="bold" font-family="Segoe UI">TB-C: IPC 경계 (신규)</text>
+      <text x="410" y="162" fill="#cbd5e1" font-size="9.5" text-anchor="middle" font-family="Segoe UI">preload allowlist(window.spip)</text>
+      <text x="410" y="180" fill="#cbd5e1" font-size="9.5" text-anchor="middle" font-family="Segoe UI">ipcMain.handle 검증 레이어</text>
+      <rect x="316" y="194" width="188" height="30" rx="6" fill="#0b1220" stroke="#34d399"/>
+      <text x="410" y="213" fill="#6ee7b7" font-size="9" text-anchor="middle" font-family="Segoe UI">open/rescan: 명세됨(H-1/H-2/M-4)</text>
+      <rect x="316" y="228" width="188" height="30" rx="6" fill="#0b1220" stroke="#fb923c"/>
+      <text x="410" y="247" fill="#fdba74" font-size="9" text-anchor="middle" font-family="Segoe UI">addRoots/removeRoot/browseDir:</text>
+      <rect x="316" y="262" width="188" height="26" rx="6" fill="#0b1220" stroke="#fb923c"/>
+      <text x="410" y="279" fill="#fdba74" font-size="9" text-anchor="middle" font-family="Segoe UI">재검증 과소명세(EM-H-1)</text>
+      <rect x="316" y="294" width="188" height="30" rx="6" fill="#0b1220" stroke="#fbbf24"/>
+      <text x="410" y="313" fill="#fcd34d" font-size="9" text-anchor="middle" font-family="Segoe UI">sender/senderFrame 검증 부재(EM-M-2)</text>
+      <text x="410" y="346" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">renderer→main 입력 = 부분신뢰 취급</text>
+
+      <!-- Main / trusted -->
+      <rect x="580" y="30" width="240" height="200" rx="10" fill="#0d1726" stroke="#34d399" stroke-width="1.3" stroke-dasharray="6 5"/>
+      <text x="700" y="52" fill="#34d399" font-size="12" text-anchor="middle" font-weight="bold" font-family="Segoe UI">Main (신뢰 런타임)</text>
+      <text x="700" y="74" fill="#cbd5e1" font-size="9.5" text-anchor="middle" font-family="Segoe UI">composition root(server.js 승계)</text>
+      <text x="700" y="94" fill="#cbd5e1" font-size="9.5" text-anchor="middle" font-family="Segoe UI">dialog·spawn·fs·scanController</text>
+      <text x="700" y="114" fill="#cbd5e1" font-size="9.5" text-anchor="middle" font-family="Segoe UI">resolveBin 절대경로·shell:false(H-2)</text>
+      <text x="700" y="134" fill="#cbd5e1" font-size="9.5" text-anchor="middle" font-family="Segoe UI">pathGuard realpath 화이트리스트(H-1)</text>
+      <text x="700" y="154" fill="#cbd5e1" font-size="9.5" text-anchor="middle" font-family="Segoe UI">config 0600 영속(M-2)</text>
+      <text x="700" y="176" fill="#fcd34d" font-size="9" text-anchor="middle" font-family="Segoe UI">패키징 무결성·미서명(EM-M-3)</text>
+      <text x="700" y="196" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">RC-1: 동일머신 타사용자 비격리(수용)</text>
+
+      <!-- TB-B -->
+      <rect x="580" y="250" width="480" height="190" rx="10" fill="#1a1206" stroke="#fbbf24" stroke-width="1.4" stroke-dasharray="6 5"/>
+      <text x="820" y="272" fill="#fbbf24" font-size="12" text-anchor="middle" font-weight="bold" font-family="Segoe UI">TB-B 스캔 대상 (부분신뢰) — 통제 전부 보존</text>
+      <text x="820" y="292" fill="#cbd5e1" font-size="9.5" text-anchor="middle" font-family="Segoe UI">RC-2 그대로 유효 — 악성 클론 리포 섞임</text>
+      <rect x="596" y="304" width="220" height="56" rx="7" fill="#0b1220" stroke="#fbbf24"/>
+      <text x="706" y="324" fill="#e2e8f0" font-size="9.5" text-anchor="middle" font-family="Segoe UI">H-1 realpath · H-2 절대경로 spawn</text>
+      <text x="706" y="340" fill="#94a3b8" font-size="8.5" text-anchor="middle" font-family="Segoe UI">git -C(cwd 의존 제거) · M-4 타임아웃/inflight</text>
+      <text x="706" y="354" fill="#94a3b8" font-size="8.5" text-anchor="middle" font-family="Segoe UI">코드 교차확인: 존재·접지됨</text>
+      <rect x="824" y="304" width="220" height="56" rx="7" fill="#0b1220" stroke="#fbbf24"/>
+      <text x="934" y="324" fill="#e2e8f0" font-size="9.5" text-anchor="middle" font-family="Segoe UI">H-3 입력가드 · M-3 깊이/심링크</text>
+      <text x="934" y="340" fill="#94a3b8" font-size="8.5" text-anchor="middle" font-family="Segoe UI">L-1 textContent · M-2 0600 · M4-H-1 shortenPath</text>
+      <text x="934" y="354" fill="#94a3b8" font-size="8.5" text-anchor="middle" font-family="Segoe UI">전송 무관 → 무수정 보존</text>
+      <text x="820" y="386" fill="#6ee7b7" font-size="9.5" text-anchor="middle" font-family="Segoe UI">→ 데스크톱 전환이 TB-B 위협을 줄이지도 늘리지도 않음(통제 유지 필수)</text>
+      <text x="820" y="410" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">renderer 폭발반경은 nodeIntegration:false·sandbox로 추가 축소</text>
+
+      <!-- flows -->
+      <line x1="240" y1="280" x2="298" y2="240" stroke="#fbbf24" stroke-width="1.8" marker-end="url(#aw)"/>
+      <text x="244" y="262" fill="#fcd34d" font-size="9" font-family="Segoe UI">invoke</text>
+      <line x1="520" y1="180" x2="578" y2="120" stroke="#34d399" stroke-width="1.8" marker-end="url(#ag)"/>
+      <text x="524" y="150" fill="#6ee7b7" font-size="9" font-family="Segoe UI">검증 통과만</text>
+      <line x1="700" y1="230" x2="700" y2="248" stroke="#fbbf24" stroke-width="1.6" marker-end="url(#aw)"/>
+    </svg>
+    <div class="legend">
+      <span><span class="dot" style="background:#64748b"></span> TB-A 제거</span>
+      <span><span class="dot" style="background:#38bdf8"></span> Renderer 미신뢰</span>
+      <span><span class="dot" style="background:#fbbf24"></span> TB-C IPC / TB-B 부분신뢰</span>
+      <span><span class="dot" style="background:#34d399"></span> Main 신뢰 / 통제</span>
+    </div>
+    <figcaption>그림 1. Electron 전환 후 신뢰 경계. TB-A(네트워크) 제거 · TB-C(IPC) 신설 · TB-B(부분신뢰) 보존. 잔여 위협은 TB-C의 IPC 입력 재검증 과소명세(EM-H-1)와 renderer file:// CSP(EM-M-1)에 집중.</figcaption>
+  </figure>
+</section>
+
+<!-- ===================== 보존 통제 PASS ===================== -->
+<section id="preserved">
+  <h2>2. 보존되는 통제 — 코드 접지 PASS (8건)</h2>
+  <p>설계가 "코드 무수정 재사용으로 보존"을 주장하는 TB-B/공통 통제가 <b>실제 코드에 존재하고 전송 방식과 독립</b>인지 교차확인했다. 8건 모두 보존 가정이 성립한다.</p>
+  <table>
+    <tr><th style="width:90px;">통제</th><th>코드 근거(교차확인)</th><th style="width:80px;">판정</th></tr>
+    <tr><td class="fid">H-1</td><td><code>pathGuard.canonicalize</code>/<code>isAllowed</code>를 <code>actionHandlers.open</code>(L98·L103)이 호출 — id→경로 역참조 후 realpath 정확 일치. 전송 무관. <code>config.normalizeScanRoots</code>(L90~127)도 realpath 등록 규칙 동일. IPC <code>open</code> 핸들러가 동일 흐름 이식 시 보존.</td><td><span class="sev pass">PASS</span></td></tr>
+    <tr><td class="fid">H-2</td><td><code>safeExec.resolveBin</code>(L75)이 PATH 절대경로 1회 해석·캐시, cwd("."")·빈 항목 제외(L98), Windows <code>.exe</code>만 허용·<code>.bat/.cmd</code> 차단(L62~67·L146~152). git collector는 <code>git -C &lt;path&gt;</code>로 cwd 의존 제거(git.js L41·L48). main에서 동일 동작.</td><td><span class="sev pass">PASS</span></td></tr>
+    <tr><td class="fid">H-3</td><td>collectors(size/git/language)·<code>_safeParse</code>의 크기·바이트·깊이·ReDoS-free 가드는 도메인 코드. main에서 동일 실행. 설계 §3 재사용 분류와 정합.</td><td><span class="sev pass">PASS</span></td></tr>
+    <tr><td class="fid">M-3</td><td>walker 안전 깊이 상한·방문 realpath 추적(심링크 루프 차단)은 walker.js 내장. 전송 무관.</td><td><span class="sev pass">PASS</span></td></tr>
+    <tr><td class="fid">M-4</td><td><code>safeExec</code> 타임아웃 SIGKILL(L226)·maxBuffer(L243/251)·inflightKey 상한(L166~172). <code>open</code>은 <code>inflightKey='open:'+id</code>(L128). IPC <code>open</code>이 동일 인자 전달.</td><td><span class="sev pass">PASS</span></td></tr>
+    <tr><td class="fid">L-1</td><td>renderer textContent 렌더(app.js·index.html 주석 L24). nodeIntegration:false·sandbox로 폭발반경 추가 축소. <b>단</b> EM-H-1/EM-M-1 조건 충족 전제.</td><td><span class="sev pass">PASS*</span></td></tr>
+    <tr><td class="fid">M-2</td><td><code>config.writeDefaultConfig</code>가 <code>{mode:0o600}</code>(config.js L252), <code>paths.ensureDirFor</code> 디렉터리 권한. pickFolders/addRoots 영속도 동일 경로 사용 시 보존.</td><td><span class="sev pass">PASS</span></td></tr>
+    <tr><td class="fid">M4-H-1</td><td>ScanProgress.currentPath shortenPath 축약·절대경로 비노출은 도메인/직렬화 책임. 이벤트 push에도 동일 객체 → 보존.</td><td><span class="sev pass">PASS</span></td></tr>
+  </table>
+  <div class="ok-box"><b>보존 결론:</b> 8중 통제 중 8건이 코드에 접지된다. 데스크톱 전환이 TB-B 위협을 줄이지 않으며 통제 보존이 필수라는 설계의 RC-2 인식(§6.3 danger-box)은 정확하다. <b>L-1만</b> file:// CSP(EM-M-1)·preload 노출(EM-H-1) 조건이 충족되어야 완전 PASS이므로 <code>PASS*</code>로 표기한다.</div>
+</section>
+
+<!-- ===================== 발견 항목 ===================== -->
+<section id="findings">
+  <h2>3. 발견 항목 (신규 위협)</h2>
+
+  <div class="finding high-f">
+    <h4><span class="fid">EM-H-1</span> · IPC 노출면 과소명세 — addRoots/removeRoot/browseDir의 main 재검증·스키마·화이트리스트 미고정 <span class="sev high">높음</span></h4>
+    <div class="kv"><b>위치</b> 설계 §4.1 채널 목록(addRoots·removeRoot·browseDir) · §4.2 검증 규칙(open/rescan/pickFolders만 명세) · §6.2 preload allowlist</div>
+    <div class="kv"><b>STRIDE</b> 정보노출(I) · 권한상승(E) · 변조(T)</div>
+    <div class="kv"><b>분석</b> 설계는 preload 최소 allowlist·"renderer를 신뢰하지 않음"을 <b>원칙</b>으로 선언하나, §4.2 검증표는 <code>open</code>·<code>rescan</code>·<code>pickFolders</code>만 main 재검증을 명세한다. <code>addRoots(paths)</code>·<code>removeRoot(path)</code>·<code>browseDir(dir)</code>는 모두 <b>renderer가 임의 경로 문자열을 main에 주입</b>하는 채널인데, 다음이 설계에 못박히지 않았다: ① <code>addRoots</code>는 §4.2에 "normalizeScanRoots 동일 규칙"이라 적혀 있으나 <b>경로 개수 상한·총 바이트 상한·타입(배열) 강제·거부 사유 누설 한계</b>가 미명세(현 <code>normalizeScanRoots</code>는 64개 상한은 있으나 호출부 인자 타입 가드는 IPC 핸들러 책임). ② <code>browseDir(dir)</code>는 "선택 기능"이라며 남겨두었으나 <b>임의 디렉터리 열람 채널</b> — scanRoots 하위/화이트리스트 제약·realpath 검증·반환 entries의 정보노출 한계(드라이브 전체 트리 열람 가능?)가 전무. RC-2(부분신뢰)+L-1이 표시만 막고 페이로드는 메모리에 잔존하는 환경에서, renderer 측 XSS가 성립하면 <code>window.spip.browseDir('C:\\')</code>·<code>window.spip.open(임의id)</code>로 <b>파일시스템 열람·VS Code 임의 경로 열기</b>가 가능해진다(nodeIntegration:false로 RCE는 막히나 정보노출/원치 않는 실행은 IPC API 자체로 도달). ③ <code>removeRoot</code>는 화이트리스트를 <b>축소</b>시키는 무결성 영향(가용성/DoS, 사용자 모르게 루트 제거)인데 검증·확인 절차 없음.</div>
+    <div class="kv"><b>악용 시나리오</b> 악성 클론 리포의 <code>package.json name</code>/git branch에 XSS 페이로드 → (L-1 우회 변형 또는 향후 innerHTML 회귀 시) renderer 컨텍스트에서 <code>window.spip.browseDir</code> 반복 호출로 사용자 홈/시스템 디렉터리 구조·파일명 열거(정보노출), 또는 <code>window.spip.open</code>으로 의도치 않은 경로 열기. browseDir에 scanRoots 제약이 없으면 화이트리스트 모델(H-1) 밖의 임의 경로 정보가 renderer로 유출된다.</div>
+    <div class="kv"><b>권고 조치</b> (1) §4.2 검증표를 <b>전 IPC 채널</b>로 확장: 채널별 인자 스키마(타입·길이·개수 상한)·거부 모드·정보노출 한계를 main에서 강제하도록 명세. (2) <code>browseDir</code>은 <b>드롭(권고)</b> 또는 채택 시 <b>scanRoots 하위 경로로 canonicalize 후 화이트리스트 제약</b>(드라이브 루트/시스템 디렉터리 열람 금지)·반환 entries에 절대경로 미포함(상대/basename). (3) <code>addRoots</code>는 배열·항목 타입·개수 상한(이미 64)·총 길이 상한을 IPC 핸들러에서 선검증 후 normalizeScanRoots 호출, 거부 사유는 고정 code(<code>INVALID_PATH</code>)만(L-3). (4) <code>removeRoot</code>는 입력 path를 canonicalize해 현재 scanRoots와 정확 일치만 제거(임의 문자열로 무관 항목 제거 불가). (5) preload는 <code>ipcRenderer</code> 원본·범용 <code>invoke(channel,...)</code> 비노출, 채널명 하드코딩을 <b>강제(MUST)</b>로 명문화.</div>
+    <div class="kv"><b>게이트</b> <b>차단.</b> 설계 반영 필수.</div>
+  </div>
+
+  <div class="finding med-f">
+    <h4><span class="fid">EM-M-1</span> · file:// 로드 시 현행 index.html의 /static 절대경로·CSP가 깨지거나 약화 <span class="sev med">중간</span></h4>
+    <div class="kv"><b>위치</b> 설계 §3(public/index.html "CSP 유지·강화", staticHandler 드롭) · §6.2 renderer CSP · 실제 <code>public/index.html</code> L11~19·L30</div>
+    <div class="kv"><b>STRIDE</b> 변조(T) · 정보노출(I) (CSP 우회 표면)</div>
+    <div class="kv"><b>분석</b> 현행 <code>index.html</code>은 자산을 <code>/static/styles.css</code>·<code>/static/app.js</code> <b>절대 경로</b>로 참조(L19·L30)하고, CSP는 <code>default-src 'self'; ... connect-src 'self'; img-src 'self' data: ...</code>로 <b>HTTP origin 기준</b> 'self'를 전제한다. <code>loadFile('public/index.html')</code>+<code>file://</code> 전환 시: ① <code>/static/*</code> 절대경로는 file 루트(드라이브 루트) 기준이 되어 <b>자산 로드 실패</b> 가능 → 상대경로(<code>./static/</code> 또는 평탄화) 재작성 필요. ② <code>file://</code>에서 CSP <code>'self'</code> 의미가 origin 부재로 모호해져 일부 디렉티브가 의도와 다르게 동작(브라우저/Chromium 버전 의존). 설계 §6.2는 CSP를 <code>default-src 'self'; script-src 'self'; object-src 'none'; base-uri 'none'</code>로 <b>축약 제시</b>해 현행의 <code>style-src</code>·<code>img-src</code>·<code>connect-src</code>·<code>form-action</code>·<code>frame-ancestors</code>를 누락 — 강화가 아니라 <b>약화</b>다. RC-2 환경에서 L-1의 2차 방어선(CSP)이 약화되면 저장형 XSS 잔여 위험이 커진다.</div>
+    <div class="kv"><b>악용 시나리오</b> CSP 디렉티브 누락/약화 + file:// 의미 모호로 인라인/외부 리소스 차단이 느슨해지면, 오염 메타가 DOM에 흘렀을 때(L-1 회귀 시) 외부 비콘·data: 스크립트 등 2차 경로가 열린다.</div>
+    <div class="kv"><b>권고 조치</b> (1) 자산 참조를 <code>file://</code>에서 동작하는 상대경로로 재작성(설계에 명시). (2) CSP는 <b>현행 전 디렉티브를 보존·강화</b>: <code>default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'</code> 권장(IPC 사용이므로 <code>connect-src</code>는 <code>'none'</code> 가능). (3) Electron <code>session.webRequest</code>/<code>onHeadersReceived</code>로 CSP를 <b>응답 헤더로도</b> 주입해 메타 누락/우회를 이중 차단(설계 옵션으로 명시). (4) staticHandler의 CSP 상수 기준이 사라지므로 단일 출처를 index.html 메타+세션 헤더로 재정의.</div>
+    <div class="kv"><b>게이트</b> 차단 아님(설계 보강 권고). PASS 상향 권장 항목.</div>
+  </div>
+
+  <div class="finding med-f">
+    <h4><span class="fid">EM-M-2</span> · IPC 발신자 검증(senderFrame/webContents) 부재 — M-1 제거 공백 <span class="sev med">중간</span></h4>
+    <div class="kv"><b>위치</b> 설계 §4.2(모든 채널 try/catch만 명세) · §6.1 사라지는 통제(세션토큰/Origin 제거)</div>
+    <div class="kv"><b>STRIDE</b> 위장(S) · 권한상승(E)</div>
+    <div class="kv"><b>분석</b> M-1(세션토큰·Origin·Host)은 소켓 소멸로 타당하게 제거됐다. 그러나 IPC에는 <b>발신 프레임 검증</b>이라는 대체 통제가 있다 — Electron 권장은 <code>ipcMain.handle</code>에서 <code>event.senderFrame</code>의 URL/origin이 신뢰 로컬 콘텐츠인지 확인하는 것이다. 설계는 "renderer는 우리 로컬 콘텐츠뿐, 원격 미로드"라는 <b>전제</b>에 의존할 뿐, will-navigate/setWindowOpenHandler 차단이 실패하거나 향후 <code>&lt;iframe&gt;</code>/sub-frame·webview가 유입될 경우 <b>비신뢰 프레임이 동일 ipcMain 채널을 호출</b>할 수 있다. 현 단일창·원격 미로드 가정에서는 위험이 낮으나, 심층방어로 명세돼야 한다(M-1 제거가 만든 미세 공백).</div>
+    <div class="kv"><b>악용 시나리오</b> will-navigate 차단 구현 누락 또는 미래의 외부 콘텐츠 임베드 시, 비신뢰 프레임이 <code>spip:open</code>/<code>spip:rescan</code>을 트리거(CSRF 유사). 발신자 검증이 없으면 main이 무차별 수신.</div>
+    <div class="kv"><b>권고 조치</b> §4.2에 "모든 ipcMain 핸들러는 <code>event.senderFrame</code>(또는 webContents)이 <b>메인 윈도우의 신뢰 로컬 file URL</b>인지 확인 후 처리, 불일치 시 무시"를 추가. <code>webContents.setWindowOpenHandler</code>·<code>will-navigate</code>·<code>will-attach-webview</code> 차단을 <b>MUST</b>로 명문화하고 sub-frame 생성 금지.</div>
+    <div class="kv"><b>게이트</b> 차단 아님(심층방어 보강 권고).</div>
+  </div>
+
+  <div class="finding med-f">
+    <h4><span class="fid">EM-M-3</span> · 패키징 무결성·배포 신뢰성 미통제(미서명·asar·fuses) <span class="sev med">중간</span></h4>
+    <div class="kv"><b>위치</b> 설계 §7.2 패키징(코드 서명 "항목만") · §8 의존성 · ADR-EM-5 · 미해결 Q5</div>
+    <div class="kv"><b>STRIDE</b> 변조(T) · 위장(S)</div>
+    <div class="kv"><b>분석</b> 설계는 NSIS+포터블, <code>asar:true</code>, 미서명(SmartScreen 경고)·자동업데이트 범위 외를 적시한다. 보안 관점 미흡: ① <b>미서명 배포</b>는 변조·위장(악성 재배포) 표면 — 단일 사용자 내부 도구로 수용 가능하나 <b>위험 수용을 명시</b>해야 한다(현재 Q5로 미결). ② <code>asar</code>는 패킹일 뿐 <b>무결성 보장이 아님</b>(추출·변조 가능) — Electron <b>fuses</b>(<code>RunAsNode</code> 비활성·<code>EnableNodeCliInspectArguments</code> 비활성·<code>OnlyLoadAppFromAsar</code>·<code>EnableEmbeddedAsarIntegrityValidation</code>)와 <code>ELECTRON_RUN_AS_NODE</code> 차단이 설계에 없다 → 패킹된 앱을 Node 런타임으로 악용하는 우회 표면. ③ <code>files</code> allowlist에 <code>test/·docs/</code> 제외는 적절하나 <b>설정/캐시(0600) 파일이 설치 디렉터리가 아닌 userData에 있는지</b>(쓰기 가능 위치 분리) 명시 필요.</div>
+    <div class="kv"><b>악용 시나리오</b> 미서명 + fuses 미적용 패키지를 공격자가 변조·재배포하거나, <code>ELECTRON_RUN_AS_NODE=1</code>로 앱 바이너리를 임의 Node 실행기로 악용.</div>
+    <div class="kv"><b>권고 조치</b> §7.2에 (1) Electron fuses 적용(RunAsNode off·OnlyLoadAppFromAsar·asar integrity)·<code>ELECTRON_RUN_AS_NODE</code> 무력화를 베이스라인으로 추가, (2) 미서명 배포는 위험 수용으로 ADR/문서 명시(SmartScreen·변조 위험), (3) 향후 서명 도입 시점·범위를 Q5에 결정 항목으로 고정.</div>
+    <div class="kv"><b>게이트</b> 차단 아님(베이스라인 보강 권고).</div>
+  </div>
+
+  <div class="finding low-f">
+    <h4><span class="fid">EM-L-1</span> · 외부 링크/shell.openExternal 정책 비고정 <span class="sev low">낮음</span></h4>
+    <div class="kv"><b>위치</b> 설계 §6.2("외부 링크는 필요 시 shell.openExternal로 명시 처리(현재 불필요)")</div>
+    <div class="kv"><b>STRIDE</b> 권한상승(E) (URL 스킴 악용)</div>
+    <div class="kv"><b>분석</b> 현재 외부 링크가 없어 위험은 낮으나, <code>shell.openExternal</code>은 <b>임의 URL 스킴(file:·smb:·custom:)</b> 실행 표면이다. "필요 시"라는 여지가 남아 향후 추가 시 검증 없이 들어올 수 있다.</div>
+    <div class="kv"><b>권고 조치</b> "외부 링크 미사용"을 <b>기본 금지</b>로 명문화하고, 향후 도입 시 <code>https:</code> 스킴 allowlist·사용자 확인을 전제로 한다고 §6.2에 못박기.</div>
+    <div class="kv"><b>게이트</b> 차단 아님.</div>
+  </div>
+
+  <div class="finding low-f">
+    <h4><span class="fid">EM-L-2</span> · sandbox "권장(권장)"의 비강제성 — 베이스라인이 약화될 여지 <span class="sev low">낮음</span></h4>
+    <div class="kv"><b>위치</b> 설계 §2 SVG·§6.2 표·ADR-EM-3("sandbox:true(권장)")</div>
+    <div class="kv"><b>STRIDE</b> 권한상승(E)</div>
+    <div class="kv"><b>분석</b> 설계는 sandbox를 "권장"으로 표기하고, 본 설계가 모든 로직을 main에 두어 sandbox와 호환됨을 인정한다. 그러나 "권장"은 구현자가 편의상 끌 여지를 남긴다 — RC-2 환경에서 sandbox off는 renderer 폭발반경을 키운다. 호환성이 이미 확보됐으므로 강제할 수 있다.</div>
+    <div class="kv"><b>권고 조치</b> ADR-EM-3에서 <code>sandbox:true</code>를 <b>"권장"이 아닌 "필수(MUST)"</b>로 격상(본 설계가 이미 호환). 구현 게이트에서 sandbox on 상태 스모크 검증 의무화.</div>
+    <div class="kv"><b>게이트</b> 차단 아님.</div>
+  </div>
+</section>
+
+<!-- ===================== 6대 체크리스트 ===================== -->
+<section id="checklist">
+  <h2>4. Electron 위협 모델링 체크리스트 판정</h2>
+  <table>
+    <tr><th style="width:200px;">체크 항목</th><th>판정 근거</th><th style="width:110px;">결과</th></tr>
+    <tr><td>1. renderer 격리(contextIsolation·nodeIntegration:false·sandbox)</td><td>§2·§6.2·ADR-EM-3·§7.1 webPreferences에 명세. nodeIntegration:false로 오염 메타→RCE 승격 차단. sandbox는 "권장"(EM-L-2). RCE 차단은 성립.</td><td><span class="sev pass">대체로 PASS</span> <span class="sev low">EM-L-2</span></td></tr>
+    <tr><td>2. preload 노출면 최소 allowlist</td><td>원칙은 명세(window.spip·ipcRenderer 비노출). <b>그러나</b> 노출 함수 인자의 main 재검증이 일부 채널만 명세(EM-H-1). browseDir 임의경로 채널 위험.</td><td><span class="sev high">EM-H-1</span></td></tr>
+    <tr><td>3. IPC 입력 검증(main에서 재검증)</td><td>open/rescan/pickFolders는 H-1/H-2/M-4 체인 명세·코드 접지. addRoots/removeRoot/browseDir 과소명세(EM-H-1). 발신자 검증 부재(EM-M-2).</td><td><span class="sev high">EM-H-1</span> <span class="sev med">EM-M-2</span></td></tr>
+    <tr><td>4. 네비게이션/콘텐츠 잠금</td><td>loadFile·will-navigate·setWindowOpenHandler:deny·원격 미로드 명세. <b>단</b> file:// CSP/경로 약화(EM-M-1), webview/sub-frame 차단 미명문(EM-M-2 연계).</td><td><span class="sev med">EM-M-1</span></td></tr>
+    <tr><td>5. 유지 통제 보존(H-1/H-2/H-3/M-3/L-1/M-2/M4-H-1)</td><td>8건 코드 접지 확인(§2). 무수정 재사용 가정 성립. L-1만 EM-M-1/EM-H-1 조건부.</td><td><span class="sev pass">PASS (8/8)</span></td></tr>
+    <tr><td>6. 신규/제거 표면(M-1 제거·폴더대화상자·config영속·패키징)</td><td>M-1 제거는 소켓 소멸로 타당(공백은 EM-M-2 발신자검증으로 보완 권고). 폴더 대화상자(main 출처)는 안전. config 영속 0600 보존. 패키징 무결성 미통제(EM-M-3).</td><td><span class="sev med">EM-M-3</span> <span class="sev med">EM-M-2</span></td></tr>
+  </table>
+</section>
+
+<!-- ===================== 구현 게이트 이월 ===================== -->
+<section id="carry">
+  <h2>5. 구현 게이트 이월 (설계 PASS ≠ 코드 PASS)</h2>
+  <p>베이스라인의 V-1(TOCTOU)·V-2(적대적 입력 실측)는 그대로 유효하며(도메인 코드 보존), Electron 전환으로 다음 항목이 추가 이월된다. 코드 보안 검증에서 실증할 것.</p>
+  <div class="note">
+    <ul style="margin:0;">
+      <li><b>EC-1 (EM-H-1 실증):</b> 전 IPC 핸들러가 인자 스키마(타입·길이·개수)를 main에서 거부하는지, browseDir(채택 시) scanRoots 하위로만 열람되는지, removeRoot가 canonicalize 정확 일치만 제거하는지 회귀 테스트. preload가 범용 invoke/ipcRenderer를 노출하지 않는지 스모크.</li>
+      <li><b>EC-2 (EM-M-1 실증):</b> 패키징본에서 file:// 로 자산 로드 성공 + CSP 메타+헤더가 인라인/외부 스크립트·data 스크립트를 실제 차단하는지(오염 메타 픽스처로 XSS 미발화 확인).</li>
+      <li><b>EC-3 (EM-M-2 실증):</b> will-navigate/setWindowOpenHandler/webview 차단이 실제 동작, ipcMain 핸들러의 senderFrame 검증이 비신뢰 프레임을 거부하는지.</li>
+      <li><b>EC-4 (EM-M-3 실증):</b> Electron fuses(RunAsNode off 등) 적용·<code>ELECTRON_RUN_AS_NODE</code> 무력화·asar integrity가 빌드 산출물에 반영됐는지.</li>
+      <li><b>EC-5:</b> sandbox:true 상태에서 전 기능 동작(preload가 우리 모듈 require 안 함) 스모크 — EM-L-2.</li>
+      <li><b>EC-6:</b> CLI(scan.js)↔앱 캐시 경로 일치(ADR-EM-4/Q3) — 불일치 시 앱이 오래된/타 경로 캐시를 읽는 무결성 이슈.</li>
+    </ul>
+  </div>
+  <div class="warn-box"><b>비고:</b> 의존성 정책상 런타임 dep 0이나 <b>electron·electron-builder(devDep)는 공급망/취약점 추적 대상</b>이다. 구현 착수 후 <code>npm audit</code>를 코드 게이트에 포함하고, Electron 버전의 보안 패치 추적(ADR-EM-1 결과의 "버전 추적 부담")을 운영 항목으로 둘 것. 현 단계는 설계 청사진이라 audit 미실행.</div>
+</section>
+
+<!-- ===================== 확인 필요 ===================== -->
+<section id="confirm">
+  <h2>6. 확인 필요 (위험 수용 결정)</h2>
+  <div class="warn-box">
+    <ul style="margin:0;">
+      <li><b>RC-1 재확인(추가조치 불필요):</b> 동일머신 타 사용자 비격리는 베이스라인에서 PM 수용·M-2 파일권한 심층방어 적용. Electron 전환은 이를 바꾸지 않는다(userData 0600 보존 전제, EC-6).</li>
+      <li><b>RC-2 그대로 유효:</b> 부분신뢰 스캔 대상 인정 → TB-B 통제 필수 보존. 본 검증에서 8/8 코드 접지 확인.</li>
+      <li><b>신규 위험 수용 후보 — browseDir(Q2):</b> 인앱 디렉터리 브라우저는 보안상 <b>드롭 권고</b>(EM-H-1). 채택 시 화이트리스트 제약 없이는 임의 경로 정보노출 채널이 되므로 PM이 명시 수용/제약 결정 필요.</li>
+      <li><b>신규 위험 수용 후보 — 미서명 배포(Q5):</b> SmartScreen·변조 위험을 PM이 명시 수용하거나 서명 도입 시점을 결정해야 한다(EM-M-3).</li>
+    </ul>
+  </div>
+  <div class="note">위 결정은 보안 게이트 통과의 <b>전제</b>가 아니다(차단 항목은 EM-H-1뿐). 다만 browseDir·미서명은 잔여 위험 수용이 명시돼야 추후 책임 소재가 분명해진다.</div>
+</section>
+
+<footer>Project-SPIP · Electron 이전 설계 보안 검증 보고서 (위협 모델링) 1회차 · 판정: <b>조건부 PASS</b> (치명 0 · 높음 1 · 중간 3 · 낮음 2 · 보존 PASS 8/8) · 게이트: <b>차단(EM-H-1: IPC 노출면 재검증 과소명세)</b> · 기준: architecture_security_review_2.html(8중 통제·TB-A/TB-B·RC-1/RC-2) · m4_design_security_review_2.html(M4-H-1·H-2) · 검증 대상: 설계 청사진 + 실제 코드 교차확인(config·safeExec·actionHandlers·git·index.html·app.js) · 구현 게이트 이월: EC-1~EC-6(V-1/V-2와 실증) · 자족형 HTML · 코드 미수정</footer>
+</body>
+</html>

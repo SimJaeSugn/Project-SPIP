@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Electron 마이그레이션 — QA 통합·동작 검증 #1</title>
+<style>
+  :root{
+    --bg:#0e1116; --bg2:#161b22; --bg3:#1c232c; --line:#2b333d;
+    --fg:#e6edf3; --mut:#9aa7b4; --acc:#58a6ff;
+    --ok:#3fb950; --warn:#d29922; --bad:#f85149; --info:#a371f7;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+    font-family:"Segoe UI",-apple-system,system-ui,"Malgun Gothic",sans-serif;line-height:1.6;font-size:15px}
+  .wrap{max-width:1100px;margin:0 auto;padding:32px 24px 80px}
+  h1{font-size:26px;margin:0 0 4px;letter-spacing:-.3px}
+  h2{font-size:20px;margin:38px 0 12px;padding-bottom:7px;border-bottom:1px solid var(--line)}
+  h3{font-size:16px;margin:24px 0 8px;color:#cdd9e5}
+  .sub{color:var(--mut);font-size:13.5px;margin:0 0 18px}
+  code,.mono{font-family:"Cascadia Code",Consolas,monospace;font-size:.92em}
+  code{background:var(--bg3);padding:1.5px 6px;border-radius:5px;color:#ffd9a8}
+  .card{background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:18px 20px;margin:16px 0}
+  .verdict{display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+  .pill{display:inline-block;padding:2px 10px;border-radius:999px;font-size:12px;font-weight:700;white-space:nowrap}
+  .p-ok{background:rgba(63,185,80,.15);color:var(--ok);border:1px solid rgba(63,185,80,.4)}
+  .p-bad{background:rgba(248,81,73,.15);color:var(--bad);border:1px solid rgba(248,81,73,.4)}
+  .p-warn{background:rgba(210,153,34,.15);color:var(--warn);border:1px solid rgba(210,153,34,.4)}
+  .p-info{background:rgba(163,113,247,.15);color:var(--info);border:1px solid rgba(163,113,247,.4)}
+  .p-na{background:rgba(154,167,180,.13);color:var(--mut);border:1px solid rgba(154,167,180,.3)}
+  table{width:100%;border-collapse:collapse;margin:12px 0;font-size:13.5px}
+  th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+  th{background:var(--bg3);color:#cdd9e5;font-weight:600}
+  td.c,th.c{text-align:center;white-space:nowrap}
+  .big-verdict{font-size:21px;font-weight:800}
+  .kbar{display:flex;gap:12px;flex-wrap:wrap;margin:14px 0}
+  .kbox{flex:1;min-width:120px;background:var(--bg3);border:1px solid var(--line);border-radius:10px;padding:12px 14px;text-align:center}
+  .kbox .n{font-size:24px;font-weight:800;display:block}
+  .kbox .l{font-size:12px;color:var(--mut)}
+  .bug{border-left:4px solid var(--bad);background:rgba(248,81,73,.06)}
+  .bug.high{border-left-color:var(--warn);background:rgba(210,153,34,.05)}
+  .bug.low{border-left-color:var(--mut);background:rgba(154,167,180,.05)}
+  .bug h3{margin-top:0}
+  .meta{color:var(--mut);font-size:12.5px}
+  ul{margin:8px 0;padding-left:22px}
+  li{margin:3px 0}
+  .glow{color:var(--acc)}
+  pre{background:#0a0d12;border:1px solid var(--line);border-radius:8px;padding:12px 14px;overflow:auto;font-size:12.5px;color:#cdd9e5}
+  .tag{font-size:11px;color:var(--mut);border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+  footer{margin-top:50px;padding-top:16px;border-top:1px solid var(--line);color:var(--mut);font-size:12.5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>Electron 마이그레이션 — QA 통합·동작 검증 #1</h1>
+<p class="sub">대상: <code>electron/**</code> · <code>public/app.js</code> · <code>preload.js</code> · <code>package.json</code> &nbsp;|&nbsp;
+기준: <code>docs/architecture/electron-migration.html</code>(v1.1 IPC 계약) · <code>electron_design_review_2.html</code> &nbsp;|&nbsp;
+검증자: QA(동작·통합) &nbsp;|&nbsp; 2026-06-21</p>
+
+<div class="card verdict">
+  <span class="pill p-bad big-verdict">종합 판정 · 통합 불가(조건부)</span>
+  <span style="flex:1;min-width:280px">
+    헤드리스로 검증 가능한 거의 전 영역(테스트 288/288, IPC 핸들러, app:// 매핑, CSP, <code>window.spip</code> 노출)은 통과.
+    <b>그러나 preload↔renderer 경계면에 런타임을 깨뜨리는 블로커 1건</b>(<span class="glow">R-12 VS Code 열기 전면 불능</span>)이 존재한다.
+    이 1건을 고치면 통합 가능 후보. 실 GUI(창·메뉴·네이티브 대화상자·실제 code 실행)는 사용자 PC 확인 필요.
+  </span>
+</div>
+
+<div class="kbar">
+  <div class="kbox"><span class="n" style="color:var(--ok)">288/288</span><span class="l">npm test 통과</span></div>
+  <div class="kbox"><span class="n" style="color:var(--bad)">1</span><span class="l">블로커 버그</span></div>
+  <div class="kbox"><span class="n" style="color:var(--warn)">2</span><span class="l">주의(낮음)</span></div>
+  <div class="kbox"><span class="n" style="color:var(--info)">7</span><span class="l">사용자 PC 확인 필요</span></div>
+</div>
+
+<h2>1. 테스트 실행 결과 (실측)</h2>
+<div class="card">
+<p><code>npm test</code> → <b>tests 288 · pass 288 · fail 0 · skipped 0</b> (duration ~0.93s). 기존 lib/server/m4/보안 회귀 전부 보존, Electron 신규 스위트(<code>electron-context</code>·<code>electron-security</code>·<code>ipc-*</code>·<code>scanController-onprogress</code>·<code>dashboard-electron</code>) 포함.</p>
+<pre>ℹ tests 288   ℹ pass 288   ℹ fail 0   ℹ skipped 0   ℹ duration_ms 933.8</pre>
+<p class="meta">IPC 핸들러 단위 스위트 재실행: <code>ipc-actions/folders/scan/data + scanController-onprogress</code> = 47/47 pass.</p>
+<p><span class="pill p-warn">한계</span> 테스트 스위트는 <b>preload↔renderer 메서드명 일치를 검증하지 않는다</b>(순수 함수만 검증). 그래서 BUG-1이 그린 상태에서도 숨어 있었다 — 아래 §2 참조.</p>
+</div>
+
+<h2>2. preload ↔ renderer 계약 일치 (경계면 교차) — <span class="pill p-bad">FAIL</span></h2>
+<div class="card">
+<p>renderer(<code>public/app.js</code>)가 호출하는 bridge 메서드와 preload(<code>electron/preload.js</code>)가 <code>window.spip</code>에 노출하는 함수명을 자동 추출·대조했다.</p>
+<table>
+<tr><th>renderer 사용(app.js)</th><th>preload 노출</th><th class="c">일치</th></tr>
+<tr><td colspan="3" class="meta">addRoots · getConfig · getProjects · getScanStatus · getStats · onScanProgress · pickFolders · removeRoot · rescan — 9개 모두 양쪽 일치</td></tr>
+<tr><td><code>open(id)</code> <span class="meta">(app.js:1917 <code>ipc('open', id)</code>)</span></td><td><b>없음</b> — preload는 <code>openInVsCode</code>로 노출</td><td class="c"><span class="pill p-bad">불일치</span></td></tr>
+<tr><td>— (사용 안 함)</td><td><code>openInVsCode</code>, <code>getHealth</code></td><td class="c"><span class="pill p-na">미사용</span></td></tr>
+</table>
+<p>설계 계약(<code>electron-migration.html</code> §4.1 표 269행 · §4.3 preload 의사코드 351행)은 채널 <code>spip:openInVsCode</code>를 <b>renderer 표면 <code>spip.open(id)</code></b>로 노출하도록 못박는다:</p>
+<pre>// 계약 §4.3 preload 의사코드
+open: (id) => ipcRenderer.invoke('spip:openInVsCode', { id: String(id) }),</pre>
+<p>renderer는 계약대로 <code>open</code>을 호출하지만, 구현된 preload는 함수명을 <code>openInVsCode</code>로 잘못 지었다. → <b>BUG-1(블로커)</b>.</p>
+<p><span class="pill p-ok">PASS</span> 인자/반환 shape는 일치 검증됨: <code>rescan(o)</code> opts는 <code>{withSize,allDrives}</code> Boolean 강제 양쪽 동일; <code>addRoots(paths)</code>는 배열 <code>map(String)</code> 후 <code>{paths}</code> 래핑(handler가 <code>args.paths</code> 추출) 일치; <code>onScanProgress(cb)</code>는 <b>구독 해제 함수를 반환</b>하고 renderer <code>unsubscribeScan()</code>이 그것을 호출·null화 — 누수 없음 일치.</p>
+</div>
+
+<h2>3. 헤드리스 Electron 스모크 (실측, offscreen BrowserWindow) — <span class="pill p-ok">대부분 PASS</span></h2>
+<div class="card">
+<p>실제 Electron 바이너리(<code>node_modules/electron/dist/electron.exe</code>)로 offscreen 창을 띄워 <code>app://index.html</code> 로드 후 <code>webContents.executeJavaScript</code>로 실측했다(contextIsolation·sandbox·nodeIntegration off 동일 설정).</p>
+<table>
+<tr><th>점검</th><th class="c">결과</th><th>근거(SMOKE 출력)</th></tr>
+<tr><td>app://index.html 로드</td><td class="c"><span class="pill p-ok">PASS</span></td><td><code>loadURL::"ok"</code></td></tr>
+<tr><td>CSP 헤더 주입(onHeadersReceived)</td><td class="c"><span class="pill p-ok">PASS</span></td><td><code>cspInjected::true</code> — 응답 헤더 주입 동작 확인</td></tr>
+<tr><td><code>window.spip</code> 노출(격리 환경)</td><td class="c"><span class="pill p-ok">PASS</span></td><td>키 11개 노출 확인</td></tr>
+<tr><td>app:// 자산 매핑(styles.css/app.js)</td><td class="c"><span class="pill p-ok">PASS</span></td><td><code>styleLinkPresent::true</code> + 매핑 시뮬레이션</td></tr>
+<tr><td><code>window.spip.open</code> 존재</td><td class="c"><span class="pill p-bad">FAIL</span></td><td><code>hasOpen::false</code> / <code>hasOpenInVsCode::true</code></td></tr>
+<tr><td>renderer가 <code>spip.open('x')</code> 호출</td><td class="c"><span class="pill p-bad">FAIL</span></td><td><code>rendererOpenCall::{"__missing":true}</code> — 함수 부재</td></tr>
+</table>
+<p><b>app:// 매핑 검증(별도 시뮬레이션):</b> 문서 URL <code>app://index.html</code> 기준 상대경로 <code>./styles.css</code>·<code>./app.js</code>는 <code>pathname=/styles.css</code>·<code>/app.js</code>로 해소되며, 프로토콜 핸들러가 <code>host</code>를 무시하고 <code>pathname</code>만 <code>public/</code>에 매핑 → 정확히 <code>public/styles.css</code>·<code>public/app.js</code> 적중. 이탈 시도(<code>../server.js</code>·<code>%2e%2e/server.js</code>)는 404. <span class="pill p-ok">PASS</span></p>
+<p class="meta">스모크 스크립트는 임시 핸들러를 등록해 자산·노출·CSP 경로를 실측했다. ipcMain 실제 등록 wiring(<code>register.js</code>)과 senderFrame 검증은 단위테스트(<code>ipc-register.test.js</code> 포함 288 그린)로 보강.</p>
+</div>
+
+<h2>4. IPC 핸들러 동작 (순수함수/ctx 모킹) — <span class="pill p-ok">PASS</span></h2>
+<div class="card">
+<table>
+<tr><th>채널/동작</th><th class="c">판정</th><th>근거</th></tr>
+<tr><td>getProjects / getStats (스냅샷 shape)</td><td class="c"><span class="pill p-ok">PASS</span></td><td>data.js가 store 스냅샷 그대로 반환, byLanguage 집계·totalBytes null 폴백. ipc-data 테스트 통과</td></tr>
+<tr><td>openInVsCode(id) 분기</td><td class="c"><span class="pill p-ok">PASS</span></td><td>ID_NOT_FOUND→PATH_GONE→PATH_NOT_ALLOWED→CODE_CLI_NOT_FOUND→OPEN_FAILED, 성공 <code>{ok:true,code:'OPENING'}</code>. H-1/H-2/M-4 in-flight 상한 유지. ipc-actions 통과</td></tr>
+<tr><td>rescan(락·게이트·NO_SCAN_ROOTS)</td><td class="c"><span class="pill p-ok">PASS</span></td><td>scanRoots 빈→NO_SCAN_ROOTS, allDrives는 <code>config.allowAllDrives</code> 게이트 전용(강등+note), acquire 실패→SCAN_IN_PROGRESS(scanId 동봉)</td></tr>
+<tr><td>scan 진행 push (onProgress→scanProgress)</td><td class="c"><span class="pill p-ok">PASS</span></td><td>makeProgressSender가 getWebContents 지연평가, isDestroyed 가드, <code>send('spip:scanProgress')</code>. scanController-onprogress 통과</td></tr>
+<tr><td>addRoots/removeRoot/pickFolders (채택·거부·취소)</td><td class="c"><span class="pill p-ok">PASS</span></td><td>canonicalize·존재·디렉터리·시스템폴더 제외·중복 → rejected 고정토큰(NOT_FOUND/SYSTEM_DIR/DUP), 0600 원자적 영속, pickFolders 취소→CANCELLED. ipc-folders 통과</td></tr>
+</table>
+<p class="meta">핸들러 로직은 계약대로 정확. BUG-1은 핸들러가 아니라 <b>preload 노출명</b> 문제 — openInVsCode 핸들러 자체는 정상이며, renderer가 도달하지 못할 뿐이다.</p>
+</div>
+
+<h2>5. 요구 추적 (Electron 경로 충족 여부)</h2>
+<div class="card">
+<table>
+<tr><th class="c">요구</th><th>내용</th><th class="c">헤드리스 판정</th><th>비고</th></tr>
+<tr><td class="c">R-04</td><td>네이티브 폴더 선택 + 경로 직접 입력 루트 관리</td><td class="c"><span class="pill p-warn">조건부</span></td><td>addRoots/removeRoot 핸들러·renderer 배선 일치(PASS). pickFolders 네이티브 대화상자는 실 GUI 확인 필요</td></tr>
+<tr><td class="c">R-12</td><td>VS Code로 열기</td><td class="c"><span class="pill p-bad">FAIL</span></td><td><b>BUG-1으로 renderer→handler 도달 불가.</b> 핸들러 로직 자체는 정상</td></tr>
+<tr><td class="c">R-15</td><td>스캔 진행 push(폴링 폐기)</td><td class="c"><span class="pill p-ok">PASS</span></td><td>onScanProgress 구독/해제·nextScanAction 상태머신·scanId 대조 일치. 실 push 흐름은 실 스캔에서 최종 확인 권장</td></tr>
+<tr><td class="c">R-16</td><td>재스캔</td><td class="c"><span class="pill p-ok">PASS</span></td><td>rescan opts 정규화·게이트·SCAN_STARTED/IN_PROGRESS 분류 일치</td></tr>
+<tr><td class="c">R-05</td><td>all-drives 게이트</td><td class="c"><span class="pill p-ok">PASS</span></td><td>UI(sanitizeRescanOpts)와 main(rescan) 이중 게이트. allowAllDrives=false면 인자로 못 켬</td></tr>
+<tr><td class="c">R-09</td><td>size(용량)</td><td class="c"><span class="pill p-ok">PASS</span></td><td>withSize 옵션 전달·getConfig size shape·sizeStatusLabel 표시. 실 측정값은 실 스캔 확인</td></tr>
+</table>
+</div>
+
+<h2>6. 회귀 (기존 동작 보존) — <span class="pill p-ok">PASS</span></h2>
+<div class="card">
+<ul>
+<li><b>lib/server/m4 테스트 보존:</b> 288 그린 — 기존 213+ 도메인/보안 테스트 무손실. snapshotStore·scanner·walker·pathGuard·safeExec·collectors·detector·config·logger 전부 통과.</li>
+<li><b>CLI(<code>scan.js</code>):</b> <code>node scan.js --help</code> 정상 출력(옵션·설정/캐시 경로 표시), exit 0. <span class="pill p-ok">PASS</span></li>
+<li><b>과도기 <code>server.js</code>:</b> <code>require('./server.js')</code> 로드 성공, <code>createServer·main</code> export 보존. HTTP 경로 회귀 스위트(server/staticHandler/security-h2) 그린. <span class="pill p-ok">PASS</span></li>
+<li><b><code>package.json</code>:</b> <code>main:electron/main.js</code>, <code>start:electron .</code>, <code>scan/start:web/serve:http</code> 스크립트 보존 — Electron·CLI·웹 3경로 공존.</li>
+</ul>
+</div>
+
+<h2>7. 발견 버그</h2>
+
+<div class="card bug">
+<h3>BUG-1 · preload가 <code>open</code> 대신 <code>openInVsCode</code>로 노출 → R-12 전면 불능 &nbsp;<span class="pill p-bad">블로커</span></h3>
+<table>
+<tr><th style="width:90px">무엇이</th><td>대시보드에서 프로젝트 "열기"를 눌러도 VS Code가 절대 열리지 않고, 항상 "Electron 환경이 아닙니다(window.spip 없음)" 류 오류 토스트가 뜬다(실제로는 메서드명 부재).</td></tr>
+<tr><th>어디서</th><td>경계면: <code>electron/preload.js:22</code> ↔ <code>public/app.js:1917</code>(<code>openProject</code>) ↔ 어댑터 <code>ipc()</code> <code>app.js:643-651</code></td></tr>
+<tr><th>기대 vs 실제</th><td>
+<b>기대(계약 §4.1/§4.3):</b> preload가 <code>open: (id) => ipcRenderer.invoke('spip:openInVsCode', {id:String(id)})</code> 노출.<br>
+<b>실제:</b> preload가 <code>openInVsCode: (id) => ...</code>로 노출. renderer는 <code>spip.open</code>을 찾지만 <code>window.spip.open === undefined</code>. 어댑터 <code>ipc('open',id)</code>가 <code>typeof spip['open'] !== 'function'</code> 분기로 <code>bridgeMissing()</code> 반환 → 항상 실패.</td></tr>
+<tr><th>재현</th><td>실 GUI: 프로젝트 카드 "열기" 클릭 → VS Code 미실행 + 오류 토스트.<br>
+헤드리스 실증: offscreen 창에서 <code>window.spip.open('x')</code> → <code>{"__missing":true}</code>(함수 부재). <code>Object.keys(window.spip)</code>에 <code>open</code> 없음/<code>openInVsCode</code> 있음.</td></tr>
+<tr><th>심각도</th><td><b>블로커</b> — 핵심 요구 R-12가 100% 동작 불능. 핸들러는 정상이라 <b>1줄 수정</b>으로 해결.</td></tr>
+<tr><th>수정안</th><td><code>backend-dev(devops)</code>: preload의 키를 <code>openInVsCode</code> → <code>open</code>으로 변경(채널명 <code>'spip:openInVsCode'</code>는 유지). 또는 별칭 <code>open</code> 추가. 미사용 <code>getHealth</code>는 무해(유지 가능).</td></tr>
+</table>
+</div>
+
+<div class="card bug low">
+<h3>NOTE-1 · 테스트가 경계면(메서드명)을 검증하지 않음 &nbsp;<span class="pill p-na">낮음(품질 격차)</span></h3>
+<p>288개 테스트는 순수 함수만 다룬다. preload 노출 키 ↔ renderer 사용 키의 일치를 자동 검증하는 테스트가 없어 BUG-1이 그린 상태로 통과했다. 재발 방지를 위해 "preload 노출 키 ⊇ renderer 사용 키" 정적 대조 테스트 추가를 권장(QA가 본 검증에서 사용한 스크립트로 충분). <span class="meta">— 코드품질 영역이라 <code>code-reviewer</code>와 공유.</span></p>
+</div>
+
+<div class="card bug low">
+<h3>NOTE-2 · preload 노출 표면에 미사용 항목 &nbsp;<span class="pill p-na">낮음</span></h3>
+<p><code>getHealth</code>·(BUG-1 수정 후) <code>openInVsCode</code> 잔존 가능성. 계약상 <code>getHealth</code>는 가용 채널로 정의되어 있어 노출 자체는 위반 아님. BUG-1 수정 시 <code>openInVsCode</code> 키는 제거(중복 방지). 동작 영향 없음.</p>
+</div>
+
+<h2>8. 사용자 PC 확인 필요 목록 (헤드리스 한계 — 추측 PASS 금지)</h2>
+<div class="card">
+<p>아래는 실 GUI·OS·외부 바이너리 의존이라 헤드리스에서 단정할 수 없다. <b>사용자 PC(Windows 11)에서 <code>npm start</code> 후 수동 확인 필요.</b></p>
+<ol>
+<li><b>실제 VS Code 열기(R-12):</b> <b>BUG-1 수정 후</b> 카드 "열기" → 실제 <code>code &lt;path&gt;</code> 실행되는지. code CLI PATH 유무에 따라 CODE_CLI_NOT_FOUND 메시지 분기도 확인.</li>
+<li><b>네이티브 폴더 대화상자(R-04, pickFolders):</b> "폴더 선택…" → OS 대화상자 표시·다중선택·취소(CANCELLED)·채택 후 루트 목록 갱신.</li>
+<li><b>실 스캔 진행 push(R-15):</b> "스캔 시작/재스캔" → scanning 뷰에 dirs/found 카운트·currentPath 실시간 갱신 → done 시 대시보드 자동 전환. push 이벤트가 끊김 없이 도착하는지.</li>
+<li><b>창 생명주기·메뉴(main.js wiring):</b> 단일 인스턴스 락(둘째 실행이 기존 창 포커스), 메뉴 "폴더 선택/재스캔" 항목, ready-to-show 표시.</li>
+<li><b>스캔 중 종료 다이얼로그(Q4):</b> 스캔 진행 중 창 닫기 → "스캔이 진행 중입니다. 종료하시겠습니까?" 확인 다이얼로그.</li>
+<li><b>CSP/하드닝 실효(EM-M-1/§6.2):</b> 외부 네비게이션·새 창·webview가 실제로 차단되는지, 메타+헤더 CSP 이중주입이 콘솔 위반 없이 동작하는지.</li>
+<li><b>패키징(electron-builder):</b> <code>npm run build:portable</code> 산출물에서 app:// 자산·preload·RUN_AS_NODE 차단이 packaged 모드에서 동작하는지(<code>app.isPackaged</code> 경로).</li>
+</ol>
+</div>
+
+<h2>9. 종합 판정 · 통합 리스크</h2>
+<div class="card">
+<p class="big-verdict"><span class="pill p-bad">통합 불가 — 조건부</span></p>
+<ul>
+<li><b>차단 사유:</b> BUG-1(블로커) — R-12 런타임 전면 불능. preload 1개 메서드명 오타(<code>openInVsCode</code>→<code>open</code>).</li>
+<li><b>해제 조건:</b> BUG-1 수정 후 (a) 헤드리스 스모크에서 <code>hasOpen::true</code> 재확인, (b) §8의 사용자 PC 확인 1~5 통과. → 그 후 <span class="pill p-ok">통합 가능</span>.</li>
+<li><b>잔여 리스크:</b> 낮음. 핸들러 로직·shape·게이트·진행 push 배선은 모두 정확하고 288 테스트 그린. 핵심 결함이 격리된 1줄이라 회귀 위험 작음.</li>
+<li><b>원인 명확:</b> 간헐/경쟁조건 아님. debugger 회부 불요 — backend-dev(devops) 직접 수정 가능.</li>
+</ul>
+</div>
+
+<footer>
+저장 경로: <code>E:\03.프로젝트\Project-SPIP\docs\reviews\electron_qa_1.html</code><br>
+검증 방식: <code>npm test</code>(288/288) · IPC 핸들러 서브셋(47/47) · offscreen Electron 스모크(electron.exe 실측) · preload↔renderer 키 자동 대조 · app:// 매핑 시뮬레이션 · CLI/server 로드 확인.<br>
+경계: 동작·통합만 검증. 코드품질=code-reviewer · 보안취약점=security-reviewer · 문서/계획=reviewer 소관.
+</footer>
+
+</div>
+</body>
+</html>

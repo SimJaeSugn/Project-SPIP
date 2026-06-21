@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>M4 설계 델타 — 독립 검증 보고 (2회차 재검증)</title>
+<style>
+  :root{--bg:#0f172a;--panel:#1e293b;--panel2:#243044;--text:#e2e8f0;--muted:#94a3b8;
+    --accent:#34d399;--ref:#38bdf8;--warn:#fbbf24;--danger:#f87171;--border:#334155;}
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:"Segoe UI","Malgun Gothic",system-ui,sans-serif;line-height:1.6;font-size:15px;}
+  header{background:linear-gradient(135deg,#1e293b,#0f172a);padding:32px 40px;border-bottom:2px solid var(--accent);}
+  header h1{margin:0 0 6px;font-size:25px;}
+  header .sub{color:var(--muted);font-size:14px;}
+  main{max-width:1180px;margin:0 auto;padding:24px 40px 80px;}
+  section{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:22px 26px;margin:20px 0;}
+  h2{color:var(--accent);font-size:20px;margin-top:0;border-bottom:1px solid var(--border);padding-bottom:10px;}
+  h3{color:var(--ref);font-size:16px;margin-top:22px;}
+  a{color:var(--ref);}
+  code{background:#0b1220;color:#7dd3fc;padding:1px 6px;border-radius:5px;font-family:Consolas,monospace;font-size:13px;}
+  pre{background:#0b1220;border:1px solid var(--border);border-radius:8px;padding:12px 14px;overflow-x:auto;color:#cbd5e1;font-family:Consolas,monospace;font-size:12.5px;}
+  table{width:100%;border-collapse:collapse;margin:12px 0;font-size:13px;}
+  th,td{border:1px solid var(--border);padding:8px 10px;text-align:left;vertical-align:top;}
+  th{background:var(--panel2);}
+  tr:nth-child(even) td{background:#1a2536;}
+  .verdict{font-size:30px;font-weight:800;}
+  .fail{color:var(--danger);}
+  .pass{color:var(--accent);}
+  .pill{display:inline-block;padding:1px 9px;border-radius:10px;font-size:11.5px;font-weight:700;white-space:nowrap;}
+  .p1{background:#3a0b0b;color:#fca5a5;}
+  .p2{background:#3a2a0b;color:#fcd34d;}
+  .p3{background:#0b2a3a;color:#7dd3fc;}
+  .ok{background:#0b2a1f;color:#6ee7b7;}
+  .resolved{background:#0b2a1f;color:#6ee7b7;}
+  .id{font-weight:700;color:var(--accent);white-space:nowrap;}
+  .note{background:#0b2a3a;border-left:4px solid var(--ref);padding:10px 14px;border-radius:0 8px 8px 0;margin:12px 0;font-size:13.5px;}
+  .danger-box{background:#3a0b0b;border-left:4px solid var(--danger);padding:10px 14px;border-radius:0 8px 8px 0;margin:12px 0;font-size:13.5px;}
+  .warn-box{background:#3a2a0b;border-left:4px solid var(--warn);padding:10px 14px;border-radius:0 8px 8px 0;margin:12px 0;font-size:13.5px;}
+  .ok-box{background:#0b2a1f;border-left:4px solid var(--accent);padding:10px 14px;border-radius:0 8px 8px 0;margin:12px 0;font-size:13.5px;}
+  ul.tight{margin:6px 0;}
+  .meta{color:var(--muted);font-size:12.5px;}
+  .check{color:var(--accent);font-weight:700;}
+</style>
+</head>
+<body>
+<header>
+  <h1>Project-SPIP — M4 설계 델타 독립 검증 (2회차 재검증)</h1>
+  <div class="sub">대상: <code>docs/architecture/m4-design.html</code> (rev.2) &nbsp;|&nbsp; 1회차 FAIL(P1 2건) 해소 대조 &nbsp;|&nbsp; 2026-06-21 &nbsp;|&nbsp; 검증자: reviewer(제3자) &nbsp;|&nbsp; 보안 상세는 security-reviewer 소관(추적성만 점검)</div>
+</header>
+<main>
+
+<section id="verdict">
+  <h2>판정 · 요약</h2>
+  <p class="verdict pass">PASS</p>
+  <p>1회차 FAIL의 직접 원인이던 <b>P1 2건(정합 오류)이 실제 코드 기준으로 모두 해소</b>됐다. rev.2는 의사코드를 <code>scanner.js:148-150</code>·<code>walker.js:48</code>·<code>router.js:66-69</code>·<code>scan.js:105</code> 실제 시그니처에 맞춰 재작성했고, "1줄 수정" 등 코드와 어긋난 문장을 삭제했다. P2 4건·P3 2건도 명세로 확정됐고, 보안 반영(scan-status M-1 read 게이트·all-drives canonicalize 세그먼트 제외)으로 인한 <b>정합 회귀는 발견되지 않았다</b>. 전진 호환(size shape 불변·depthLimit floor 승계)도 유지된다. <b>설계는 구현 착수 가능 상태</b>다.</p>
+  <table>
+    <tr><th style="width:110px;">1회차 항목</th><th>건수</th><th>2회차 결과</th></tr>
+    <tr><td><span class="pill p1">P1</span></td><td>2</td><td><span class="pill resolved">해소 2/2</span> onProgress 정합(onDir 콜백 채택+코드 일치) · router.js 델타 명시(rescan POST+checkStateChange, scan-status GET+checkReadAccess)</td></tr>
+    <tr><td><span class="pill p2">P2</span></td><td>4</td><td><span class="pill resolved">해소 4/4</span> finalizing 전이 정의 · scanId 5항 규약 · size status 2레이어 분리 · totalBytes 집계 위치 확정</td></tr>
+    <tr><td><span class="pill p3">P3</span></td><td>2</td><td><span class="pill resolved">반영 2/2</span> api-contract 갱신 절차(§8.5) · R-05 사전 고지(§5.4). (실제 api-contract.md 갱신은 PASS 후 수행 — 절차로 정합)</td></tr>
+    <tr><td>회귀</td><td>—</td><td><span class="pill ok">없음</span> 보안 게이트 추가가 기존 정합·전진 호환을 깨지 않음</td></tr>
+  </table>
+  <div class="note"><b>잔여(블로커 아님):</b> 실제 <code>docs/api-contract.md</code> 파일 갱신은 설계 PASS 후 PM 중재로 수행하도록 절차화(§8.5)되어 있어, 본 시점의 문서 불일치는 의도된 순서다. 단 PASS 확정과 동시에 P3-1 갱신을 누락 없이 실행해야 계약 표류가 닫힌다 — 후속 추적 권고(아래 §4).</div>
+</section>
+
+<section id="p1">
+  <h2>1. P1 해소 대조 (핵심 — 실제 코드 재확인)</h2>
+
+  <h3>P1-1 — onProgress / dirs 산출 정합</h3>
+  <table>
+    <tr><th style="width:160px;">확인 항목</th><th>1회차 지적</th><th>rev.2 + 실제 코드 대조</th><th style="width:64px;">판정</th></tr>
+    <tr><td>실제 호출 시그니처</td><td>"MVP onProgress(count), walker yield마다 dirs++, scan.js 1줄 수정"이 코드와 불일치</td><td><code>scanner.js:148-150</code> 확인 = <code>options.onProgress(projects.length, project)</code>(2인자, 프로젝트 확정 시만). rev.2 §3.2 danger-box가 이 사실을 정확히 인용하고 "1줄 수정" 문장을 <b>삭제</b>.</td><td><span class="check">OK</span></td></tr>
+    <tr><td>dirs/currentPath 산출 경로</td><td>현재 호출 지점에서 dirs 불가 — (a)walker 콜백 또는 (b)scanner 루프 변경 명시 요구</td><td>rev.2가 <b>(a) walker onDir 콜백 인자 추가</b>를 명시 채택. <code>walker.js:48</code> <code>yield dir</code> 직전에 <code>onDir(dir)</code> 1회 호출하는 의사코드 = 실제 코드 구조(stack pop→visited→yield)와 정합. 미지정 시 동작 불변도 정확.</td><td><span class="check">OK</span></td></tr>
+    <tr><td>scanner walk 주입</td><td>—</td><td><code>scanner.js:137</code> 실제 = <code>walker.walk(roots,{excludes,logger})</code>. rev.2 의사코드가 이 라인을 정확히 인용하고 <code>onDir</code>·<code>depthLimit</code> 주입 + throttle(<code>makeThrottle(250)</code>) + onProgress 객체화로 변경. 책임 분리(scanner=phase/dirs/found/currentPath, controller=scanId/elapsed)도 명확.</td><td><span class="check">OK</span></td></tr>
+    <tr><td>scan.js(CLI) 영향</td><td>1줄 아님 — 콜백 본문 정정 필요</td><td><code>scan.js:105</code> 실제 = <code>onProgress:(count)=>{… 'count' …}</code>. rev.2 §3.2 warn-box가 "number→object라 1줄 아니라 콜백 본문 정정(<code>count</code>→<code>p.found</code>)"으로 정확히 기술 + §10 scan.js 델타에 반영.</td><td><span class="check">OK</span></td></tr>
+    <tr><td>§10 파일 델타 반영</td><td>변경 범위 누락</td><td>§10에 walker.js(onDir yield 직전)·scanner.js(onDir 주입+onProgress 객체화)·scan.js(count→p.found) 모두 <span class="pill chg" style="background:#78350f;color:#fcd34d;">수정</span>으로 명시.</td><td><span class="check">OK</span></td></tr>
+  </table>
+  <div class="ok-box"><b>P1-1 해소 확정.</b> rev.2의 onProgress/onDir 의사코드는 <code>walker.js:35-48</code>(stack DFS·visited·yield)·<code>scanner.js:137·148-150</code>·<code>scan.js:105</code> 실제 코드와 라인 단위로 일치한다. "거대 트리에서 dirs가 0에 머문다"던 1회차 회귀 위험이 walker onDir 누계로 제거됐다. onProgress를 객체 단일 인자로 통일하면서 호출부(scan.js)를 함께 정정한 점도 정합.</div>
+
+  <h3>P1-2 — router.js 수정 누락 / "M-1 선통과" 모순</h3>
+  <table>
+    <tr><th style="width:160px;">확인 항목</th><th>1회차 지적</th><th>rev.2 + 실제 코드 대조</th><th style="width:64px;">판정</th></tr>
+    <tr><td>현재 라우팅 사실</td><td><code>router.js:66-69</code> rescan = 메서드 무관 404, checkStateChange 미호출</td><td><code>router.js:66-69</code> 확인 = <code>if(urlPath==='/api/rescan'){ return actionHandlers.rescan(...) }</code> (메서드 분기·가드 없음). rev.2 §2.2·§10이 이 사실을 정확히 인용하고 "이전 rev 모순"을 명시 정정.</td><td><span class="check">OK</span></td></tr>
+    <tr><td>rescan 라우트 정정</td><td>POST 한정 + checkStateChange 선통과를 §10에 명시 요구</td><td>§10 router.js 델타 + 의사코드: <code>method!=='POST'→405</code>, <code>security.checkStateChange</code> 선통과(<code>/api/open</code> router.js:56-64와 동형), 실패 403. <code>open</code> 분기와 동형임이 실제 코드(56-64)와 일치.</td><td><span class="check">OK</span></td></tr>
+    <tr><td>scan-status 라우트 추가</td><td>GET 라우트가 router에 없음</td><td>§10·§3.4 의사코드: <code>method!=='GET'→405</code>, <code>security.checkReadAccess</code> 게이트 후 <code>apiHandlers.getScanStatus</code>. router.js 델타에 명시.</td><td><span class="check">OK</span></td></tr>
+    <tr><td>§10 파일 델타 명시</td><td>actionHandlers/apiHandlers만 있고 router.js 빠짐</td><td>§10에 <code>router.js</code> <b>★P1-2</b> 수정 항목 + warn-box + 의사코드 블록까지 추가. security.js(checkReadAccess 신규)도 명시.</td><td><span class="check">OK</span></td></tr>
+  </table>
+  <div class="ok-box"><b>P1-2 해소 확정.</b> "라우터가 M-1을 선통과시킨다"는 §2.2 주장이 이제 §10 router.js 정정(POST한정+checkStateChange)으로 뒷받침되어 1회차의 자기모순이 닫혔다. scan-status GET도 checkReadAccess 게이트로 라우트가 명시됐다. 실제 <code>router.js:56-64</code> open 패턴을 그대로 재사용하므로 구현자가 따라갈 수 있는 구체성도 충족.</div>
+</section>
+
+<section id="p2p3">
+  <h2>2. P2 / P3 해소 대조</h2>
+  <table>
+    <tr><th style="width:60px;">#</th><th>1회차 지적</th><th>rev.2 반영</th><th style="width:64px;">판정</th></tr>
+    <tr><td class="id">P2-1</td><td>finalizing phase 진입 시점·counts·프론트 처리 미정</td><td>§3.3 phase 전이표 신설: finalizing = scanner.scan() 반환 직후 ~ writeSnapshot+store.load() 완료 전, counts <b>채워짐</b>, 프론트 "마무리 중"(currentPath 미갱신). done은 store.load() 성공 후만 → 옛 스냅샷 재fetch 경쟁(RM-3) 차단 근거 명확.</td><td><span class="pill resolved">해소</span></td></tr>
+    <tr><td class="id">P2-2</td><td>scanId 형식·생성 주체·대조 규약 모호</td><td>§8.3 note 5항 규약: (1)생성=ScanController.acquire, (2)형식=<code>crypto.randomBytes(8)</code> 16자 hex, (3)202/모든 status 동일, (4)프론트 자기 scanId와 대조해 타 스캔 무시, (5)인가 미사용(표시·상관용). §2.5 시그니처와 일관.</td><td><span class="pill resolved">해소</span></td></tr>
+    <tr><td class="id">P2-3</td><td>size collector 계약 status('ok/na/error') vs data.status('ok/partial/skipped/error') 레이어 충돌. <code>scanner.js:60</code>이 data.status로 덮어씀</td><td>§4.1.1 신설: <code>scanner.js:60</code> <code>Object.assign({status:res.status},res.data)</code> 병합으로 data가 res.status를 덮는 실제 동작을 정확히 인용. 계약 status=운영신호(ok/na/error), data.status=도메인 품질(ok/partial/skipped/error) 2레이어 분리 + partial/skipped→계약 ok 흡수 매핑 명시. <b>코드(scanner.js:55-61) 재확인 결과 인용 정확.</b></td><td><span class="pill resolved">해소</span></td></tr>
+    <tr><td class="id">P2-4</td><td>stats.totalBytes 집계 위치 미지정</td><td>§4.3: scanner가 Snapshot에 합계 저장(루프 내 ok/partial 누계), getStats는 읽기만(O(1)), partial 부분값 포함·skipped/error/null 제외. snapshotStore.load()가 parsed.stats 적재(경미 수정)까지 §10에 정정. 집계 1지점 확정.</td><td><span class="pill resolved">해소</span></td></tr>
+    <tr><td class="id">P3-1</td><td>api-contract.md 미반영(설계와 계약 문서 불일치)</td><td>§8.5 갱신 절차 신설: PASS 직후 PM 중재로 5개 항목 갱신, 설계 확정 전 선반영 금지(표류 방지). <b>절차로는 반영. 단 실제 파일 갱신은 미수행(의도된 순서) — 후속 추적 필요(§4).</b></td><td><span class="pill p3">절차 반영</span></td></tr>
+    <tr><td class="id">P3-2</td><td>R-05 사전 시간 고지(수용기준 후단) 누락</td><td>§5.4 신설: CLI(scan.js)는 루트 열거 후 스캔 전 콘솔 경고(--quiet에도 1줄), 대시보드는 allDrives 토글 시 확인 단계+aria-live. §10 scan.js·public 델타에 반영.</td><td><span class="pill resolved">해소</span></td></tr>
+  </table>
+</section>
+
+<section id="regression">
+  <h2>3. 회귀 / 전진 호환 / 보안 반영 정합 재확인</h2>
+  <table>
+    <tr><th style="width:200px;">점검</th><th>대조</th><th style="width:64px;">결과</th></tr>
+    <tr><td>scan-status M-1 read 게이트(M4-H-1) ↔ 폴링 정합</td><td>checkReadAccess(Host+Origin+토큰, CT 면제)는 폴링 GET이 본문 없음을 반영. 대시보드는 토큰 보유로 무영향. CSP <code>connect-src 'self'</code> 동일출처 정합. <b>보안 강화가 기존 폴링 흐름을 깨지 않음.</b></td><td><span class="pill ok">회귀 없음</span></td></tr>
+    <tr><td>all-drives canonicalize 세그먼트 제외(M4-H-2) ↔ walker 정합</td><td>§5.3 의사코드가 <code>walker.js:78</code> <code>childCanonical=pathGuard.canonicalize(childRaw)</code> 실제 라인 + push 전(85) 가지치기 시점을 정확히 인용. 기존 H-1 canonicalize 재사용이라 신규 정규화 규칙 없음. <code>allDrives</code> false면 분기 미진입 → 기존 동작 불변.</td><td><span class="pill ok">회귀 없음</span></td></tr>
+    <tr><td>size shape 전진 호환</td><td>§4.2/§8.4: size 객체 shape 불변, data.status 값만 확장(skipped→ok/partial/error). 프론트 "skipped/null=미측정" 로직 유지 시 자동 호환. <code>scanner.js:60</code> 병합 경로 불변.</td><td><span class="pill ok">유지</span></td></tr>
+    <tr><td>depthLimit floor 승계(R-03)</td><td>§6.1/ADR-M4-5: <code>walker.js:28</code> SAFE_MAX_DEPTH=24를 기본값으로 강등, ABS_MAX_DEPTH=64 신설, all-drives는 별도 상한 24+기본 12. <code>clamp(depthLimit??dflt,1,cap)</code>. 미지정 호출부 24 유지=행동 불변. <b>약화 없이 강화(walker 전역 maxDirs/timeBudgetMs 추가).</b></td><td><span class="pill ok">유지</span></td></tr>
+    <tr><td>락 데드락 방지(M4-M-3)</td><td>§2.1/§2.5: try/finally 항상 running=false + watchdog 강제 해제. phase=error도 idle 복귀. RM-6으로 추적. 가용성 회귀(영구 409) 방어 추가 — 기존 흐름과 충돌 없음.</td><td><span class="pill ok">개선</span></td></tr>
+    <tr><td>onProgress 객체화 ↔ CLI 호출부</td><td>number→object 변경이 <code>scan.js:105</code> 콜백 본문 정정으로 흡수(§3.2 warn-box·§10). 다른 onProgress 호출부 미존재 확인(코드 grep 범위 내 scanner/scan.js만). <b>시그니처 변경 누락 호출부 없음.</b></td><td><span class="pill ok">회귀 없음</span></td></tr>
+    <tr><td>의존성 방향 / 외부 의존성 0</td><td>§10 note: scanController(server)→scanner(scan) 기존 방향. driveEnum은 scan 내부. fs/os/http/crypto 내장만. 순환 없음.</td><td><span class="pill ok">유지</span></td></tr>
+  </table>
+  <div class="ok-box"><b>회귀 없음 확정.</b> 보안 게이트 추가(H-1/H-2)는 모두 기존 통제(checkStateChange·pathGuard.canonicalize·foldForCompare)의 재사용/덧붙임이며, allDrives 비활성·토큰 보유 대시보드의 기존 경로를 변경하지 않는다. 전진 호환 2건(size shape·depthLimit floor)도 코드 대조로 유지 확인.</div>
+</section>
+
+<section id="followup">
+  <h2>4. 후속 추적 (PASS 조건 아님 — 비블로커)</h2>
+  <ul class="tight">
+    <li><b>P3-1 실행 추적:</b> 본 PASS와 동시에 <code>docs/api-contract.md</code>를 §8.1~§8.4대로 갱신해야 단일 출처 표류가 닫힌다(현재 rescan=404·totalBytes:null·size always skipped로 남아 있음). 설계 자체의 결함은 아니며 절차(§8.5)에 명시됨 — PM이 갱신 실행을 누락하지 않도록 추적.</li>
+    <li><b>구현 시 검증 항목(설계 블로커 아님):</b> (1) <code>store.load()</code> 원자성·idempotent 실제 동작, (2) walker 전역 <code>maxDirs/timeBudgetMs</code> + ABS_MAX_DEPTH=64 + all-drives 조합의 N-01 예산 준수 — §6.1이 벤치(V-2 연장)로 실증하라고 명시했으므로 qa-engineer 실측 단계에서 확인.</li>
+    <li><b>보안 최종 판정:</b> M4-H-1/H-2/M-3, checkReadAccess, currentPath 축약의 위협 모델 적정성은 <b>security-reviewer 2회차 재검</b> 소관. 본 보고는 추적성(통제가 설계에서 약화 없이 일관 언급되는가)만 점검했고, 통제 언급은 일관 유지됨.</li>
+  </ul>
+</section>
+
+<section id="confirm">
+  <h2>5. 확인 필요 (PM 판단)</h2>
+  <ul class="tight">
+    <li>설계 미해결 Q2~Q5(size 기본 on/off·폴링 주기·depthLimit 기본값·a11y 검증 도구)는 PM 결정과 충돌 없이 권고+확인 요청으로 정리됨 — 별도 상신 불필요. Q1은 PM 확정으로 종결됨.</li>
+    <li>본 검증으로 상신할 신규 블로커 쟁점 없음.</li>
+  </ul>
+</section>
+
+<section id="scope">
+  <h2>6. 검증 범위 / 경계</h2>
+  <p class="meta">본 재검증은 문서·계획의 추적성·일관성·완결성·실행가능성에 한정한다. 보안 취약점·신뢰 경계·인가·시크릿의 적정성은 <b>security-reviewer</b> 소관(본 보고는 통제가 설계에서 약화 없이 일관 언급되는가의 추적성만 점검). 코드 동작·빌드·수용기준 실측은 qa-engineer, 코드 품질은 code-reviewer 소관. 본 검증자는 산출물을 직접 수정하지 않으며 반영은 생산자가 수행한다.</p>
+  <p class="meta">대조 근거(코드 재확인): <code>lib/scan/scanner.js</code>(50-65 size 병합·120-164 onProgress/walk)·<code>lib/scan/walker.js</code>(28 SAFE_MAX_DEPTH·35-89 DFS/yield/canonicalize)·<code>lib/server/router.js</code>(40-81 라우팅/open/rescan)·<code>scan.js</code>(95-114 onProgress 콜백) / 문서: m4-design.html(rev.2 전체)·m4_design_review_1.html(1회차 대조).</p>
+</section>
+
+</main>
+</body>
+</html>

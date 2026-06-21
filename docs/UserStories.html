@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project-SPIP — 사용자 스토리 백로그</title>
+<style>
+  :root{--bg:#0f172a;--panel:#1e293b;--text:#e2e8f0;--sub:#94a3b8;
+    --accent:#34d399;--ref:#38bdf8;--line:#334155;}
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:"Segoe UI","Malgun Gothic",system-ui,sans-serif;line-height:1.7;}
+  header{padding:44px 32px 30px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#13203b,#0f172a);}
+  header h1{margin:0 0 8px;font-size:27px;}
+  header .tag{display:inline-block;background:rgba(52,211,153,.12);color:var(--accent);
+    border:1px solid rgba(52,211,153,.4);border-radius:999px;padding:3px 12px;font-size:13px;margin-right:8px;}
+  header p{margin:12px 0 0;color:var(--sub);max-width:860px;}
+  main{max-width:1040px;margin:0 auto;padding:30px;}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px 26px;margin:20px 0;}
+  h2{margin:0 0 6px;font-size:19px;color:var(--accent);border-left:4px solid var(--accent);padding-left:12px;}
+  .epic-goal{color:var(--sub);font-size:13.5px;margin:0 0 12px;padding-left:16px;}
+  table{width:100%;border-collapse:collapse;margin:8px 0;font-size:13.5px;}
+  th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top;}
+  th{background:#142035;color:var(--accent);}
+  code{background:#0b1220;color:var(--ref);padding:1px 5px;border-radius:5px;font-size:12.5px;}
+  .sid{font-family:Consolas,monospace;color:var(--ref);font-weight:700;white-space:nowrap;}
+  .rid{font-family:Consolas,monospace;color:var(--accent);white-space:nowrap;}
+  .pill{font-size:11px;font-weight:700;padding:2px 8px;border-radius:6px;white-space:nowrap;}
+  .must{background:rgba(248,113,113,.16);color:#fca5a5;border:1px solid rgba(248,113,113,.4);}
+  .should{background:rgba(251,191,36,.16);color:#fcd34d;border:1px solid rgba(251,191,36,.4);}
+  .could{background:rgba(56,189,248,.16);color:#7dd3fc;border:1px solid rgba(56,189,248,.4);}
+  .sz{font-family:Consolas,monospace;color:var(--sub);}
+  .ac{color:var(--sub);font-size:12.5px;}
+  ul{margin:4px 0;padding-left:18px;}li{margin:3px 0;}
+  footer{text-align:center;color:var(--sub);font-size:12.5px;padding:28px;border-top:1px solid var(--line);}
+  .legend{font-size:12.5px;color:var(--sub);margin-top:8px;}
+</style>
+</head>
+<body>
+<header>
+  <span class="tag">사용자 스토리 백로그</span><span class="tag">v1.0</span>
+  <h1>Project-SPIP — 사용자 스토리 백로그</h1>
+  <p>PRD(<code>docs/PRD.html</code>)의 요구를 에픽 → 스토리로 분해한다. 각 스토리는 수용 기준·우선순위(MoSCoW)·규모 추정 힌트(S/M/L)·연결 R-ID를 가진다. 추적성 매트릭스의 입력으로 사용한다.</p>
+  <p class="legend">규모 힌트: <span class="sz">S</span>=작음(≤1일) · <span class="sz">M</span>=보통(2~3일) · <span class="sz">L</span>=큼(주 단위/분할 권장)</p>
+</header>
+<main>
+
+<section>
+  <h2>EPIC A — 스캔 & 탐지</h2>
+  <p class="epic-goal">흩어진 프로젝트를 빠짐없이, 그러나 불필요한 폴더는 건너뛰며 찾아낸다.</p>
+  <table>
+    <tr><th style="width:64px;">ID</th><th>스토리 / 수용 기준</th><th style="width:64px;">우선</th><th style="width:42px;">규모</th><th style="width:70px;">R-ID</th></tr>
+    <tr><td class="sid">US-A1</td><td>개발자로서, 내 프로젝트 위치를 파악하기 위해 지정 루트를 스캔하고 싶다.<br><span class="ac">AC: <code>.git/package.json/.vscode</code> 보유 폴더를 1건으로 탐지; 결과를 데이터 파일로 저장; 콘솔에 개수·소요시간 요약.</span></td><td><span class="pill must">Must</span></td><td class="sz">M</td><td class="rid">R-01,14</td></tr>
+    <tr><td class="sid">US-A2</td><td>개발자로서, 스캔이 빠르도록 거대 폴더를 건너뛰고 싶다.<br><span class="ac">AC: <code>node_modules</code>·<code>.git</code> 내부·<code>dist/build/.cache</code> 등에 재귀 진입 안 함; 제외 목록 설정 추가 가능.</span></td><td><span class="pill must">Must</span></td><td class="sz">S</td><td class="rid">R-02</td></tr>
+    <tr><td class="sid">US-A3</td><td>개발자로서, 스캔 대상 루트를 직접 지정하고 싶다.<br><span class="ac">AC: 설정 파일/CLI 인자로 N개 루트 지정; 미설정 시 기본값 사용 + 안내.</span></td><td><span class="pill must">Must</span></td><td class="sz">S</td><td class="rid">R-04</td></tr>
+    <tr><td class="sid">US-A4</td><td>개발자로서, 위치를 모르는 프로젝트까지 찾으려 전체 드라이브를 탐색하고 싶다.<br><span class="ac">AC: <code>--all-drives</code> 옵션으로 모든 드라이브 대상; 제외 규칙 적용; 시작 전 시간 경고.</span></td><td><span class="pill should">Should</span></td><td class="sz">M</td><td class="rid">R-05</td></tr>
+    <tr><td class="sid">US-A5</td><td>개발자로서, 스캔이 멈추지 않도록 순환 링크/깊은 트리를 안전 처리하고 싶다.<br><span class="ac">AC: 깊이 한도에서 중단·경고; 무한 루프 없음.</span></td><td><span class="pill should">Should</span></td><td class="sz">S</td><td class="rid">R-03</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>EPIC B — 인사이트</h2>
+  <p class="epic-goal">각 프로젝트의 상태를 4종 인사이트로 한눈에 이해한다.</p>
+  <table>
+    <tr><th style="width:64px;">ID</th><th>스토리 / 수용 기준</th><th style="width:64px;">우선</th><th style="width:42px;">규모</th><th style="width:70px;">R-ID</th></tr>
+    <tr><td class="sid">US-B1</td><td>개발자로서, 무슨 기술로 만든 프로젝트인지 알기 위해 언어/스택을 보고 싶다.<br><span class="ac">AC: <code>package.json</code> deps·확장자 비율로 주 언어/스택 추정; 전체 분포 집계; 불명 시 "Unknown".</span></td><td><span class="pill must">Must</span></td><td class="sz">M</td><td class="rid">R-06</td></tr>
+    <tr><td class="sid">US-B2</td><td>개발자로서, 방치된 프로젝트를 가려내기 위해 신선도를 보고 싶다.<br><span class="ac">AC: 최종 수정일·최근 커밋 시각 표시; 기준일(기본 90일) 초과 시 stale 배지; 기준 설정 가능.</span></td><td><span class="pill must">Must</span></td><td class="sz">M</td><td class="rid">R-07</td></tr>
+    <tr><td class="sid">US-B3</td><td>개발자로서, 커밋/푸시를 놓친 곳을 찾기 위해 git 상태를 보고 싶다.<br><span class="ac">AC: 저장소 여부·브랜치·미커밋 변경·ahead/behind 표시; 미설치/비저장소는 "N/A".</span></td><td><span class="pill must">Must</span></td><td class="sz">M</td><td class="rid">R-08,13</td></tr>
+    <tr><td class="sid">US-B4</td><td>개발자로서, 디스크 정리를 위해 규모/의존성을 보고 싶다.<br><span class="ac">AC: 총 용량·<code>node_modules</code> 크기·의존성 개수 표시; 무거우면 지연/근사 측정.</span></td><td><span class="pill should">Should</span></td><td class="sz">L</td><td class="rid">R-09</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>EPIC C — 대시보드</h2>
+  <p class="epic-goal">목록·통계를 한 화면에서 보고, 원하는 것을 빠르게 찾는다.</p>
+  <table>
+    <tr><th style="width:64px;">ID</th><th>스토리 / 수용 기준</th><th style="width:64px;">우선</th><th style="width:42px;">규모</th><th style="width:70px;">R-ID</th></tr>
+    <tr><td class="sid">US-C1</td><td>개발자로서, 전체를 한눈에 보기 위해 카드/리스트 + 통계 요약을 보고 싶다.<br><span class="ac">AC: 항목별 이름·경로·설명·언어·신선도·git 배지; 상단 통계(개수·분포·stale·총용량); 0건 시 빈 상태 안내.</span></td><td><span class="pill must">Must</span></td><td class="sz">L</td><td class="rid">R-10</td></tr>
+    <tr><td class="sid">US-C2</td><td>개발자로서, 원하는 프로젝트를 빨리 찾기 위해 필터/정렬/검색하고 싶다.<br><span class="ac">AC: 언어·신선도·git로 필터(AND); 이름·수정일·용량 정렬; 이름/경로 검색; 클라이언트 측 갱신, 200개 로드 상태에서 입력→재렌더 <code>performance.now()</code> 중앙값 ≤200ms(PRD §3 측정 정의).</span></td><td><span class="pill must">Must</span></td><td class="sz">M</td><td class="rid">R-11</td></tr>
+    <tr><td class="sid">US-C3</td><td>개발자로서, 최신 상태를 보기 위해 대시보드에서 재스캔하고 싶다.<br><span class="ac">AC: '재스캔' 클릭 시 서버가 스캔 재실행 후 화면 갱신.</span></td><td><span class="pill could">Could</span></td><td class="sz">M</td><td class="rid">R-16</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>EPIC D — 액션 & 견고성</h2>
+  <p class="epic-goal">찾은 프로젝트를 바로 열고, 어떤 환경에서도 안전하게 동작한다.</p>
+  <table>
+    <tr><th style="width:64px;">ID</th><th>스토리 / 수용 기준</th><th style="width:64px;">우선</th><th style="width:42px;">규모</th><th style="width:70px;">R-ID</th></tr>
+    <tr><td class="sid">US-D1</td><td>개발자로서, 작업을 재개하기 위해 카드에서 바로 VS Code로 열고 싶다.<br><span class="ac">AC: 클릭 시 <code>code &lt;path&gt;</code> 실행; 화이트리스트 검증; 성공/실패 피드백; code 미설치 시 안내(크래시 없음).</span></td><td><span class="pill must">Must</span></td><td class="sz">M</td><td class="rid">R-12,13</td></tr>
+    <tr><td class="sid">US-D2</td><td>개발자로서, 도구가 죽지 않도록 git/code 부재·권한 문제를 안전 처리하길 원한다.<br><span class="ac">AC: 미설치·권한없음·손상파일에도 해당 항목만 스킵/N-A, 전체는 정상 완료.</span></td><td><span class="pill must">Must</span></td><td class="sz">S</td><td class="rid">R-13,N-05</td></tr>
+    <tr><td class="sid">US-D3</td><td>개발자로서, 진행 상황을 알기 위해 스캔 진행 표시를 보고 싶다.<br><span class="ac">AC: 1초 이상 소요 시 처리 경로/카운트 주기 표시.</span></td><td><span class="pill should">Should</span></td><td class="sz">S</td><td class="rid">R-15</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>EPIC E — 보안 & 운영 (비기능)</h2>
+  <p class="epic-goal">로컬 전용 도구로서 안전과 가벼움을 보장한다.</p>
+  <table>
+    <tr><th style="width:64px;">ID</th><th>스토리 / 수용 기준</th><th style="width:64px;">우선</th><th style="width:42px;">규모</th><th style="width:70px;">R-ID</th></tr>
+    <tr><td class="sid">US-E1</td><td>사용자로서, 데이터가 외부로 나가지 않도록 서버가 localhost에만 바인딩되길 원한다.<br><span class="ac">AC: <code>127.0.0.1</code> 바인딩; 외부 전송 없음.</span></td><td><span class="pill must">Must</span></td><td class="sz">S</td><td class="rid">N-02</td></tr>
+    <tr><td class="sid">US-E2</td><td>사용자로서, 임의 파일이 노출되지 않도록 경로 순회가 차단되길 원한다.<br><span class="ac">AC: 스캔 루트 밖·<code>../</code> 접근 차단; 열기/읽기는 등록 경로 화이트리스트 내만 허용.</span></td><td><span class="pill must">Must</span></td><td class="sz">M</td><td class="rid">N-03</td></tr>
+    <tr><td class="sid">US-E3</td><td>사용자로서, 설치가 가볍도록 외부 의존성이 최소이길 원한다.<br><span class="ac">AC: Node 16+/CommonJS; UI는 빌드/프레임워크 없는 순수 HTML/CSS/JS.</span></td><td><span class="pill must">Must</span></td><td class="sz">S</td><td class="rid">N-04</td></tr>
+    <tr><td class="sid">US-E4</td><td>사용자로서, 스캔이 빠르게 끝나도록 성능 기준이 충족되길 원한다.<br><span class="ac">AC(N-01): 200개 프로젝트 규모 지정 루트 스캔이 30초 이내 완료(콜드 캐시 3회 중앙값, 벤치 픽스처). 필터/검색 갱신은 200개 로드 상태에서 입력→재렌더 <code>performance.now()</code> 중앙값 ≤200ms. 측정은 QA 벤치/브라우저 계측으로 자동화.</span></td><td><span class="pill must">Must</span></td><td class="sz">M</td><td class="rid">N-01,R-11</td></tr>
+    <tr><td class="sid">US-E5</td><td>사용자로서, 내 데이터가 안전·로컬에만 보관되고 인증 부담이 없길 원한다.<br><span class="ac">AC(N-06): 스캔 결과 JSON은 OS 사용자 캐시 폴더(<code>%LOCALAPPDATA%</code>/<code>~/Library/Caches</code>/<code>$XDG_CACHE_HOME</code>)에 영속화하여 프로젝트 폴더를 오염시키지 않음; 외부 전송 없음; 단일 사용자·인증 없음으로 동작.</span></td><td><span class="pill must">Must</span></td><td class="sz">S</td><td class="rid">N-06</td></tr>
+    <tr><td class="sid">US-E6</td><td>사용자로서, 키보드와 색약 환경에서도 대시보드를 쓸 수 있길 원한다.<br><span class="ac">AC(N-07): 주요 인터랙티브 요소(카드·필터·열기 버튼)는 키보드 포커스 이동·Enter 실행 가능; 상태 배지는 색상에만 의존하지 않고 텍스트 라벨 병기; 본문/배지 대비 WCAG AA 권고 충족. <b>MVP 비포함(M4 정식 검증). MVP에서는 권고 수준 적용.</b></span></td><td><span class="pill should">Should</span></td><td class="sz">M</td><td class="rid">N-07</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>MVP 스프린트 제안</h2>
+  <p class="ac"><b>단일 MVP 기준:</b> PRD §12.1 단일 MVP 요구 집합과 일치한다. MVP 포함 R/N = R-01·02·04·06·07·08·10·11·12·13·14 + N-01(품질)·N-02·03·04·05·06. <b>N-07(US-E6)은 MVP 비포함(S4/M4).</b> S1~S3 스토리 합이 이 집합을 정확히 커버한다.</p>
+  <table>
+    <tr><th>스프린트</th><th>포함 스토리</th><th>커버 R/N-ID</th><th>산출</th></tr>
+    <tr><td>S1 — 코어 스캔</td><td>US-A1, A2, A3, D2, E3, E5</td><td class="rid">R-01,02,04,14,13,N-04,05,06</td><td>CLI 스캔 → 결과 JSON(OS 캐시)</td></tr>
+    <tr><td>S2 — 인사이트</td><td>US-B1, B2, B3</td><td class="rid">R-06,07,08,13</td><td>핵심 3종 인사이트 데이터화</td></tr>
+    <tr><td>S3 — 대시보드 MVP</td><td>US-C1, C2, D1, E1, E2, E4</td><td class="rid">R-10,11,12,13,N-01,02,03</td><td>목록·통계·필터·열기 + 성능기준 (MVP 출시)</td></tr>
+    <tr><td>S4 — 확장 / 후속</td><td>US-A4, A5, B4, C3, D3, <b>E6</b></td><td class="rid">R-05,03,09,16,15,N-07</td><td>전체 드라이브·규모·재스캔·진행·접근성</td></tr>
+  </table>
+  <p class="ac">참고: MVP 집합에 등장하는 R/N이 모두 위 S1~S3 스토리에 1:1로 매핑되어 추적 가능하다(비기능 N-01/N-06도 US-E4/E5로 분해되어 스프린트·테스트로 흐른다).</p>
+</section>
+
+</main>
+<footer>Project-SPIP · 사용자 스토리 백로그 v1.0 · PRD 보조 산출물 · 자족형 HTML</footer>
+</body>
+</html>

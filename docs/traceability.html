@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project-SPIP — 추적성 매트릭스 (Traceability Matrix)</title>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#1e293b; --text:#e2e8f0; --sub:#94a3b8;
+    --accent:#34d399; --ref:#38bdf8; --line:#334155; --warn:#fbbf24; --danger:#f87171;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:"Segoe UI","Malgun Gothic",system-ui,sans-serif;line-height:1.7;}
+  header{padding:48px 32px 36px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#13203b,#0f172a);}
+  header h1{margin:0 0 8px;font-size:30px;}
+  header .tag{display:inline-block;background:rgba(52,211,153,.12);color:var(--accent);
+    border:1px solid rgba(52,211,153,.4);border-radius:999px;padding:3px 12px;font-size:13px;margin-right:8px;}
+  header p{margin:14px 0 0;color:var(--sub);max-width:960px;}
+  .meta{margin-top:16px;font-size:13px;color:var(--sub);}
+  main{max-width:1400px;margin:0 auto;padding:32px;}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:24px 28px;margin:22px 0;}
+  h2{margin:0 0 16px;font-size:21px;color:var(--accent);border-left:4px solid var(--accent);
+    padding-left:12px;}
+  h3{font-size:16px;color:var(--ref);margin:22px 0 10px;}
+  p{margin:8px 0;}
+  ul{margin:8px 0;padding-left:22px;}
+  li{margin:5px 0;}
+  code{background:#0b1220;color:var(--ref);padding:1px 6px;border-radius:5px;font-size:12.5px;
+    font-family:Consolas,monospace;}
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13px;}
+  th,td{border:1px solid var(--line);padding:9px 11px;text-align:left;vertical-align:top;}
+  th{background:#142035;color:var(--accent);position:sticky;top:0;}
+  tr:nth-child(even) td{background:rgba(255,255,255,.02);}
+  .rid{font-family:Consolas,monospace;color:var(--accent);font-weight:700;white-space:nowrap;}
+  .nid{font-family:Consolas,monospace;color:var(--warn);font-weight:700;white-space:nowrap;}
+  .sid{font-family:Consolas,monospace;color:var(--danger);font-weight:700;white-space:nowrap;}
+  .req{font-size:13px;color:var(--text);}
+  .pill{font-size:11px;font-weight:700;padding:2px 9px;border-radius:6px;white-space:nowrap;display:inline-block;}
+  .mvp{background:rgba(52,211,153,.16);color:#6ee7b7;border:1px solid rgba(52,211,153,.5);}
+  .quality{background:rgba(56,189,248,.16);color:#7dd3fc;border:1px solid rgba(56,189,248,.45);}
+  .m4{background:rgba(148,163,184,.16);color:#cbd5e1;border:1px solid rgba(148,163,184,.4);}
+  .st-design{background:rgba(52,211,153,.14);color:#6ee7b7;border:1px solid rgba(52,211,153,.45);}
+  .st-todo{background:rgba(148,163,184,.14);color:#cbd5e1;border:1px solid rgba(148,163,184,.4);}
+  .st-m4{background:rgba(251,191,36,.14);color:#fcd34d;border:1px solid rgba(251,191,36,.4);}
+  .pass{color:#6ee7b7;font-weight:700;}
+  .todo{color:#94a3b8;}
+  .planned{color:#fcd34d;}
+  .mono{font-family:Consolas,monospace;font-size:12px;color:#cbd5e1;}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;}
+  .card{background:#0b1220;border:1px solid var(--line);border-radius:10px;padding:16px;}
+  .card .k{font-size:12px;color:var(--sub);text-transform:uppercase;letter-spacing:.5px;}
+  .card .v{font-size:14px;margin-top:6px;color:var(--text);}
+  .kpi{font-size:26px;font-weight:800;color:var(--accent);}
+  .note{background:rgba(56,189,248,.08);border:1px solid rgba(56,189,248,.3);border-radius:8px;
+    padding:12px 16px;font-size:13.5px;color:#bae6fd;margin:12px 0;}
+  .danger-box{background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.35);border-radius:8px;
+    padding:12px 16px;font-size:13.5px;color:#fecaca;margin:12px 0;}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12.5px;color:var(--sub);margin-top:10px;}
+  .legend span{display:inline-flex;align-items:center;gap:6px;}
+  .tbl-wrap{overflow-x:auto;}
+  th.c-id{width:62px;} th.c-req{width:200px;} th.c-scope{width:78px;}
+  th.c-design{width:300px;} th.c-impl{width:280px;} th.c-verify{width:230px;} th.c-status{width:96px;}
+  footer{text-align:center;color:var(--sub);font-size:12.5px;padding:30px;border-top:1px solid var(--line);}
+</style>
+</head>
+<body>
+<header>
+  <span class="tag">추적성 매트릭스</span><span class="tag">v1.2</span><span class="tag">현재 단계: Electron 데스크톱 전환 완료·검증 통과</span>
+  <h1>Project-SPIP — 추적성 매트릭스</h1>
+  <p>요구가 <b>기획 → 설계 결정/모듈 → 구현 위치 → 검증</b>까지 끊기지 않고 이어지는지를 한 표로 관리하는 1급 산출물.
+  PRD의 모든 요구(기능 R-01~R-16, 비기능 N-01~N-07)를 행으로 가지며, 각 요구를 아키텍처 설계서 §14 매핑·본문 §5~§9 모듈/계약/API·§7 디렉터리 트리(구현 위치)와 검증 기록(QA·코드·보안 PASS)에 연결한다.</p>
+  <div class="note">
+    <b>전송: Electron IPC (과도기 HTTP 보존).</b> 제품이 로컬 웹앱 → <b>Electron 데스크톱 앱</b>으로 이전 완료되어 전송 계층이 <b>HTTP → Electron IPC</b>로 바뀌었다. 사용자 표면(R-04 루트 설정·R-12 열기·R-15 진행·R-16 재스캔)의 구현 위치·검증을 Electron 기준으로 갱신했다(아래 해당 행에 표기). 도메인 로직(walker·detector·collectors·scanController·pathGuard·safeExec)은 전송 무관하게 그대로 재사용된다. IPC 계약 정본: <code>docs/architecture/electron-migration.html</code> §4. 과도기 HTTP 서버(<code>server.js</code>·<code>lib/server/*</code> · <code>npm run start:web</code>)는 <b>아직 보존</b>되며 후속 제거 예정(코드리뷰 P2-2). 요구 상태는 전부 <b>구현 완료</b> 유지.
+  </div>
+  <div class="meta">문서 유형: 추적성 매트릭스 · 작성: 기술 문서 작성자 · 최종 갱신: 2026-06-21 · 현재 단계: <b>전체(MVP+M4) 구현 완료·검증 통과</b> · 입력: PRD v1.0 / architecture.html rev.2 / m4-design.html / adr.html rev.2 / S0~S7 + M4 후속 6건 구현물 / 검증 PASS(MVP S7 QA·코드·보안 + M4 설계 2회·M4 다면검증 QA·코드·보안 + 재검증 2회)</div>
+</header>
+
+<main>
+
+<section id="summary">
+  <h2>요약</h2>
+  <div class="grid">
+    <div class="card"><div class="k">전체 요구 수</div><div class="kpi">23</div><div class="v">기능 R 16건 + 비기능 N 7건. 추적 누락 0.</div></div>
+    <div class="card"><div class="k">MVP 집합</div><div class="kpi">16</div><div class="v">기능 11(R-01·02·04·06·07·08·10·11·12·13·14) + 비기능 5(N-02·03·04·05·06)</div></div>
+    <div class="card"><div class="k">M4 후속</div><div class="kpi">6</div><div class="v">R-03·R-05·R-09·R-15·R-16 + N-07(접근성) — 전건 <b>구현 완료</b></div></div>
+    <div class="card"><div class="k">품질 기준</div><div class="kpi">1</div><div class="v">N-01(성능) — 기능 스토리 아닌 산출물 품질 기준으로 적용</div></div>
+    <div class="card"><div class="k">현재 상태</div><div class="kpi" style="font-size:16px;">Electron 데스크톱 전환 완료·검증 통과</div><div class="v">전송 HTTP→IPC. QA·코드·보안 PASS. 테스트 304/304(전환 후)·탐지율 100%·필터 0.154ms.</div></div>
+  </div>
+  <div class="note">
+    <b>현재 단계 = 전체(MVP+M4) 구현 완료·검증 통과.</b> S0~S7 구현물 + M4 후속 6건 구현물(<code>scan.js</code>·<code>server.js</code>·<code>lib/server/scanController.js</code>·<code>lib/scan/driveEnum.js</code>·<code>lib/scan/collectors/size.js</code>·<code>lib/scan/walker.js</code>(depthLimit)·<code>public/**</code> 진행/접근성·<code>test/**</code>)이 실재한다. 본 매트릭스의 "구현 위치"는 <b>실제 파일 경로</b>이고, "검증" 칸은 다면 검증의 <b>실측 결과</b>를 반영한다. 통과한 검증: <b>QA(통합·동작) GO · 코드 품질 PASS · 보안 게이트 PASS(치명·높음·중간·낮음 0)</b>. 핵심 실측: <code>node --test</code> <b>213/213</b> 통과(MVP 107 → M4 포함 213) · 탐지율 100%(게이트 ≥95%) · 클라이언트 필터/정렬 5000건 0.154ms(게이트 200ms). M4 후속 6건(R-03·05·09·15·16·N-07)은 모두 <b>구현 완료</b>로 전이했다.
+  </div>
+  <div class="danger-box">
+    <b>보안 통제 연결(높음 3건) — 구현 코드에서 실재·동작 확인.</b> 설계 rev.2에 구조적으로 해소된 <span class="sid">H-1</span>(심링크/realpath 우회) · <span class="sid">H-2</span>(PATH 하이재킹/위장 바이너리) · <span class="sid">H-3</span>(JSON 폭탄·ReDoS 등 부분신뢰 입력)는 모두 <span class="nid">N-03</span>에 연결되며, S7 보안 게이트에서 코드 정독 + 회귀(107건) + 적대적 프로브로 <b>실재·동작이 입증</b>됐다.
+    <span class="sid">H-1</span>=<code>lib/common/pathGuard.js</code>/<code>walker.js</code> canonicalize(realpath) 정확일치, <span class="sid">H-2</span>=<code>lib/common/safeExec.js</code> resolveBin 절대경로·<code>.exe</code>만·shell:false, <span class="sid">H-3</span>=<code>lib/scan/collectors/_safeParse.js</code> 등 입력 가드(위장 git.bat → pwned.txt 미생성·200k자 ReDoS 0ms 실측). 부수 통제 M-1·M-2·M-3·M-4·L-1·L-3도 각 요구 행에 반영. 이월 항목 <span class="sid">V-1</span>(TOCTOU 잔여)·<span class="sid">V-2</span>(적대적 입력 실측)는 모두 <b>해소</b>(검증 산출 real을 spawn 인자로 전달, 적대 프로브 차단 실측). 스캔 대상은 <b>부분신뢰(TB-B, RC-2 인정)</b> 전제(ADR-006).
+  </div>
+  <div class="legend">
+    <span><span class="pill mvp">MVP</span> 1차 구현 대상</span>
+    <span><span class="pill quality">품질</span> 산출물 품질 기준</span>
+    <span><span class="pill m4">M4</span> 후속 (구현 완료)</span>
+    <span><span class="pill st-design">구현 완료</span></span>
+    <span class="pass">PASS</span>
+  </div>
+</section>
+
+<section id="matrix">
+  <h2>추적성 매트릭스 — 전체 요구 (R-01~R-16, N-01~N-07)</h2>
+
+  <h3>기능 요구 (R-01 ~ R-16)</h3>
+  <div class="tbl-wrap">
+  <table>
+    <tr>
+      <th class="c-id">요구 ID</th>
+      <th class="c-req">요구 (기획 요약)</th>
+      <th class="c-scope">MVP/M4</th>
+      <th class="c-design">설계 결정 / 모듈</th>
+      <th class="c-impl">구현 위치 (실제 파일 / 계약)</th>
+      <th class="c-verify">검증 (테스트 / 리뷰)</th>
+      <th class="c-status">상태</th>
+    </tr>
+
+    <tr>
+      <td class="rid">R-01</td>
+      <td class="req">지정 경로 하위에서 VS Code 프로젝트 폴더 탐지(<code>.git</code>/<code>package.json</code>/<code>.vscode</code> 신호, 중첩 시 최상위 1건)</td>
+      <td><span class="pill mvp">MVP</span></td>
+      <td><code>detector</code>(프로젝트 판별·중첩 최상위 1건) · <code>Project.signals</code> 필드 · §6.1·§14</td>
+      <td class="mono">lib/scan/detector.js<br>lib/scan/scanner.js(projectId·중첩 폴드)<br>스냅샷 Project.signals 스키마</td>
+      <td>QA PASS(픽스처 10/10 탐지·중첩 최상위 1건)·코드 PASS·보안 PASS. <b>탐지율 100%</b>(게이트 ≥95%)·오탐 0/8 실측. test/detector.test.js</td>
+      <td><span class="pill st-design">구현 완료</span></td>
+    </tr>
+    <tr>
+      <td class="rid">R-02</td>
+      <td class="req">거대·불필요 폴더 제외 규칙으로 재귀 비진입(<code>node_modules</code>·<code>.git</code> 내부·<code>dist/build/.cache</code>·OS 폴더), 설정 확장</td>
+      <td><span class="pill mvp">MVP</span></td>
+      <td><code>walker</code>(DFS 순회·매칭 폴더 비진입)+<code>excludeRules</code>(판정 함수) · <code>config.excludes</code> 병합 · §6.1·§14</td>
+      <td class="mono">lib/scan/walker.js<br>lib/scan/excludeRules.js(BUILTIN_EXCLUDES 20+)<br>lib/common/config.js(excludes 병합)</td>
+      <td>QA PASS("제외 폴더 하위 재귀 미진입"·dist 내 pkg 미탐지)·코드 PASS·보안 PASS. L-2(패턴 길이·개수 상한) 실재. test/walker.test.js</td>
+      <td><span class="pill st-design">구현 완료</span></td>
+    </tr>
+    <tr>
+      <td class="rid">R-03</td>
+      <td class="req">탐색 깊이/심볼릭 링크 안전 처리 — <b>사용자 설정 가능한</b> 깊이 한도·심링크 정책 정교화</td>
+      <td><span class="pill m4">M4</span></td>
+      <td><code>config.depthLimit</code>(기본 24) · <code>walker</code> 유효깊이 = clamp(depthLimit, 1, ABS_MAX_DEPTH 64). all-drives는 더 낮은 상한(24)·기본(12). 내장 안전상한+방문 realpath 추적으로 루프 차단(M-3) 승계 · §6.1·§8.2·§14</td>
+      <td class="mono">lib/scan/walker.js(effectiveDepth clamp·ABS_MAX_DEPTH 64·all-drives 24)<br>lib/common/config.js(depthLimit 기본 24·양정수 검증)<br>scan.js(<code>--depth</code> 파싱)</td>
+      <td>QA GO·보안 PASS·코드 PASS. depthLimit clamp/안전 상한 walker.test.js 통과. <b>213/213</b> 통과. test/walker.test.js</td>
+      <td><span class="pill st-design">구현 완료</span></td>
+    </tr>
+    <tr>
+      <td class="rid">R-04</td>
+      <td class="req">사용자 지정 루트 폴더 목록 설정(기본 방식). 미지정 시 자동 스캔 않고 안내 후 종료</td>
+      <td><span class="pill mvp">MVP</span></td>
+      <td><b>[전송: IPC]</b> 앱은 <b>네이티브 폴더 대화상자</b>(<code>spip:pickFolders</code>) + <b>경로 직접 입력</b>(<code>spip:addRoots</code>)·<code>spip:removeRoot</code> IPC로 루트를 관리한다. main이 canonicalize(realpath)·디렉터리·시스템 폴더 제외 재검증 후 채택/거부 산출, 0600 원자적 영속. <code>common/config.js</code>(scanRoots 로드·병합·검증) 재사용. CLI는 <code>--roots</code>·빈 배열 시 안내 종료 유지 · §4.1/§4.2·§8.2·§14</td>
+      <td class="mono">electron/ipc/folders.js(pickFolders·addRootsResolve·removeRootResolve·isSystemDir·0600 영속)<br>electron/preload.js(pickFolders/addRoots/removeRoot)<br>lib/common/config.js(normalizeScanRoots) · scan.js(--roots·빈 roots 안내 종료)<br>%APPDATA%\spip\config\spip.config.json(scanRoots)</td>
+      <td>QA PASS(IPC ipc-folders 단위·헤드리스 스모크). 적대 프로브: addRoots 비배열→INVALID_PATH·len5000→NOT_FOUND·시스템 폴더→SYSTEM_DIR 실측(보안 1회). CLI 2-12(빈 roots 안내·종료코드 0) 보존. L-2/H-1(scanRoots realpath 정규화) 실재. test/ipc-folders.test.js·config.test.js</td>
+      <td><span class="pill st-design">구현 완료</span></td>
+    </tr>
+    <tr>
+      <td class="rid">R-05</td>
+      <td class="req">전체 드라이브 자동 탐색 옵션(<code>spip scan --all-drives</code>), 시작 전 시간 소요 고지</td>
+      <td><span class="pill m4">M4</span></td>
+      <td><code>scan.js</code> <code>--all-drives</code> + <code>config.allowAllDrives</code> 게이트(기본 false). <code>driveEnum</code>(외부 명령 0·fs만)로 드라이브/마운트 루트 열거 → walker 시스템 제외(M4-H-2)·낮은 깊이 상한 적용. 시작 전 시간 소요 고지 · §2·§14</td>
+      <td class="mono">scan.js(--all-drives·게이트·고지)<br>lib/scan/driveEnum.js(enumerateRoots·canonicalize)<br>lib/scan/walker.js(allDrives 시스템 제외·낮은 상한)<br>lib/server/actionHandlers.js(rescan 본문 allDrives 강등)</td>
+      <td>QA GO·보안 PASS·코드 PASS. all-drives 강등(본문만으론 못 켬)·드라이브 열거 실측. <b>213/213</b> 통과. 보안: 게이트·시스템 제외 회귀 0</td>
+      <td><span class="pill st-design">구현 완료</span></td>
+    </tr>
+    <tr>
+      <td class="rid">R-06</td>
+      <td class="req">언어/프레임워크 분포 감지(<code>package.json</code> deps + 확장자 비율), 전체 집계, 불명 시 "Unknown"</td>
+      <td><span class="pill mvp">MVP</span></td>
+      <td><code>collectors/language</code>(공통 수집기 계약) · <code>Project.language{primary,breakdown}</code> · <code>GET /api/stats</code> byLanguage 집계 · §6.1·§9·§14</td>
+      <td class="mono">lib/scan/collectors/language.js<br>lib/server/apiHandlers.js(/api/stats byLanguage)</td>
+      <td>QA PASS(실 스캔 Node.js/React/HTML/JavaScript breakdown·TS 0.958→React)·코드 PASS·보안 PASS. H-3(크기/깊이 가드·ReDoS-free·문자열 정제) 실측. test/collectors.test.js</td>
+      <td><span class="pill st-design">구현 완료</span></td>
+    </tr>
+    <tr>
+      <td class="rid">R-07</td>
+      <td class="req">활동/신선도 정보 — 최종 수정일+최근 커밋 시각, 기준일(기본 90일) 이상 무활동 시 stale 표시(설정 가능)</td>
+      <td><span class="pill mvp">MVP</span></td>
+      <td><code>collectors/freshness</code> · <code>config.staleDays=90</code> · <code>Project.freshness{lastModified,lastCommit,isStale}</code> · §6.1·§8·§14</td>
+      <td class="mono">lib/scan/collectors/freshness.js<br>lib/common/config.js(staleDays=90)</td>
+      <td>QA PASS(freshness 객체·isStale·stale 90일 기준 적용)·코드 PASS·보안 PASS. test/collectors.test.js</td>
+      <td><span class="pill st-design">구현 완료</span></td>
+    </tr>
+    <tr>
+      <td class="rid">R-08</td>
+      <td class="req">Git 상태 수집 — 저장소 여부·브랜치·미커밋 변경·ahead/behind(미푸시). 미설치/비저장소 시 "N/A"</td>
+      <td><span class="pill mvp">MVP</span></td>
+      <td><code>collectors/git</code> via <code>safeExec</code>(읽기 전용) · <code>Project.git{status,isRepo,branch,dirty,ahead,behind}</code> · ADR-002 · §6.1·§14</td>
+      <td class="mono">lib/scan/collectors/git.js(runGit -C·parseStatus)<br>lib/common/safeExec.js(resolveBin)</td>
+      <td>QA PASS(실 스캔 main/master·dirty·ahead/behind·na 폴백)·코드 PASS·보안 PASS. H-2(git 절대경로·<code>-C path</code>·.exe만, 위장 git.bat 미실행 실측)·M-4(타임아웃·버퍼 상한) 실재. test/security-h2.test.js</td>
+      <td><span class="pill st-design">구현 완료</span></td>
+    </tr>
+    <tr>
+      <td class="rid">R-09</td>
+      <td class="req">규모/의존성 정보 — 총 용량·<code>node_modules</code> 크기·의존성 개수(지연/근사 허용)</td>
+      <td><span class="pill m4">M4</span></td>
+      <td><code>collectors/size</code>(<code>mvp:false</code>) — deps/devDeps는 <b>항상</b> 저비용 수집, 용량 측정은 <b>opt-in</b>(<code>config.size.enabled</code>/<code>--with-size</code>/rescan withSize). 예산(budgetMs)·깊이(maxDepth)·entry 상한 도달 시 partial. 비활성 시 <code>data.status:'skipped'</code>·<code>/api/stats.totalBytes=null</code> · §6.1·§8·§9·§14</td>
+      <td class="mono">lib/scan/collectors/size.js(measureTree·예산/깊이/entry 가드·심링크 미추적)<br>lib/common/config.js(size 기본 off·budgetMs/maxDepth/maxEntries)<br>scan.js(<code>--with-size</code>) · apiHandlers(/api/stats totalBytes 승격)</td>
+      <td>QA GO — 기본 deps/devDeps 실값(alpha 2/1·beta 0/0·gamma 3/0)·용량 게이트 null·skipped, withSize 시 totalBytes number·partial·stats 승격(178) 실측. size 시간예산(OBS-M4-02) PASS. <b>213/213</b>. 보안 PASS</td>
+      <td><span class="pill st-design">구현 완료</span></td>
+    </tr>
+    <tr>
+      <td class="rid">R-10</td>
+      <td class="req">프로젝트 카드/리스트 표시 + 전체 통계 요약 뷰. 데이터 0건 시 빈 상태 안내</td>
+      <td><span class="pill mvp">MVP</span></td>
+      <td><code>router</code>+<code>staticHandler</code>+<code>apiHandlers</code>(<code>/api/projects</code>·<code>/api/stats</code>)+<code>snapshotStore</code> · <code>public/*</code> view/store · ADR-004 · §6.2·§6.3·§9·§14</td>
+      <td class="mono">server.js · lib/server/{router,staticHandler,snapshotStore,apiHandlers}.js<br>public/{index.html,styles.css,app.js}</td>
+      <td>QA PASS(서버 기동·전 엔드포인트 응답·index.html 서빙·카드 빌드)·코드 PASS·보안 PASS. 경계면(serializer→store→api→toViewModel) 불일치 0건. L-1(CSP·textContent) 실측. test/server.test.js·dashboard.test.js</td>
+      <td><span class="pill st-design">구현 완료</span></td>
+    </tr>
+    <tr>
+      <td class="rid">R-11</td>
+      <td class="req">필터·정렬·검색 — 언어/신선도/git 필터(AND), 이름/최종수정/용량 정렬, 이름/경로 검색. 200개에서 ≤200ms 재렌더</td>
+      <td><span class="pill mvp">MVP</span></td>
+      <td><code>app.js — filter</code>(필터→검색→정렬 클라이언트 메모리 처리, 디바운스). 필터/정렬/검색은 API에 두지 않음(§9 노트). MVP 정렬키=이름·최종수정(용량은 R-09/M4 시 활성, P2-1) · §6.3·§14</td>
+      <td class="mono">public/app.js(applyQuery: 필터 AND→검색→정렬, debounce 120ms)</td>
+      <td>QA PASS(/api/projects 1회 fetch·클라 메모리 처리)·코드 PASS·보안 PASS. <b>5000건 0.154ms</b>(게이트 200ms, 1300배 여유) 실측. test/dashboard.test.js</td>
+      <td><span class="pill st-design">구현 완료</span></td>
+    </tr>
+    <tr>
+      <td class="rid">R-12</td>
+      <td class="req">'VS Code로 열기' 액션(<code>code &lt;path&gt;</code>) — 2초 내 UI 피드백, <code>code</code> CLI 미설치 시 안내·비크래시</td>
+      <td><span class="pill mvp">MVP</span></td>
+      <td><b>[전송: IPC]</b> <code>spip:openInVsCode { id }</code> IPC → id 역참조 → <code>pathGuard</code> realpath 화이트리스트 선통과(real 산출) → <code>safeExec</code> 절대경로 spawn(shell:false·detached) · id별 in-flight 상한(M-4) · <code>Project.id</code> 기반 식별. HTTP 상태코드 매핑은 드롭, 객체 <code>{ok,code}</code> 반환 · §4.1/§4.2·§9·§14</td>
+      <td class="mono">electron/ipc/actions.js(openInVsCode·sanitizeOpenId·H-1/H-2/M-4)<br>electron/preload.js(open(id)) · lib/common/{pathGuard,safeExec}.js<br>public/app.js(window.spip.open·code→한국어 메시지 매핑)</td>
+      <td>QA PASS(open 채널 정합 BUG-1 해소 재검·preload-contract 4/4·헤드리스 invoke 실측). 적대 프로브: id 123/null/len513/배열/객체 전부 REJECT(보안 1회). code 미설치=CODE_CLI_NOT_FOUND. 코드·보안 PASS. H-1·H-2·M-4 IPC 보존·V-1 해소(검증 산출 real을 spawn 인자로). test/electron-preload-contract.test.js·ipc-actions·safeExec.test.js·pathGuard.test.js<br><span class="planned">U-2: 실 code CLI로 VS Code 기동은 사용자 PC 1회 확인(헤드리스 한계)</span></td>
+      <td><span class="pill st-design">구현 완료</span></td>
+    </tr>
+    <tr>
+      <td class="rid">R-13</td>
+      <td class="req">git/외부 도구 미존재 시 graceful 처리 — 프로세스 비종료, 해당 항목만 "N/A"/안내</td>
+      <td><span class="pill mvp">MVP</span></td>
+      <td>수집기 공통 계약 <code>status:'na'</code>(throw 아닌 결과 반환) · <code>snapshotStore</code> graceful 적재(<code>hasSnapshot:false</code>) · <code>GET /api/health</code>(codeCli/git 부재 표시) · 200+빈상태(P2-5) · §5·§6.2·§9·§14</td>
+      <td class="mono">lib/scan/collectors/*.js(status 계약) · lib/server/snapshotStore.js · apiHandlers(/api/health: codeCli/git)</td>
+      <td>QA PASS(2-9: 스냅샷 부재 시 200+hasSnapshot:false 빈 상태·크래시 0 / health codeCli:false·git:true)·코드 PASS·보안 PASS. test/snapshotStore.test.js</td>
+      <td><span class="pill st-design">구현 완료</span></td>
+    </tr>
+    <tr>
+      <td class="rid">R-14</td>
+      <td class="req"><code>spip</code> 명령으로 스캔 실행 → 결과 데이터(<code>projects.json</code>) 생성 + 콘솔 요약</td>
+      <td><span class="pill mvp">MVP</span></td>
+      <td><code>scan.js</code>(진입점·옵션 파싱)+<code>scanner</code>(walker→detector→collectors→serializer 오케스트레이션) · <code>package.json</code> bin <code>spip→scan.js</code> · ADR-005 · §5·§6.1·§14</td>
+      <td class="mono">scan.js · lib/scan/scanner.js · serializer.js<br>package.json(bin spip→scan.js · scripts scan/start/dev)</td>
+      <td>QA PASS(실 스캔 요약 출력: 프로젝트/stale/오류/경고/소요/저장경로 · --help 동작 · projects.json 생성)·코드 PASS·보안 PASS. test/scanner.test.js·smoke.test.js</td>
+      <td><span class="pill st-design">구현 완료</span></td>
+    </tr>
+    <tr>
+      <td class="rid">R-15</td>
+      <td class="req">스캔 진행 표시(progress) — 1초 이상 소요 시 처리 경로/진행 카운트 주기 표시</td>
+      <td><span class="pill m4">M4</span></td>
+      <td><b>[전송: IPC push]</b> 앱: <code>scanController.start(opts).onProgress</code> 콜백이 매 진행마다 <code>spip:scanProgress</code>로 창에 <b>push</b>(폴링 폐기·R-15 갱신). 초기 동기화·재구독은 <code>spip:getScanStatus</code>(invoke). currentPath는 shortenPath 축약 노출(M4-H-1·L-3). CLI는 onProgress 카운트 주기 출력 유지 · §4.1/§4.3·§5·§14</td>
+      <td class="mono">electron/ipc/scan.js(makeProgressSender→spip:scanProgress push·getScanStatus)<br>electron/preload.js(onScanProgress 구독·해제) · lib/scan/scanner.js(onProgress ScanProgress) · lib/server/scanController.js(state·shortenPath·onProgress)<br>public/app.js(scanning 뷰·onScanProgress·aria-live) · scan.js(CLI onProgress)</td>
+      <td>QA PASS — 헤드리스 스모크에서 scanProgress 푸시·구독 라우팅 실측·preload onScanProgress 노출 확인. currentPath 축약·절대경로 미노출(보안 onProgress 통제). <b>304/304</b>. 코드·보안 PASS. test/scanController-onprogress.test.js·ipc-scan</td>
+      <td><span class="pill st-design">구현 완료</span></td>
+    </tr>
+    <tr>
+      <td class="rid">R-16</td>
+      <td class="req">대시보드에서 재스캔 트리거 — 서버가 스캔 재실행 후 갱신 데이터 반영</td>
+      <td><span class="pill m4">M4</span></td>
+      <td><b>[전송: IPC]</b> <code>spip:rescan { withSize?, allDrives? }</code> IPC → 옵션 sanitize(키 화이트리스트)·scanRoots/allDrives 게이트 → <code>scanController</code> 인프로세스 백그라운드 스캔(전역 단일 락·중복 SCAN_IN_PROGRESS). finalizing 시 writeSnapshot+store.load 무중단 교체. watchdog로 데드락 방지(_forceError 락 강제 해제·scanId 세대 가드). 결과 객체 <code>{ok,code,scanId,startedAt}</code> 반환 · §4.1/§4.2·§9·§14</td>
+      <td class="mono">electron/ipc/actions.js(rescan·sanitizeRescanOpts·게이트·락)<br>electron/preload.js(rescan(o)) · lib/server/scanController.js(acquire/start·watchdog·세대 가드)<br>public/app.js(재스캔 버튼·메뉴·triggerRescan→scanning 뷰)</td>
+      <td>QA PASS — 메뉴 payload 정합(P2-1) 해소 재검·rescan→scanning→done 전이 헤드리스 실측. 적대 프로브: rescan opts 프로토타입 오염키·배열·문자열 → 화이트리스트 2키만 산출(보안 1회). 코드 P1-1(watchdog 락 강제 해제) 시정 반영. <b>304/304</b>. 보안 PASS. test/m4-rescan.test.js·ipc-actions·dashboard-menu</td>
+      <td><span class="pill st-design">구현 완료</span></td>
+    </tr>
+  </table>
+  </div>
+
+  <h3>비기능 요구 (N-01 ~ N-07)</h3>
+  <div class="tbl-wrap">
+  <table>
+    <tr>
+      <th class="c-id">요구 ID</th>
+      <th class="c-req">요구 (기획 요약)</th>
+      <th class="c-scope">MVP/M4</th>
+      <th class="c-design">설계 결정 / 모듈</th>
+      <th class="c-impl">구현 위치 (실제 파일 / 계약)</th>
+      <th class="c-verify">검증 (테스트 / 리뷰)</th>
+      <th class="c-status">상태</th>
+    </tr>
+
+    <tr>
+      <td class="nid">N-01</td>
+      <td class="req">성능 — 지정 루트(~200개) 스캔 &lt;30초. 전체 드라이브 스캔은 제외 규칙+진행 표시 동반</td>
+      <td><span class="pill quality">품질</span></td>
+      <td>스캔/서빙 프로세스 분리(ADR-005)·제외 가지치기 우선·git 호출 프로젝트당 1회·클라이언트 필터 · <code>test/fixtures</code> 벤치(콜드 캐시 3회 중앙값) · §3·§12·§14</td>
+      <td class="mono">lib/scan/walker.js·scanner.js·collectors/git.js<br>public/app.js(클라 필터)</td>
+      <td>QA 측정(품질 기준): 실환경 6개 463ms · 합성 300개 7,904ms(≈26.4ms/건) · 클라 필터 5000건 0.154ms. PRD §3에 절대 임계 ms 미정의 → 성능 게이트 위반 해당 없음(참고 측정값)</td>
+      <td><span class="pill st-design">구현 완료</span></td>
+    </tr>
+    <tr>
+      <td class="nid">N-02</td>
+      <td class="req">보안/프라이버시 — 서버 <code>127.0.0.1</code>(localhost) 전용 바인딩, 외부 네트워크 전송 0</td>
+      <td><span class="pill mvp">MVP</span></td>
+      <td><code>server.listen(port,'127.0.0.1')</code> 루프백 전용(ADR-004) · 외부 전송 0 · 고정 포트(기본 예: 7421)·자동 오픈 없음 · §4·§11.3·§14</td>
+      <td class="mono">server.js(<code>listen(port,'127.0.0.1')</code>) · lib/common/config.js(port=7421)</td>
+      <td>QA PASS("listen 127.0.0.1 바인딩" 통과·자동 오픈 없음)·코드 PASS·보안 PASS(외부 전송 0·메타데이터만). test/server.test.js</td>
+      <td><span class="pill st-design">구현 완료</span></td>
+    </tr>
+    <tr>
+      <td class="nid">N-03</td>
+      <td class="req">경로 안전성 / 프로세스 인젝션 — 스캔 루트 밖·디렉터리 순회(<code>../</code>) 차단, 화이트리스트 내 '열기'/읽기, 외부 프로세스는 <code>shell:false</code>+인자 배열</td>
+      <td><span class="pill mvp">MVP</span></td>
+      <td><code>pathGuard</code>(canonicalize/realpath 정확 일치, 403 PATH_NOT_ALLOWED) + <code>safeExec</code>(절대경로·shell:false) + <code>staticHandler</code>(public 정규화·이탈 404). 부분신뢰(TB-B) 전제(ADR-006) · §11.1·11.2·§14 · <b>보안 <span class="sid">H-1</span>·<span class="sid">H-2</span>·<span class="sid">H-3</span>·M-1·L-1·L-3 연결</b></td>
+      <td class="mono">lib/common/pathGuard.js(설계 §6.2 server→common 이동, P3-1) · lib/server/staticHandler.js<br>lib/common/safeExec.js · lib/scan/collectors/_safeParse.js(H-3 가드)</td>
+      <td><b>보안 게이트 PASS</b>(치명·높음 0) — H-1·H-2·H-3 코드 실재+동작 입증. <b>V-1·V-2 모두 해소</b>(검증 산출 real spawn·위장 git.bat 미실행·200k자 ReDoS 0ms 실측). QA PASS(../ /%2e%2e/널바이트/매핑외 → 전부 404). test/pathGuard.test.js·staticHandler.test.js</td>
+      <td><span class="pill st-design">구현 완료</span></td>
+    </tr>
+    <tr>
+      <td class="nid">N-04</td>
+      <td class="req">의존성 — Node 16+, CommonJS, 외부 npm 의존성 최소화(내장 모듈 위주), UI는 빌드/프레임워크 없는 순수 HTML/CSS/JS</td>
+      <td><span class="pill mvp">MVP</span></td>
+      <td>외부 의존성 0(<code>fs/path/child_process/http/os/crypto/node:test</code> 내장만)·빌드 도구 없음·정적 UI · ADR-001 · §10·§14</td>
+      <td class="mono">전 모듈(lib/·public/·scan.js·server.js, 내장 모듈만)<br>package.json(dependencies 블록 없음 · engines.node ">=16")</td>
+      <td>QA PASS(N-04 입력 가드 2MB=TOO_LARGE·깊이200=TOO_DEEP)·코드 PASS(외부 의존성 0)·보안 PASS(공급망 표면 0 → npm audit 비해당·시크릿 0). <b>참고:</b> node:test 러너·테스트 안정성 위해 README는 Node 18+ 권장(engines는 ">=16" 표기 — 백엔드 범위에서 정합 검토 권고)</td>
+      <td><span class="pill st-design">구현 완료</span></td>
+    </tr>
+    <tr>
+      <td class="nid">N-05</td>
+      <td class="req">견고성 — 읽기 권한 없는 폴더·손상 <code>package.json</code>·비-UTF8 파일을 만나도 항목만 건너뛰고 전체 스캔 완료</td>
+      <td><span class="pill mvp">MVP</span></td>
+      <td><code>scanner</code> 항목 단위 격리·<code>warnings[]</code> 누적 · <code>walker</code> 내장 안전 깊이 상한+방문 realpath 추적(심링크 루프 차단, M-3) · §6.1·§12·§14</td>
+      <td class="mono">lib/scan/scanner.js(항목 격리·warnings[]) · lib/scan/walker.js(SAFE_MAX_DEPTH 24·visited realpath)</td>
+      <td>QA PASS(collector throw·손상 JSON 섞여도 스캔 완주·실 스캔 errors:0)·코드 PASS·보안 PASS. M-3(심링크 루프 종료·깊이 상한 초과 중단) 실측. test/scanner.test.js·walker.test.js</td>
+      <td><span class="pill st-design">구현 완료</span></td>
+    </tr>
+    <tr>
+      <td class="nid">N-06</td>
+      <td class="req">데이터 — 스캔 결과(JSON) 로컬 보관, OS 사용자 캐시/앱 데이터 폴더 영속화(프로젝트 폴더 비오염), 단일 사용자·인증 없음</td>
+      <td><span class="pill mvp">MVP</span></td>
+      <td><code>common/paths.js</code>(appDir/configPath/cachePath 단일 해석, P1-2) + <code>serializer</code> 원자적 쓰기(임시→rename) · 앱 폴더 <code>cache/projects.json</code>·<code>config/spip.config.json</code> · ADR-003 · §7·§8·§14 · <b>보안 M-2(0600/ACL) 연결</b></td>
+      <td class="mono">lib/common/paths.js(appDir/configPath/cachePath) · lib/scan/serializer.js<br>(런타임 산출물은 리포 밖: %APPDATA%\spip\cache\projects.json)</td>
+      <td>QA PASS("serializer 원자적 쓰기 + 0600 권한" 통과·캐시 파일 생성 확인)·코드 PASS·보안 PASS. M-2(임시→fsync→rename 원자성·0600·디렉터리 0700) 실측. test/paths.test.js·snapshotStore.test.js</td>
+      <td><span class="pill st-design">구현 완료</span></td>
+    </tr>
+    <tr>
+      <td class="nid">N-07</td>
+      <td class="req">접근성/UX — 키보드 포커스·색상 외 상태 라벨·적정 대비. <b>정식 검증은 M4.</b></td>
+      <td><span class="pill m4">M4</span></td>
+      <td>키보드 조작(skip-link·:focus-visible 윤곽), 드로어 <code>role=dialog</code>·<code>aria-modal</code>·포커스 트랩(Tab 순환)·열기 트리거로 포커스 복원, 진행 화면 <code>role=status</code>·<code>aria-live=polite</code>, 색상+텍스트 라벨 병기·aria-label 전수 · §6.3·§14</td>
+      <td class="mono">public/app.js(포커스 트랩·focus 복원·aria-live 진행·aria-label·aria-pressed)<br>public/styles.css(.skip-link·:focus-visible) · index.html(toast role=status)</td>
+      <td>QA GO — 접근성 워크스루 불변·dashboard-m4.test.js 통과(프론트 무회귀). 키보드/포커스 트랩/aria 라이브 코드 실재. <b>213/213</b>. 보안 PASS</td>
+      <td><span class="pill st-design">구현 완료</span></td>
+    </tr>
+  </table>
+  </div>
+</section>
+
+<section id="security-trace">
+  <h2>보안 통제 ↔ 요구 추적 (높음 3 + 부수 통제)</h2>
+  <p>설계 보안검증에서 제기되어 architecture.html rev.2 / ADR-006에 구조적으로 해소된 통제들을 어느 요구에 연결되는지로 정리한다. <b>S7 최종 보안 게이트(구현 코드)에서 8중 통제가 모두 실재·동작 확인됐고, 종합 판정 PASS</b>(치명·높음·중간 0 · 낮음 1 정보성). 이월 항목 V-1·V-2도 해소.</p>
+  <div class="tbl-wrap">
+  <table>
+    <tr><th style="width:74px;">통제 ID</th><th style="width:90px;">등급</th><th>위협 / 통제</th><th style="width:150px;">연결 요구</th><th style="width:240px;">구현 위치 (실측)</th><th style="width:90px;">검증</th></tr>
+    <tr><td class="sid">H-1</td><td><span class="pill" style="background:rgba(248,113,113,.16);color:#fca5a5;border:1px solid rgba(248,113,113,.4)">높음</span></td><td>심링크/접합점/실경로 정규화 우회 → 화이트리스트 경계 이탈. <code>canonicalize(realpath)</code> 등록·검증 양 시점 정확 일치</td><td><span class="nid">N-03</span> · <span class="rid">R-12</span> · <span class="rid">R-04</span>(scanRoots)</td><td class="mono">lib/common/pathGuard.js · walker.js · snapshotStore.js · config.js · actionHandlers.js</td><td><span class="pass">PASS</span><br>(실재·동작)</td></tr>
+    <tr><td class="sid">H-2</td><td><span class="pill" style="background:rgba(248,113,113,.16);color:#fca5a5;border:1px solid rgba(248,113,113,.4)">높음</span></td><td>PATH 하이재킹/위장 바이너리 → RCE. <code>resolveBin</code> 절대경로 1회 고정·<code>git -C</code> cwd 의존제거·Windows PATHEXT 차단</td><td><span class="nid">N-03</span> · <span class="rid">R-08</span> · <span class="rid">R-12</span></td><td class="mono">lib/common/safeExec.js · collectors/git.js (ADR-002)</td><td><span class="pass">PASS</span><br>(실재·동작)</td></tr>
+    <tr><td class="sid">H-3</td><td><span class="pill" style="background:rgba(248,113,113,.16);color:#fca5a5;border:1px solid rgba(248,113,113,.4)">높음</span></td><td>부분신뢰 입력 파싱(JSON 폭탄·과중첩·ReDoS·거대 파일) → DoS. 크기/바이트/깊이 가드+선형시간 정규식+문자열 정제, 격리 앞단 배치</td><td><span class="nid">N-03</span> · <span class="rid">R-06</span></td><td class="mono">lib/scan/collectors/_safeParse.js · language.js · git.js parseStatus · logger.clampString</td><td><span class="pass">PASS</span><br>(실재·동작)</td></tr>
+    <tr><td class="sid">M-1</td><td><span class="pill" style="background:rgba(251,191,36,.16);color:#fcd34d;border:1px solid rgba(251,191,36,.4)">중간</span></td><td>CSRF/DNS 리바인딩 → Host allowlist+Origin 검증+세션 토큰(상태변경 POST)</td><td><span class="nid">N-02</span> · <span class="rid">R-12</span></td><td class="mono">lib/server/security.js · router.js · actionHandlers.js · staticHandler.js(토큰주입) (ADR-004)</td><td><span class="pass">PASS</span></td></tr>
+    <tr><td class="sid">M-2</td><td><span class="pill" style="background:rgba(251,191,36,.16);color:#fcd34d;border:1px solid rgba(251,191,36,.4)">중간</span></td><td>스냅샷/설정 파일 권한 → 소유자 전용(0600/디렉터리 0700/Windows ACL), 원자적 쓰기·실패 정리</td><td><span class="nid">N-06</span></td><td class="mono">lib/scan/serializer.js · lib/common/paths.js (ADR-003)</td><td><span class="pass">PASS</span></td></tr>
+    <tr><td class="sid">M-3</td><td><span class="pill" style="background:rgba(251,191,36,.16);color:#fcd34d;border:1px solid rgba(251,191,36,.4)">중간</span></td><td>심링크 루프/무한 재귀 → 내장 안전 깊이 상한+방문 realpath 추적 가지치기</td><td><span class="nid">N-05</span> · <span class="rid">R-03</span>(M4 depthLimit 설정화)</td><td class="mono">lib/scan/walker.js (기본 24·visited realpath·ABS_MAX_DEPTH 64 clamp)</td><td><span class="pass">PASS</span></td></tr>
+    <tr><td class="sid">M-4</td><td><span class="pill" style="background:rgba(251,191,36,.16);color:#fcd34d;border:1px solid rgba(251,191,36,.4)">중간</span></td><td>외부 프로세스 행(hang)·중복 spawn → 타임아웃+강제 kill·출력 버퍼 상한·id별 in-flight 상한</td><td><span class="nid">N-03</span> · <span class="rid">R-08</span> · <span class="rid">R-12</span></td><td class="mono">lib/common/safeExec.js · lib/server/actionHandlers.js</td><td><span class="pass">PASS</span></td></tr>
+    <tr><td class="sid">L-1</td><td><span class="pill" style="background:rgba(148,163,184,.16);color:#cbd5e1;border:1px solid rgba(148,163,184,.4)">낮음</span></td><td>저장형 XSS(오염된 name/description/branch) → view 전면 textContent/이스케이프·innerHTML 결합 금지·CSP 메타</td><td><span class="rid">R-10</span> · <span class="nid">N-03</span></td><td class="mono">public/app.js(textContent 전수) · index.html(CSP 메타) · staticHandler.js(CSP 헤더)</td><td><span class="pass">PASS</span></td></tr>
+    <tr><td class="sid">L-2</td><td><span class="pill" style="background:rgba(148,163,184,.16);color:#cbd5e1;border:1px solid rgba(148,163,184,.4)">낮음</span></td><td>설정 파일 검증 약함 → scanRoots realpath 정규화·타입/존재 검증, excludes 패턴 길이·개수 상한</td><td><span class="rid">R-04</span> · <span class="rid">R-02</span></td><td class="mono">lib/common/config.js (LIMITS: maxExcludes 200·patternLen 256·maxScanRoots 64)</td><td><span class="pass">PASS</span></td></tr>
+    <tr><td class="sid">L-3</td><td><span class="pill" style="background:rgba(148,163,184,.16);color:#cbd5e1;border:1px solid rgba(148,163,184,.4)">낮음</span></td><td>에러 메시지 정보 누출 → message는 고정 안내문만, 원시 예외·스택·내부 경로는 콘솔 로그만</td><td><span class="nid">N-03</span> · <span class="rid">R-13</span></td><td class="mono">lib/server/apiHandlers.js · actionHandlers.js · logger.js(sanitizeForUser)</td><td><span class="pass">PASS</span></td></tr>
+    <tr><td class="sid">RC-1</td><td><span class="pill" style="background:rgba(148,163,184,.16);color:#cbd5e1;border:1px solid rgba(148,163,184,.4)">수용</span></td><td>동일머신 타 사용자 격리 — MVP 비목표(PM 수용), 단 M-1·M-2 심층방어 적용</td><td><span class="nid">N-02</span> · <span class="nid">N-06</span></td><td class="mono">§11.7 note (심층방어로 보완)</td><td><span class="pass">수용</span></td></tr>
+    <tr><td class="sid">RC-2</td><td><span class="pill" style="background:rgba(148,163,184,.16);color:#cbd5e1;border:1px solid rgba(148,163,184,.4)">인정</span></td><td>스캔 대상 신뢰 수준 — 악성 외부 클론 리포 섞일 수 있음 명시 인정 → H-2·H-3·L-1을 필수 방어로 확정</td><td><span class="nid">N-03</span> · <span class="nid">N-05</span> · <span class="rid">R-13</span></td><td class="mono">ADR-006 · §1·§11.7 (TB-B 전제)</td><td><span class="pass">인정</span></td></tr>
+    <tr><td class="sid">V-1</td><td><span class="pill" style="background:rgba(56,189,248,.14);color:#7dd3fc;border:1px solid rgba(56,189,248,.5)">이월</span></td><td>realpath·절대경로 TOCTOU 잔여 — verify→spawn 재해석 창. 검증 직후 산출 실경로(<code>real</code>)를 그대로 spawn 인자로 전달해 창 제거</td><td><span class="nid">N-03</span> · <span class="rid">R-12</span></td><td class="mono">lib/server/actionHandlers.js open() · pathGuard.js</td><td><span class="pass">해소</span></td></tr>
+    <tr><td class="sid">V-2</td><td><span class="pill" style="background:rgba(56,189,248,.14);color:#7dd3fc;border:1px solid rgba(56,189,248,.5)">이월</span></td><td>적대적 입력 가드 + cwd 위장 바이너리 실측 — 거대/과중첩 JSON skip·ReDoS 0·위장 git.bat 미실행</td><td><span class="nid">N-03</span> · <span class="nid">N-04</span> · <span class="rid">R-06</span> · <span class="rid">R-08</span></td><td class="mono">_safeParse.js · safeExec.js · git.js (위장 git.bat→pwned.txt 미생성·200k자 0ms 실측)</td><td><span class="pass">해소</span></td></tr>
+  </table>
+  </div>
+</section>
+
+<section id="verify-status">
+  <h2>검증 단계 현황</h2>
+  <table>
+    <tr><th style="width:230px;">검증</th><th style="width:110px;">판정</th><th>대상 / 근거</th></tr>
+    <tr><td>기획 재검증 (2회차)</td><td class="pass">PASS</td><td><code>docs/reviews/planning_review_2.html</code> — P1 3건 해소(비기능 추적성·MVP 경계 3중 불일치·화면 명세 공백), 설계 착수 가능</td></tr>
+    <tr><td>아키텍처 재검증 (2회차)</td><td class="pass">PASS</td><td><code>docs/reviews/architecture_review_2.html</code> — P1 2건(정적 URL 규약·설정 위치) 해소·P2 5건 반영·보안 반영 회귀 없음·§14 MVP 매핑 누락 0</td></tr>
+    <tr><td>보안 재검증 (2회차, 설계)</td><td class="pass">PASS</td><td><code>docs/reviews/architecture_security_review_2.html</code> — H-1·H-2·H-3 구조적 해소로 게이트 PASS 상향(설계 수준). 부대조건 V-1·V-2는 코드 보안 게이트로 이월</td></tr>
+    <tr><td>QA 통합·동작 검증 (S7)</td><td class="pass">PASS</td><td><code>docs/reviews/qa_s7_1.html</code> — 출시 가능. 테스트 107/107·MVP 16건 전건 PASS·경계면 불일치 0·블로커/높음 0(중간 1·낮음 2는 문서/메시지 보완). 탐지율 100%·필터 0.154ms</td></tr>
+    <tr><td>코드 품질 검증 (S7)</td><td class="pass">PASS</td><td><code>docs/reviews/code_review_s7_1.html</code> — P1 정확성 결함 0건(P2 6·P3 7 권고). 모듈 경계·리소스 정리·경계조건 견고. pathGuard를 common 배치한 합리적 편차 1건 수용(P3-1)</td></tr>
+    <tr><td>최종 보안 게이트 검증 (S7, 코드)</td><td class="pass">PASS</td><td><code>docs/reviews/security_review_s7_1.html</code> — 치명·높음·중간 0(낮음 1 정보성). 8중 통제 코드 실재+회귀+프로브 동작 입증. <b>V-1·V-2 해소</b>. 외부 의존성 0→npm audit 비해당·시크릿 0</td></tr>
+    <tr><td>M4 설계 검증 (2회차)</td><td class="pass">PASS</td><td><code>docs/reviews/m4_design_review_2.html</code> · <code>m4_design_security_review_2.html</code> — M4 6건 설계(scanController 동시성·driveEnum 게이트·size 예산·depthLimit clamp·진행/접근성) 검토·보안 검토 PASS. 코드 착수 가능</td></tr>
+    <tr><td>M4 QA 다면 검증 (재검 2회차)</td><td class="pass">GO</td><td><code>docs/reviews/qa_m4_2.html</code> — 출시 가능(GO). <b>npm test 213/213</b>(1회 201→+12 회귀)·R-16/R-15 실서버 E2E·기본 deps/devDeps 실값·withSize 용량 승격·size 시간예산(OBS-M4-02)·watchdog 후속 rescan 202·회귀 0</td></tr>
+    <tr><td>M4 코드 품질 검증</td><td class="pass">PASS</td><td><code>docs/reviews/code_review_m4_1.html</code> — 조건부 PASS의 P1-1(watchdog 락 강제 해제)은 <code>scanController._forceError</code>가 <code>running=false</code> 즉시 해제·scanId 세대 가드로 시정, QA m4_2·보안 m4_2가 실측 재검 PASS</td></tr>
+    <tr><td>M4 보안 게이트 검증 (재검 2회차)</td><td class="pass">PASS</td><td><code>docs/reviews/security_review_m4_2.html</code> — 치명·높음·중간·낮음 0·신규 위협 0·회귀 0(1회 조건부→무조건 PASS 상향). 세대 가드·size 항상로드·all-drives 게이트·currentPath 축약 통제 약화 0. npm audit 0·시크릿 0</td></tr>
+    <tr><td>Electron 설계 검증 (2회차)</td><td class="pass">PASS</td><td><code>docs/reviews/electron_design_review_2.html</code> · <code>electron_design_security_review_2.html</code> — HTTP→IPC 전환 설계(§4 IPC 계약·§6 보안 베이스라인) P1/P2 보완→PASS, EC-1~6 보안 조건부→PASS. 헤드리스 GUI 검증 한계·모킹 경계 명시(F-3)</td></tr>
+    <tr><td>Electron 구현 보안 게이트</td><td class="pass">PASS</td><td><code>docs/reviews/electron_security_review_1.html</code> — 치명·높음·중간 0·낮음 1(EI-L-1 권고, <b>코드 해소·반영됨</b>). 테스트 288/288·EC 6/6 실증·적대 프로브 차단. CSP·격리·발신자검증·fuses 정합. GUI/빌드 런타임은 사용자 PC 확인 분리</td></tr>
+    <tr><td>Electron 코드 품질 검증</td><td class="pass">PASS</td><td><code>docs/reviews/electron_code_review_1.html</code> — 도메인/전송 분리(ipc/*는 (args,ctx)→result 순수 함수, register.js만 wiring)·헤드리스 61건 PASS. P1 0. 잔여 P2-2(과도기 HTTP 모듈 잔존)는 server 제거로 해소 예정·비차단</td></tr>
+    <tr><td>Electron 동작·통합 다면 검증 (재검 2회차)</td><td class="pass">PASS</td><td><code>docs/reviews/electron_qa_2.html</code> — 블로커 2건(open 채널 정합 BUG-1·메뉴 payload 정합 P2-1) 모두 해소 PASS. <b>npm test 304/304</b>(1회 288→+16 정합 회귀)·실 electron.exe 헤드리스 스모크 5항목. 조건: U-1~U-3 GUI/OS 통합은 사용자 PC 1회 확인(헤드리스 구조적 사각, 차단 아님)</td></tr>
+  </table>
+  <div class="note">
+    <b>추적 누락 0 확인.</b> PRD 전체 요구 23건(R-01~R-16 16건 + N-01~N-07 7건)이 모두 본 매트릭스에 행으로 존재하며, 각 행의 "설계 결정/모듈"·"구현 위치"·"검증"·"상태" 칸이 모두 채워졌다(빈 칸 없음). MVP 16(R-01·02·04·06·07·08·10·11·12·13·14 + N-02·03·04·05·06)은 S7 QA·코드·보안 3면 PASS로, M4 후속 6(R-03·05·09·15·16·N-07)은 M4 설계 2회·다면검증 QA(GO)·코드·보안 + 재검증 2회로 모두 <b>구현 완료</b>이며, 품질기준 1(N-01)은 측정 완료다. 즉 전체 23건이 <b>구현 완료·검증 통과</b>로 일관된다.
+  </div>
+  <div class="note" style="background:rgba(251,191,36,.08);border-color:rgba(251,191,36,.3);color:#fde68a;">
+    <b>후속/백로그(출시 비차단).</b> 정식 N-01 30초 벤치(지정 루트 ~200개 콜드캐시), 전체 드라이브 실스캔 실측, 스크린리더 실측(N-07 자동검증 외 수기 워크스루), 협조적 취소(<code>AbortSignal</code>) 도입 등은 비차단 후속 항목으로 남는다. 현재 watchdog는 hang 시 락을 강제 해제해 가용성 데드락은 방지하나, 버려진 스캔의 즉시 협조적 중단은 후속이다.
+  </div>
+</section>
+
+</main>
+<footer>Project-SPIP · 추적성 매트릭스 v1.2 · 요구 23건(R 16 + N 7) · MVP 16 + 품질 1 + M4 6 · 추적 누락 0 · 전송 HTTP→Electron IPC(과도기 HTTP 보존) · 현재 단계: Electron 데스크톱 전환 완료·검증 통과(QA · 코드 · 보안 PASS · 테스트 304/304 · 탐지율 100% · 필터 0.154ms) · 자족형 HTML 산출물</footer>
+</body>
+</html>
