@@ -30,6 +30,7 @@ const { registerIpcHandlers } = require('./ipc/register');
 const { applyCspHeaders, hardenWebContents, TRUSTED_ORIGIN } = require('./security');
 const { buildMenuTemplate } = require('./menu');
 const { createTray } = require('./tray');
+const { resolveAppRelPath } = require('./appProtocol');
 const favoritesWidget = require('./favoritesWidget');
 const { Logger } = require('../lib/common/logger');
 
@@ -98,13 +99,10 @@ if (!gotLock) {
 /** app:// 자산 요청을 public/ 루트로 안전 매핑(디렉터리 이탈 차단). */
 function registerAppProtocol() {
   protocol.handle('app', (request) => {
-    let pathname;
-    try {
-      pathname = decodeURIComponent(new URL(request.url).pathname);
-    } catch (_) {
-      return new Response('Bad Request', { status: 400 });
-    }
-    if (!pathname || pathname === '/') pathname = '/index.html';
+    // app:// 는 standard scheme이라 'app://favorites.html'의 파일명이 hostname으로 파싱된다.
+    //   resolveAppRelPath가 host/pathname을 종합해 올바른 public/ 상대 경로를 돌려준다(순수·테스트됨).
+    const pathname = resolveAppRelPath(request.url);
+    if (pathname === null) return new Response('Bad Request', { status: 400 });
 
     // public/ 루트 기준으로 정규화하고 이탈을 차단.
     const resolved = path.normalize(path.join(PUBLIC_DIR, pathname));
