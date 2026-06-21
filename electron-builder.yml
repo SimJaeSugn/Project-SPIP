@@ -18,6 +18,16 @@ directories:
   buildResources: build
   output: dist
 
+# 트레이 전용 아이콘(icon-tray.ico)을 resources/ 에 언팩 동봉(런타임 nativeImage 로드용).
+#   files 화이트리스트에는 build/ 가 없어 asar 에 안 들어가므로, 트레이가 읽을 실파일을 별도 동봉한다.
+#   main.js 는 app.isPackaged 시 process.resourcesPath/icon-tray.ico 로 해석한다.
+#   filter glob 이라 build/icon-tray.ico 가 아직 없어도 빌드는 실패하지 않는다(부재 시 빈 아이콘 폴백).
+extraResources:
+  - from: build
+    to: .
+    filter:
+      - icon-tray.ico
+
 # fuses 적용(EM-M-3): RunAsNode off·OnlyLoadAppFromAsar·asar integrity 등.
 afterPack: build/afterPack.js
 

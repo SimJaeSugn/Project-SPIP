@@ -32,8 +32,9 @@ const path = require('path');
 
 const PRELOAD_FAVORITES = path.join(__dirname, 'preload-favorites.js');
 const WIDGET_URL = 'app://favorites.html';
-const WIDGET_WIDTH = 360;
-const WIDGET_HEIGHT = 220;
+// [M8-DESIGN] 디자인 트레이 패널(폭 ~452px·카드 300px) + 헤더/배지/푸터를 담도록 확대.
+const WIDGET_WIDTH = 470;
+const WIDGET_HEIGHT = 344;
 const MARGIN = 16;
 const BLUR_GRACE_MS = 100;
 const FLOATING_LEVEL = 'floating';

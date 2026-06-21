@@ -536,11 +536,29 @@ input, button, select { font-family: inherit; }
 .fav-btn--labeled.is-on { border-color: var(--warn-border); background: var(--warn-bg); }
 .fav-btn__label { font-size: 12px; font-weight: 600; color: var(--t2); }
 
-/* R-19 드래그 카드 시각 피드백 + 키보드 이동 버튼 */
-.card[draggable="true"] { cursor: grab; }
-.card.is-dragging { opacity: .55; cursor: grabbing; border-color: var(--accent); }
-.card.is-dropt { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-bg); }
+/* [M8] SortableJS 드래그 재정렬 — placeholder 라이브 프리뷰 + 키보드 이동 버튼 */
+.cards .card { cursor: grab; }
+.cards .card:active { cursor: grabbing; }
+/* placeholder(ghost): 드롭 위치를 점선 빈 슬롯으로 미리보기(내용 숨김). */
+.card--ghost {
+  opacity: 1;
+  background: var(--accent-bg);
+  border: 1.5px dashed var(--accent);
+  box-shadow: none;
+}
+.card--ghost > * { visibility: hidden; }
+/* chosen: 선택된 원본 카드(살짝 비활성). */
+.card--chosen { opacity: .9; }
+/* drag: 커서를 따라다니는 드래그 클론(들어올린 느낌). */
+.card--drag {
+  opacity: 1; cursor: grabbing;
+  border-color: var(--accent);
+  box-shadow: 0 14px 40px rgba(28,25,23,.22);
+}
 .move-btn { padding: 4px 7px; line-height: 0; }
+@media (prefers-reduced-motion: reduce) {
+  .card--ghost, .card--chosen, .card--drag { transition: none !important; }
+}
 .toolbar__manual { margin-left: 8px; color: var(--accent-text); }
 
 /* 즐겨찾기만 필터 토글 */

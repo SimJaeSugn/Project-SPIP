@@ -130,6 +130,18 @@ function registerIpcHandlers(deps) {
   // [M6 R-17] 클립보드 — main clipboard 주입.
   guard('spip:copyText', (args) => clipboardIpc.copyText(args, { clipboard }));
 
+  // [M8-DESIGN] 위젯 헤더 '대시보드 열기' — 메인 대시보드 창 show/focus(약한 네비게이션, 인자 없음).
+  //   tray onShowDashboard와 동일 동작. 창 부재/파괴 시 graceful({ok:false}).
+  guard('spip:openDashboard', () => {
+    const win = (typeof getWin === 'function') ? getWin() : null;
+    if (win && (typeof win.isDestroyed !== 'function' || !win.isDestroyed())) {
+      try { if (typeof win.show === 'function') win.show(); } catch (_) { /* noop */ }
+      try { if (typeof win.focus === 'function') win.focus(); } catch (_) { /* noop */ }
+      return { ok: true };
+    }
+    return { ok: false, code: 'NO_WINDOW' };
+  });
+
   // [M6 R-18] 외부 툴 — tools.js. setToolPath/pick는 캐시 무효화·persist·force 재검증.
   guard('spip:getTools', () => toolsIpc.getTools(ctx));
   guard('spip:setToolPath', (args) => toolsIpc.setToolPath(args, ctx));

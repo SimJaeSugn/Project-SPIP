@@ -60,7 +60,8 @@ function createTray(opts) {
   const Menu = electron.Menu;
   if (!Tray || !Menu) throw new Error('createTray: Electron Tray/Menu unavailable');
 
-  const iconPath = opts.iconPath || path.join(__dirname, '..', 'build', 'icon.ico');
+  // 트레이 전용 아이콘. main.js가 패키지/개발 경로를 iconPath로 주입하며, 미주입 시 개발 폴백.
+  const iconPath = opts.iconPath || path.join(__dirname, '..', 'build', 'icon-tray.ico');
   const image = resolveTrayImage(electron, iconPath);
   const tray = image !== undefined ? new Tray(image) : new Tray(iconPath);
 

@@ -909,7 +909,6 @@ function initBrowser() {
       order: [],                 // R-19: 수동 카드 순서(id 배열)
       sortMode: 'auto',          // R-19: 'auto' | 'manual'
       favoritesOnly: false,      // R-20: '즐겨찾기만' 필터
-      dragId: null,              // R-19: 드래그 중인 카드 id
       // [M7 §8.1] 즐겨찾기 슬라이더 오버레이(store.state.slider) 제거 — 독립 위젯 창(favorites.html)으로 이전.
     },
     // R-15: 진행 통지 컨텍스트(Electron push 모델 — 폴링 타이머 제거)
@@ -1018,6 +1017,7 @@ function initBrowser() {
    * 메인 렌더 디스패치
    * ===================================================================== */
   function render() {
+    destroyCardSortable();   // [M8] 이전 .cards 의 Sortable 인스턴스 정리(노드 교체 전).
     app.replaceChildren();
     const v = store.state.view;
     if (v === 'loading') { app.appendChild(renderLoading()); return; }
@@ -1025,6 +1025,7 @@ function initBrowser() {
     if (v === 'scanning') { app.appendChild(renderScanning()); return; }
     if (v === 'firstRun') { app.appendChild(renderFirstRun()); return; }
     app.appendChild(renderDashboard());
+    initCardSortable();      // [M8] 카드뷰면 .cards 에 드래그 재정렬 부착(표/무결과면 no-op).
   }
 
   /* ---- 로딩 / 에러 ---- */
@@ -1904,26 +1905,10 @@ function initBrowser() {
 
   function buildCard(vm, index, displayIds) {
     const card = el('article', { cls: 'card' });
-    // R-19: HTML5 드래그로 순서 변경. 드롭 시 자동 manual 전환 + setOrder 영속.
-    card.setAttribute('draggable', 'true');
+    // [M8] 카드 순서 변경은 SortableJS(initCardSortable)가 .cards 컨테이너에서 일괄 관리한다.
+    //   드래그 중 placeholder 라이브 프리뷰 + 형제 카드 실시간 시프트(onEnd 에서 setOrder 영속).
+    //   data-card-id 는 onEnd 의 새 순서 산출·FLIP 키로 사용. 키보드 이동 버튼은 접근성 대체(N-07).
     card.dataset.cardId = vm.id || '';
-    if (store.state.dragId && store.state.dragId === vm.id) card.classList.add('is-dragging');
-    card.addEventListener('dragstart', (e) => {
-      store.state.dragId = vm.id;
-      try { e.dataTransfer.setData('text/plain', vm.id); e.dataTransfer.effectAllowed = 'move'; } catch (_) { /* ignore */ }
-      card.classList.add('is-dragging');
-    });
-    card.addEventListener('dragend', () => { store.state.dragId = null; card.classList.remove('is-dragging'); });
-    card.addEventListener('dragover', (e) => { e.preventDefault(); try { e.dataTransfer.dropEffect = 'move'; } catch (_) { /* ignore */ } card.classList.add('is-dropt'); });
-    card.addEventListener('dragleave', () => card.classList.remove('is-dropt'));
-    card.addEventListener('drop', (e) => {
-      e.preventDefault();
-      card.classList.remove('is-dropt');
-      const fromId = store.state.dragId;
-      store.state.dragId = null;
-      if (!fromId || fromId === vm.id) { render(); return; }
-      reorderByDrop(displayIds, fromId, vm.id);
-    });
 
     const head = el('div', { cls: 'card__head' });
     head.appendChild(dot(vm.language));
@@ -2589,13 +2574,6 @@ function initBrowser() {
     }
   }
 
-  /** 드롭(fromId 를 targetId 위치로) → 표시 id 순서 재배열 → manual 전환 + 영속. */
-  function reorderByDrop(displayIds, fromId, targetId) {
-    const from = displayIds.indexOf(fromId);
-    const to = displayIds.indexOf(targetId);
-    commitReorder(moveInOrder(displayIds, from, to));
-  }
-
   /** 키보드 이동(index 를 dir 만큼) → 표시 id 순서 재배열 → manual 전환 + 영속. */
   function reorderByMove(displayIds, index, dir) {
     commitReorder(moveInOrder(displayIds, index, index + dir));
@@ -2633,6 +2611,53 @@ function initBrowser() {
       } else if (res && res.ok === false) {
         toast('순서 저장에 실패했습니다.', true);
       }
+    });
+  }
+
+  /* =====================================================================
+   * [M8] SortableJS 드래그 재정렬 (placeholder 라이브 프리뷰)
+   *   .cards 컨테이너에 Sortable 인스턴스를 부착 → 드래그 중 placeholder(ghost)로 드롭 위치를
+   *   미리 보여주고 형제 카드를 실시간 시프트한다. 드롭(onEnd) 시 현재 DOM 의 id 순서를 읽어
+   *   commitReorder 로 manual 전환 + setOrder 영속(키보드 이동과 동일 경로 재사용).
+   *   - CSP: ./vendor/Sortable.min.js('self')로 로드(window.Sortable). 부재 시 graceful(키보드 이동만).
+   *   - 인터랙티브 컨트롤(버튼/링크/입력)에서 시작하는 드래그는 filter 로 차단(클릭 보존).
+   *   - prefers-reduced-motion 시 애니메이션 0.
+   * ===================================================================== */
+  let cardSortable = null;
+  function destroyCardSortable() {
+    if (cardSortable && typeof cardSortable.destroy === 'function') {
+      try { cardSortable.destroy(); } catch (_) { /* ignore */ }
+    }
+    cardSortable = null;
+  }
+  function initCardSortable() {
+    destroyCardSortable();
+    if (typeof document === 'undefined') return;
+    const Sortable = (typeof window !== 'undefined') ? window.Sortable : null;
+    if (!Sortable || typeof Sortable.create !== 'function') return; // 라이브러리 부재 — 키보드 이동만
+    const grid = document.querySelector('.cards');
+    if (!grid) return; // 표 밀도/무결과 — 카드 컨테이너 없음
+    cardSortable = Sortable.create(grid, {
+      draggable: '.card',
+      // 버튼/링크/입력에서 시작하는 포인터다운은 드래그로 잡지 않음(클릭 동작 보존).
+      filter: 'button, a, input, select, textarea, .fav-btn, .btn, .move-btn',
+      preventOnFilter: false,
+      animation: prefersReducedMotion() ? 0 : 160,
+      easing: 'cubic-bezier(.2,.8,.2,1)',
+      ghostClass: 'card--ghost',    // placeholder(드롭 위치 미리보기)
+      chosenClass: 'card--chosen',  // 선택된 원본 카드
+      dragClass: 'card--drag',      // 따라다니는 드래그 클론(fallback)
+      fallbackTolerance: 4,
+      onEnd: (evt) => {
+        if (!evt || evt.oldIndex === evt.newIndex) return; // 위치 동일 — 무시
+        const grid2 = evt.to || grid;
+        const newIds = Array.prototype.slice.call(grid2.querySelectorAll('[data-card-id]'))
+          .map((n) => (n.dataset && n.dataset.cardId) || '')
+          .filter((x) => typeof x === 'string' && x);
+        if (!newIds.length) return;
+        // onEnd 실행 중 render()가 이 Sortable 인스턴스를 destroy 하지 않도록 마이크로태스크로 지연.
+        Promise.resolve().then(() => commitReorder(newIds));
+      },
     });
   }
 

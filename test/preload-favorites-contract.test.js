@@ -18,7 +18,7 @@ const ROOT = path.join(__dirname, '..');
 const SRC_PATH = path.join(ROOT, 'electron', 'preload-favorites.js');
 const SRC = fs.readFileSync(SRC_PATH, 'utf8');
 
-const ALLOWED = ['getUiState', 'getProjects', 'open', 'copyText', 'setFavorite', 'onFavoritesChanged'];
+const ALLOWED = ['getUiState', 'getProjects', 'open', 'copyText', 'setFavorite', 'onFavoritesChanged', 'openDashboard'];
 // 위젯에 절대 노출되면 안 되는 강력 채널(체크리스트 §11.1).
 const FORBIDDEN = [
   'setToolPath', 'pickToolExecutable', 'setOrder', 'setSortMode',
@@ -59,12 +59,12 @@ function loadExposed() {
   return { exposed: fakeElectron._exposed, calls, listeners };
 }
 
-test('preload-favorites — exposeInMainWorld(spip) 6개 함수만 노출', () => {
+test('preload-favorites — exposeInMainWorld(spip) 7개 함수만 노출', () => {
   const { exposed } = loadExposed();
   assert.ok(exposed, 'exposeInMainWorld 호출되어야 함');
   assert.strictEqual(exposed.key, 'spip');
   const keys = Object.keys(exposed.api).sort();
-  assert.deepStrictEqual(keys, [...ALLOWED].sort(), '정확히 6개 함수만 노출: ' + JSON.stringify(keys));
+  assert.deepStrictEqual(keys, [...ALLOWED].sort(), '정확히 7개 함수만 노출: ' + JSON.stringify(keys));
   for (const fn of ALLOWED) assert.strictEqual(typeof exposed.api[fn], 'function');
 });
 
@@ -93,12 +93,14 @@ test('SEC-M3 — 각 액션이 하드코딩 채널로 invoke(인자 형태 1차 
   exposed.api.open('aa11', 'code');
   exposed.api.copyText('x');
   exposed.api.setFavorite('bb22', true);
+  exposed.api.openDashboard();
   const byCh = calls.reduce((m, c) => { m[c.channel] = c.payload; return m; }, {});
   assert.ok('spip:getUiState' in byCh);
   assert.ok('spip:getProjects' in byCh);
   assert.deepStrictEqual(byCh['spip:openInVsCode'], { id: 'aa11', toolId: 'code' });
   assert.deepStrictEqual(byCh['spip:copyText'], { text: 'x' });
   assert.deepStrictEqual(byCh['spip:setFavorite'], { id: 'bb22', on: true });
+  assert.ok('spip:openDashboard' in byCh);
 });
 
 test('onFavoritesChanged — spip:favorites-changed 구독 + payload 중계 + unsubscribe', () => {
@@ -115,7 +117,7 @@ test('onFavoritesChanged — spip:favorites-changed 구독 + payload 중계 + un
 
 test('정적 — exposeInMainWorld(spip) 단일 호출 + 채널명 하드코딩', () => {
   assert.ok(/exposeInMainWorld\(\s*'spip'/.test(SRC));
-  for (const ch of ['spip:getUiState', 'spip:getProjects', 'spip:openInVsCode', 'spip:copyText', 'spip:setFavorite', 'spip:favorites-changed']) {
+  for (const ch of ['spip:getUiState', 'spip:getProjects', 'spip:openInVsCode', 'spip:copyText', 'spip:setFavorite', 'spip:openDashboard', 'spip:favorites-changed']) {
     assert.ok(SRC.includes("'" + ch + "'"), '하드코딩 채널 누락: ' + ch);
   }
 });

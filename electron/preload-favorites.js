@@ -3,7 +3,8 @@
  * electron/preload-favorites.js — 즐겨찾기 위젯 전용 축소 allowlist (M7 §5·§6.2 · SEC-M3)
  *
  * 위젯 창(app://favorites.html)의 renderer에 window.spip로 즐겨찾기 표시·액션에 필요한
- * 6개 함수만 노출한다(메인 preload.js의 부분집합).
+ * 7개 함수만 노출한다(메인 preload.js의 부분집합). openDashboard는 메인창 show/focus만 하는
+ * 약한 네비게이션 채널(강력 채널 아님 — SEC-M3 표면 축소 원칙 유지).
  *
  * SEC-M3 MUST:
  *   ① ipcRenderer 원본 비노출.
@@ -35,6 +36,9 @@ contextBridge.exposeInMainWorld('spip', {
   }),
   copyText: (t) => ipcRenderer.invoke('spip:copyText', { text: String(t) }),
   setFavorite: (id, on) => ipcRenderer.invoke('spip:setFavorite', { id: String(id), on: !!on }),
+
+  // [M8-DESIGN] 헤더 '대시보드 열기' — 메인 대시보드 창 show/focus. 인자 없음(강력 채널 아님).
+  openDashboard: () => ipcRenderer.invoke('spip:openDashboard'),
 
   // 동기화 구독(on/send) — main→renderer 단방향 push 'spip:favorites-changed' { favorites:string[] }.
   //   채널명 하드코딩, ipcRenderer 원본 비노출. unsubscribe 함수 반환.

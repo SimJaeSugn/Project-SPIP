@@ -1,194 +1,262 @@
 /* =====================================================================
  * 즐겨찾기 위젯 창 스타일 (app://favorites.html — 별도 토스트형 BrowserWindow)
- * [M7-FIX] 신규 캐러셀 UI(이미지 슬라이더). viewport>track>slide 를 transform: translateX 로 롤링.
- *   본문(이름·언어·git·경로)은 카드 상단 고정 표시, 액션은 비줄바꿈 아이콘 줄 — 이전 "버튼만 보이고
- *   카드 본문이 압착되던" 레이아웃 클리핑 회귀를 차단.
- * 외부 CDN 금지(CSP) → 시스템 폰트 스택. 둥근 모서리 토스트(투명 창 위 둥근 패널).
- * 다크/라이트 prefers-color-scheme 일관. 색 외 텍스트 보조(N-07).
+ * [M8-DESIGN] Claude Design "즐겨찾기 트레이" 이식 — 프로스티드(글래스) 플라이아웃 패널 +
+ *   카드(300px)를 단일 트랙에 가로로 깔고 드래그/관성/휠/양끝 화살표로 스크롤. 하단 진행 바.
+ * 외부 CDN 금지(CSP) → 시스템 폰트 스택(Geist/Pretendard 대체).
+ * 다크/라이트(OS prefers-color-scheme) 자동 대응. 색 외 텍스트 보조(N-07). prefers-reduced-motion 존중.
  * ===================================================================== */
 
 :root {
-  --fav-panel: #ffffff;
-  --fav-border: #e7e5e4;
-  --fav-border-soft: #ececea;
+  --fav-panel: rgba(255, 255, 255, .86);
+  --fav-panel-solid: #ffffff;
+  --fav-panel-border: rgba(255, 255, 255, .7);
+  --fav-card: #ffffff;
+  --fav-card-border: #e7e5e4;
+  --fav-card-border-soft: #ececea;
   --fav-t1: #1c1917;
   --fav-t2: #57534e;
+  --fav-t3: #78716c;
   --fav-t4: #a8a29e;
-  --fav-accent: #4f46e5;
-  --fav-accent-bg: #eef2ff;
-  --fav-card: #fafafa;
+  --fav-t5: #d6d3d1;
+  --fav-chip-bg: #f7f7f6;
+  --fav-chip-border: #ececea;
+  --fav-soft-bg: #f0efed;
+  --fav-soft-border: #e7e5e4;
   --fav-btn-bg: #ffffff;
-  --fav-btn-hover: #f4f4f3;
+  --fav-btn-hover: #fafafa;
   --fav-dark-bg: #1c1917;
   --fav-dark-fg: #ffffff;
-  --fav-star: #d97706;
-  --fav-shadow: 0 16px 48px rgba(28,25,23,.30);
-  --fav-font: system-ui, -apple-system, 'Segoe UI', 'Malgun Gothic', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
-  --fav-mono: ui-monospace, 'Cascadia Mono', 'Consolas', 'D2Coding', 'Courier New', monospace;
-  --fav-slide-ms: 320ms;
+  --fav-accent: #4f46e5;
+  --fav-star: #f5b301;
+  --fav-track: #ececea;
+  --fav-prog: #1c1917;
+  --fav-arrow-bg: rgba(255, 255, 255, .95);
+  --fav-arrow-border: #e7e5e4;
+  --fav-shadow: 0 24px 60px -12px rgba(28, 25, 23, .34), 0 4px 14px rgba(28, 25, 23, .12);
+  /* git 배지 색 */
+  --fav-dirty-bg: #fef3c7; --fav-dirty-fg: #b45309; --fav-dirty-bd: #fde68a;
+  --fav-ahead-bg: #dbeafe; --fav-ahead-fg: #1d4ed8; --fav-ahead-bd: #bfdbfe;
+  --fav-behind-bg: #ede9fe; --fav-behind-fg: #6d28d9; --fav-behind-bd: #ddd6fe;
+  --fav-clean-bg: #dcfce7; --fav-clean-fg: #15803d; --fav-clean-bd: #bbf7d0;
+  --fav-font: 'Geist', system-ui, -apple-system, 'Segoe UI', 'Malgun Gothic', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Pretendard', sans-serif;
+  --fav-mono: 'Geist Mono', ui-monospace, 'Cascadia Mono', 'Consolas', 'D2Coding', 'Courier New', monospace;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --fav-panel: #1e1b18;
-    --fav-border: #3a3530;
-    --fav-border-soft: #2c2825;
+    --fav-panel: rgba(30, 27, 24, .86);
+    --fav-panel-solid: #1e1b18;
+    --fav-panel-border: rgba(120, 113, 108, .28);
+    --fav-card: #26221e;
+    --fav-card-border: #3a3530;
+    --fav-card-border-soft: #322d29;
     --fav-t1: #f5f3f0;
     --fav-t2: #cbc5bd;
+    --fav-t3: #a8a29e;
     --fav-t4: #8a837a;
-    --fav-accent: #a5b4fc;
-    --fav-accent-bg: #312e81;
-    --fav-card: #26221e;
+    --fav-t5: #57534e;
+    --fav-chip-bg: #2c2825;
+    --fav-chip-border: #3a3530;
+    --fav-soft-bg: #2c2825;
+    --fav-soft-border: #3a3530;
     --fav-btn-bg: #2c2825;
     --fav-btn-hover: #38332e;
-    --fav-dark-bg: #4f46e5;
-    --fav-dark-fg: #ffffff;
+    --fav-dark-bg: #f5f3f0;
+    --fav-dark-fg: #1c1917;
+    --fav-accent: #a5b4fc;
     --fav-star: #fbbf24;
-    --fav-shadow: 0 16px 48px rgba(0,0,0,.5);
+    --fav-track: #38332e;
+    --fav-prog: #e7e5e4;
+    --fav-arrow-bg: rgba(44, 40, 37, .96);
+    --fav-arrow-border: #3a3530;
+    --fav-shadow: 0 24px 60px -12px rgba(0, 0, 0, .6), 0 4px 14px rgba(0, 0, 0, .4);
+    --fav-dirty-bg: #3a2c10; --fav-dirty-fg: #fcd34d; --fav-dirty-bd: #5b430f;
+    --fav-ahead-bg: #16294d; --fav-ahead-fg: #93c5fd; --fav-ahead-bd: #1e3a6b;
+    --fav-behind-bg: #2a1f4d; --fav-behind-fg: #c4b5fd; --fav-behind-bd: #3c2d6b;
+    --fav-clean-bg: #122e1d; --fav-clean-fg: #86efac; --fav-clean-bd: #1d4a30;
   }
 }
 
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; height: 100%; }
 
-/* 투명 창 — 여백은 투명, 둥근 패널이 토스트 외형 */
+/* 투명 창 — 여백은 투명(드롭섀도용), 둥근 글래스 패널이 토스트 외형 */
 .fav-widget-body {
   background: transparent;
   color: var(--fav-t1);
   font-family: var(--fav-font);
   font-size: 13px;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
   overflow: hidden;
-  padding: 6px;
+  padding: 10px;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
+@keyframes favTrayUp { from { opacity: 0; transform: translateY(14px) scale(.985); } to { opacity: 1; transform: none; } }
+
 .fav-widget {
-  height: calc(100vh - 12px);
+  position: relative;
+  height: calc(100vh - 20px);
   background: var(--fav-panel);
-  border: 1px solid var(--fav-border);
-  border-radius: 14px;
+  -webkit-backdrop-filter: blur(22px) saturate(160%);
+  backdrop-filter: blur(22px) saturate(160%);
+  border: 1px solid var(--fav-panel-border);
+  border-radius: 18px;
   box-shadow: var(--fav-shadow);
-  padding: 10px 12px 11px;
+  padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
   overflow: hidden;
+  animation: favTrayUp .26s cubic-bezier(.22, 1, .36, 1);
 }
 
 /* 비포커스 시 살짝 흐리게 — 액션 게이팅(SEC-H2)의 시각 신호 */
-.fav-widget.is-blurred { opacity: .82; }
+.fav-widget.is-blurred { opacity: .9; }
 
 /* ─── 헤더 ─── */
-.fav-head { display: flex; align-items: center; gap: 8px; flex: none; }
-.fav-head__title { font-size: 12.5px; font-weight: 700; color: var(--fav-t1); letter-spacing: .2px; }
-.fav-head__spacer { flex: 1; }
-.fav-head__close {
-  appearance: none; border: 1px solid var(--fav-border); background: var(--fav-btn-bg);
-  color: var(--fav-t2); width: 24px; height: 24px; border-radius: 7px; cursor: pointer;
-  font-size: 15px; line-height: 1; display: flex; align-items: center; justify-content: center;
+.fav-head { display: flex; align-items: center; gap: 10px; flex: none; padding: 14px 16px 12px; }
+.fav-head__logo {
+  width: 26px; height: 26px; border-radius: 7px; background: var(--fav-dark-bg); color: var(--fav-dark-fg);
+  display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px;
+  font-family: var(--fav-mono); flex: none;
 }
-.fav-head__close:hover { background: var(--fav-btn-hover); }
-.fav-head__close:focus-visible { outline: 2px solid var(--fav-accent); outline-offset: 2px; }
+.fav-head__block { flex: 1; min-width: 0; }
+.fav-head__titlerow { display: flex; align-items: center; gap: 7px; }
+.fav-head__title { font-size: 13.5px; font-weight: 600; letter-spacing: -.01em; color: var(--fav-t1); }
+.fav-head__count {
+  font-family: var(--fav-mono); font-size: 11px; font-weight: 600; color: var(--fav-t3);
+  background: var(--fav-soft-bg); border: 1px solid var(--fav-soft-border); padding: 1px 6px; border-radius: 6px;
+}
+.fav-head__sub { font-size: 11px; color: var(--fav-t4); margin-top: 1px; }
+.fav-head__dash {
+  appearance: none; border: 1px solid var(--fav-card-border); background: var(--fav-btn-bg); color: var(--fav-t2);
+  width: 28px; height: 28px; border-radius: 8px; cursor: pointer; line-height: 0;
+  display: flex; align-items: center; justify-content: center; flex: none;
+}
+.fav-head__dash:hover { background: var(--fav-btn-hover); border-color: var(--fav-t5); color: var(--fav-t1); }
+.fav-head__dash:focus-visible { outline: 2px solid var(--fav-accent); outline-offset: 2px; }
+.fav-head__dash:disabled { opacity: .45; cursor: not-allowed; }
 
 /* ─── 빈 상태 ─── */
 .fav-empty {
   flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 6px; text-align: center; padding: 12px 10px; color: var(--fav-t4);
+  gap: 7px; text-align: center; padding: 16px; color: var(--fav-t4);
 }
-.fav-empty__icon { color: var(--fav-t4); opacity: .55; line-height: 0; }
+.fav-empty__icon { color: var(--fav-star); opacity: .65; line-height: 0; }
+.fav-empty__icon svg { width: 34px; height: 34px; }
 .fav-empty__title { font-size: 13px; font-weight: 600; color: var(--fav-t2); }
 .fav-empty__sub { font-size: 11.5px; color: var(--fav-t4); line-height: 1.45; }
 
-/* ─── 캐러셀(이미지 슬라이더) ─── */
-.fav-carousel { display: flex; align-items: stretch; gap: 6px; flex: 1; min-height: 0; }
-
-.fav-carousel__nav {
-  appearance: none; border: 1px solid var(--fav-border); background: var(--fav-btn-bg); color: var(--fav-t2);
-  border-radius: 9px; cursor: pointer; flex: none; width: 28px; padding: 0;
-  display: flex; align-items: center; justify-content: center;
+/* ─── 캐러셀(드래그 스크롤 트랙) ─── */
+.fav-carousel { position: relative; flex: 1; min-height: 0; }
+.fav-carousel__viewport {
+  height: 100%; overflow: hidden; padding: 4px 16px 8px; cursor: grab; touch-action: pan-y;
 }
-.fav-carousel__nav:hover:not(:disabled) { background: var(--fav-btn-hover); color: var(--fav-t1); }
-.fav-carousel__nav:focus-visible { outline: 2px solid var(--fav-accent); outline-offset: 2px; }
-.fav-carousel__nav:disabled { opacity: .35; cursor: default; }
-
-/* viewport: 한 장 폭만 노출. track: 전 슬라이드를 가로로 깔고 translateX 로 롤링. */
-.fav-carousel__viewport { flex: 1; min-width: 0; overflow: hidden; border-radius: 11px; }
+.fav-carousel__viewport.is-grabbing { cursor: grabbing; }
 .fav-carousel__track {
-  display: flex;
-  height: 100%;
-  transition: transform var(--fav-slide-ms) cubic-bezier(.22,.61,.36,1);
-  will-change: transform;
+  display: flex; gap: 14px; height: 100%; align-items: stretch; will-change: transform;
 }
-.fav-carousel__slide {
-  flex: 0 0 100%;
-  width: 100%;
-  min-width: 0;
-  height: 100%;
-  display: flex;
-}
-/* 비활성 슬라이드는 상호작용 차단(가시 노출만 트랙 이동으로 제어) */
-.fav-carousel__slide[aria-hidden="true"] { pointer-events: none; }
 
-/* ─── 카드(슬라이드 1장) — 본문 상단 고정 + 액션 분리 ─── */
+/* ─── 카드(트랙 1장, 고정 폭) ─── */
 .fav-card {
-  flex: 1; min-width: 0; margin: 0;
-  border: 1px solid var(--fav-border-soft); border-radius: 11px;
-  padding: 10px 11px; background: var(--fav-card);
-  display: flex; flex-direction: column; gap: 8px;
+  flex: none; width: 300px; margin: 0;
+  background: var(--fav-card); border: 1px solid var(--fav-card-border); border-radius: 14px;
+  padding: 14px 15px; display: flex; flex-direction: column; gap: 11px;
+  box-shadow: 0 1px 2px rgba(28, 25, 23, .04);
 }
-.fav-card__body { display: flex; flex-direction: column; gap: 4px; flex: 1; min-height: 0; }
-.fav-card__title-row { display: flex; align-items: center; gap: 7px; min-width: 0; }
-.fav-card__dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+.fav-card__body { display: flex; flex-direction: column; gap: 11px; flex: 1; min-height: 0; }
+.fav-card__head { display: flex; align-items: flex-start; gap: 10px; }
+.fav-card__dot { width: 9px; height: 9px; border-radius: 2px; flex: none; margin-top: 5px; display: inline-block; }
+.fav-card__id { flex: 1; min-width: 0; }
 .fav-card__name {
-  font-size: 14px; font-weight: 700; color: var(--fav-t1); margin: 0; min-width: 0;
+  font-size: 14px; font-weight: 600; letter-spacing: -.01em; color: var(--fav-t1); margin: 0;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.25;
 }
-.fav-card__meta {
-  display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--fav-t2);
+.fav-card__path {
+  font-family: var(--fav-mono); font-size: 11px; color: var(--fav-t4); margin-top: 2px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.fav-card__lang { font-weight: 600; }
-.fav-card__sep { color: var(--fav-t4); }
-.fav-card__git { color: var(--fav-t2); overflow: hidden; text-overflow: ellipsis; }
-.fav-card__path {
-  font-size: 11px; color: var(--fav-t4); font-family: var(--fav-mono); line-height: 1.4;
-  word-break: break-all; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2; max-height: 2.9em; margin-top: 2px;
+.fav-card__star {
+  appearance: none; border: none; background: none; color: var(--fav-star); cursor: pointer;
+  flex: none; margin-top: 1px; padding: 1px; line-height: 0; border-radius: 6px;
 }
+.fav-card__star:hover:not(:disabled) { filter: brightness(1.08); }
+.fav-card__star:focus-visible { outline: 2px solid var(--fav-accent); outline-offset: 2px; }
+.fav-card__star:disabled { opacity: .45; cursor: not-allowed; }
 
-/* 액션 줄: 줄바꿈 억제(본문 압착 방지). 아이콘 + 짧은 라벨. */
-.fav-card__acts { display: flex; gap: 6px; flex: none; flex-wrap: nowrap; }
-.fav-act {
-  appearance: none; border: 1px solid var(--fav-border); background: var(--fav-btn-bg); color: var(--fav-t1);
-  border-radius: 8px; padding: 6px 8px; font-size: 11.5px; font-weight: 600; cursor: pointer;
-  display: inline-flex; align-items: center; justify-content: center; gap: 4px; flex: 1 1 0; min-width: 0;
-  white-space: nowrap; line-height: 1;
+.fav-card__desc {
+  font-size: 12.5px; color: var(--fav-t2); line-height: 1.5; min-height: 37px;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
-.fav-act svg { flex: none; }
-.fav-act__t { overflow: hidden; text-overflow: ellipsis; }
-.fav-act:hover:not(:disabled) { background: var(--fav-btn-hover); }
+.fav-card__desc.is-empty { color: var(--fav-t4); font-style: italic; }
+
+/* ─── 배지(언어 + git 상태, N-07 색 외 텍스트) ─── */
+.fav-card__badges { display: flex; flex-wrap: wrap; gap: 6px; }
+.fav-badge {
+  display: inline-flex; align-items: center; white-space: nowrap; font-size: 11px; font-weight: 600;
+  padding: 2px 8px; border-radius: 6px; border: 1px solid transparent;
+}
+.fav-badge--lang { background: var(--fav-chip-bg); color: var(--fav-t2); border-color: var(--fav-chip-border); font-family: var(--fav-mono); font-size: 10.5px; }
+.fav-badge--dirty { background: var(--fav-dirty-bg); color: var(--fav-dirty-fg); border-color: var(--fav-dirty-bd); }
+.fav-badge--ahead { background: var(--fav-ahead-bg); color: var(--fav-ahead-fg); border-color: var(--fav-ahead-bd); }
+.fav-badge--behind { background: var(--fav-behind-bg); color: var(--fav-behind-fg); border-color: var(--fav-behind-bd); }
+.fav-badge--clean { background: var(--fav-clean-bg); color: var(--fav-clean-fg); border-color: var(--fav-clean-bd); }
+
+/* ─── 카드 푸터(상대시간·용량 + 복사/열기) ─── */
+.fav-card__foot {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px; flex: none;
+  border-top: 1px solid var(--fav-card-border-soft); padding-top: 11px;
+}
+.fav-card__meta {
+  font-size: 11.5px; color: var(--fav-t4); font-family: var(--fav-mono);
+  display: flex; align-items: center; gap: 7px; min-width: 0; overflow: hidden;
+}
+.fav-card__meta > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fav-card__metasep { color: var(--fav-t5); flex: none; }
+.fav-card__acts { display: flex; gap: 6px; flex: none; }
+.fav-act {
+  appearance: none; border: 1px solid var(--fav-card-border); background: var(--fav-btn-bg); color: var(--fav-t2);
+  font-size: 12px; font-weight: 600; padding: 5px 11px; border-radius: 8px; cursor: pointer; white-space: nowrap; line-height: 1;
+}
+.fav-act:hover:not(:disabled) { background: var(--fav-btn-hover); border-color: var(--fav-t5); }
 .fav-act:focus-visible { outline: 2px solid var(--fav-accent); outline-offset: 2px; }
 .fav-act:disabled { opacity: .45; cursor: not-allowed; }
 .fav-act--primary { background: var(--fav-dark-bg); color: var(--fav-dark-fg); border-color: var(--fav-dark-bg); }
-.fav-act--primary:hover:not(:disabled) { filter: brightness(1.1); background: var(--fav-dark-bg); }
-.fav-act--star:not(:disabled) { color: var(--fav-star); }
-.fav-act--star:hover:not(:disabled) { background: var(--fav-btn-hover); }
+.fav-act--primary:hover:not(:disabled) { filter: brightness(1.12); background: var(--fav-dark-bg); border-color: var(--fav-dark-bg); }
 
-/* ─── 하단 컨트롤: 점 인디케이터 + N/M ─── */
-.fav-ctrl { display: flex; align-items: center; justify-content: center; gap: 10px; flex: none; }
-.fav-ctrl__dots { display: flex; align-items: center; gap: 6px; }
-.fav-ctrl__dot {
-  appearance: none; border: none; padding: 0; cursor: pointer;
-  width: 7px; height: 7px; border-radius: 50%; background: var(--fav-border);
-  transition: background var(--fav-slide-ms) ease, width var(--fav-slide-ms) ease;
+/* ─── 양끝 화살표(플로팅) ─── */
+.fav-carousel__nav {
+  position: absolute; top: calc(50% - 2px); transform: translateY(-50%);
+  width: 34px; height: 34px; border-radius: 50%; background: var(--fav-arrow-bg); border: 1px solid var(--fav-arrow-border);
+  box-shadow: 0 4px 14px rgba(28, 25, 23, .16); color: var(--fav-t1);
+  display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 10;
+  transition: opacity .2s ease, transform .15s ease;
 }
-.fav-ctrl__dot:hover { background: var(--fav-t4); }
-.fav-ctrl__dot:focus-visible { outline: 2px solid var(--fav-accent); outline-offset: 2px; }
-.fav-ctrl__dot.is-active { background: var(--fav-accent); width: 16px; border-radius: 4px; }
-.fav-ctrl__pos { font-size: 11px; color: var(--fav-t4); font-family: var(--fav-mono); }
+.fav-carousel__nav--prev { left: 8px; }
+.fav-carousel__nav--next { right: 8px; }
+.fav-carousel__nav:hover { transform: translateY(-50%) scale(1.06); }
+.fav-carousel__nav:focus-visible { outline: 2px solid var(--fav-accent); outline-offset: 2px; }
+.fav-carousel__nav.is-off { opacity: 0; pointer-events: none; }
 
-/* prefers-reduced-motion: 슬라이드/전이 즉시(애니메이션 제거·N-07) */
+/* ─── 진행 바 ─── */
+.fav-foot { display: flex; align-items: center; gap: 12px; padding: 6px 18px 15px; flex: none; }
+.fav-prog { flex: 1; height: 4px; background: var(--fav-track); border-radius: 3px; overflow: hidden; }
+.fav-prog__bar { height: 100%; background: var(--fav-prog); border-radius: 3px; width: 30%; transition: opacity .2s; }
+
+/* ─── 토스트(open/copy 피드백) ─── */
+@keyframes favToastIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.fav-toast {
+  position: absolute; right: 16px; bottom: 16px; z-index: 30;
+  background: #1c1917; color: #fff; font-size: 12.5px; font-weight: 500;
+  padding: 9px 14px; border-radius: 10px; box-shadow: 0 12px 30px rgba(28, 25, 23, .3);
+  display: flex; align-items: center; gap: 8px; animation: favToastIn .2s ease;
+}
+.fav-toast svg { color: #86efac; flex: none; }
+
+/* prefers-reduced-motion: 전이/애니메이션 즉시(N-07) */
 @media (prefers-reduced-motion: reduce) {
-  .fav-carousel__track { transition: none !important; }
-  .fav-ctrl__dot { transition: none !important; }
+  .fav-widget, .fav-toast { animation: none !important; }
+  .fav-carousel__track, .fav-carousel__nav, .fav-prog__bar { transition: none !important; }
 }

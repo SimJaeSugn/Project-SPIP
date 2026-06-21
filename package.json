@@ -21,9 +21,10 @@
     "node": ">=18"
   },
   "devDependencies": {
+    "@electron/fuses": "^1.8.0",
     "electron": "^31.0.0",
     "electron-builder": "^24.13.3",
-    "@electron/fuses": "^1.8.0"
+    "sortablejs": "1.15.6"
   },
   "license": "MIT"
 }

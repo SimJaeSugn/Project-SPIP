@@ -75,16 +75,16 @@ app.whenReady().then(async () => {
           const n = c.querySelector('.fav-card__name');
           return n ? n.textContent : '';
         });
-        // 현재 슬라이드 가시성: is-current 슬라이드의 카드가 1개 이상.
-        const current = document.querySelectorAll('.fav-carousel__slide.is-current .fav-card');
+        // 신규 모델: 카드는 단일 드래그 트랙에 모두 배치(페이징 슬라이드 없음).
+        const current = document.querySelectorAll('.fav-carousel__track .fav-card');
         // 경로/언어 본문이 비어있지 않은지(클리핑 회귀 아님 — 본문 존재).
         const firstName = names[0] || '';
         const firstPath = (cards[0] && cards[0].querySelector('.fav-card__path'))
           ? cards[0].querySelector('.fav-card__path').textContent : '';
-        // 본문 가시 지오메트리(원 버그=본문 클리핑 회귀 차단): 현재 카드 본문이 실제 높이를 가짐.
-        const curBody = document.querySelector('.fav-carousel__slide.is-current .fav-card__body');
+        // 본문 가시 지오메트리(원 버그=본문 클리핑 회귀 차단): 첫 카드 본문이 실제 높이를 가짐.
+        const curBody = document.querySelector('.fav-card .fav-card__body');
         const bodyRect = curBody ? curBody.getBoundingClientRect() : { width: 0, height: 0 };
-        const curName = document.querySelector('.fav-carousel__slide.is-current .fav-card__name');
+        const curName = document.querySelector('.fav-card .fav-card__name');
         const nameRect = curName ? curName.getBoundingClientRect() : { width: 0, height: 0 };
         return {
           cardCount,

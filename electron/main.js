@@ -36,6 +36,11 @@ const { Logger } = require('../lib/common/logger');
 
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 const PRELOAD = path.join(__dirname, 'preload.js');
+// 트레이 전용 아이콘(icon-tray.ico). 패키지에선 resources/(electron-builder.yml extraResources 동봉),
+//   개발에선 build/ 에서 로드. 부재 시 tray.js 가 빈 이미지로 graceful 폴백(트레이는 계속 생성).
+const TRAY_ICON = app.isPackaged
+  ? path.join(process.resourcesPath, 'icon-tray.ico')
+  : path.join(__dirname, '..', 'build', 'icon-tray.ico');
 // [P3-4] TRUSTED_ORIGIN은 security.js 단일 원천에서 import(이중정의 제거).
 const IS_DEV = !app.isPackaged;
 
@@ -183,6 +188,7 @@ function onReady() {
   //   destroy+exit)는 close 핸들러가 Q4 통과 후 doFinalQuit 단일 경로에서만 수행(조기 dispose 방지).
   try {
     tray = createTray({
+      iconPath: TRAY_ICON,
       onShowDashboard: () => { if (win && !win.isDestroyed()) { win.show(); win.focus(); } },
       // [M7 §8.1 R4] 트레이 '즐겨찾기' → 독립 위젯 창 show(메인창 push/show 폐기).
       //   메인창이 hidden(트레이 상주)이어도 위젯 등장(R-22 독립성). applyCspHeaders는 deps 불요
