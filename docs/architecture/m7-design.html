@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project-SPIP — M7 설계 델타 (즐겨찾기 위젯 창 · 카드 드래그 애니메이션)</title>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#1e293b; --text:#e2e8f0; --sub:#94a3b8;
+    --accent:#34d399; --ref:#38bdf8; --line:#334155; --warn:#fbbf24; --danger:#f87171;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:"Segoe UI","Malgun Gothic",system-ui,sans-serif;line-height:1.7;}
+  header{padding:48px 32px 36px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#13203b,#0f172a);}
+  header h1{margin:0 0 8px;font-size:30px;}
+  header .tag{display:inline-block;background:rgba(52,211,153,.12);color:var(--accent);
+    border:1px solid rgba(52,211,153,.4);border-radius:999px;padding:3px 12px;font-size:13px;margin-right:8px;}
+  header p{margin:14px 0 0;color:var(--sub);max-width:980px;}
+  .meta{margin-top:16px;font-size:13px;color:var(--sub);}
+  main{max-width:1160px;margin:0 auto;padding:32px;}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:24px 28px;margin:22px 0;}
+  h2{margin:0 0 16px;font-size:21px;color:var(--accent);border-left:4px solid var(--accent);
+    padding-left:12px;}
+  h3{font-size:16px;color:var(--ref);margin:22px 0 10px;}
+  h4{font-size:14px;color:var(--text);margin:16px 0 6px;}
+  p{margin:8px 0;}
+  ul,ol{margin:8px 0;padding-left:22px;}
+  li{margin:5px 0;}
+  code{background:#0b1220;color:var(--ref);padding:1px 6px;border-radius:5px;font-size:13px;}
+  pre{background:#0b1220;border:1px solid var(--line);border-radius:8px;padding:14px 16px;
+    overflow-x:auto;font-size:13px;color:#cbd5e1;font-family:Consolas,monospace;line-height:1.55;}
+  pre .c{color:#64748b;}
+  pre .k{color:#7dd3fc;}
+  pre .s{color:#86efac;}
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13.5px;}
+  th,td{border:1px solid var(--line);padding:9px 11px;text-align:left;vertical-align:top;}
+  th{background:#142035;color:var(--accent);}
+  tr:nth-child(even) td{background:rgba(255,255,255,.02);}
+  .rid{font-family:Consolas,monospace;color:var(--accent);font-weight:700;white-space:nowrap;}
+  .nid{font-family:Consolas,monospace;color:var(--warn);font-weight:700;white-space:nowrap;}
+  .mono{font-family:Consolas,monospace;font-size:12.5px;}
+  .pill{font-size:11px;font-weight:700;padding:2px 9px;border-radius:6px;white-space:nowrap;}
+  .keep{background:rgba(52,211,153,.16);color:#6ee7b7;border:1px solid rgba(52,211,153,.5);}
+  .wrap{background:rgba(56,189,248,.16);color:#7dd3fc;border:1px solid rgba(56,189,248,.45);}
+  .new{background:rgba(251,191,36,.16);color:#fcd34d;border:1px solid rgba(251,191,36,.45);}
+  .drop{background:rgba(248,113,113,.16);color:#fca5a5;border:1px solid rgba(248,113,113,.5);}
+  .inv{background:rgba(52,211,153,.16);color:#6ee7b7;border:1px solid rgba(52,211,153,.5);}
+  .evt{background:rgba(251,191,36,.16);color:#fcd34d;border:1px solid rgba(251,191,36,.45);}
+  .note{background:rgba(56,189,248,.08);border:1px solid rgba(56,189,248,.3);border-radius:8px;
+    padding:12px 16px;font-size:13.5px;color:#bae6fd;}
+  .warn-box{background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.3);border-radius:8px;
+    padding:12px 16px;font-size:13.5px;color:#fde68a;}
+  .danger-box{background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.35);border-radius:8px;
+    padding:12px 16px;font-size:13.5px;color:#fecaca;}
+  figure{margin:18px 0;background:#0b1220;border:1px solid var(--line);border-radius:10px;padding:18px;}
+  figcaption{color:var(--sub);font-size:12.5px;margin-top:10px;text-align:center;}
+  .legend{display:flex;gap:18px;flex-wrap:wrap;font-size:12.5px;color:var(--sub);margin-top:10px;justify-content:center;}
+  .legend span{display:inline-flex;align-items:center;gap:6px;}
+  .dot{width:11px;height:11px;border-radius:3px;display:inline-block;}
+  .toc a{color:var(--ref);text-decoration:none;}
+  .toc a:hover{text-decoration:underline;}
+  .toc ol{columns:2;}
+  .adr{border-left:3px solid var(--ref);padding-left:14px;margin:16px 0;}
+  .adr h4{color:var(--ref);margin-top:0;}
+  footer{text-align:center;color:var(--sub);font-size:12.5px;padding:30px;border-top:1px solid var(--line);}
+</style>
+</head>
+<body>
+<header>
+  <span class="tag">M7 설계 델타</span><span class="tag">즐겨찾기 위젯 창</span><span class="tag">카드 드래그 애니메이션</span>
+  <h1>Project-SPIP — M7 설계 델타 (즐겨찾기 독립 토스트 창 · 카드 reorder 애니메이션)</h1>
+  <p>기존 Electron 데스크톱 앱(<code>electron-migration.html</code> v1.1, <code>m6-design.html</code> rev.2 기준)에 사용자 요청 2건을 <b>점진 확장</b>으로 반영하는 설계 델타다. <b>① 즐겨찾기 UI를 메인 대시보드 창 내부 오버레이(ADR-M6-5)에서 대시보드와 독립된 별도 프레임리스 토스트형 <code>BrowserWindow</code>로 전환</b>(우측 하단 등장, 대시보드가 트레이로 숨어 있어도 동작)하고, <b>② 대시보드 카드 reorder 시 부드러운 이동 애니메이션</b>(FLIP)을 추가한다. <b>기존 프로세스 모델·IPC 계약·보안 베이스라인(EC-1~6·EM·M6 통제)을 0 약화로 보존</b>하고, 새 창에도 메인 창과 동등한 보안 통제를 통째로 적용한다. 본 문서는 설계이며 실행 가능한 구현 코드를 포함하지 않는다(IPC/창 계약·데이터 흐름·의사코드·SVG·ADR까지만).</p>
+  <div class="meta">문서 유형: 설계 델타 · 작성: 수석 아키텍트 · 작성일: 2026-06-21 · <b>rev.2 (2026-06-21)</b> — 보안 조건부 PASS(높음 2)·독립 검증 PASS(P2/P3) 반영 · 입력: m6-design.html(rev.2 — ADR-M6-5 오버레이·R-21 트레이·§4 IPC)·electron-migration.html(v1.1 — §6 보안·§7 생명주기·webPreferences·app:// 프로토콜) · 실측 코드: electron/{main,tray,preload,security}.js·electron/ipc/register.js·register.js(isTrustedSender)·public/app.js(즐겨찾기 슬라이더·reorder·data-card-id:1870)</div>
+  <div class="warn-box" style="margin-top:18px;"><b>rev.2 변경 요약(검증 반영):</b> ① <b>SEC-H1(CSP 세션 모델)</b> — PM 확정: 위젯 창은 메인과 <b>default session 공유</b>(별도 partition 미사용). <code>applyCspHeaders</code>는 앱 <b>1회 등록</b>(main.js:151)으로 위젯 로드에도 그대로 적용 → 위젯 생성 시 재호출하지 않음(§4.1·§5). favorites.html 메타 CSP는 <code>CSP_POLICY</code> 단일 원천과 문자열 동일(SEC-L2). ② <b>SEC-H2(UI redressing/클릭통과)</b> — 위젯 비드래그·고정 우측하단(MQ7-2)·hide/blur 시 alwaysOnTop 해제·부수효과 액션은 focus 시에만 활성·클릭통과 비허용을 통제로 확정(§4.1·§5·ADR-M7-3·ADR-M7-5). ③ <b>SEC-M1~4·L1/L3</b> 단언 명문화. ④ <b>R1</b> §4.1 hide를 blur+100ms grace+명시 ×/Esc로 승격(MQ7-1 확정). <b>R2</b> order/sortMode 비대상 근거 §7. <b>R3</b> FLIP 키를 실측 <code>data-card-id</code>로 정합. <b>R4</b> onTray 3층 제거 §8.1. <b>R5</b> table 밀도 드래그 reorder 부재 확인 — FLIP cards 한정.</div>
+  <div class="note" style="margin-top:18px;"><b>설계 원칙:</b> ① 단순성 우선 — 새 창은 <b>기존 app:// 프로토콜·preload contextBridge·register.js guard·security.js 헬퍼를 재사용</b>하고, 위젯 전용 축소 preload 1개와 별도 페이지(<code>app://favorites.html</code>) 1개만 추가한다. ② 기존 보안 불변 — 새 창도 동일 webPreferences·CSP·하드닝·senderFrame 검증·textContent(L-1)를 전부 적용. ③ 추적성 — 두 요청을 <span class="rid">R-22</span>(즐겨찾기 독립 위젯 창)·<span class="rid">R-23</span>(카드 드래그 애니메이션)으로 부여하고 기존 R-20·R-21·R-19와 연결. ④ ADR-M6-5(오버레이) <b>번복</b> — 근거를 새 ADR-M7-1에 명시.</div>
+</header>
+
+<main>
+
+<section class="toc">
+  <h2>목차</h2>
+  <ol>
+    <li><a href="#overview">1. 개요 · 아키텍처 동인 · 변경 범위</a></li>
+    <li><a href="#quality">2. 품질 속성 요구</a></li>
+    <li><a href="#windows">3. 창 구조 (메인 + 위젯) · 신뢰 경계</a></li>
+    <li><a href="#widget">4. 즐겨찾기 위젯 창 — 창 속성 · 배치 · 생명주기</a></li>
+    <li><a href="#security">5. 위젯 창 보안 표면 · 통제 (핵심)</a></li>
+    <li><a href="#ipc">6. IPC / 창 계약 (델타)</a></li>
+    <li><a href="#sync">7. 데이터 · 동기화 (broadcast)</a></li>
+    <li><a href="#tray">8. 트레이 흐름 · 독립성 · 기존 오버레이 제거</a></li>
+    <li><a href="#anim">9. R-23 카드 드래그 애니메이션 (FLIP)</a></li>
+    <li><a href="#tree">10. 디렉터리 구조 델타</a></li>
+    <li><a href="#trace">11. 추적성 (요구 ↔ 채널/모듈)</a></li>
+    <li><a href="#adr">12. ADR</a></li>
+    <li><a href="#risk">13. 리스크 · 가정 · 미해결 질문</a></li>
+  </ol>
+</section>
+
+<section id="overview">
+  <h2>1. 개요 · 아키텍처 동인 · 변경 범위</h2>
+  <p>사용자 요청 2건을 신규 요구 ID로 정리한다. 두 요청 모두 <b>기존 코드를 갈아엎지 않는 추가·치환</b>으로 설계한다.</p>
+  <table>
+    <tr><th style="width:90px;">요구</th><th style="width:240px;">사용자 요청</th><th>아키텍처 동인 / 결정 영향</th></tr>
+    <tr><td><span class="rid">R-22</span></td><td>즐겨찾기 = 메인창 내 오버레이가 아닌 <b>별도 프레임리스 토스트형 창</b>. 우측 하단 등장. <b>대시보드를 닫아 트레이에만 있어도</b> 트레이 '즐겨찾기'로 떠야 함(독립성).</td><td><b>M7 핵심.</b> ADR-M6-5(오버레이) <b>번복</b>. 새 <code>BrowserWindow</code> 1개 도입 → 새 보안 표면(webPreferences·preload·CSP·하드닝·senderFrame)을 메인 창과 동등하게 구성. 위젯은 자체 데이터 적재(getUiState+getProjects) 필요. 메인↔위젯 즐겨찾기 변경 동기화(broadcast). 생명주기(hide 재사용·doFinalQuit 정리)·트레이 연동 변경.</td></tr>
+    <tr><td><span class="rid">R-23</span></td><td>대시보드 카드 reorder 시 <b>부드러운 이동 애니메이션</b>.</td><td><b>렌더러 전용·저위험.</b> 현 reorder는 <code>render()</code> 전체 재구성(app.js:2588)이라 위치가 점프한다. FLIP(First-Last-Invert-Play)로 위치 전이를 보간. <code>prefers-reduced-motion</code> 존중. 키보드 이동(reorderByMove)에도 동일 적용. <b>IPC·main·보안 무관</b>(DOM 트랜지션만).</td></tr>
+  </table>
+  <div class="warn-box"><b>변경의 핵심(R-22 독립성):</b> 현재 슬라이더는 메인 renderer의 <code>position:fixed</code> 오버레이(app.js <code>renderFavoritesSlider</code>)라 <b>메인창이 살아있어야만 표시</b>된다(m6-design §9.3 가정 명문화). 사용자 요구는 "대시보드를 닫아 트레이에만 있어도 즐겨찾기 위젯이 떠야 함"이므로, 위젯을 메인창과 <b>생명주기·렌더 컨텍스트가 분리된 독립 창</b>으로 만들어야 한다 — 이것이 ADR-M6-5를 번복하는 직접적 사유다.</div>
+  <div class="note"><b>불변(이번 변경에서 손대지 않음):</b> 메인 대시보드의 R-19(드래그 영속)·R-20(즐겨찾기 토글·필터)·R-21(close-to-tray·트레이 메뉴·생명주기 단일 종료 경로 doFinalQuit)·R-17/R-18, 그리고 app://·CSP·하드닝·register.js guard·전 채널 main 재검증은 그대로 유지된다. R-22는 <b>"즐겨찾기 표시 UI의 호스트"만</b> 오버레이→별도 창으로 바꾼다.</div>
+</section>
+
+<section id="quality">
+  <h2>2. 품질 속성 요구</h2>
+  <table>
+    <tr><th style="width:140px;">품질 속성</th><th>목표</th><th>M7에서의 구조적 충족</th></tr>
+    <tr><td>보안 (최우선)</td><td>새 창이 기존 베이스라인을 0 약화. 새 렌더 컨텍스트가 OS 자원/임의 IPC 도달 표면이 되지 않음</td><td>위젯 창도 메인 창과 <b>동일 webPreferences</b>(contextIsolation·nodeIntegration:false·sandbox·webSecurity)·<b>app:// 로드</b>·<b>CSP 이중주입+메타</b>·<b>hardenWebContents</b>·<b>senderFrame 검증(register guard)</b> 적용. 위젯 전용 <b>축소 preload</b>(allowlist 6개)로 표면 최소화. §5.</td></tr>
+    <tr><td>유지보수성</td><td>새 책임 격리, 기존 모듈 경계 보존</td><td>위젯 창 생성·생명주기 → <code>electron/favoritesWidget.js</code>(신규). 위젯 UI → <code>public/favorites.html</code>+<code>public/favorites.js</code>(신규, 메인 app.js 분리). preload는 위젯 전용 <code>electron/preload-favorites.js</code>(신규). 기존 파일 수정은 main.js(트레이 콜백·정리)·register.js(broadcast 대상 추가)·app.js(오버레이 제거) 최소 지점.</td></tr>
+    <tr><td>성능 / 반응성</td><td>트레이 '즐겨찾기' → 위젯 즉시 등장(&lt;200ms 체감). 재사용 시 재로드 비용 없음</td><td>위젯 창은 <b>최초 1회 생성 후 hide/show 재사용</b>(destroy 안 함). show 직전 위치 재계산. 데이터는 위젯이 자체 getUiState/getProjects로 적재(메인창 의존 0).</td></tr>
+    <tr><td>독립성 / 가용성</td><td>대시보드 창이 hidden(트레이 상주)이어도 즐겨찾기 위젯 동작</td><td>위젯 창은 메인 win과 <b>생명주기 분리</b> — 메인 win이 hide여도 위젯 show 가능. doFinalQuit(완전 종료)에서만 함께 정리. window-all-closed no-op 정합(트레이 상주).</td></tr>
+    <tr><td>접근성 (N-07)</td><td>위젯·드래그 애니메이션 키보드 도달·모션 민감 사용자 배려</td><td>위젯은 좌/우 버튼+화살표 키+Esc 닫기(기존 슬라이더 키맵 이식). 애니메이션은 <code>prefers-reduced-motion: reduce</code> 시 즉시 적용(전이 0). 키보드 reorder에도 동일 FLIP 경로.</td></tr>
+    <tr><td>사용성</td><td>토스트답게 등장하되 작업 방해 최소</td><td>frameless·우측하단·적정 크기·둥근 모서리(transparent). alwaysOnTop은 'floating' 수준(아래 ADR-M7-3에서 결정). 클릭아웃(blur)/Esc/X로 hide.</td></tr>
+  </table>
+</section>
+
+<section id="windows">
+  <h2>3. 창 구조 (메인 + 위젯) · 신뢰 경계</h2>
+  <p>M7 이후 앱은 <b>최대 2개의 BrowserWindow</b>를 가진다 — 메인 대시보드 창(기존)과 즐겨찾기 위젯 창(신규). 두 창은 <b>동일한 보안 컨텍스트</b>(app:// origin·동일 CSP·동일 하드닝)를 갖되, preload allowlist는 위젯이 더 좁다. 둘 다 같은 main 프로세스의 <code>register.js</code> guard로만 IPC하며, guard의 senderFrame 검증은 app:// origin 정확 일치라 <b>두 창 모두 신뢰 발신자로 통과</b>한다(별도 분기 불필요).</p>
+
+  <figure>
+    <svg viewBox="0 0 1100 560" width="100%" role="img" aria-label="M7 창 구조: 메인 대시보드 창 + 즐겨찾기 위젯 창 + main + 신뢰 경계">
+      <defs>
+        <marker id="ipc" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 Z" fill="#34d399"/></marker>
+        <marker id="evt" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 Z" fill="#fbbf24"/></marker>
+      </defs>
+
+      <!-- MAIN process -->
+      <rect x="380" y="40" width="340" height="480" rx="12" fill="#0b1220" stroke="#34d399" stroke-width="1.8"/>
+      <text x="550" y="66" fill="#34d399" font-size="14" text-anchor="middle" font-weight="bold" font-family="Segoe UI">Main 프로세스 (Node 전권)</text>
+      <text x="550" y="84" fill="#94a3b8" font-size="9.5" text-anchor="middle" font-family="Segoe UI">electron/main.js — composition root, 생명주기</text>
+
+      <rect x="400" y="100" width="300" height="60" rx="8" fill="#101a30" stroke="#475569"/>
+      <text x="550" y="122" fill="#e2e8f0" font-size="11" text-anchor="middle" font-family="Segoe UI" font-weight="bold">register.js guard (공통 게이트)</text>
+      <text x="550" y="139" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">senderFrame 검증(app:// 정확일치) · try/catch</text>
+      <text x="550" y="152" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">전 채널 인자 재검증 · 메인+위젯 공통</text>
+
+      <rect x="400" y="176" width="300" height="54" rx="8" fill="#101a30" stroke="#fbbf24"/>
+      <text x="550" y="198" fill="#fcd34d" font-size="11" text-anchor="middle" font-family="Segoe UI" font-weight="bold">favoritesWidget.js (신규)</text>
+      <text x="550" y="214" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">위젯 창 생성·우측하단 위치계산·show/hide 재사용</text>
+
+      <rect x="400" y="246" width="300" height="54" rx="8" fill="#101a30" stroke="#475569"/>
+      <text x="550" y="268" fill="#e2e8f0" font-size="11" text-anchor="middle" font-family="Segoe UI" font-weight="bold">uiStateStore · toolRegistry · lib/* (재사용)</text>
+      <text x="550" y="284" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">favorites/order/sortMode · resolveTool · pathGuard</text>
+
+      <rect x="400" y="316" width="300" height="50" rx="8" fill="#101a30" stroke="#38bdf8"/>
+      <text x="550" y="337" fill="#38bdf8" font-size="11" text-anchor="middle" font-family="Segoe UI" font-weight="bold">tray.js (대시보드 / 즐겨찾기 / 종료)</text>
+      <text x="550" y="352" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">'즐겨찾기' → favoritesWidget.show (메인창 무관)</text>
+
+      <rect x="400" y="382" width="300" height="56" rx="8" fill="#101a30" stroke="#34d399"/>
+      <text x="550" y="404" fill="#6ee7b7" font-size="11" text-anchor="middle" font-family="Segoe UI" font-weight="bold">broadcastFavoritesChanged (신규)</text>
+      <text x="550" y="420" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">setFavorite 성공 후 main+widget wc로 push</text>
+      <text x="550" y="432" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">'spip:favorites-changed' { favorites[] }</text>
+
+      <!-- MAIN window -->
+      <rect x="40" y="60" width="300" height="200" rx="12" fill="#0b1220" stroke="#38bdf8" stroke-width="1.8"/>
+      <text x="190" y="86" fill="#38bdf8" font-size="13" text-anchor="middle" font-weight="bold" font-family="Segoe UI">메인 대시보드 창 (기존)</text>
+      <text x="190" y="104" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">app://index.html · preload.js</text>
+      <rect x="60" y="118" width="260" height="40" rx="6" fill="#142035" stroke="#475569"/>
+      <text x="190" y="136" fill="#e2e8f0" font-size="9.5" text-anchor="middle" font-family="Segoe UI">window.spip (전체 allowlist)</text>
+      <text x="190" y="150" fill="#94a3b8" font-size="8.5" text-anchor="middle" font-family="Segoe UI">getProjects·rescan·setFavorite·onTray …</text>
+      <rect x="60" y="166" width="260" height="38" rx="6" fill="#170d0d" stroke="#f87171" stroke-dasharray="4 3"/>
+      <text x="190" y="184" fill="#fca5a5" font-size="9" text-anchor="middle" font-family="Segoe UI">close-to-tray: X → hide (트레이 상주)</text>
+      <text x="190" y="197" fill="#94a3b8" font-size="8.5" text-anchor="middle" font-family="Segoe UI">오버레이 슬라이더 제거(R-22)</text>
+      <rect x="60" y="212" width="260" height="36" rx="6" fill="#142035" stroke="#fbbf24"/>
+      <text x="190" y="228" fill="#fcd34d" font-size="9" text-anchor="middle" font-family="Segoe UI">contextIsolation·sandbox·webSecurity</text>
+      <text x="190" y="240" fill="#94a3b8" font-size="8.5" text-anchor="middle" font-family="Segoe UI">CSP·하드닝·will-navigate·openHandler deny</text>
+
+      <!-- WIDGET window -->
+      <rect x="760" y="290" width="300" height="230" rx="12" fill="#0b1220" stroke="#fbbf24" stroke-width="1.8"/>
+      <text x="910" y="316" fill="#fbbf24" font-size="13" text-anchor="middle" font-weight="bold" font-family="Segoe UI">즐겨찾기 위젯 창 (신규)</text>
+      <text x="910" y="334" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">app://favorites.html · preload-favorites.js</text>
+      <rect x="780" y="346" width="260" height="44" rx="6" fill="#142035" stroke="#475569"/>
+      <text x="910" y="364" fill="#e2e8f0" font-size="9.5" text-anchor="middle" font-family="Segoe UI">window.spip (축소 allowlist 6개)</text>
+      <text x="910" y="378" fill="#94a3b8" font-size="8.5" text-anchor="middle" font-family="Segoe UI">getUiState·getProjects·open·copyText·setFavorite</text>
+      <rect x="780" y="396" width="260" height="36" rx="6" fill="#170d0d" stroke="#f87171" stroke-dasharray="4 3"/>
+      <text x="910" y="412" fill="#fca5a5" font-size="9" text-anchor="middle" font-family="Segoe UI">frame:false · 우측하단 · skipTaskbar</text>
+      <text x="910" y="425" fill="#94a3b8" font-size="8.5" text-anchor="middle" font-family="Segoe UI">blur/Esc/X → hide (destroy 아님·재사용)</text>
+      <rect x="780" y="438" width="260" height="36" rx="6" fill="#142035" stroke="#fbbf24"/>
+      <text x="910" y="454" fill="#fcd34d" font-size="9" text-anchor="middle" font-family="Segoe UI">동일 webPreferences·CSP·하드닝</text>
+      <text x="910" y="466" fill="#94a3b8" font-size="8.5" text-anchor="middle" font-family="Segoe UI">senderFrame: app:// → guard 통과</text>
+      <rect x="780" y="482" width="260" height="30" rx="6" fill="#1a1206" stroke="#34d399"/>
+      <text x="910" y="501" fill="#6ee7b7" font-size="9" text-anchor="middle" font-family="Segoe UI">독립 생명주기: 메인창 hidden이어도 동작</text>
+
+      <!-- arrows -->
+      <line x1="340" y1="138" x2="398" y2="130" stroke="#34d399" stroke-width="2" marker-end="url(#ipc)"/>
+      <text x="368" y="120" fill="#34d399" font-size="8.5" font-family="Segoe UI">invoke</text>
+      <line x1="760" y1="368" x2="702" y2="200" stroke="#34d399" stroke-width="2" marker-end="url(#ipc)"/>
+      <text x="724" y="300" fill="#34d399" font-size="8.5" font-family="Segoe UI">invoke (위젯)</text>
+      <path d="M700 400 Q540 470 342 200" fill="none" stroke="#fbbf24" stroke-width="1.8" marker-end="url(#evt)"/>
+      <text x="470" y="455" fill="#fbbf24" font-size="8.5" font-family="Segoe UI">favorites-changed push (양 창)</text>
+      <path d="M700 332 Q740 300 762 332" fill="none" stroke="#38bdf8" stroke-width="1.6" marker-end="url(#ipc)"/>
+      <text x="715" y="300" fill="#38bdf8" font-size="8.5" font-family="Segoe UI">tray→show</text>
+    </svg>
+    <div class="legend">
+      <span><span class="dot" style="background:#34d399"></span> IPC invoke (메인·위젯 공통 guard)</span>
+      <span><span class="dot" style="background:#fbbf24"></span> 이벤트 push (favorites-changed)</span>
+      <span><span class="dot" style="background:#38bdf8"></span> 트레이→위젯 show</span>
+      <span><span class="dot" style="border:1px dashed #f87171;width:9px;height:9px;"></span> 신뢰/권한 경계</span>
+    </div>
+    <figcaption>그림 1. M7 창 구조. 메인·위젯 두 창이 동일 보안 컨텍스트(app://·CSP·하드닝·senderFrame)를 공유하되 preload allowlist는 위젯이 더 좁다. 위젯은 독립 생명주기 — 메인창 hidden이어도 동작.</figcaption>
+  </figure>
+
+  <div class="note"><b>신뢰 경계 변화 요약:</b> 새 렌더 컨텍스트(위젯 창)가 1개 추가된다. 이것이 M7의 유일한 신규 보안 표면이며, §5에서 메인 창과 <b>동등한 통제</b>로 봉합한다. IPC 채널은 신규 push 채널 1개(<code>spip:favorites-changed</code>)만 추가되고, invoke 채널은 기존 것을 재사용한다(새 invoke 0). 따라서 main 재검증·guard 표면은 거의 불변이다.</div>
+</section>
+
+<section id="widget">
+  <h2>4. 즐겨찾기 위젯 창 — 창 속성 · 배치 · 생명주기</h2>
+
+  <h3>4.1 창 속성 (BrowserWindow 옵션)</h3>
+  <table>
+    <tr><th style="width:200px;">속성</th><th style="width:160px;">값(설계)</th><th>근거</th></tr>
+    <tr><td><code>frame</code></td><td><code>false</code></td><td>토스트형 — OS 타이틀바·테두리 없음. 자체 헤더(× 버튼·드래그 핸들)는 위젯 HTML로 그림.</td></tr>
+    <tr><td><code>transparent</code></td><td><code>true</code> (불투명 폴백 ADR-M7-5)</td><td>둥근 모서리 토스트 외형. <b>SEC-H2 — 클릭통과 비허용(확정):</b> <code>setIgnoreMouseEvents</code>(패스스루)를 <b>사용하지 않는다</b>. 투명은 <b>모서리 라운드 표현용일 뿐</b>이며, 위젯 창은 자기 영역 클릭을 가로채거나 아래 앱으로 흘리지 않는다. 투명 여백 영역은 body 배경 둥근 패널로 채워 시각적 토스트 외형만 낸다(클릭 좌표는 위젯이 소유). Windows에서 transparent+frameless는 resizable 제약이 있어 <code>resizable:false</code>와 함께 사용. 투명 유지가 환경 부담이면 <b>불투명 패널+border-radius로 폴백</b>(ADR-M7-5 — 보안·UX 동등, 결정 무영향).</td></tr>
+    <tr><td><code>resizable</code> / <code>maximizable</code> / <code>minimizable</code></td><td><code>false</code></td><td>고정 크기 토스트. 위젯은 크기 변경 불필요(고정 카드 레이아웃).</td></tr>
+    <tr><td><code>width</code> / <code>height</code></td><td>360 × 220 (기준)</td><td>카드 1장 + 좌/우 내비 + 점 인디케이터에 충분한 적정 크기. 폭은 우측하단 토스트 관례.</td></tr>
+    <tr><td><code>skipTaskbar</code></td><td><code>true</code></td><td>작업표시줄에 별도 항목 노출 안 함(토스트답게). 앱 진입점은 메인창·트레이.</td></tr>
+    <tr><td><code>alwaysOnTop</code> + level</td><td>show 시 <code>true</code> level <code>'floating'</code> · hide/blur 시 <code>false</code></td><td>토스트답게 위로 뜨되 과하지 않게 — <code>'floating'</code>은 일반 창보다 위, 전체화면/스크린세이버보다 아래(ADR-M7-3). <b>SEC-H2 — 표시 중에만 floating(확정):</b> <code>show()</code> 시 <code>setAlwaysOnTop(true,'floating')</code>, <code>hide</code>·<code>blur</code> 시 <code>setAlwaysOnTop(false)</code>로 <b>해제</b>한다. 숨겨진(또는 비포커스) 위젯이 다른 앱 위에 계속 떠 있어 입력을 가로채는 표면을 제거.</td></tr>
+    <tr><td><code>movable</code> (드래그 이동)</td><td><code>false</code> · <code>-webkit-app-region:drag</code> 미사용</td><td><b>SEC-H2 — 비드래그·고정 우측하단(확정, MQ7-2):</b> 위젯은 OS 드래그로 이동하지 않고 항상 우측하단에 고정 등장한다. <code>movable:false</code> + 위젯 HTML에 드래그 핸들(<code>-webkit-app-region:drag</code>)을 두지 않는다. 드래그 이동은 후속(도입 시 별도 보안 점검).</td></tr>
+    <tr><td><code>show</code></td><td><code>false</code> → 준비 후 표시</td><td>흰 화면 깜빡임 방지. <code>ready-to-show</code>에서 위치 재계산 후 <code>show()</code>(또는 createWidget 완료 후 첫 트리거에서 show).</td></tr>
+    <tr><td><code>fullscreenable</code> / <code>autoHideMenuBar</code></td><td><code>false</code> / <code>true</code></td><td>토스트는 전체화면 대상 아님. 메뉴바 없음.</td></tr>
+    <tr><td><code>parent</code></td><td><b>지정하지 않음</b></td><td><b>핵심 — 메인창을 parent로 두지 않는다.</b> parent 지정 시 메인창 hide/close에 종속되어 "대시보드 닫혀도 동작" 요구(R-22 독립성)를 깨뜨린다. 위젯은 top-level 독립 창.</td></tr>
+    <tr><td><code>webPreferences</code></td><td>메인창과 동일 + 위젯 preload</td><td><code>{ preload: PRELOAD_FAVORITES, contextIsolation:true, nodeIntegration:false, sandbox:true, webSecurity:true }</code>. §5.</td></tr>
+  </table>
+  <pre><span class="c">// electron/favoritesWidget.js — 위젯 창 생성(설계 의사코드, 구현 아님)</span>
+<span class="c">// ★SEC-H1: applyCspHeaders는 앱 1회만 등록(main.js:151, default session). 위젯은 같은 default</span>
+<span class="c">//   session을 공유하므로 위젯 생성 시 재호출하지 않는다(아래 deps에 applyCspHeaders 없음).</span>
+<span class="k">const</span> PRELOAD_FAVORITES = path.join(__dirname, <span class="s">'preload-favorites.js'</span>);
+<span class="k">let</span> widget = <span class="k">null</span>;   <span class="c">// 단일 위젯 인스턴스(재사용)</span>
+<span class="k">let</span> graceTimer = <span class="k">null</span>;
+
+<span class="k">function</span> ensureWidget(deps) {                 <span class="c">// deps: { hardenWebContents, TRUSTED_ORIGIN, screen } — ★applyCspHeaders 불요(SEC-H1)</span>
+  <span class="k">if</span> (widget &amp;&amp; !widget.isDestroyed()) <span class="k">return</span> widget;
+  widget = <span class="k">new</span> BrowserWindow({
+    width: 360, height: 220, show: <span class="k">false</span>,
+    frame: <span class="k">false</span>, transparent: <span class="k">true</span>, resizable: <span class="k">false</span>,
+    minimizable: <span class="k">false</span>, maximizable: <span class="k">false</span>, fullscreenable: <span class="k">false</span>,
+    movable: <span class="k">false</span>,                               <span class="c">// ★SEC-H2: 비드래그·고정 우측하단(MQ7-2)</span>
+    skipTaskbar: <span class="k">true</span>, alwaysOnTop: <span class="k">false</span>,         <span class="c">// ★SEC-H2: 생성 시 off, show 시에만 floating</span>
+    webPreferences: { preload: PRELOAD_FAVORITES, contextIsolation:<span class="k">true</span>,
+                      nodeIntegration:<span class="k">false</span>, sandbox:<span class="k">true</span>, webSecurity:<span class="k">true</span> },
+  });
+  <span class="c">// ★SEC-H1: applyCspHeaders(session) 재호출 없음 — default session에 main이 이미 1회 등록.</span>
+  <span class="c">//   (onHeadersReceived는 세션당 1핸들러만 유효하므로 중복 등록 금지. favorites.html 메타 CSP가 2차 방어.)</span>
+  deps.hardenWebContents(widget.webContents, { trustedOrigin: deps.TRUSTED_ORIGIN }); <span class="c">// ★per-wc 필수: will-navigate·openHandler deny</span>
+  widget.loadURL(<span class="s">'app://favorites.html'</span>);            <span class="c">// ★app:// 로 별도 페이지 로드(file:// 아님)</span>
+  widget.on(<span class="s">'blur'</span>, () => {                            <span class="c">// ★SEC-H2+R1(MQ7-1): blur 시 floating 즉시 해제 + 100ms grace 후 hide</span>
+    widget.setAlwaysOnTop(<span class="k">false</span>);                    <span class="c">// 표시 중에만 floating — 비포커스 위젯이 위에 떠 입력 가로채지 않게</span>
+    clearTimeout(graceTimer);
+    graceTimer = setTimeout(() => { <span class="k">if</span> (widget &amp;&amp; !widget.isFocused()) widget.hide(); }, 100);
+  });
+  widget.on(<span class="s">'focus'</span>, () => clearTimeout(graceTimer)); <span class="c">// 재포커스(위젯 내부 클릭 경합) 시 grace 취소 — 오작동 닫힘 방지</span>
+  widget.on(<span class="s">'closed'</span>, () => { widget = <span class="k">null</span>; clearTimeout(graceTimer); });
+  <span class="k">return</span> widget;
+}
+
+<span class="c">// show: 위치재계산 → floating ON → show → focus. hide: floating OFF 후 hide. Esc·헤더 ×는 명시 hide().</span>
+<span class="k">function</span> show(deps) {
+  <span class="k">const</span> w = ensureWidget(deps);
+  positionBottomRight(w, deps.screen);
+  w.setAlwaysOnTop(<span class="k">true</span>, <span class="s">'floating'</span>);              <span class="c">// ★SEC-H2: 표시 시점에만 floating(ADR-M7-3)</span>
+  w.show(); w.focus();
+}
+<span class="k">function</span> hide() {                                  <span class="c">// blur(grace 후)·Esc·헤더 ×·closeWidget 공통 경로</span>
+  <span class="k">if</span> (widget &amp;&amp; !widget.isDestroyed()) { widget.setAlwaysOnTop(<span class="k">false</span>); widget.hide(); }
+}</pre>
+  <div class="warn-box"><b>SEC-H1 (CSP 세션 모델 — PM 확정):</b> 위젯 창은 메인 창과 <b>동일한 default session</b>을 공유한다(별도 <code>partition</code> 미사용). 실측 <code>applyCspHeaders</code>(security.js:40~46)는 <code>session.webRequest.onHeadersReceived</code>에 핸들러를 등록하는데 이 API는 <b>세션당 1핸들러만 유효</b>하다. 따라서 <b>앱 부팅 시 main.js:151에서 default session에 1회 등록한 CSP 헤더 주입이 위젯 로드(<code>app://favorites.html</code>)에도 그대로 적용</b>된다. 위젯 생성 시 <code>applyCspHeaders</code>를 <b>재호출하지 않는다</b>(중복/덮어쓰기 방지). 헤더 주입(앱 1회) + favorites.html <b>메타 CSP</b>(2차 방어)의 이중주입 일관을 유지하되, 메타 CSP는 <code>security.js</code>의 <code>CSP_POLICY</code> 단일 원천과 <b>문자열 동일</b>해야 한다(드리프트 금지, SEC-L2 — index.html 메타와 문자 단위 일치를 구현 게이트에서 비교).</div>
+  <div class="danger-box"><b>SEC-H2 (UI redressing / 클릭통과 / 입력 가로채기 — 통제 확정):</b> ① <b>위젯 비드래그·고정 우측하단</b> — <code>movable:false</code>, <code>-webkit-app-region:drag</code> 미사용(MQ7-2 드래그 취소). ② <b>hide/blur 시 <code>alwaysOnTop</code> 해제</b> — 표시·포커스 중에만 floating, 그 외엔 <code>setAlwaysOnTop(false)</code>. ③ <b>부수효과 액션(open·copyText·setFavorite)은 위젯이 focus 상태일 때만 활성</b> — blur 시 액션 버튼 비활성(아래 §5·위젯 렌더러 계약). 오버레이로 다른 앱 클릭을 가로채 액션을 유발하는 표면 제거. ④ <b>투명 여백 클릭통과 비허용</b> — <code>setIgnoreMouseEvents</code>(패스스루) 미사용. 투명은 모서리 라운드 표현용일 뿐, 위젯이 자기 클릭 좌표를 소유한다. transparent 부담 시 <b>불투명 패널+border-radius 폴백</b>(ADR-M7-5).</div>
+
+  <h3>4.2 우측 하단 배치 (작업영역 기준 좌표)</h3>
+  <p>작업표시줄을 가리지 않도록 <b>전체 화면 크기가 아닌 작업영역(workArea)</b> 기준으로 좌표를 계산한다. 커서가 놓인 디스플레이를 기준으로 멀티모니터를 지원한다.</p>
+  <pre><span class="c">// 우측하단 위치 계산(설계) — screen.getDisplayNearestPoint 사용</span>
+<span class="k">function</span> positionBottomRight(win, screen) {
+  <span class="k">const</span> cursor = screen.getCursorScreenPoint();
+  <span class="k">const</span> disp = screen.getDisplayNearestPoint(cursor);   <span class="c">// 커서가 있는 모니터</span>
+  <span class="k">const</span> wa = disp.workArea;                            <span class="c">// {x,y,width,height} — 작업표시줄 제외 영역</span>
+  <span class="k">const</span> [w, h] = win.getSize();
+  <span class="k">const</span> margin = 16;
+  <span class="k">const</span> x = wa.x + wa.width  - w - margin;             <span class="c">// 우측 여백</span>
+  <span class="k">const</span> y = wa.y + wa.height - h - margin;             <span class="c">// 작업표시줄 위(하단 여백)</span>
+  win.setPosition(Math.round(x), Math.round(y), <span class="k">false</span>);
+}
+<span class="c">// show 트리거마다 재계산(모니터 변경·해상도 변경·작업표시줄 위치 대응)</span></pre>
+
+  <h3>4.3 생명주기 (hide 재사용 · 단일 인스턴스)</h3>
+  <figure>
+    <svg viewBox="0 0 1100 320" width="100%" role="img" aria-label="즐겨찾기 위젯 창 생명주기 상태 전이">
+      <defs>
+        <marker id="w1" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 Z" fill="#34d399"/></marker>
+        <marker id="w2" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 Z" fill="#fbbf24"/></marker>
+        <marker id="w3" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 Z" fill="#f87171"/></marker>
+      </defs>
+      <rect x="40" y="120" width="200" height="70" rx="10" fill="#101a30" stroke="#475569"/>
+      <text x="140" y="150" fill="#94a3b8" font-size="12" text-anchor="middle" font-weight="bold" font-family="Segoe UI">미생성 / 파괴됨</text>
+      <text x="140" y="170" fill="#64748b" font-size="9" text-anchor="middle" font-family="Segoe UI">widget = null</text>
+
+      <rect x="420" y="40" width="220" height="70" rx="10" fill="#0b1220" stroke="#34d399" stroke-width="1.6"/>
+      <text x="530" y="70" fill="#34d399" font-size="12" text-anchor="middle" font-weight="bold" font-family="Segoe UI">표시(show)</text>
+      <text x="530" y="90" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">우측하단 위치재계산·focus·alwaysOnTop</text>
+
+      <rect x="420" y="210" width="220" height="70" rx="10" fill="#0b1220" stroke="#fbbf24" stroke-width="1.6"/>
+      <text x="530" y="240" fill="#fbbf24" font-size="12" text-anchor="middle" font-weight="bold" font-family="Segoe UI">숨김(hide)</text>
+      <text x="530" y="260" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">인스턴스 생존(재사용) · 다음 show 즉시</text>
+
+      <rect x="860" y="120" width="200" height="70" rx="10" fill="#170d0d" stroke="#f87171" stroke-width="1.6"/>
+      <text x="960" y="150" fill="#fca5a5" font-size="12" text-anchor="middle" font-weight="bold" font-family="Segoe UI">정리(destroy)</text>
+      <text x="960" y="170" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">doFinalQuit에서만</text>
+
+      <path d="M240 145 Q330 90 418 78" fill="none" stroke="#34d399" stroke-width="2" marker-end="url(#w1)"/>
+      <text x="320" y="105" fill="#34d399" font-size="9.5" text-anchor="middle" font-family="Segoe UI">트레이 '즐겨찾기' (최초) → ensureWidget+show</text>
+
+      <path d="M530 210 L530 112" fill="none" stroke="#34d399" stroke-width="2" marker-end="url(#w1)"/>
+      <text x="650" y="165" fill="#34d399" font-size="9.5" text-anchor="middle" font-family="Segoe UI">트레이 '즐겨찾기' (재호출) → show+재배치</text>
+
+      <path d="M530 110 L530 208" fill="none" stroke="#fbbf24" stroke-width="2" marker-end="url(#w2)"/>
+      <text x="410" y="165" fill="#fbbf24" font-size="9.5" text-anchor="middle" font-family="Segoe UI">blur/Esc/× → hide</text>
+
+      <path d="M640 240 Q760 200 858 170" fill="none" stroke="#f87171" stroke-width="2" marker-end="url(#w3)"/>
+      <path d="M640 78 Q760 100 858 150" fill="none" stroke="#f87171" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#w3)"/>
+      <text x="770" y="120" fill="#f87171" font-size="9.5" text-anchor="middle" font-family="Segoe UI">앱 완전 종료(doFinalQuit) → destroy</text>
+    </svg>
+    <figcaption>그림 2. 위젯 창 생명주기. 트레이 '즐겨찾기'로 최초 생성 후 hide/show 재사용(destroy 아님). 닫힘(blur/Esc/×)은 hide. 앱 완전 종료에서만 destroy.</figcaption>
+  </figure>
+  <table>
+    <tr><th style="width:200px;">상호작용</th><th>설계</th></tr>
+    <tr><td>닫힘 = hide vs destroy</td><td><b>hide(재사용)</b> 채택. 닫기 경로 3종 — ⓐ <b>blur(클릭아웃) → floating 해제 + 100ms grace 후 hide</b>(R1·MQ7-1 확정. 위젯 내부 클릭으로 인한 순간 blur는 재포커스 시 grace 타이머 취소로 오작동 닫힘 방지) ⓑ <b>Esc</b> → 명시 <code>hide()</code> ⓒ <b>헤더 ×</b> → 명시 <code>hide()</code>(blur/closeWidget 경유). 재호출 시 show만 하면 즉시 등장(재로드 비용 0). <b>완전 종료(doFinalQuit)에서만 destroy</b>. 근거: ADR-M7-2.</td></tr>
+    <tr><td>단일 인스턴스</td><td>위젯은 <b>모듈 단일 변수 <code>widget</code></b>로 1개만 유지. 트레이 '즐겨찾기' 반복 클릭은 ensure→show→재배치(중복 창 생성 안 함).</td></tr>
+    <tr><td>show 시퀀스</td><td>① <code>ensureWidget()</code>(없으면 생성·app:// 로드) ② <code>positionBottomRight()</code> ③ <code>setAlwaysOnTop(true,'floating')</code>(SEC-H2 — 표시 시점에만) ④ <code>widget.show()</code> ⑤ <code>widget.focus()</code>. 데이터는 위젯 렌더러가 표시 직전 자체 getUiState/getProjects로 적재(또는 show 때 <code>spip:favorites-changed</code> 1회 push로 갱신 트리거 — §7).</td></tr>
+    <tr><td>앱 완전 종료(doFinalQuit)</td><td>main.js <code>doFinalQuit()</code>에 <b>위젯 정리 1줄 추가</b>: <code>favoritesWidget.dispose()</code>. <b>SEC-L3 — dispose 멱등(MUST):</b> 미생성/이미 destroy 시 <b>no-op</b>(<code>if (widget &amp;&amp; !widget.isDestroyed()) widget.destroy(); widget = null; clearTimeout(graceTimer);</code>) — 중복 호출 안전. 기존 dispose(scanController)·tray.destroy·app.exit 순서 유지(P2-2 단일 종료 경로 불변. 실측 doFinalQuit는 _disposed 멱등 가드 보유).</td></tr>
+    <tr><td>close-to-tray 상호작용</td><td>메인창 X→hide는 위젯에 영향 없음(parent 미지정·독립 생명주기). 메인창이 hidden인 채로도 트레이 '즐겨찾기'→위젯 show 정상 동작(R-22 독립성 충족).</td></tr>
+    <tr><td>window-all-closed</td><td>기존 no-op(트레이 상주) 유지. 위젯 hide/destroy는 quit를 유발하지 않음(트레이 '종료'만 완전 종료).</td></tr>
+  </table>
+</section>
+
+<section id="security">
+  <h2>5. 위젯 창 보안 표면 · 통제 (핵심)</h2>
+  <p>새 렌더 컨텍스트(위젯 창)는 M7의 유일한 신규 보안 표면이다. <b>메인 창과 동등한 통제를 통째로 적용</b>해 베이스라인을 0 약화로 봉합한다. 위젯은 메인 창보다 <b>더 좁은 preload allowlist</b>를 가져 표면을 추가로 축소한다.</p>
+  <table>
+    <tr><th style="width:210px;">통제 (출처)</th><th>위젯 창 적용</th></tr>
+    <tr><td>webPreferences (EC/EM 베이스라인)</td><td><b>메인창과 동일</b>: <code>contextIsolation:true</code>·<code>nodeIntegration:false</code>·<code>sandbox:true</code>·<code>webSecurity:true</code>. main.js 메인창 옵션과 1:1 동일. renderer는 Node·OS 접근 0.</td></tr>
+    <tr><td>로드 경로 (EM-M-1)</td><td><b>app:// 로 로드</b> — <code>loadURL('app://favorites.html')</code>. 기존 <code>registerAppProtocol</code>(main.js:98)이 <code>public/</code> 루트로 매핑·디렉터리 이탈 차단하므로 <b>새 페이지 1개(favorites.html) 추가만으로 동일 보호</b>. file:// 미사용. origin이 app://라 CSP <code>'self'</code> 의미 명확.</td></tr>
+    <tr><td>CSP 이중주입 (EM-M-1) <span class="pill new">SEC-H1</span></td><td><b>세션 공유 모델(PM 확정):</b> 위젯은 메인과 <b>동일 default session</b>을 공유한다(partition 미사용). <code>applyCspHeaders</code>는 <code>session.webRequest.onHeadersReceived</code> 기반·세션당 1핸들러라, <b>앱 부팅 시 main.js:151의 1회 등록이 위젯 로드에도 자동 적용</b>된다 → 위젯 생성 시 <b>재호출하지 않음</b>(중복/덮어쓰기 방지). 2차 방어로 favorites.html <code>&lt;meta http-equiv&gt;</code>에 메인과 <b>문자열 동일</b>한 CSP(<code>security.js CSP_POLICY</code> 단일 원천 — SEC-L2 드리프트 금지). 헤더(앱 1회)+메타 이중주입 일관.</td></tr>
+    <tr><td>하드닝 (EM §6.2) <span class="pill new">SEC-M1</span></td><td><b>동일 <code>hardenWebContents(widget.webContents,{trustedOrigin})</code></b>: will-navigate(app:// 외 차단)·<code>setWindowOpenHandler:deny</code>·will-attach-webview 거부. <b>per-webContents 등록이라 위젯 생성 시 반드시 호출</b>(ensureWidget이 강제). <b>SEC-M1 단언:</b> 위젯의 모든 외부 동작은 <b>IPC invoke만</b>이며 렌더러 <b>직접 네비/팝업 0</b> — open(R-12)은 <code>window.open</code>/<code>&lt;a target&gt;</code>이 아니라 <code>spip:openInVsCode</code> invoke로 main이 수행. 위젯 DOM은 외부 location/팝업/webview로 탈출 불가. 구현 게이트에 EC-5 정합 스모크(위젯 <code>window.open</code>·외부 location 차단 확인) 명시.</td></tr>
+    <tr><td>senderFrame 검증 (EM-M-2)</td><td><b>추가 작업 없음</b> — 위젯은 app:// origin이라 기존 <code>register.js</code> <code>isTrustedSender</code>(app:// 정확 일치)를 그대로 통과. 양 창이 동일 guard로 검증됨. <b>guard 분기·예외 없음</b>(보안 일관성 핵심).</td></tr>
+    <tr><td>preload 최소 allowlist <span class="pill new">SEC-M3</span></td><td><b>위젯 전용 축소 preload</b>(<code>preload-favorites.js</code>). <b>SEC-M3 MUST:</b> ① <code>ipcRenderer</code> 원본 비노출 ② generic <code>invoke</code>(임의 채널 호출) 비노출 ③ 채널명 <b>하드코딩</b> — 메인 preload.js와 동일 패턴. 노출 함수는 즐겨찾기 표시·액션에 필요한 <b>6개로 한정</b>: <code>getUiState</code>·<code>getProjects</code>·<code>open</code>·<code>copyText</code>·<code>setFavorite</code>·<code>onFavoritesChanged</code>(+위젯 hide 트리거 <code>closeWidget</code> 선택). 메인 preload의 강력 채널(<code>setToolPath·pickToolExecutable·setOrder·rescan·addRoots·removeRoot·setSortMode·pickFolders</code>)은 <b>단 하나도 노출하지 않음</b>(체크리스트 §11).</td></tr>
+    <tr><td>textContent (L-1)</td><td>위젯 UI의 name·path·라벨 등 모든 표시 문자열은 <code>textContent</code> 렌더(기존 슬라이더 vm.name/path 처리 이식). 오염된 메타데이터 저장형 XSS 차단(RC-2).</td></tr>
+    <tr><td>전 채널 main 재검증 (EM-H-1) <span class="pill new">SEC-M4</span></td><td><b>SEC-M4 단언:</b> 위젯의 <code>open</code>·<code>copyText</code>·<code>setFavorite</code>은 <b>신규 핸들러 0, 기존 register.js guard 핸들러 100% 재사용</b>(register.js:118/130/142 — 채널당 1회만 등록). 따라서 id 형식·길이·toolId 화이트리스트·pathGuard·resolveBin force·safeExec(.exe·shell:false) 재검증(EC-1·H-1·H-2)이 <b>그대로 자동 승계</b>된다(M6 §4/§6 불변). 위젯 렌더러가 보내는 모든 인자는 <b>비신뢰로 간주</b> — main 재검증이 유일 권위. 위젯이 표시 교집합 밖 임의 id를 보내도 main 핸들러가 형식·존재를 재검증하므로 IDOR로 확대되지 않음. 위젯이 새 검증 우회 경로를 만들지 않음.</td></tr>
+    <tr><td>focus 게이팅 (SEC-H2) <span class="pill new">SEC-H2</span></td><td><b>부수효과 액션(open·copyText·setFavorite)은 위젯이 focus 상태일 때만 활성.</b> 위젯 렌더러는 <code>focus</code>/<code>blur</code> 이벤트로 액션 버튼 enable/disable을 토글한다(blur 시 비활성). 오버레이로 다른 앱 클릭을 가로채 부수효과를 유발하는 표면을 차단(클릭재킹 유사 방어). 표시는 비포커스에도 가능하나 <b>액션 실행은 명시 포커스 후</b>에만.</td></tr>
+    <tr><td>broadcast 단방향 (신규) <span class="pill new">SEC-M2</span></td><td><code>spip:favorites-changed</code>는 main→renderer 단방향 push만. <b>SEC-M2 계약:</b> payload 스키마는 <code>{ favorites:string[] }</code>(형식 검증된 id 배열) <b>한정</b> — 경로·실행 인자·내부 상태 <b>금지</b>. 대상 wc는 <b>메인·위젯 2개로 화이트리스트</b>(<code>BrowserWindow.getAllWindows()</code> 순회 금지 — 향후 창 추가 시 누설 방지). send 전 <code>!isDestroyed()</code> 가드 명시(§6.3). renderer는 구독만(역방향 채널 아님).</td></tr>
+  </table>
+  <div class="danger-box"><b>보안 결론(표면 변화 · rev.2):</b> M7이 추가하는 보안 표면은 <b>위젯 렌더 컨텍스트 1개 + push 채널 1개</b>다. 위젯 컨텍스트는 메인 창과 <b>동등한 통제</b>(동일 webPreferences·app:// 로드·<b>CSP=default session 공유로 앱 1회 등록 자동 적용+메타 단일원천</b>·하드닝(렌더러 직접 네비 0)·senderFrame 검증·기존 guard 재검증 승계·textContent)로 봉합하고, preload allowlist를 6개로 좁혀(ipcRenderer·generic invoke 비노출 MUST) 메인보다 <b>표면을 줄인다</b>. frameless·transparent·alwaysOnTop의 UI redressing 표면은 <b>SEC-H2 통제</b>(비드래그·표시 중에만 floating·focus 게이팅·클릭통과 비허용)로 봉합한다. 새 invoke 채널이 0이므로 main 재검증 표면은 불변이다. ADR-M6-5(오버레이)가 "별도 창은 보안 표면 2배"라 한 우려는, app://·CSP·하드닝·security.js 헬퍼·register guard가 이미 <b>창 무관 재사용 가능한 단일 원천</b>으로 모듈화되어 있어 <b>CSP는 공유 세션 1회 등록이 자동 적용되고 하드닝 1줄+축소 preload 1개로 끝난다</b>는 점이 실측 코드로 확인된다(ADR-M7-1 번복 근거).</div>
+</section>
+
+<section id="ipc">
+  <h2>6. IPC / 창 계약 (델타)</h2>
+  <p>위젯은 <b>새 invoke 채널을 추가하지 않고</b> 기존 채널을 재사용한다. 신규는 <b>push 채널 1개</b>(<code>spip:favorites-changed</code>)뿐이다. 모든 invoke는 기존 <code>register.js</code> guard 경유(senderFrame 검증·main 재검증 자동 적용).</p>
+
+  <h3>6.1 위젯이 사용하는 IPC (재사용 + 신규 1)</h3>
+  <table>
+    <tr><th style="width:200px;">채널 / preload API</th><th style="width:80px;">방향</th><th>요청</th><th>응답 / payload</th><th style="width:90px;">상태</th></tr>
+    <tr><td><code>spip:getUiState</code><br><span class="mono">spip.getUiState()</span></td><td><span class="pill inv">invoke</span></td><td>—</td><td><code>{ ok:true, favorites:string[], order, sortMode }</code></td><td><span class="pill keep">재사용</span></td></tr>
+    <tr><td><code>spip:getProjects</code><br><span class="mono">spip.getProjects()</span></td><td><span class="pill inv">invoke</span></td><td>—</td><td><code>{ …, projects:Project[] }</code> — favorites∩스냅샷 산출용</td><td><span class="pill keep">재사용</span></td></tr>
+    <tr><td><code>spip:openInVsCode</code><br><span class="mono">spip.open(id, toolId?)</span></td><td><span class="pill inv">invoke</span></td><td><code>{ id, toolId? }</code></td><td><code>{ ok:true, code:'OPENING' }</code> 또는 실패 code</td><td><span class="pill keep">재사용</span></td></tr>
+    <tr><td><code>spip:copyText</code><br><span class="mono">spip.copyText(text)</span></td><td><span class="pill inv">invoke</span></td><td><code>{ text }</code></td><td><code>{ ok:true }</code> / <code>INVALID_TEXT</code></td><td><span class="pill keep">재사용</span></td></tr>
+    <tr><td><code>spip:setFavorite</code><br><span class="mono">spip.setFavorite(id,on)</span></td><td><span class="pill inv">invoke</span></td><td><code>{ id, on }</code></td><td><code>{ ok:true, favorites:string[] }</code> — 성공 후 main이 broadcast</td><td><span class="pill keep">재사용</span></td></tr>
+    <tr><td><code>spip:favorites-changed</code><br><span class="mono">spip.onFavoritesChanged(cb)</span></td><td><span class="pill evt">on/send</span></td><td>(구독)</td><td>main→renderer push: <code>{ favorites:string[] }</code> — setFavorite 성공 시 양 창에 동기화</td><td><span class="pill new">신규</span></td></tr>
+    <tr><td>(선택) <span class="mono">spip.closeWidget()</span></td><td><span class="pill inv">invoke</span></td><td>—</td><td><code>{ ok:true }</code> — 헤더 × 클릭 시 main에 위젯 hide 요청</td><td><span class="pill new">신규(선택)</span></td></tr>
+  </table>
+  <div class="note"><b>위젯 닫기 방식(R1 확정·MQ7-1):</b> ⓐ <b>blur 기반(기본)</b> — main의 <code>widget.on('blur', …)</code>가 <code>setAlwaysOnTop(false)</code>로 floating을 즉시 해제하고 <b>100ms grace 후 hide</b>(위젯 재포커스 시 grace 취소). ⓑ <b>Esc·헤더 ×</b> — 명시 <code>hide()</code>. 헤더 × 닫기는 신규 <code>spip:closeWidget</code> invoke(선택)로 main이 hide하거나, 렌더러가 blur를 유발. 채널 추가 없이 ⓐ로 충분. <b>모두 destroy 아닌 hide</b>이며 hide 시 floating 해제(SEC-H2).</div>
+
+  <h3>6.2 위젯 전용 preload (축소 allowlist)</h3>
+  <pre><span class="c">// electron/preload-favorites.js — 위젯 전용 최소 allowlist(설계 의사코드)</span>
+<span class="c">// ★SEC-M3 MUST: ipcRenderer 원본 비노출 · generic invoke(임의 채널) 비노출 · 채널명 하드코딩.</span>
+<span class="c">// 메인 preload.js의 부분집합(6개). rescan/addRoots/setToolPath/removeRoot/setOrder/setSortMode/</span>
+<span class="c">// pickToolExecutable/pickFolders 등 강력 채널은 단 하나도 노출하지 않음(표면 축소).</span>
+<span class="k">const</span> { contextBridge, ipcRenderer } = require(<span class="s">'electron'</span>);
+contextBridge.exposeInMainWorld(<span class="s">'spip'</span>, {
+  getUiState:  () => ipcRenderer.invoke(<span class="s">'spip:getUiState'</span>),
+  getProjects: () => ipcRenderer.invoke(<span class="s">'spip:getProjects'</span>),
+  open:    (id, toolId) => ipcRenderer.invoke(<span class="s">'spip:openInVsCode'</span>, { id:String(id), toolId: toolId?String(toolId):<span class="k">undefined</span> }),
+  copyText: (t) => ipcRenderer.invoke(<span class="s">'spip:copyText'</span>, { text:String(t) }),
+  setFavorite: (id,on) => ipcRenderer.invoke(<span class="s">'spip:setFavorite'</span>, { id:String(id), on:!!on }),
+  onFavoritesChanged: (cb) => {                 <span class="c">// 채널명 하드코딩, ipcRenderer 원본 비노출</span>
+    <span class="k">if</span> (<span class="k">typeof</span> cb !== <span class="s">'function'</span>) <span class="k">return</span> () => {};
+    <span class="k">const</span> h = (_e, payload) => cb(payload);
+    ipcRenderer.on(<span class="s">'spip:favorites-changed'</span>, h);
+    <span class="k">return</span> () => ipcRenderer.removeListener(<span class="s">'spip:favorites-changed'</span>, h);
+  },
+  <span class="c">// (선택) closeWidget: () => ipcRenderer.invoke('spip:closeWidget'),</span>
+});</pre>
+
+  <h3>6.3 register.js 델타 (broadcast + 선택 closeWidget)</h3>
+  <pre><span class="c">// register.js — setFavorite 핸들러를 broadcast로 감싼다(설계). 기존 guard 패턴 유지.</span>
+<span class="c">// deps에 getFavoritesWidgetWc(위젯 webContents 지연평가)를 추가로 주입.</span>
+<span class="k">const</span> broadcastFavorites = (favorites) => {
+  <span class="c">// ★SEC-M2: payload 스키마 = { favorites:string[] }만(경로/실행 인자/내부 상태 금지). 대상 wc는 메인·위젯 2개로 한정.</span>
+  <span class="k">const</span> payload = { favorites };                                 <span class="c">// 형식 검증된 id 배열뿐(uiState가 반환한 res.favorites)</span>
+  <span class="k">const</span> mainWc = getWebContents &amp;&amp; getWebContents();             <span class="c">// 메인 창(지연평가·파괴 시 null)</span>
+  <span class="k">const</span> widgetWc = getFavoritesWidgetWc &amp;&amp; getFavoritesWidgetWc(); <span class="c">// 위젯 창(있으면·파괴 시 null)</span>
+  [mainWc, widgetWc].forEach((wc) => {                          <span class="c">// ★화이트리스트 2개 — getAllWindows() 순회 금지</span>
+    <span class="k">if</span> (wc &amp;&amp; !wc.isDestroyed()) {                              <span class="c">// ★SEC-M2: 파괴된 wc로 send 방지(main makeProgressSender 패턴 동형)</span>
+      <span class="k">try</span> { wc.send(<span class="s">'spip:favorites-changed'</span>, payload); } <span class="k">catch</span>(_){}
+    }
+  });
+};
+guard(<span class="s">'spip:setFavorite'</span>, <span class="k">async</span> (args) => {
+  <span class="k">const</span> res = <span class="k">await</span> uiStateIpc.setFavorite(args, ctx);   <span class="c">// 기존 핸들러(검증·영속) 불변</span>
+  <span class="k">if</span> (res &amp;&amp; res.ok &amp;&amp; Array.isArray(res.favorites)) broadcastFavorites(res.favorites);
+  <span class="k">return</span> res;
+});
+<span class="c">// (선택) guard('spip:closeWidget', () =&gt; { favoritesWidget.hide(); return { ok:true }; });</span></pre>
+
+  <h3>6.4 창 계약 (main 내부 — favoritesWidget 모듈 표면)</h3>
+  <table>
+    <tr><th style="width:200px;">함수 (favoritesWidget.js)</th><th>계약</th></tr>
+    <tr><td><code>show(deps)</code></td><td>ensureWidget→positionBottomRight→<b>setAlwaysOnTop(true,'floating')</b>→show→focus. 트레이 '즐겨찾기' onShowFavorites가 호출(deps에 <code>screen</code>·<code>hardenWebContents</code>·<code>TRUSTED_ORIGIN</code> — <b>applyCspHeaders는 불요·SEC-H1</b>). 메인창 상태와 무관(독립).</td></tr>
+    <tr><td><code>hide()</code></td><td>위젯이 있으면 <code>setAlwaysOnTop(false)</code> 후 hide(없으면 no-op·SEC-H2). blur(grace 후)/Esc/×/closeWidget 공통 경로.</td></tr>
+    <tr><td><code>getWebContents()</code></td><td>위젯 wc(없거나 destroy면 null) — broadcast 지연평가 대상. register.js에 주입. broadcast는 <code>!isDestroyed()</code> 가드 후 send(SEC-M2).</td></tr>
+    <tr><td><code>dispose()</code></td><td><b>멱등(MUST·SEC-L3):</b> <code>if (widget &amp;&amp; !widget.isDestroyed()) widget.destroy(); widget=null; clearTimeout(graceTimer);</code> — 미생성/중복 호출 시 no-op. main.js <code>doFinalQuit()</code>에서만 호출.</td></tr>
+  </table>
+</section>
+
+<section id="sync">
+  <h2>7. 데이터 · 동기화 (broadcast)</h2>
+  <p>위젯과 메인창은 각자 독립 렌더러이므로 즐겨찾기 변경을 양쪽에서 일관되게 보아야 한다. <b>단일 진실 원천은 <code>ui-state.json</code></b>(main의 uiStateStore)이고, 변경 통지는 main→양 창 push로 동기화한다.</p>
+  <figure>
+    <svg viewBox="0 0 1100 300" width="100%" role="img" aria-label="즐겨찾기 변경 동기화 흐름">
+      <defs>
+        <marker id="d1" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 Z" fill="#34d399"/></marker>
+        <marker id="d2" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 Z" fill="#fbbf24"/></marker>
+      </defs>
+      <rect x="40" y="40" width="220" height="80" rx="10" fill="#0b1220" stroke="#38bdf8"/>
+      <text x="150" y="68" fill="#38bdf8" font-size="12" text-anchor="middle" font-weight="bold" font-family="Segoe UI">위젯 또는 메인창</text>
+      <text x="150" y="88" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">별(★) 토글 → 낙관적 반영</text>
+      <text x="150" y="104" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">spip.setFavorite(id, on)</text>
+
+      <rect x="440" y="40" width="220" height="80" rx="10" fill="#0b1220" stroke="#34d399"/>
+      <text x="550" y="64" fill="#34d399" font-size="12" text-anchor="middle" font-weight="bold" font-family="Segoe UI">main: guard</text>
+      <text x="550" y="84" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">검증·uiStateStore 영속(0600)</text>
+      <text x="550" y="100" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">res.favorites 산출</text>
+
+      <rect x="840" y="40" width="220" height="80" rx="10" fill="#0b1220" stroke="#fbbf24"/>
+      <text x="950" y="64" fill="#fcd34d" font-size="12" text-anchor="middle" font-weight="bold" font-family="Segoe UI">broadcastFavorites</text>
+      <text x="950" y="84" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">favorites-changed push</text>
+      <text x="950" y="100" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">→ 메인 wc + 위젯 wc</text>
+
+      <rect x="340" y="200" width="420" height="70" rx="10" fill="#101a30" stroke="#475569"/>
+      <text x="550" y="228" fill="#e2e8f0" font-size="11" text-anchor="middle" font-weight="bold" font-family="Segoe UI">양 창 onFavoritesChanged → state.favorites 갱신·재렌더</text>
+      <text x="550" y="248" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">자기 자신의 낙관적 반영과 idempotent(동일 결과) — 깜빡임 없음</text>
+
+      <line x1="260" y1="80" x2="438" y2="80" stroke="#34d399" stroke-width="2" marker-end="url(#d1)"/>
+      <line x1="660" y1="80" x2="838" y2="80" stroke="#34d399" stroke-width="2" marker-end="url(#d1)"/>
+      <path d="M950 120 Q860 200 760 230" fill="none" stroke="#fbbf24" stroke-width="2" marker-end="url(#d2)"/>
+      <path d="M880 120 Q500 160 360 205" fill="none" stroke="#fbbf24" stroke-width="2" marker-end="url(#d2)"/>
+    </svg>
+    <figcaption>그림 3. 즐겨찾기 동기화. 어느 창에서 토글하든 main이 영속 후 양 창에 favorites-changed push → 두 창이 동일 상태로 수렴. 자기 낙관적 반영과 push 결과가 idempotent라 깜빡임 없음.</figcaption>
+  </figure>
+  <table>
+    <tr><th style="width:200px;">항목</th><th>설계</th></tr>
+    <tr><td>단일 진실 원천</td><td><code>ui-state.json</code>의 <code>favorites</code>(main uiStateStore). 위젯·메인창은 캐시(낙관적 반영) + push로 동기화하는 뷰.</td></tr>
+    <tr><td>변경 전파</td><td>setFavorite 성공 시 main이 <code>broadcastFavorites(res.favorites)</code> → 메인 wc + 위젯 wc로 <code>spip:favorites-changed</code> push. 양 창이 <code>state.favorites</code> 교체 후 재렌더.</td></tr>
+    <tr><td>위젯 표시 데이터</td><td><code>favorites(id) ∩ getProjects() 스냅샷</code> 교집합(소멸 id skip) — 기존 <code>favoriteViewModels</code> 로직 이식. 빈 즐겨찾기면 "즐겨찾기가 없습니다" 안내(기존 슬라이더 빈 상태 재사용).</td></tr>
+    <tr><td>위젯 최초 데이터 · stale 해소</td><td>위젯 렌더러 로드 시 getUiState+getProjects 1회. 이후 favorites-changed로 증분 갱신. <b>R2 — show마다 getUiState 재조회를 stale 해소의 정규 수단으로 확정:</b> 위젯은 hide/show 재사용이므로 매 <code>show</code> 시퀀스에서 getUiState+getProjects를 재조회해 order/sortMode·스냅샷 변경을 최신화한다(별도 broadcast 불요).</td></tr>
+    <tr><td><b>broadcast 범위 = favorites만(R2 근거)</b></td><td>신규 push는 <code>spip:favorites-changed</code> 1개뿐 — <b>order/sortMode는 broadcast 비대상</b>이다. 근거: ① <b>위젯은 즐겨찾기만 표시</b>하므로 메인창의 카드 순서(order)·정렬 모드(sortMode) 변경은 위젯 표시 대상이 아니다. ② 즐겨찾기는 <b>집합(set)</b>이며, 위젯은 <b>자체 표시 순서</b>(favoriteViewModels)를 사용한다 — 메인 카드 order에 종속되지 않는다. ③ MVP 위젯은 1장 슬라이딩(MQ7-4)이라 순서 영향이 더욱 작다. 잔여 stale은 위 "show마다 getUiState 재조회"로 해소. 비대칭은 <b>의도된 범위 축소</b>(표면·동기화 비용 최소화)이며 §7 "단일 진실 원천(ui-state.json)" 일관과 충돌하지 않는다.</td></tr>
+    <tr><td>동시 열림 정합</td><td>위젯·메인창이 둘 다 열린 채 한쪽에서 토글 → push로 다른 쪽 즉시 반영. 자기 낙관적 반영과 push payload가 동일(idempotent)이라 충돌·역전 없음.</td></tr>
+    <tr><td>스냅샷 변경(재스캔)</td><td>위젯은 메인창의 재스캔과 독립이나, projects 스냅샷이 바뀌면 표시 교집합이 달라질 수 있다. MVP는 위젯 show 때 getProjects 재조회로 최신화(재스캔 진행 push 구독은 위젯 비대상 — 표면 축소).</td></tr>
+  </table>
+</section>
+
+<section id="tray">
+  <h2>8. 트레이 흐름 · 독립성 · 기존 오버레이 제거</h2>
+
+  <h3>8.1 트레이 '즐겨찾기' 흐름 변경</h3>
+  <figure>
+    <svg viewBox="0 0 1100 250" width="100%" role="img" aria-label="트레이 즐겨찾기 흐름: M6 오버레이 → M7 독립 위젯 창">
+      <defs>
+        <marker id="t1" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 Z" fill="#f87171"/></marker>
+        <marker id="t2" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 Z" fill="#34d399"/></marker>
+      </defs>
+      <text x="270" y="34" fill="#fca5a5" font-size="12" text-anchor="middle" font-weight="bold" font-family="Segoe UI">M6 (번복): 메인창 의존 오버레이</text>
+      <rect x="40" y="50" width="150" height="56" rx="8" fill="#1a1206" stroke="#fbbf24"/>
+      <text x="115" y="74" fill="#fcd34d" font-size="10" text-anchor="middle" font-family="Segoe UI">트레이 '즐겨찾기'</text>
+      <rect x="240" y="50" width="170" height="56" rx="8" fill="#0b1220" stroke="#f87171"/>
+      <text x="325" y="72" fill="#fca5a5" font-size="9.5" text-anchor="middle" font-family="Segoe UI">win.show()+focus</text>
+      <text x="325" y="88" fill="#94a3b8" font-size="8.5" text-anchor="middle" font-family="Segoe UI">send('spip:tray:favorites')</text>
+      <rect x="460" y="50" width="190" height="56" rx="8" fill="#0b1220" stroke="#f87171"/>
+      <text x="555" y="72" fill="#fca5a5" font-size="9.5" text-anchor="middle" font-family="Segoe UI">메인 renderer 오버레이</text>
+      <text x="555" y="88" fill="#94a3b8" font-size="8.5" text-anchor="middle" font-family="Segoe UI">메인창 떠 있어야만 표시</text>
+      <line x1="190" y1="78" x2="238" y2="78" stroke="#f87171" stroke-width="1.8" marker-end="url(#t1)"/>
+      <line x1="410" y1="78" x2="458" y2="78" stroke="#f87171" stroke-width="1.8" marker-end="url(#t1)"/>
+      <text x="780" y="82" fill="#64748b" font-size="9" font-family="Segoe UI">한계: 대시보드 닫으면(트레이 상주) 즐겨찾기 못 봄</text>
+
+      <text x="270" y="158" fill="#6ee7b7" font-size="12" text-anchor="middle" font-weight="bold" font-family="Segoe UI">M7 (채택): 독립 위젯 창</text>
+      <rect x="40" y="172" width="150" height="56" rx="8" fill="#1a1206" stroke="#fbbf24"/>
+      <text x="115" y="196" fill="#fcd34d" font-size="10" text-anchor="middle" font-family="Segoe UI">트레이 '즐겨찾기'</text>
+      <rect x="240" y="172" width="200" height="56" rx="8" fill="#0b1220" stroke="#34d399"/>
+      <text x="340" y="194" fill="#6ee7b7" font-size="9.5" text-anchor="middle" font-family="Segoe UI">favoritesWidget.show()</text>
+      <text x="340" y="210" fill="#94a3b8" font-size="8.5" text-anchor="middle" font-family="Segoe UI">우측하단 위치재계산·focus</text>
+      <rect x="490" y="172" width="200" height="56" rx="8" fill="#0b1220" stroke="#34d399"/>
+      <text x="590" y="194" fill="#6ee7b7" font-size="9.5" text-anchor="middle" font-family="Segoe UI">독립 위젯 창 표시</text>
+      <text x="590" y="210" fill="#94a3b8" font-size="8.5" text-anchor="middle" font-family="Segoe UI">메인창 hidden이어도 동작</text>
+      <line x1="190" y1="200" x2="238" y2="200" stroke="#34d399" stroke-width="1.8" marker-end="url(#t2)"/>
+      <line x1="440" y1="200" x2="488" y2="200" stroke="#34d399" stroke-width="1.8" marker-end="url(#t2)"/>
+      <text x="800" y="204" fill="#6ee7b7" font-size="9" font-family="Segoe UI">충족: 대시보드 닫혀도 즐겨찾기 위젯 등장(R-22)</text>
+    </svg>
+    <figcaption>그림 4. 트레이 '즐겨찾기' 흐름. M6는 메인창을 show하고 메인 renderer 오버레이를 띄워 메인창에 종속됐다. M7은 메인창과 무관하게 favoritesWidget.show()로 독립 창을 띄운다.</figcaption>
+  </figure>
+  <table>
+    <tr><th style="width:230px;">변경 지점 (실측 코드)</th><th>M6 (현재)</th><th>M7 (변경)</th></tr>
+    <tr><td>main.js <code>onShowFavorites</code>(184~193행)</td><td><code>win.show(); win.focus(); win.webContents.send('spip:tray:favorites')</code></td><td><code>favoritesWidget.show({ hardenWebContents, TRUSTED_ORIGIN, screen })</code> — <b>메인창 show/push 폐기</b>. <b>applyCspHeaders는 deps 불요(SEC-H1: default session에 앱 1회 등록 자동 적용)</b>. 메인창 상태와 무관.</td></tr>
+    <tr><td>tray.js</td><td>'대시보드 / 즐겨찾기 / 종료' 메뉴</td><td><b>불변</b>. 메뉴 구조·TRAY_ACTIONS 화이트리스트 동일. onShowFavorites 콜백 동작만 main이 위젯 show로 교체.</td></tr>
+    <tr><td>app.js 오버레이</td><td><code>renderFavoritesSlider</code>·<code>openFavoritesSlider</code>·<code>onTrayCommand('favorites')</code>·<code>spip:tray:favorites</code> 수신 분기·필터바 '슬라이더' 버튼</td><td><b>제거</b>(아래 8.2). 위젯 창이 대체. <code>onTray('dashboard')</code> 디스패치는 유지(대시보드 포커스).</td></tr>
+    <tr><td>preload.js <code>onTray</code></td><td>action ∈ <code>dashboard|favorites</code></td><td><code>favorites</code> push가 사라지므로 <b>action을 <code>dashboard</code>만</b>으로 축소(SEC-L1: 죽은 수신 채널 잔존 방지). 유지 시 "수신만·미사용" 주석 명시.</td></tr>
+  </table>
+  <div class="note"><b>R4 — onTray favorites 제거 3층 정합(단일 표):</b> 트레이 '즐겨찾기'가 메인창 push가 아닌 <code>favoritesWidget.show</code>로 바뀌어 <code>spip:tray:favorites</code> push가 사라진다. 따라서 favorites 경로를 <b>3개 층에서 함께 정리</b>한다 — ① <b>preload.js</b> <code>onTray</code> 노출(80~90행)을 <code>['dashboard']</code>로 축소 ② <b>app.js</b> <code>onTrayCommand</code> favorites 분기(2473~2476행) 제거 ③ <b>tray.js</b> <code>TRAY_ACTIONS</code>(:18)는 <b>메뉴 라벨 정의용으로만 호환 유지</b>(favorites 라벨 자체는 남되 동작은 main이 위젯 show로 처리). 세 층이 일시 불일치 상태가 되지 않도록 동시 반영(SEC-L1 표면 위생).</div>
+
+  <h3>8.2 기존 메인창 오버레이 제거 (명시)</h3>
+  <div class="warn-box"><b>제거/대체 대상(app.js):</b> ① <code>renderFavoritesSlider()</code>·<code>openFavoritesSlider()</code>·<code>closeFavoritesSlider()</code>·<code>syncSliderIndex()</code>·<code>slideBy()</code>·<code>onSliderKeydown()</code> 및 <code>store.state.slider</code> ② <code>render()</code> 내 <code>if (store.state.slider.open) root.appendChild(renderFavoritesSlider())</code>(1244행) ③ 필터바 '슬라이더' 버튼(1611~1618행) ④ <code>onTrayCommand</code>의 <code>'favorites'</code> 분기(2473~2476행)와 <code>spip:tray:favorites</code> 수신. → 이들은 <b>위젯 창(public/favorites.js)으로 이전</b>된다(슬라이더 렌더·키맵·favoriteViewModels 재사용). 메인 대시보드의 R-20 즐겨찾기 <b>토글·필터(favoritesOnly)·별 버튼</b>은 그대로 유지(슬라이더만 제거). <code>favoriteViewModels</code>·<code>nextSlideIndex</code> 순수 함수는 위젯에서 공유(중복 방지 위해 모듈 분리 또는 favorites.js로 복사).</div>
+</section>
+
+<section id="anim">
+  <h2>9. R-23 — 카드 드래그 reorder 애니메이션 (FLIP)</h2>
+  <p>현재 reorder는 <code>commitReorder</code>가 <code>store.state.order</code>를 바꾸고 <code>render()</code>로 카드 DOM을 <b>전부 재구성</b>(app.js:2588)하므로 카드가 새 위치로 <b>즉시 점프</b>한다. FLIP(First-Last-Invert-Play)로 재배치 전/후 좌표차를 트랜지션으로 보간해 부드럽게 이동시킨다. <b>렌더러 전용 — IPC·main·보안 무관</b>(DOM transform/transition만, 새 입력·새 권한 없음).</p>
+
+  <h3>9.1 FLIP vs CSS-only transition (대안 비교)</h3>
+  <table>
+    <tr><th style="width:170px;">대안</th><th>장점</th><th>단점 / 적합성</th></tr>
+    <tr><td>A. CSS transition만</td><td>구현 단순(<code>transition: transform</code>). 코드 최소.</td><td><b>현 구조에 부적합</b> — render()가 DOM을 새로 만들어(노드 교체) 기존 노드의 위치 트랜지션이 성립 안 함. transition은 같은 노드의 속성 변화에만 적용된다.</td></tr>
+    <tr><td>B. FLIP (채택)</td><td>render()로 DOM이 재구성돼도 <b>id 기준 이전 좌표를 기억</b>해 새 좌표와의 차이를 invert 후 transition으로 play. 현 "전체 재렌더" 패턴과 호환. 라이브러리 0(<code>getBoundingClientRect</code>+<code>requestAnimationFrame</code>).</td><td>좌표 캐시·rAF 1단계 추가. 키 매핑(card의 기존 <code>data-card-id</code> 재사용·R3) 필요. 복잡도 소폭 증가하나 외부 dep 0 원칙 유지.</td></tr>
+    <tr><td>C. DnD 라이브러리(SortableJS 등)</td><td>드래그+애니메이션 일괄 제공.</td><td><b>과설계·런타임 dep 추가</b> — "런타임 추가 의존성 electron 외 0" 원칙(EM ADR-EM-1) 위배. 기존 네이티브 HTML5 DnD(R-19)와 중복. 거부.</td></tr>
+  </table>
+  <p><b>권고: B(FLIP)</b>. 현 전체 재렌더 구조와 유일하게 호환되고 런타임 의존성 0을 지킨다. ADR-M7-4.</p>
+
+  <h3>9.2 FLIP 적용 설계 (의사코드)</h3>
+  <pre><span class="c">// public/app.js — render() 전후를 감싸는 FLIP 헬퍼(설계 의사코드, 렌더러 전용)</span>
+<span class="c">// ★R3: 카드 요소는 이미 data-card-id를 가짐(실측 app.js:1870 card.dataset.cardId = vm.id).</span>
+<span class="c">//   신규 data-id를 부여하지 않고 기존 data-card-id/dataset.cardId를 그대로 키로 재사용(중복 속성 금지).</span>
+<span class="k">function</span> flipReorder(containerSelector, mutate) {
+  <span class="k">const</span> reduce = window.matchMedia(<span class="s">'(prefers-reduced-motion: reduce)'</span>).matches;
+  <span class="k">const</span> first = <span class="k">new</span> Map();                              <span class="c">// First: cardId → 이전 rect</span>
+  <span class="k">if</span> (!reduce) {
+    <span class="k">for</span> (<span class="k">const</span> elx <span class="k">of</span> document.querySelectorAll(containerSelector + <span class="s">' [data-card-id]'</span>))
+      first.set(elx.dataset.cardId, elx.getBoundingClientRect());
+  }
+  mutate();                                          <span class="c">// = commitReorder의 order 변경 + render() (Last)</span>
+  <span class="k">if</span> (reduce) <span class="k">return</span>;                               <span class="c">// 모션 민감 사용자 — 즉시 적용(전이 0)</span>
+  <span class="k">for</span> (<span class="k">const</span> elx <span class="k">of</span> document.querySelectorAll(containerSelector + <span class="s">' [data-card-id]'</span>)) {
+    <span class="k">const</span> prev = first.get(elx.dataset.cardId);
+    <span class="k">if</span> (!prev) <span class="k">continue</span>;                            <span class="c">// 신규 카드 — 페이드인 별도(선택)</span>
+    <span class="k">const</span> now = elx.getBoundingClientRect();
+    <span class="k">const</span> dx = prev.left - now.left, dy = prev.top - now.top;   <span class="c">// Invert</span>
+    <span class="k">if</span> (!dx &amp;&amp; !dy) <span class="k">continue</span>;
+    elx.style.transform = <span class="s">`translate(${dx}px,${dy}px)`</span>;
+    elx.style.transition = <span class="s">'none'</span>;
+    requestAnimationFrame(() => {                    <span class="c">// Play</span>
+      elx.style.transition = <span class="s">'transform 180ms cubic-bezier(.2,.8,.2,1)'</span>;
+      elx.style.transform = <span class="s">''</span>;
+    });
+  }
+}
+<span class="c">// commitReorder/reorderByDrop/reorderByMove가 render() 직접 호출 대신 flipReorder('.cards', () =&gt; render())로 위임.</span>
+<span class="c">// 드래그 중인 카드는 .is-dragging(기존 클래스)으로 FLIP 제외(포인터 추종은 네이티브 DnD가 처리).</span></pre>
+  <table>
+    <tr><th style="width:200px;">항목</th><th>설계</th></tr>
+    <tr><td>적용 범위 (R5)</td><td>cards 밀도 카드 컨테이너만(<code>.cards</code>). <b>R5 실측 확인:</b> table 밀도(<code>renderTable</code> app.js:1985~)는 행에 <code>draggable</code>·<code>reorderByDrop</code>/<code>reorderByMove</code> 핸들러가 <b>전혀 없다</b> — 즉 <b>드래그 reorder 경로가 table에는 존재하지 않는다</b>(행 클릭은 드로어 열기). 따라서 FLIP을 cards에만 적용하는 것은 누락이 아니라 <b>reorder 트리거 부재에 정합</b>한다(table는 reorder 자체가 없으므로 애니메이션 대상 아님 — UX 비대칭 없음). R-23 "카드 reorder" 요구 범위와 일치. 향후 table에 행 reorder가 도입되면 동일 FLIP 확장.</td></tr>
+    <tr><td>드래그 vs 드롭</td><td>드래그 중 포인터 추종은 네이티브 HTML5 DnD(<code>.is-dragging</code>). 애니메이션은 <b>드롭 확정 후 재배치(render)</b> 시점의 위치 전이에 적용(다른 카드가 자리를 비켜주는 모션).</td></tr>
+    <tr><td>키보드 이동</td><td><b>동일 FLIP 적용</b> — <code>reorderByMove</code>(위/아래 버튼·화살표, N-07)도 render를 flipReorder로 위임해 시각적 일관성 확보. 접근성 사용자도 이동을 시각적으로 추적.</td></tr>
+    <tr><td><code>prefers-reduced-motion</code></td><td><b>존중(필수)</b>. <code>matchMedia('(prefers-reduced-motion: reduce)')</code> 시 transition 생략하고 즉시 적용. styles.css에도 <code>@media (prefers-reduced-motion: reduce){ .card{ transition:none !important } }</code> 방어.</td></tr>
+    <tr><td>성능</td><td>transform/opacity만 애니메이트(레이아웃 리플로 회피, GPU 합성). 180ms 단발. rAF 1프레임. 카드 수 많아도 transform 일괄이라 부담 작음.</td></tr>
+    <tr><td>보안</td><td><b>영향 0</b>. 새 IPC·새 입력·새 권한 없음. DOM 노드의 transform 속성만 변경. textContent(L-1) 렌더 불변. §5 위젯 보안과 무관.</td></tr>
+  </table>
+</section>
+
+<section id="tree">
+  <h2>10. 디렉터리 구조 델타</h2>
+  <pre>electron/
+├─ main.js                  <span class="c"># [수정] onShowFavorites→favoritesWidget.show(screen·hardenWebContents·TRUSTED_ORIGIN 주입) / doFinalQuit에 위젯 dispose(멱등) / applyCspHeaders는 1회 등록 그대로(재호출 X·SEC-H1) (§4·§8)</span>
+├─ favoritesWidget.js       <span class="c"># ★[신규] 위젯 창 생성·우측하단 위치계산·show/hide 재사용·dispose (R-22)</span>
+├─ preload.js               <span class="c"># [수정 최소] onTray action 축소(favorites push 폐기) — dashboard만</span>
+├─ preload-favorites.js     <span class="c"># ★[신규] 위젯 전용 축소 allowlist(6개) + onFavoritesChanged (§5·§6.2)</span>
+├─ tray.js                  <span class="c"># [불변] 메뉴·TRAY_ACTIONS 동일. onShowFavorites 콜백 동작만 main이 교체</span>
+├─ security.js              <span class="c"># [불변] CSP_POLICY·applyCspHeaders·hardenWebContents — 위젯 창도 동일 재사용</span>
+├─ context.js               <span class="c"># [불변]</span>
+└─ ipc/
+   ├─ register.js           <span class="c"># [수정] setFavorite를 broadcast로 래핑 + getFavoritesWidgetWc 주입 (+선택 closeWidget) (§6.3)</span>
+   ├─ uiState.js            <span class="c"># [불변] setFavorite 검증·영속 로직 그대로(broadcast는 register에서)</span>
+   ├─ clipboard.js·tools.js·actions.js·data.js·scan.js·folders.js  <span class="c"># [불변]</span>
+public/
+├─ index.html               <span class="c"># [수정] 즐겨찾기 슬라이더 오버레이 컨테이너 마크업 제거(있다면) — CSP 메타 불변</span>
+├─ favorites.html           <span class="c"># ★[신규] 위젯 페이지(app://favorites.html). 메인과 동일 CSP 메타. 토스트 패널 마크업</span>
+├─ favorites.js             <span class="c"># ★[신규] 위젯 렌더러: getUiState/getProjects 적재·슬라이더 렌더·onFavoritesChanged·키맵·Esc/blur</span>
+├─ styles.css               <span class="c"># [수정] 위젯 토스트 스타일(둥근·투명) + 카드 FLIP transition + prefers-reduced-motion (§9)</span>
+└─ app.js                   <span class="c"># [수정] 오버레이 슬라이더 제거(§8.2)+onTrayCommand favorites 분기 제거(R4) + commitReorder/reorderByMove를 flipReorder로 위임(§9, 기존 data-card-id 재사용·R3)</span>
+
+<span class="c"># 런타임 데이터: 변경 없음(ui-state.json favorites/order/sortMode 그대로 — 새 영속 0)</span></pre>
+  <div class="note"><b>변경 격리:</b> 위젯 책임은 전부 신규 파일(<code>favoritesWidget.js</code>·<code>preload-favorites.js</code>·<code>favorites.html</code>·<code>favorites.js</code>)에 격리. 기존 파일 수정은 ① main.js(트레이 콜백·종료 정리·screen) ② register.js(broadcast 래핑) ③ app.js(오버레이 제거+FLIP 위임) ④ preload.js(onTray 축소) ⑤ styles.css — 모두 치환·최소 추가. 보안 헬퍼(security.js)·IPC 검증(uiState.js)·도메인은 무수정.</div>
+</section>
+
+<section id="trace">
+  <h2>11. 추적성 (요구 ↔ 채널/모듈)</h2>
+  <table>
+    <tr><th style="width:90px;">요구</th><th>신규/변경 채널</th><th>신규/수정 모듈</th><th>영속</th><th>보안 게이트</th></tr>
+    <tr><td><span class="rid">R-22</span></td><td><code>spip:favorites-changed</code>(push, 신규) · 기존 getUiState·getProjects·open·copyText·setFavorite 재사용 · (선택)closeWidget</td><td>electron/favoritesWidget.js(신규)·preload-favorites.js(신규)·public/favorites.{html,js}(신규)·main.js(수정)·register.js(broadcast 수정)·app.js(오버레이+onTrayCommand favorites 제거)·preload.js(onTray 축소)</td><td>없음(기존 ui-state.json 재사용)</td><td>위젯 동일 webPreferences·app:// 로드·<b>CSP=default session 공유(앱 1회 등록 자동 적용·SEC-H1)+메타 단일원천(SEC-L2)</b>·hardenWebContents(렌더러 직접 네비 0·SEC-M1)·senderFrame(register guard)·<b>축소 preload(6, ipcRenderer/generic invoke 비노출 MUST·SEC-M3)</b>·기존 guard 재검증 승계(SEC-M4)·textContent(L-1)·broadcast 단방향 {favorites}+isDestroyed 가드(SEC-M2)·<b>SEC-H2(비드래그·floating 해제·focus 게이팅·클릭통과 비허용)</b>·dispose 멱등(SEC-L3)</td></tr>
+    <tr><td><span class="rid">R-23</span></td><td>없음(IPC 무관)</td><td>public/app.js(flipReorder 위임·기존 <b>data-card-id</b> 재사용·R3)·styles.css(transition·reduced-motion)</td><td>없음</td><td>렌더러 전용 — 새 입력·권한 0. textContent 불변</td></tr>
+  </table>
+  <h3>11.1 위젯 preload 강력채널 비노출 체크리스트 (SEC-M3)</h3>
+  <table>
+    <tr><th>메인 preload 채널</th><th style="width:160px;">위젯 노출?</th><th>비고</th></tr>
+    <tr><td>getUiState · getProjects · open · copyText · setFavorite · onFavoritesChanged</td><td><span class="pill keep">노출 (6개)</span></td><td>즐겨찾기 표시·액션·동기화에 필요한 최소집합</td></tr>
+    <tr><td>setToolPath · pickToolExecutable · setOrder · setSortMode</td><td><span class="pill drop">미노출</span></td><td>도구 경로·정렬·순서 — 위젯 비대상(표면 축소)</td></tr>
+    <tr><td>rescan · addRoots · removeRoot · pickFolders</td><td><span class="pill drop">미노출</span></td><td>스캔·루트 관리 — 위젯 비대상</td></tr>
+    <tr><td>ipcRenderer 원본 · generic invoke(임의 채널)</td><td><span class="pill drop">비노출 (MUST)</span></td><td>채널명 하드코딩만. 6채널 축소 무력화 방지</td></tr>
+  </table>
+  <p><b>기존 요구 연계:</b> R-22는 <span class="rid">R-20</span>(즐겨찾기 데이터)·<span class="rid">R-21</span>(트레이·생명주기)의 표시 호스트를 오버레이→독립 창으로 전환(ADR-M6-5 번복). R-23은 <span class="rid">R-19</span>(드래그 reorder)의 시각 품질 향상. 둘 다 기존 데이터 모델·보안 베이스라인 불변.</p>
+</section>
+
+<section id="adr">
+  <h2>12. ADR</h2>
+
+  <div class="adr">
+    <h4>ADR-M7-1 — 즐겨찾기 위젯: 메인창 내 오버레이 → 별도 프레임리스 BrowserWindow (ADR-M6-5 번복)</h4>
+    <p><b>상태:</b> 제안(승인 권고) · <b>대체:</b> ADR-M6-5(메인창 내 오버레이)를 <b>Superseded</b>로 전환</p>
+    <p><b>맥락:</b> ADR-M6-5는 즐겨찾기 슬라이더를 메인창 내 <code>position:fixed</code> 오버레이로 결정했고, 그 근거는 "별도 창은 webPreferences·preload·CSP·senderFrame·하드닝을 한 벌 더 구성·검증(보안 표면·복잡도 2배)"이었다. 그러나 사용자 요구가 명확해졌다 — <b>대시보드 창을 닫아 트레이에만 상주해도 트레이 '즐겨찾기'로 위젯이 떠야 한다</b>(독립성). 오버레이는 메인 renderer에 종속(<code>renderFavoritesSlider</code>)이라 <b>메인창이 hide면 표시 불가</b>(m6-design §9.3 가정에 이미 명시된 한계). 요구를 충족하려면 호스트가 메인창과 분리돼야 한다.</p>
+    <p><b>고려한 대안:</b></p>
+    <ul>
+      <li><b>A. 오버레이 유지 + 트레이 시 항상 win.show:</b> 트레이 '즐겨찾기'가 메인창을 강제로 띄움. 그러나 "대시보드를 닫아둔 채 즐겨찾기만 보고 싶다"는 의도(작업 방해 최소)와 모순 — 대시보드 전체가 떠버림. 독립성 요구 미충족.</li>
+      <li><b>B. 별도 프레임리스 BrowserWindow(채택):</b> 메인창과 생명주기·렌더 컨텍스트 분리. 메인창 hidden이어도 위젯만 우측하단에 토스트로 등장.</li>
+      <li><b>C. OS 네이티브 토스트/알림:</b> 즐겨찾기 카드의 인터랙션(열기·복사·해제·슬라이딩)을 알림 UI로 못 담음. 부적합.</li>
+    </ul>
+    <p><b>결정:</b> <b>B</b>. 즐겨찾기를 별도 frameless·우측하단·토스트형 BrowserWindow(<code>favoritesWidget.js</code>·<code>app://favorites.html</code>)로 구현. 트레이 '즐겨찾기'→<code>favoritesWidget.show()</code>(메인창 무관).</p>
+    <p><b>번복 근거(ADR-M6-5의 "보안 표면 2배" 우려 재평가):</b> M6 이후 실측 코드에서 보안 통제가 이미 <b>창 무관 재사용 단일 원천</b>으로 모듈화됐다 — <code>registerAppProtocol</code>(app:// public/ 매핑·이탈 차단), <code>security.js</code>의 <code>applyCspHeaders</code>·<code>hardenWebContents</code>·<code>CSP_POLICY</code>, <code>register.js</code>의 <code>isTrustedSender</code>(app:// 정확 일치, 창 무관). 따라서 새 창의 보안 구성은 "한 벌 더 작성"이 아니라 <b>동일 헬퍼를 2줄 호출 + app://favorites.html 1페이지 + 축소 preload 1개</b>로 끝난다. "복잡도 2배"는 실제로 성립하지 않으며, 위젯 preload를 6개로 좁혀 <b>표면은 오히려 메인보다 작다</b>(§5). 독립성 요구를 충족하는 단순한 구조다.</p>
+    <p><b>결과:</b> (+) 대시보드 닫혀도 즐겨찾기 동작(요구 충족)·토스트 UX·표면 축소 preload. (−) 렌더 컨텍스트 1개·push 채널 1개 추가(§5에서 동등 통제로 봉합)·메인↔위젯 동기화(broadcast) 필요·favoriteViewModels 등 일부 렌더 로직 위젯으로 이전(중복 최소화 위해 공유 모듈 권장). ADR-M6-5는 Superseded.</p>
+  </div>
+
+  <div class="adr">
+    <h4>ADR-M7-2 — 위젯 닫기: hide(재사용) vs destroy</h4>
+    <p><b>상태:</b> 제안</p>
+    <p><b>맥락:</b> blur/Esc/× 시 위젯을 destroy(매번 재생성)할지 hide(인스턴스 유지·재사용)할지.</p>
+    <p><b>고려한 대안:</b></p>
+    <ul>
+      <li><b>A. destroy:</b> 메모리 즉시 회수. 그러나 재호출마다 BrowserWindow 생성·app:// 로드·CSP/하드닝 재설정 비용 → 토스트 등장이 느려지고 깜빡임.</li>
+      <li><b>B. hide(재사용, 채택):</b> 최초 1회 생성 후 hide/show. 재등장 즉시(&lt;200ms). 메인창 close-to-tray(hide)와 동일 패턴(일관). 완전 종료에서만 destroy.</li>
+    </ul>
+    <p><b>결정:</b> <b>B(hide 재사용)</b>. <code>doFinalQuit()</code>에서만 <code>favoritesWidget.dispose()</code>로 destroy. 단일 인스턴스(모듈 변수).</p>
+    <p><b>근거:</b> 반응성·일관성(메인창 hide 패턴과 동형). 위젯은 작은 창이라 상주 메모리 부담 작음. 보안은 hide여도 동일 컨텍스트 유지라 약화 없음.</p>
+    <p><b>결과:</b> (+) 빠른 재등장·구현 단순(생성 1회). (−) 숨은 채 메모리 상주(작음). 완전 종료 시 정리 1줄 필요(doFinalQuit 멱등 경로에 추가).</p>
+  </div>
+
+  <div class="adr">
+    <h4>ADR-M7-3 — alwaysOnTop 수준: 'floating' (과하지 않은 상위 레벨)</h4>
+    <p><b>상태:</b> 제안</p>
+    <p><b>맥락:</b> 토스트답게 다른 창 위로 떠야 하나, 모든 것 위에 고정되면(스크린세이버·전체화면 게임 위) 방해.</p>
+    <p><b>고려한 대안:</b></p>
+    <ul>
+      <li><b>A. alwaysOnTop:false:</b> 다른 창에 가려짐 — 토스트 의미 약함.</li>
+      <li><b>B. alwaysOnTop:true, level 'screen-saver'/'pop-up-menu':</b> 거의 모든 것 위 — 전체화면 앱·시스템 UI도 덮어 과함.</li>
+      <li><b>C. alwaysOnTop:true, level 'floating'(채택):</b> 일반 창보다 위, 전체화면/스크린세이버보다 아래. 토스트로 적정.</li>
+    </ul>
+    <p><b>결정:</b> <b>C</b>. <code>show()</code> 시 <code>setAlwaysOnTop(true,'floating')</code>, <b>hide·blur 시 <code>setAlwaysOnTop(false)</code>로 해제</b>(SEC-H2). 즉 <b>표시·포커스 중에만 floating</b>이다.</p>
+    <p><b>근거:</b> 토스트의 "보이되 방해 최소" 절충. <b>SEC-H2 보강 — 해제 시점 명세:</b> 비포커스/숨김 위젯이 다른 앱 위에 계속 떠 입력을 가로채는 표면을 제거하기 위해 floating은 표시 중에만 유지하고 blur 즉시 해제한다(이후 100ms grace로 hide). 생성 시 <code>alwaysOnTop:false</code>로 시작.</p>
+    <p><b>결과:</b> (+) 적정 가시성·비포커스 시 입력 가로채기 표면 제거. (−) 일부 전체화면 컨텍스트에서 가려질 수 있음(의도된 절충). 필요 시 후속에서 레벨 조정.</p>
+  </div>
+
+  <div class="adr">
+    <h4>ADR-M7-5 — 위젯 외형: transparent 토스트 vs 불투명 패널 (SEC-H2 클릭통과·UI redressing)</h4>
+    <p><b>상태:</b> 제안</p>
+    <p><b>맥락:</b> 보안 검증(SEC-H2)이 <code>transparent:true</code> frameless·alwaysOnTop 위젯의 클릭통과·UI redressing 표면을 지적했다. 둥근 모서리 토스트 외형을 어떻게 내되 클릭통과·오클릭 표면을 만들지 않을지 결정한다.</p>
+    <p><b>고려한 대안:</b></p>
+    <ul>
+      <li><b>A. transparent:true + 클릭통과(<code>setIgnoreMouseEvents</code> forward):</b> 투명 여백 클릭이 아래 앱으로 흐름. <b>거부</b> — 위젯이 다른 앱 입력 영역을 시각적으로 덮으면서 일부 클릭만 흘리면 사용자 인지 경계가 흐려지고(클릭재킹 유사), 반대로 아래 앱 입력을 일부 가로채는 모호성 발생.</li>
+      <li><b>B. transparent:true + 클릭통과 비허용(채택):</b> <code>setIgnoreMouseEvents</code> <b>미사용</b>. 투명은 모서리 라운드 표현용일 뿐, 위젯 창은 자기 영역의 모든 클릭 좌표를 소유한다(아래 앱으로 흘리지 않음). body 둥근 패널로 시각 외형만 토스트화.</li>
+      <li><b>C. transparent:false + 불투명 패널 + border-radius(폴백):</b> 투명 미사용. Windows 환경별 transparent 렌더 이슈(그림자·잔상)나 부담 시 동등 외형을 CSS만으로 제공. 보안·UX 동등.</li>
+    </ul>
+    <p><b>결정:</b> <b>B(클릭통과 비허용)</b>를 기본, 환경 부담 시 <b>C(불투명 폴백)</b>. 어느 경우든 <code>setIgnoreMouseEvents</code> 패스스루는 사용하지 않는다.</p>
+    <p><b>근거:</b> 클릭통과를 쓰지 않으면 "위젯 위 클릭=위젯, 위젯 밖 클릭=blur(grace hide)"라는 단순·예측 가능한 입력 경계가 성립한다. 부수효과 액션은 focus 게이팅(SEC-H2)으로 추가 보호. B/C는 보안·UX가 동등하므로 ADR-M7-1(별도 창) 결정에 영향 없다.</p>
+    <p><b>결과:</b> (+) 클릭재킹/입력 가로채기 표면 제거·환경 호환 폴백 보유. (−) 투명 여백이 클릭을 "삼키는"(아래 앱 미전달) 동작 — 토스트로는 자연스러우며 의도된 설계.</p>
+  </div>
+
+  <div class="adr">
+    <h4>ADR-M7-4 — 카드 reorder 애니메이션 기법: FLIP (CSS-only·라이브러리 아님)</h4>
+    <p><b>상태:</b> 제안</p>
+    <p><b>맥락:</b> reorder가 <code>render()</code> 전체 재구성이라 카드가 점프. 부드러운 이동 필요. §9.1 대안 비교.</p>
+    <p><b>고려한 대안:</b> A. CSS transition만(노드 교체로 미성립) · B. FLIP(재렌더 호환·dep 0) · C. DnD 라이브러리(런타임 dep·과설계).</p>
+    <p><b>결정:</b> <b>B(FLIP)</b>. render 전 id별 rect 캐시 → render(Last) → invert(transform) → rAF로 play. <code>prefers-reduced-motion</code> 시 생략. 키보드 이동에도 동일.</p>
+    <p><b>근거:</b> 현 "전체 재렌더" 구조와 유일 호환. 런타임 의존성 0(EM ADR-EM-1) 유지. transform/opacity만 애니메이트(성능). 보안 영향 0(렌더러 전용).</p>
+    <p><b>결과:</b> (+) 부드러운 이동·dep 0·접근성 존중. (−) 좌표 캐시·rAF·기존 <code>data-card-id</code> 키 재사용(R3) 소폭 추가. table 밀도는 reorder 경로 부재로 미적용(R5).</p>
+  </div>
+</section>
+
+<section id="risk">
+  <h2>13. 리스크 · 가정 · 미해결 질문</h2>
+  <h3>리스크 / 완화</h3>
+  <table>
+    <tr><th style="width:280px;">리스크</th><th>완화</th></tr>
+    <tr><td>transparent+frameless 창의 클릭통과·UI redressing(SEC-H2)·Windows 렌더 이슈</td><td><b>통제로 확정(ADR-M7-5):</b> <code>setIgnoreMouseEvents</code> 패스스루 미사용(클릭통과 비허용)·body 둥근 패널로 시각 외형만 토스트화. 환경 부담 시 <code>transparent:false</code>+CSS 둥근 모서리 <b>불투명 폴백</b>(보안·UX 동등·ADR-M7-1 무영향). 구현 게이트 스모크 검증.</td></tr>
+    <tr><td>blur=hide가 위젯 내 클릭(focus 이동)에서 오작동 — 카드 버튼 클릭 시 닫힘</td><td><b>R1 통제로 확정(MQ7-1):</b> blur → floating 해제 + <b>100ms grace 후 hide</b>, 위젯 재포커스 시 grace 타이머 취소(§4.1). 위젯 내부 포커스 이동은 같은 창이라 blur 미발생(정상)·외부 클릭만 blur. Esc·헤더 ×는 명시 hide().</td></tr>
+    <tr><td>비포커스/숨김 위젯이 alwaysOnTop으로 다른 앱 입력 가로채기(SEC-H2)</td><td><b>통제로 확정:</b> floating은 <b>표시·포커스 중에만</b>(show 시 ON, hide/blur 시 OFF). 부수효과 액션(open·copyText·setFavorite)은 <b>focus 상태일 때만 활성</b>(blur 시 비활성) — 오클릭/클릭재킹 유사 표면 차단(§5·ADR-M7-3).</td></tr>
+    <tr><td>멀티모니터/작업표시줄 위치 변동 시 위치 오정렬</td><td>show마다 <code>getDisplayNearestPoint(cursor)</code>+workArea 재계산(§4.2). 작업표시줄이 상단/측면이어도 workArea 기준이라 자동 대응.</td></tr>
+    <tr><td>메인↔위젯 즐겨찾기 동기화 누락(둘 다 열림)</td><td>setFavorite 성공 시 main이 양 창에 broadcast(§7). 단일 진실 원천(ui-state.json)·idempotent payload로 수렴.</td></tr>
+    <tr><td>위젯 창 보안 통제 누락(새 창에 CSP/하드닝 미적용 실수)</td><td>ensureWidget이 메인창과 동일 헬퍼(applyCspHeaders·hardenWebContents)를 <b>생성 시 강제 호출</b>(§4.1 의사코드). 구현 게이트에 "위젯 sandbox·CSP·will-navigate 차단 스모크"(EC-5 정합) 추가.</td></tr>
+    <tr><td>app://favorites.html 추가로 protocol 매핑 이탈</td><td>기존 registerAppProtocol이 public/ 루트 정규화·이탈 차단(main.js:108~113) — 새 페이지도 동일 보호(추가 코드 0).</td></tr>
+    <tr><td>FLIP가 많은 카드에서 프레임 드랍</td><td>transform/opacity만(합성 레이어)·180ms 단발·rAF 1프레임. reduced-motion 시 생략. table 밀도 미적용으로 범위 한정.</td></tr>
+  </table>
+  <h3>가정</h3>
+  <ul>
+    <li>1차 타깃 Windows. frameless·transparent·alwaysOnTop 'floating'·skipTaskbar는 Windows 기준(macOS/Linux 후속).</li>
+    <li>위젯은 메인창과 동일 app:// origin이므로 register.js senderFrame 검증을 추가 분기 없이 통과한다(실측 isTrustedSender는 창 무관 origin 검증).</li>
+    <li>즐겨찾기 데이터(favorites)·프로젝트 스냅샷(getProjects)은 위젯에서도 동일 IPC로 접근 가능(권한 동일).</li>
+    <li>favoriteViewModels·nextSlideIndex 등 순수 렌더 로직은 위젯/메인이 공유(중복 방지 위해 공유 모듈 권장).</li>
+  </ul>
+  <h3>미해결 질문 (PM 확인 필요)</h3>
+  <table>
+    <tr><th style="width:80px;">항목</th><th>질문</th><th style="width:150px;">PM 확정 / 기본 권고</th></tr>
+    <tr><td class="nid">MQ7-1</td><td>위젯 닫기 트리거 — <b>blur(클릭아웃) 자동 hide</b>를 켤지, 아니면 명시 ×/Esc만으로 닫을지?</td><td><b>확정(PM):</b> blur+100ms grace+명시 ×/Esc hide(§4.1 의사코드로 승격·R1)</td></tr>
+    <tr><td class="nid">MQ7-2</td><td>위젯에서 <b>드래그로 위치 이동</b>(frameless 창 끌기, <code>-webkit-app-region:drag</code>)을 허용할지? 고정 우측하단만 쓸지.</td><td><b>확정(PM·SEC-H2):</b> 비드래그·고정 우측하단(<code>movable:false</code>·드래그 핸들 미사용). 드래그 이동 취소.</td></tr>
+    <tr><td class="nid">MQ7-3</td><td>메인창의 <b>R-20 '슬라이더' 버튼/필터바 진입점</b>(app.js:1611)을 — 제거할지, 유지하되 위젯 창을 띄우는 버튼으로 바꿀지? (현재 메인 UI 내 슬라이더 토글)</td><td>위젯 창 show 버튼으로 전환(메인에서도 위젯 호출 — main에 IPC 또는 메뉴 경유 필요)</td></tr>
+    <tr><td class="nid">MQ7-4</td><td>위젯 <b>크기/카드 표시 수</b> — 카드 1장 슬라이딩(현 슬라이더와 동일) 유지 vs 다중 카드 그리드? 360×220는 1장 기준.</td><td>1장 슬라이딩 유지(기존 UX·작은 토스트 일관)</td></tr>
+    <tr><td class="nid">MQ7-5</td><td>FLIP를 <b>table 밀도</b>에도 적용할지? MVP는 cards만 권고.</td><td><b>확정:</b> cards만 — 실측상 table에 드래그 reorder 경로 부재(R5). table 행 reorder 도입 시 후속 확장.</td></tr>
+  </table>
+  <div class="note"><b>참고(MQ7-3 보강):</b> 메인 UI에서 위젯을 띄우려면 renderer→main 트리거가 필요하다(렌더러는 BrowserWindow를 못 만듦). 트레이와 동일하게 main이 소유하므로, 메인 버튼은 ⓐ 새 invoke <code>spip:showFavoritesWidget</code>(guard 등록) 또는 ⓑ 메뉴 항목으로 main을 경유한다. 보안상 ⓐ가 단순하나 새 invoke 1개가 추가되므로 PM 결정 필요(현 설계는 트레이 경유만 필수로 본다).</div>
+</section>
+
+<footer>
+  Project-SPIP — M7 설계 델타(R-22 즐겨찾기 독립 위젯 창 · R-23 카드 드래그 애니메이션) · 수석 아키텍트 · 2026-06-21 <b>rev.2</b>(보안 SEC-H1/H2·SEC-M1~4·L1~3 + 검증 R1~R5 반영) · ADR-M6-5(오버레이) 번복 → ADR-M7-1(별도 BrowserWindow)·ADR-M7-5(클릭통과 비허용) · 기존 Electron 구조·보안 베이스라인(EC/EM/M6) 보존 점진 확장 · 본 문서는 설계 청사진이며 구현 코드를 포함하지 않는다.
+</footer>
+
+</main>
+</body>
+</html>

@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project-SPIP — M7 구현 보안 게이트 (즐겨찾기 위젯 창) 1회차</title>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#1e293b; --text:#e2e8f0; --sub:#94a3b8;
+    --accent:#34d399; --ref:#38bdf8; --line:#334155; --warn:#fbbf24; --danger:#f87171;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:"Segoe UI","Malgun Gothic",system-ui,sans-serif;line-height:1.7;}
+  header{padding:48px 32px 36px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#13203b,#0f172a);}
+  header h1{margin:0 0 8px;font-size:28px;}
+  header .tag{display:inline-block;background:rgba(52,211,153,.12);color:var(--accent);
+    border:1px solid rgba(52,211,153,.4);border-radius:999px;padding:3px 12px;font-size:13px;margin-right:8px;}
+  header p{margin:14px 0 0;color:var(--sub);max-width:1000px;}
+  .meta{margin-top:16px;font-size:13px;color:var(--sub);}
+  main{max-width:1180px;margin:0 auto;padding:32px;}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:24px 28px;margin:22px 0;}
+  h2{margin:0 0 16px;font-size:21px;color:var(--accent);border-left:4px solid var(--accent);padding-left:12px;}
+  h3{font-size:16px;color:var(--ref);margin:22px 0 10px;}
+  p{margin:8px 0;}
+  ul,ol{margin:8px 0;padding-left:22px;}
+  li{margin:5px 0;}
+  code{background:#0b1220;color:var(--ref);padding:1px 6px;border-radius:5px;font-size:13px;}
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13.5px;}
+  th,td{border:1px solid var(--line);padding:9px 11px;text-align:left;vertical-align:top;}
+  th{background:#142035;color:var(--accent);}
+  tr:nth-child(even) td{background:rgba(255,255,255,.02);}
+  .fid{font-family:Consolas,monospace;color:var(--accent);font-weight:700;white-space:nowrap;}
+  .mono{font-family:Consolas,monospace;font-size:12.5px;}
+  .sev{font-size:11px;font-weight:700;padding:2px 9px;border-radius:6px;white-space:nowrap;}
+  .crit{background:rgba(248,113,113,.22);color:#fecaca;border:1px solid rgba(248,113,113,.6);}
+  .high{background:rgba(251,146,60,.18);color:#fed7aa;border:1px solid rgba(251,146,60,.55);}
+  .med{background:rgba(251,191,36,.16);color:#fde68a;border:1px solid rgba(251,191,36,.5);}
+  .low{background:rgba(56,189,248,.16);color:#bae6fd;border:1px solid rgba(56,189,248,.45);}
+  .pass{background:rgba(52,211,153,.16);color:#6ee7b7;border:1px solid rgba(52,211,153,.5);}
+  .resolved{background:rgba(52,211,153,.2);color:#6ee7b7;border:1px solid rgba(52,211,153,.6);}
+  .stride{font-family:Consolas,monospace;font-size:11px;color:var(--warn);}
+  .note{background:rgba(56,189,248,.08);border:1px solid rgba(56,189,248,.3);border-radius:8px;
+    padding:12px 16px;font-size:13.5px;color:#bae6fd;}
+  .warn-box{background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.3);border-radius:8px;
+    padding:12px 16px;font-size:13.5px;color:#fde68a;}
+  .ok-box{background:rgba(52,211,153,.08);border:1px solid rgba(52,211,153,.35);border-radius:8px;
+    padding:14px 18px;font-size:14px;color:#bbf7d0;}
+  .verdict{font-size:15px;font-weight:700;padding:10px 16px;border-radius:10px;display:inline-block;margin-top:10px;}
+  .v-pass{background:rgba(52,211,153,.18);color:#6ee7b7;border:1px solid rgba(52,211,153,.6);}
+  figure{margin:18px 0;background:#0b1220;border:1px solid var(--line);border-radius:10px;padding:18px;}
+  figcaption{color:var(--sub);font-size:12.5px;margin-top:10px;text-align:center;}
+  .legend{display:flex;gap:18px;flex-wrap:wrap;font-size:12.5px;color:var(--sub);margin-top:10px;justify-content:center;}
+  .legend span{display:inline-flex;align-items:center;gap:6px;}
+  .dot{width:11px;height:11px;border-radius:3px;display:inline-block;}
+  .finding{border-left:3px solid var(--line);padding:6px 0 6px 14px;margin:18px 0;}
+  .finding.ok{border-color:#34d399;}
+  .finding h4{margin:0 0 6px;font-size:15px;}
+  .kv{font-size:13px;color:var(--sub);margin:3px 0;}
+  .kv b{color:var(--text);}
+  .gate{font-family:Consolas,monospace;color:var(--ref);font-weight:700;}
+  footer{text-align:center;color:var(--sub);font-size:12.5px;padding:30px;border-top:1px solid var(--line);}
+</style>
+</head>
+<body>
+<header>
+  <span class="tag">M7 구현 보안 게이트</span><span class="tag">즐겨찾기 위젯 BrowserWindow</span><span class="tag">1회차</span>
+  <h1>Project-SPIP — M7 구현 최종 보안 게이트 (코드 실재 + 동작 실측)</h1>
+  <p>검증 대상: <code>electron/favoritesWidget.js</code>·<code>preload-favorites.js</code>·<code>main.js</code>(onShowFavorites·doFinalQuit)·<code>ipc/register.js</code>(setFavorite broadcast)·<code>preload.js</code>(onTray 축소)·<code>security.js</code> + <code>public/favorites.{html,js,css}</code> + 신규 테스트 5종. 기준: <code>docs/reviews/m7_design_security_review_2.html</code>(설계 보안 PASS — SEC-H1/H2 구조적 해소·SEC-M1~4·SEC-L1~3 설계 단언 반영). 본 게이트는 설계가 명시한 통제를 <b>구현 코드가 실제로 구현했는지</b>와 <b>동작이 실측에서 성립하는지</b>(npm test 474건 전수 통과 + 직접 프로브)를 적대적으로 확인하고, 이관 구현 게이트(스모크)를 실측으로 닫는다.</p>
+  <div class="meta">문서 유형: 구현 보안 검증 보고 · 보안 전담 검증자 · 2026-06-21 · 실측: <code>npm test</code> (tests 474 / pass 474 / fail 0) · Node 프로브(CSP 바이트 비교·preload 노출 캡처·partition/setIgnoreMouseEvents/secret grep) · docs/Development 정책 문서 없음(표준 체크리스트 적용)</div>
+  <div class="verdict v-pass">종합 판정: PASS — 치명 0 · 높음 0 · 보통 0 · 낮음 0. 게이트 1~7 전부 코드 실재 + 동작 실측 충족. 보존 통제(회귀) 무약화. 런타임 의존성 0 · 시크릿 0. 구현 보안 게이트 통과.</div>
+</header>
+
+<main>
+
+<section>
+  <h2>1. 검증 방법 · 실측 환경</h2>
+  <p>추측을 배제하고 ① <b>코드 실재</b>(Read/Grep로 통제가 소스에 실제 존재)와 ② <b>동작 실측</b>(<code>npm test</code> 전수 + 직접 Node 프로브)을 모두 요구했다. 설계 보고서가 인계한 구현 게이트 스모크 4종(헤더/메타 CSP 일치·partition 부재·외부 네비 차단)을 본 단계에서 실측으로 닫는다.</p>
+  <ul>
+    <li><b>npm test:</b> <span class="mono">tests 474 · suites 0 · pass 474 · fail 0 · duration ~1.23s</span>. 신규 5종(<code>favorites-widget</code>·<code>preload-favorites-contract</code>·<code>favorites-broadcast</code>·<code>favorites-renderer</code>·<code>favorites-html-csp</code>) 포함 전부 GREEN.</li>
+    <li><b>CSP 바이트 비교 프로브:</b> <code>security.CSP_POLICY</code> ≡ <code>public/favorites.html</code> 메타 ≡ <code>public/index.html</code> 메타 → 3자 <b>완전 일치(===)</b> 확인.</li>
+    <li><b>preload 노출 캡처 프로브:</b> <code>contextBridge.exposeInMainWorld</code>를 모킹해 위젯 preload가 실제 노출하는 객체를 런타임 캡처 → 키 6개·강력채널 0·ipcRenderer/invoke/send 0 확인.</li>
+    <li><b>정적 grep 프로브:</b> <code>partition</code> 0건 · <code>setIgnoreMouseEvents</code> 호출 0건(주석 1건만) · <code>-webkit-app-region</code> 0건 · <code>applyCspHeaders</code> 호출 1지점(main.js:152)만 · 하드코딩 시크릿 0 · 런타임 dependencies <code>{}</code>.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>2. 게이트별 판정 (코드 실재 + 동작 실측)</h2>
+  <table>
+    <tr><th style="width:54px;">게이트</th><th>요구(설계 기준)</th><th>코드 실재 근거(위치)</th><th>동작 실측 근거</th><th style="width:64px;">판정</th></tr>
+
+    <tr>
+      <td class="gate">G1</td>
+      <td>위젯 webPreferences 메인 1:1 — contextIsolation:true·nodeIntegration:false·sandbox:true·webSecurity:true·preload=preload-favorites.js·parent 미지정·movable:false. 빠진 옵션 0.</td>
+      <td><code>favoritesWidget.js:108-130</code> BrowserWindow 옵션: <code>contextIsolation:true</code>·<code>nodeIntegration:false</code>·<code>sandbox:true</code>·<code>webSecurity:true</code>·<code>preload=PRELOAD_FAVORITES</code>(:33,:124)·<code>movable:false</code>(:118)·<code>parent</code> 키 없음. 보안 4옵션이 <code>main.js:141-147</code> 메인창과 자구 동일.</td>
+      <td><code>favorites-widget.test.js</code> "webPreferences 메인창과 1:1" + "§4.1 창 속성 1:1" GREEN — <code>assert.ok(!('parent' in o))</code>·movable:false·alwaysOnTop:false·4옵션 단언 통과.</td>
+      <td><span class="sev pass">PASS</span></td>
+    </tr>
+
+    <tr>
+      <td class="gate">G2</td>
+      <td>preload-favorites 6채널 한정(getUiState·getProjects·open·copyText·setFavorite·onFavoritesChanged) + generic invoke 0 + ipcRenderer/강력채널 0. 정적·런타임 확인.</td>
+      <td><code>preload-favorites.js:25-47</code> — exposeInMainWorld('spip', {…}) 6키만. <code>ipcRenderer</code> 원본 미노출, 각 함수가 하드코딩 채널로 invoke. <code>setToolPath/setOrder/rescan/pickFolders/getTools/onTray</code> 등 강력채널 부재.</td>
+      <td>런타임 프로브: 노출 키 = <span class="mono">copyText,getProjects,getUiState,onFavoritesChanged,open,setFavorite</span>(정확히 6). ipcRenderer/invoke/send = <b>false</b>. 강력채널 16종 any = <b>false</b>. invoke 채널 = getUiState/getProjects/openInVsCode/copyText/setFavorite만. <code>preload-favorites-contract.test.js</code> 6테스트 GREEN.</td>
+      <td><span class="sev pass">PASS</span></td>
+    </tr>
+
+    <tr>
+      <td class="gate">G3<br><span class="fid">SEC-H1</span></td>
+      <td>위젯에 applyCspHeaders 재호출 없음(앱 1회 등록 자동 적용)·favorites.html 메타 = CSP_POLICY 문자열 동일·hardenWebContents per-wc 적용.</td>
+      <td><code>favoritesWidget.js:132</code> 재호출 없음(주석 명시)·deps에 applyCspHeaders 키 부재(:46-54). <code>main.js:152</code> applyCspHeaders 단 1지점. <code>favoritesWidget.js:134-136</code> hardenWebContents per-wc 호출. grep: <code>partition</code> 0·applyCspHeaders 호출 1.</td>
+      <td>CSP 프로브: <code>CSP_POLICY===favorites메타===index메타</code> = <b>true(true)</b>(바이트 동일). <code>favorites-widget.test.js</code> "applyCspHeaders deps 미존재"·"hardenWebContents 위젯 wc 1회 호출(per-wc)" GREEN. <code>favorites-html-csp.test.js</code> "메타 CSP index와 문자열 동일" GREEN.</td>
+      <td><span class="sev pass">PASS</span></td>
+    </tr>
+
+    <tr>
+      <td class="gate">G4<br><span class="fid">SEC-H2</span></td>
+      <td>setAlwaysOnTop show(true,'floating')/hide·blur(false) 토글·movable:false·blur 100ms grace 후 hide·setIgnoreMouseEvents 미사용·focus 게이팅(open/copyText/setFavorite은 focus 시에만).</td>
+      <td><code>favoritesWidget.js:165</code> show→setAlwaysOnTop(true,'floating')·:177 hide→(false)·:84-90 blur→(false)+100ms grace hide·:94-96 focus→clearTimeout·:118 movable:false·:120 alwaysOnTop:false. <code>favorites.js:142-155</code> guardedAction focus 게이팅(비포커스 첫클릭 포커스만). setIgnoreMouseEvents 호출 0(주석만).</td>
+      <td><code>favorites-widget.test.js</code>: show floating·hide(false)·"blur 100ms grace 후 hide"·"grace 중 재focus 취소" GREEN(타이머 실측 130ms 대기). <code>favorites-renderer.test.js</code> focusGate(true/false/비boolean) + app.js↔favorites.js 동형 GREEN.</td>
+      <td><span class="sev pass">PASS</span></td>
+    </tr>
+
+    <tr>
+      <td class="gate">G5<br><span class="fid">SEC-M2</span></td>
+      <td>spip:favorites-changed는 setFavorite 성공 시만·payload {favorites}·메인+위젯 wc !isDestroyed() 가드·신규 invoke 0.</td>
+      <td><code>register.js:144-153</code> broadcastFavorites — payload <code>{favorites}</code>만·<code>[mainWc,widgetWc]</code> 화이트리스트·<code>!wc.isDestroyed() && wc.send</code> 가드. :157-161 setFavorite은 <code>res.ok && Array.isArray(res.favorites)</code>일 때만 broadcast. push 채널 1개·신규 invoke 0.</td>
+      <td><code>favorites-broadcast.test.js</code> 8테스트 GREEN: 메인+위젯 양쪽 push·payload Object.keys=['favorites']·파괴 wc 미수신·위젯 null graceful·실패(INVALID_ID) 시 push 0·위젯 origin guard 통과.</td>
+      <td><span class="sev pass">PASS</span></td>
+    </tr>
+
+    <tr>
+      <td class="gate">G6<br><span class="fid">SEC-M4</span></td>
+      <td>위젯이 호출하는 open/copyText/setFavorite이 register.js isTrustedSender(app://) + 기존 검증(H-1/H-2)을 그대로 통과. 신규 핸들러 0.</td>
+      <td><code>register.js:94-107</code> 공통 guard가 채널별 분기 없이 isTrustedSender(:40-75 정규 origin 정확 비교·opaque/traversal 거부) 적용. open/copyText/setFavorite은 <code>actionsIpc/clipboardIpc/uiStateIpc</code> 기존 핸들러 재사용(:119,:131,:157). 채널당 1회 등록·신규 invoke 0.</td>
+      <td><code>favorites-broadcast.test.js</code> "위젯 app://favorites.html origin도 guard 통과" GREEN. 전체 IPC/검증 회귀 스위트(474건) GREEN — H-1(realpath)·INVALID_ID 등 기존 검증 무약화 확인.</td>
+      <td><span class="sev pass">PASS</span></td>
+    </tr>
+
+    <tr>
+      <td class="gate">G7<br><span class="fid">SEC-L3/M1/L1</span></td>
+      <td>dispose 멱등(SEC-L3)·will-navigate(SEC-M1 하드닝)·onTray 축소(SEC-L1).</td>
+      <td><code>favoritesWidget.js:195-202</code> dispose 멱등(미생성/destroy no-op·graceTimer clear). <code>security.js:61-73</code> will-navigate 차단·setWindowOpenHandler:deny·webview 거부(per-wc, :134 주입). <code>preload.js:81-91</code> onTray actions=['dashboard']만. <code>app.js:817-823</code> dispatchTrayAction dashboard만·favorites→null.</td>
+      <td><code>favorites-widget.test.js</code> "dispose 멱등 미생성 no-op"·"중복 dispose 안전"·"close는 hide로 치환" GREEN. <code>favorites-renderer.test.js</code> dispatchTrayAction 축소 회귀 GREEN. grep: tray:favorites push 발신부 0(tray.js는 onShowFavorites 콜백→위젯 직접 open).</td>
+      <td><span class="sev pass">PASS</span></td>
+    </tr>
+  </table>
+</section>
+
+<section>
+  <h2>3. 신뢰 경계 · CSP 세션 모델 (실측 데이터 흐름)</h2>
+  <figure>
+    <svg viewBox="0 0 1100 320" width="100%" role="img" aria-label="M7 위젯 신뢰 경계 및 CSP 흐름">
+      <defs>
+        <marker id="g" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 Z" fill="#34d399"/></marker>
+        <marker id="b" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 Z" fill="#38bdf8"/></marker>
+      </defs>
+      <rect x="30" y="40" width="250" height="120" rx="10" fill="#101a30" stroke="#34d399" stroke-width="1.6"/>
+      <text x="155" y="66" fill="#34d399" font-size="12" text-anchor="middle" font-weight="bold" font-family="Segoe UI">main 프로세스 (신뢰)</text>
+      <text x="155" y="88" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">main.js:152 applyCspHeaders</text>
+      <text x="155" y="104" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">default session · 1회 등록(partition 0)</text>
+      <text x="155" y="122" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">register.js guard · isTrustedSender</text>
+      <text x="155" y="140" fill="#6ee7b7" font-size="9" text-anchor="middle" font-family="Segoe UI">broadcast {favorites} · isDestroyed 가드</text>
+
+      <rect x="430" y="20" width="260" height="74" rx="10" fill="#0b1220" stroke="#38bdf8"/>
+      <text x="560" y="44" fill="#38bdf8" font-size="11" text-anchor="middle" font-weight="bold" font-family="Segoe UI">메인창 wc (app://index.html)</text>
+      <text x="560" y="64" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">헤더 CSP 자동 적용 · preload.js(전체)</text>
+      <text x="560" y="80" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">onTray=['dashboard'] (SEC-L1 축소)</text>
+
+      <rect x="430" y="116" width="260" height="92" rx="10" fill="#1a1206" stroke="#fbbf24"/>
+      <text x="560" y="140" fill="#fcd34d" font-size="11" text-anchor="middle" font-weight="bold" font-family="Segoe UI">위젯 wc (app://favorites.html)</text>
+      <text x="560" y="158" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">동일 default session → 헤더 CSP 자동</text>
+      <text x="560" y="173" fill="#6ee7b7" font-size="9" text-anchor="middle" font-family="Segoe UI">메타 CSP = CSP_POLICY (바이트 동일)</text>
+      <text x="560" y="188" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">preload-favorites(6채널) · per-wc 하드닝</text>
+      <text x="560" y="202" fill="#fca5a5" font-size="9" text-anchor="middle" font-family="Segoe UI">movable:false · floating only on show · focus 게이팅</text>
+
+      <rect x="840" y="60" width="230" height="110" rx="10" fill="#101a30" stroke="#f87171"/>
+      <text x="955" y="84" fill="#fca5a5" font-size="11" text-anchor="middle" font-weight="bold" font-family="Segoe UI">신뢰 밖 (거부)</text>
+      <text x="955" y="104" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">non-app:// 네비 → will-navigate 차단</text>
+      <text x="955" y="120" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">window.open/팝업 → deny</text>
+      <text x="955" y="136" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">webview → preventDefault</text>
+      <text x="955" y="152" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">비-app:// sender → FORBIDDEN</text>
+
+      <line x1="280" y1="80" x2="428" y2="57" stroke="#38bdf8" stroke-width="2" marker-end="url(#b)"/>
+      <line x1="280" y1="120" x2="428" y2="150" stroke="#34d399" stroke-width="2" marker-end="url(#g)"/>
+      <line x1="690" y1="162" x2="838" y2="120" stroke="#f87171" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#g)"/>
+    </svg>
+    <div class="legend">
+      <span><span class="dot" style="background:#34d399"></span> main 신뢰 경계</span>
+      <span><span class="dot" style="background:#38bdf8"></span> CSP 적용 렌더 컨텍스트</span>
+      <span><span class="dot" style="background:#f87171"></span> 하드닝/guard 거부</span>
+    </div>
+    <figcaption>그림 1. M7 신뢰 경계 — 위젯은 메인과 default session 공유로 헤더 CSP 자동 적용(실측 partition 0·applyCspHeaders 호출 1). 신규 표면은 위젯 렌더 컨텍스트 1개 + push 채널 1개(spip:favorites-changed)로 정확히 한정. open/copyText/setFavorite은 main guard 재검증이 유일 권위.</figcaption>
+  </figure>
+</section>
+
+<section>
+  <h2>4. SEC-H / M / L 항목별 판정</h2>
+  <table>
+    <tr><th style="width:70px;">ID</th><th>통제</th><th>STRIDE</th><th style="width:64px;">심각도</th><th style="width:60px;">판정</th></tr>
+    <tr><td class="fid">SEC-H1</td><td>CSP 세션 모델 — default session 공유·재호출 0·메타=CSP_POLICY 바이트 동일·per-wc 하드닝</td><td class="stride">I/E</td><td><span class="sev high">높음</span></td><td><span class="sev resolved">충족</span></td></tr>
+    <tr><td class="fid">SEC-H2</td><td>UI redressing/클릭통과 — movable:false·floating only on show·blur 해제+grace·setIgnoreMouseEvents 미사용·focus 게이팅</td><td class="stride">S/T</td><td><span class="sev high">높음</span></td><td><span class="sev resolved">충족</span></td></tr>
+    <tr><td class="fid">SEC-M1</td><td>per-wc 하드닝(will-navigate·팝업 deny·webview 거부) 위젯 강제</td><td class="stride">E</td><td><span class="sev med">보통</span></td><td><span class="sev resolved">충족</span></td></tr>
+    <tr><td class="fid">SEC-M2</td><td>broadcast 성공 게이팅·payload {favorites} 한정·isDestroyed 가드·화이트리스트 2개</td><td class="stride">I/T</td><td><span class="sev med">보통</span></td><td><span class="sev resolved">충족</span></td></tr>
+    <tr><td class="fid">SEC-M3</td><td>preload 6채널·ipcRenderer/generic invoke 비노출·채널 하드코딩·강력채널 0</td><td class="stride">E</td><td><span class="sev med">보통</span></td><td><span class="sev resolved">충족</span></td></tr>
+    <tr><td class="fid">SEC-M4</td><td>open/copyText/setFavorite guard·senderFrame 승계·렌더러 인자 비신뢰·신규 핸들러 0</td><td class="stride">S/E</td><td><span class="sev med">보통</span></td><td><span class="sev resolved">충족</span></td></tr>
+    <tr><td class="fid">SEC-L1</td><td>onTray ['dashboard'] 축소·dispatchTrayAction favorites→null·tray:favorites push 발신 0</td><td class="stride">R</td><td><span class="sev low">낮음</span></td><td><span class="sev resolved">충족</span></td></tr>
+    <tr><td class="fid">SEC-L2</td><td>메타 CSP 드리프트 방지 — favorites=index=CSP_POLICY 문자 단위 일치</td><td class="stride">T</td><td><span class="sev low">낮음</span></td><td><span class="sev resolved">충족</span></td></tr>
+    <tr><td class="fid">SEC-L3</td><td>dispose 멱등(미생성/중복 no-op)·graceTimer clear·doFinalQuit 단일 경로</td><td class="stride">D</td><td><span class="sev low">낮음</span></td><td><span class="sev resolved">충족</span></td></tr>
+  </table>
+  <div class="ok-box">SEC-H1·H2(높음 2) 및 SEC-M1~4·L1~3 전부 <b>코드 실재 + 동작 실측</b>으로 충족. 신규 치명/높음 위협 0.</div>
+</section>
+
+<section>
+  <h2>5. 보존 통제 (회귀) — 무약화 실측</h2>
+  <table>
+    <tr><th style="width:320px;">통제</th><th style="width:64px;">판정</th><th>근거(실측)</th></tr>
+    <tr><td>메인창 EC-1~6·H-1/H-2/H-3·기존 IPC 검증</td><td><span class="sev pass">PASS</span></td><td>register.js guard·isTrustedSender·각 핸들러 무수정. 전체 474 테스트 GREEN(H-1 realpath·INVALID_ID·deny-list 등 회귀 포함).</td></tr>
+    <tr><td>doFinalQuit 단일 종료 경로 + 멱등</td><td><span class="sev pass">PASS</span></td><td><code>main.js:265-271</code> disposeResources(_disposed 가드) → favoritesWidget.dispose() 1줄 추가 → tray.destroy → app.exit. 기존 순서 불변(P2-2).</td></tr>
+    <tr><td>textContent 렌더(L-1)·저장형 XSS 차단</td><td><span class="sev pass">PASS</span></td><td>favorites.js el()의 <code>opts.text→textContent</code>(:114)·name/path title 모두 textContent(:239,:241). <code>favorites-html-csp.test.js</code> innerHTML 할당 0·favorites-renderer XSS 보존(textContent 전제) GREEN.</td></tr>
+    <tr><td>오버레이 제거가 main 통제 0 변경</td><td><span class="sev pass">PASS</span></td><td>제거 대상은 렌더러 DOM/onTray 분기. main.js webPreferences·applyCspHeaders·하드닝·window-all-closed no-op·close-to-tray 무수정. onShowFavorites 콜백만 위젯 show로 연결(:192-198).</td></tr>
+    <tr><td>런타임 의존성 0 · 시크릿 0</td><td><span class="sev pass">PASS</span></td><td>package.json <code>dependencies:{}</code>. M7 파일 require는 builtin <code>path</code> + <code>electron</code>(지연·dev)만. 시크릿 grep 0건.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>6. 확인 필요 (위험 수용 — 잔여, 비차단)</h2>
+  <ul>
+    <li><b>GUI 수동 스모크(F-3):</b> 창 wiring(트레이→위젯 show·blur→hide·우측하단 배치·트레이 상주 중 위젯 등장)은 헤드리스 단위테스트로 동작 동등성을 실측했으나, 실제 멀티모니터·작업표시줄 위치·always-on-top 시각 거동은 패키징/런타임 GUI 스모크에서 1회 육안 확인 권고(보안 게이트 비차단 — 통제 자체는 코드/테스트로 성립).</li>
+    <li><b>MQ7-3(메인 UI 위젯 트리거) 미채택 유지:</b> 현 구현은 트레이 경유만이며 신규 invoke 0. 향후 <code>spip:showFavoritesWidget</code> 도입 시 "신규 invoke 0" 주장이 변경되므로 1회 재검 권고(현 판정 비차단).</li>
+  </ul>
+  <div class="note">두 항목 모두 치명/높음을 만들지 않으며 게이트 통과를 막지 않는다.</div>
+</section>
+
+<section>
+  <h2>7. 종합 판정</h2>
+  <div class="ok-box">
+    <p style="margin:4px 0;"><b>판정: PASS.</b> 설계 보안검증(rev.2 PASS)이 명시한 통제가 구현 코드에 <b>실재</b>하고 <b>실측 동작</b>으로 성립함을 확인했다. 게이트 G1~G7 전부 충족 — 위젯 webPreferences 메인 1:1(빠진 옵션 0)·preload 6채널 한정(generic invoke/강력채널 0, 런타임 캡처)·SEC-H1 CSP 세션 공유(applyCspHeaders 1지점·partition 0·메타 바이트 동일)·SEC-H2 4중 통제(movable:false·floating only on show·blur grace·setIgnoreMouseEvents 미사용·focus 게이팅)·SEC-M2 broadcast 성공 게이팅+isDestroyed 가드·SEC-M4 guard 승계·SEC-L1~3.</p>
+    <p style="margin:4px 0;"><b>발견 건수:</b> 치명 0 · 높음 0 · 보통 0 · 낮음 0 · 신규 위협 0. (설계 9개 통제 전부 구현 실측 클로즈.)</p>
+    <p style="margin:4px 0;"><b>실측 근거:</b> <span class="mono">npm test → tests 474 / pass 474 / fail 0</span>. CSP 3자 ===true. preload 노출 키 정확히 6 + ipcRenderer/invoke/send/강력채널 0. partition 0 · setIgnoreMouseEvents 호출 0 · applyCspHeaders 호출 1(main.js:152) · dependencies {} · 시크릿 0.</p>
+    <p style="margin:4px 0;"><b>요약:</b> M7 신규 보안 표면은 위젯 렌더 컨텍스트 1개 + push 채널 1개로 정확히 한정되며, 메인창 동등 통제(동일 webPreferences·app:// 로드·default session CSP 자동 적용+메타 단일원천·per-wc 하드닝·senderFrame guard 재검증·textContent)와 더 좁은 preload(6채널)로 봉합됐다. frameless/transparent/alwaysOnTop UI redressing 표면은 4중 통제로 닫혔고 main 재검증이 유일 권위라 게이팅 우회가 권한 상승으로 확대되지 않는다. <b>구현 보안 게이트 통과 — 이관 구현 승인.</b> 코드는 직접 수정하지 않고 검증·확인만 수행했다.</p>
+  </div>
+  <p class="kv"><b>보고서 경로:</b> <code>E:\03.프로젝트\Project-SPIP\docs\reviews\m7_security_review_1.html</code></p>
+</section>
+
+<footer>
+  Project-SPIP — M7 구현 보안 게이트 1회차 · 보안 전담 검증자 · 2026-06-21 · 대상 favoritesWidget/preload-favorites/main/register/preload/security + public/favorites.* + 테스트 5종 · 기준 m7_design_security_review_2.html · 실측 npm test(474/474) + Node 프로브 · 판정: PASS(치명 0·높음 0·보통 0·낮음 0·신규 위협 0) · 코드 직접 수정 없음(검증·확인만).
+</footer>
+
+</main>
+</body>
+</html>

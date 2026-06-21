@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!--
+    즐겨찾기 위젯 창(app://favorites.html). 별도 프레임리스 토스트형 BrowserWindow 전용.
+    CSP (SEC-H1/SEC-L2, EM-M-1): index.html 메타와 **문자열 동일**한 단일 원천 정책.
+    main 이 default session 에 1회 등록한 응답 헤더 CSP 가 이 페이지 로드에도 자동 적용되며(SEC-H1),
+    아래 메타는 그 정합 사본(2차 방어). 축약/드리프트 금지 — 누락은 약화.
+    인라인 스크립트 0 · 인라인 이벤트 핸들러 0 · 자산은 동일 출처('self')만(./favorites.css · ./favorites.js).
+  -->
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'">
+  <title>즐겨찾기 — Project-SPIP</title>
+  <link rel="stylesheet" href="./favorites.css">
+</head>
+<body class="fav-widget-body">
+  <!-- 위젯 루트: 모든 표시 문자열은 favorites.js 가 DOM API(textContent)로 렌더(L-1) -->
+  <div id="fav-widget" class="fav-widget" role="dialog" aria-modal="false" aria-label="즐겨찾기 위젯"></div>
+  <script src="./favorites.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project-SPIP — M7 코드 품질 리뷰 #1</title>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#1e293b; --text:#e2e8f0; --sub:#94a3b8;
+    --accent:#34d399; --ref:#38bdf8; --line:#334155; --warn:#fbbf24; --danger:#f87171;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:"Segoe UI","Malgun Gothic",system-ui,sans-serif;line-height:1.7;}
+  header{padding:42px 32px 30px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#13203b,#0f172a);}
+  header h1{margin:0 0 8px;font-size:27px;}
+  header .tag{display:inline-block;background:rgba(52,211,153,.12);color:var(--accent);
+    border:1px solid rgba(52,211,153,.4);border-radius:999px;padding:3px 12px;font-size:13px;margin-right:8px;}
+  header p{margin:12px 0 0;color:var(--sub);max-width:1000px;}
+  .meta{margin-top:14px;font-size:13px;color:var(--sub);}
+  main{max-width:1180px;margin:0 auto;padding:30px;}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:22px 26px;margin:20px 0;}
+  h2{margin:0 0 14px;font-size:20px;color:var(--accent);border-left:4px solid var(--accent);padding-left:12px;}
+  h3{font-size:15px;color:var(--ref);margin:20px 0 8px;}
+  p{margin:8px 0;}
+  ul,ol{margin:8px 0;padding-left:22px;} li{margin:5px 0;}
+  code{background:#0b1220;color:var(--ref);padding:1px 6px;border-radius:5px;font-size:12.5px;font-family:Consolas,monospace;}
+  table{width:100%;border-collapse:collapse;margin:12px 0;font-size:13px;}
+  th,td{border:1px solid var(--line);padding:9px 11px;text-align:left;vertical-align:top;}
+  th{background:#142035;color:var(--accent);}
+  tr:nth-child(even) td{background:rgba(255,255,255,.02);}
+  .loc{font-family:Consolas,monospace;color:var(--warn);white-space:nowrap;font-size:12px;}
+  .pill{font-size:11px;font-weight:700;padding:2px 9px;border-radius:6px;white-space:nowrap;display:inline-block;}
+  .p1{background:rgba(248,113,113,.16);color:#fca5a5;border:1px solid rgba(248,113,113,.5);}
+  .p2{background:rgba(251,191,36,.16);color:#fcd34d;border:1px solid rgba(251,191,36,.45);}
+  .p3{background:rgba(56,189,248,.16);color:#7dd3fc;border:1px solid rgba(56,189,248,.45);}
+  .ok{background:rgba(52,211,153,.16);color:#6ee7b7;border:1px solid rgba(52,211,153,.5);}
+  .verdict{font-size:22px;font-weight:800;color:var(--accent);}
+  .note{background:rgba(56,189,248,.08);border:1px solid rgba(56,189,248,.3);border-radius:8px;padding:12px 16px;font-size:13px;color:#bae6fd;}
+  .warn-box{background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.3);border-radius:8px;padding:12px 16px;font-size:13px;color:#fde68a;}
+  .ok-box{background:rgba(52,211,153,.08);border:1px solid rgba(52,211,153,.3);border-radius:8px;padding:12px 16px;font-size:13px;color:#a7f3d0;}
+  .kv{display:flex;gap:18px;flex-wrap:wrap;margin-top:14px;}
+  .kv div{background:#0b1220;border:1px solid var(--line);border-radius:10px;padding:12px 18px;min-width:130px;}
+  .kv .n{font-size:26px;font-weight:800;}
+  .kv .l{font-size:12px;color:var(--sub);}
+  footer{text-align:center;color:var(--sub);font-size:12px;padding:26px;border-top:1px solid var(--line);}
+  .sev-head{font-weight:700;}
+</style>
+</head>
+<body>
+<header>
+  <span class="tag">M7 코드 품질 리뷰</span><span class="tag">즐겨찾기 위젯 창</span><span class="tag">FLIP 애니메이션</span>
+  <h1>Project-SPIP — M7 신규/변경 코드 품질 리뷰 #1</h1>
+  <p>M7(R-22 즐겨찾기 독립 위젯 창 · R-23 카드 reorder FLIP) 신규/변경 코드의 <b>품질</b>(정확성·중복·복잡도·모듈 경계·죽은 코드·테스트 신뢰도)을 검증한다. 동작 적합성(QA)·보안 표면(Security)은 별도 트랙. 기준: <code>docs/architecture/m7-design.html</code>(rev.2)·기존 CommonJS 스타일. <b>docs/Development/ 표준 폴더는 부재</b> — 주변 코드 일관성·일반 모범 사례를 기준으로 적용.</p>
+  <div class="meta">리뷰어: 코드 품질 전담 · 작성일: 2026-06-21 · 대상: favoritesWidget.js·preload-favorites.js·favorites.{html,js,css}·main.js·ipc/register.js·preload.js·app.js·styles.css + 신규 테스트 5종 · 증거: 전체 테스트 <b>475/475 PASS</b>(그 중 M7 5종 101건)</div>
+</header>
+
+<main>
+
+<section>
+  <h2>종합 판정</h2>
+  <p class="verdict">PASS — 정확성 결함(P1) 0건</p>
+  <div class="kv">
+    <div><div class="n" style="color:#fca5a5">0</div><div class="l">P1 · 정확성 결함</div></div>
+    <div><div class="n" style="color:#fcd34d">5</div><div class="l">P2 · 개선</div></div>
+    <div><div class="n" style="color:#7dd3fc">6</div><div class="l">P3 · 사소</div></div>
+    <div><div class="n" style="color:#6ee7b7">475/475</div><div class="l">테스트 PASS</div></div>
+  </div>
+  <div class="ok-box" style="margin-top:14px;">
+    <b>요약:</b> M7 구현은 설계(rev.2)에 충실하고 품질이 높다. 위젯 생명주기(grace 타이머 정리·dispose 멱등·close→hide 치환), positionBottomRight(workArea·멀티모니터·screen 결측 가드), broadcast(wc 화이트리스트 2개·isDestroyed 가드·실패 시 미push), FLIP(순수 computeFlip·reduced-motion·is-dragging 제외·rAF play), focus 게이팅 상태머신, 모듈 경계(전송 vs 도메인 vs 렌더러 분리)·preload 최소성·CSP 단일원천 일치 모두 <b>실측·테스트로 확인된 정확성 결함 0</b>. 발견된 항목은 전부 개선(P2)·사소(P3)이며 동작·보안을 약화하지 않는다. 핵심 쟁점은 <b>frontend가 동형성 테스트로 고정했다고 보고한 app.js↔favorites.js 4개 함수 중복</b>의 향후 추출 가치(P2-1)와, 미사용 export·refresh 중복 트리거 등 경미한 위생 항목이다.</p>
+  </div>
+</section>
+
+<section>
+  <h2>1. 정확성 (P1 대상 — 결함 없음, 검증 근거)</h2>
+  <p>설계가 지목한 정확성 위험 지점을 실측 코드로 추적했고, 전부 적절히 처리됨을 확인했다. 아래는 <b>합격 근거</b>(P1 아님)다.</p>
+  <table>
+    <tr><th style="width:230px;">점검 항목</th><th>실측 결과 (위치)</th><th style="width:70px;">판정</th></tr>
+    <tr><td>grace 타이머 정리</td><td><code>onBlur</code>가 <code>clearTimeout(graceTimer)</code> 선행 후 재설정. <code>onFocus</code>·<code>closed</code>·<code>dispose</code>에서 모두 clear. 재진입 안전. (<span class="loc">favoritesWidget.js:83,95,150,196</span>)</td><td><span class="pill ok">OK</span></td></tr>
+    <tr><td>dispose 멱등 / 재진입</td><td>미생성·이미 destroy 시 no-op, 중복 호출 안전. <code>destroy()</code>→<code>closed</code> 이벤트가 <code>widget=null</code> 후 dispose도 재차 <code>widget=null</code> — 무해. 테스트로 고정. (<span class="loc">favoritesWidget.js:195-202</span>)</td><td><span class="pill ok">OK</span></td></tr>
+    <tr><td>close→hide 치환</td><td>단독 close는 <code>preventDefault</code>+<code>hide()</code>로 재사용 보존. dispose는 <code>destroy()</code>(close 핸들러 미경유)라 preventDefault가 종료를 막지 않음. (<span class="loc">favoritesWidget.js:144-149</span>)</td><td><span class="pill ok">OK</span></td></tr>
+    <tr><td>positionBottomRight 경계</td><td>workArea(x/y 비0 멀티모니터) 기준 우측하단. <code>setPosition</code>·<code>screen</code> API 결측 시 no-op. workArea 결측 폴백·getSize 폴백. 멀티모니터 오프셋 테스트 통과. (<span class="loc">favoritesWidget.js:67-80</span>)</td><td><span class="pill ok">OK</span></td></tr>
+    <tr><td>broadcast wc 가드</td><td>메인·위젯 2개 화이트리스트(getAllWindows 순회 아님), <code>typeof isDestroyed==='function' &amp;&amp; !isDestroyed() &amp;&amp; typeof send==='function'</code> 삼중 가드 + try/catch. 실패 시 미push. (<span class="loc">register.js:144-153</span>)</td><td><span class="pill ok">OK</span></td></tr>
+    <tr><td>FLIP rect 정확성</td><td>First는 old DOM, Last는 mutate(render) 후 new DOM. <code>computeFlip</code> 순수(dx=prev.left-now.left). dragging 카드 제외. rAF 1프레임 play. 누수 없음(rAF 콜백 1회). (<span class="loc">app.js:833-847,2844-2874</span>)</td><td><span class="pill ok">OK</span></td></tr>
+    <tr><td>reduced-motion</td><td>JS(<code>prefersReducedMotion</code>) 조기 return + CSS <code>@media reduce{.cards .card{transition:none!important}}</code> 이중 방어. (<span class="loc">app.js:2845,2848 · styles.css:585</span>)</td><td><span class="pill ok">OK</span></td></tr>
+    <tr><td>focus 게이팅 상태머신</td><td><code>focusGate</code> 순수(focused!==true → focusOnly). 비포커스 첫 클릭은 액션 미실행·포커스만, 버튼 disabled 동기화. (<span class="loc">favorites.js:62-66,142-155,259-260</span>)</td><td><span class="pill ok">OK</span></td></tr>
+    <tr><td>onFavoritesChanged 구독 누수</td><td>위젯은 hide/show 재사용(재로드 없음)이라 init 1회 구독이 창 수명 전체에 1개로 유지 — 누수 아님. preload는 unsubscribe 함수 반환(미사용이나 계약상 안전). (<span class="loc">favorites.js:341-349</span>)</td><td><span class="pill ok">OK</span></td></tr>
+    <tr><td>오버레이 제거 후 dangling</td><td><code>renderFavoritesSlider/openFavoritesSlider/state.slider/spip:tray:favorites</code> 등 런타임 참조 전무(주석만 잔존). app.js·index.html·styles.css 전수 grep으로 확인. (<span class="loc">app.js:913,1657 — 주석</span>)</td><td><span class="pill ok">OK</span></td></tr>
+    <tr><td>비동기 미await</td><td>doFinalQuit의 <code>dispose()</code>는 동기. broadcast send 동기. favorites.js의 doOpen/doCopy/doUnfavorite/refresh는 await 처리·busy 플래그 보유. main onShowFavorites는 동기 show(try/catch). 누락 없음.</td><td><span class="pill ok">OK</span></td></tr>
+    <tr><td>setFavorite 실패 시 broadcast</td><td><code>res.ok &amp;&amp; Array.isArray(res.favorites)</code> 충족 시에만 push. INVALID_ID 시 미push(테스트 고정). (<span class="loc">register.js:157-161</span>)</td><td><span class="pill ok">OK</span></td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>2. 개선 항목 (P2)</h2>
+
+  <h3>P2-1 <span class="pill p2">중복</span> app.js↔favorites.js 4개 순수 함수 바이트 동일 중복</h3>
+  <table>
+    <tr><th style="width:150px;">무엇</th><td><code>focusGate</code>·<code>favoritesChangedView</code>·<code>nextSlideIndex</code> 3개가 두 파일에 <b>바이트 동일</b>로 정의됨. <code>favoriteViewModels</code>(app)↔<code>favoriteWidgetViewModels</code>(favorites)는 변수명만 다른 <b>동형</b> 로직.</td></tr>
+    <tr><th>위치</th><td><span class="loc">app.js:776,856,866,789</span> ↔ <span class="loc">favorites.js:53,63,69,24</span></td></tr>
+    <tr><th>왜 문제</th><td>한쪽 계약 변경 시 다른 쪽이 자동으로 따라가지 않아 <b>드리프트 위험</b>. 현재는 frontend가 <code>favorites-renderer.test.js</code>의 동형성 단언(<code>app.focusGate(true)===fav.focusGate(true)</code> 등)으로 고정 → <b>드리프트가 즉시 테스트 실패로 드러나므로 위험도는 낮음</b>. 다만 동형성 테스트는 focusGate·favoritesChangedView 2개만 커버하고 <code>nextSlideIndex</code>·뷰모델 동형은 <b>app↔fav 교차 단언이 없다</b>(각자 단독 검증). 즉 nextSlideIndex가 한쪽만 바뀌면 테스트가 못 잡는다.</td></tr>
+    <tr><th>권고</th><td>독립 창이라 ESM/공유 모듈 도입이 부담이면 <b>현 복사 + 동형성 테스트 유지</b>가 합리적. 단 ① 동형성 단언을 <code>nextSlideIndex</code>·뷰모델까지 확장(교차 비교 1~2줄 추가)하거나 ② 두 파일 상단에 "이 함수는 X와 동기화 필수(테스트 고정)" 상호 참조 주석을 넣어 의도를 명문화. 향후 함수가 더 늘면 <code>public/shared/favorites-core.js</code> 같은 단일 원천 추출을 검토(런타임 dep 0 원칙과 무충돌).</td></tr>
+  </table>
+
+  <h3>P2-2 <span class="pill p2">죽은 코드</span> app.js 미사용 export(nextSlideIndex·favoriteViewModels)</h3>
+  <table>
+    <tr><th style="width:150px;">무엇</th><td>오버레이 슬라이더 제거 후 app.js 런타임에서 <code>nextSlideIndex</code>·<code>favoriteViewModels</code>는 <b>호출되지 않는다</b>(정의·export만 잔존). <code>focusGate</code>·<code>favoritesChangedView</code>도 app.js 런타임에서 미사용(위젯 전용 로직).</td></tr>
+    <tr><th>위치</th><td><span class="loc">app.js:776,789,856,866 (def) / 3015-3023 (export)</span> — grep 결과 런타임 호출부 0</td></tr>
+    <tr><th>왜 문제</th><td>설계 §8.2가 "<code>favoriteViewModels</code>·<code>nextSlideIndex</code> 순수 함수는 위젯에서 공유(중복 방지)"라 했으나 실제로는 위젯이 자체 복사본을 갖고 app.js 사본은 <b>오직 테스트(동형성)용으로만 남았다</b>. 코드만 읽으면 "app이 아직 슬라이더를 쓰나?"라는 오해를 부른다. 죽은 코드 신호.</td></tr>
+    <tr><th>권고</th><td>P2-1과 함께 결정. 동형성 테스트 기준점으로 의도적으로 남기는 것이라면 <b>각 함수 위에 "@deprecated 런타임 미사용 — 위젯 동형성 테스트 기준점"</b> 주석으로 의도를 박제. 동형성을 favorites.js 단독 검증으로 옮길 수 있으면 app.js에서 4개를 삭제해 표면을 줄이는 편이 더 깔끔하다(슬라이더가 완전히 위젯으로 이전됐으므로).</td></tr>
+  </table>
+
+  <h3>P2-3 <span class="pill p2">복잡도</span> favorites.js refresh 중복 트리거(focus + visibilitychange)</h3>
+  <table>
+    <tr><th style="width:150px;">무엇</th><td>show(=포커스 복귀)마다 stale 해소 재조회를 <code>window 'focus'</code>와 <code>document 'visibilitychange'</code> <b>두 경로</b>로 건다. 한 번의 show에서 두 이벤트가 모두 발화하면 <code>refresh()</code>(getUiState+getProjects 각 1회)가 <b>중복 호출</b>될 수 있다.</td></tr>
+    <tr><th>위치</th><td><span class="loc">favorites.js:325-338</span></td></tr>
+    <tr><th>왜 문제</th><td>기능 오류는 아니다(refresh는 idempotent·render 재호출 안전). 그러나 show마다 IPC 2회가 2배(최대 4회)로 나갈 수 있어 <b>불필요한 왕복</b>이고, render() 중복으로 슬라이더 인덱스 clamp가 두 번 일어난다. 의도(둘 중 무엇이 실제 발화 경로인지)가 코드에서 불명확.</td></tr>
+    <tr><th>권고</th><td>경합 제거: refresh에 in-flight 가드(예: <code>if(state.refreshing)return</code>)를 두거나, 한쪽 경로를 정규 트리거로 확정하고 다른 쪽은 폴백으로 주석화. 비용이 작아 P2 하위.</td></tr>
+  </table>
+
+  <h3>P2-4 <span class="pill p2">정확성(경미)</span> doOpen/doCopy 공유 busy 플래그 — 교차 차단</h3>
+  <table>
+    <tr><th style="width:150px;">무엇</th><td><code>doOpen</code>·<code>doCopy</code>가 같은 <code>state.busy</code>를 공유한다. open in-flight 동안 copy가, copy in-flight 동안 open이 <b>무시</b>된다(다른 동작인데도).</td></tr>
+    <tr><th>위치</th><td><span class="loc">favorites.js:99,158-169</span></td></tr>
+    <tr><th>왜 문제</th><td>연타 방지 목적은 달성하나, 서로 무관한 두 액션이 한 플래그를 공유해 <b>한쪽이 다른 쪽을 막는</b> 의도치 않은 상호 차단이 가능. 메인 app.js는 액션별 맵(<code>store.state.opening[id]</code>)으로 분리한 것과 <b>일관성도 어긋난다</b>. 위젯은 카드 1장 표시라 실사용 충돌 빈도는 낮음(저심각).</td></tr>
+    <tr><th>권고</th><td>액션별 또는 (id,action)별 in-flight 키로 분리하거나, 최소한 open/copy를 각자 플래그로 나눠 교차 차단을 없앤다. setFavorite(doUnfavorite)는 busy를 쓰지 않는데 이는 낙관적 반영이므로 의도적 — 일관성 측면에서 주석 1줄로 차이를 밝히면 가독성 향상.</td></tr>
+  </table>
+
+  <h3>P2-5 <span class="pill p2">가독성</span> renderInteractivity가 render의 별칭(이름-구현 불일치)</h3>
+  <table>
+    <tr><th style="width:150px;">무엇</th><td>주석은 "전체 재렌더 없이 버튼 활성/시각만 갱신(가벼운 경로)"라 하지만 <code>renderInteractivity</code>는 사실상 <code>render()</code>를 그대로 호출한다(전체 재렌더).</td></tr>
+    <tr><th>위치</th><td><span class="loc">favorites.js:292-293</span></td></tr>
+    <tr><th>왜 문제</th><td>주석-코드 불일치. "가벼운 경로"라는 이름·주석이 실제 비용(전체 재렌더)을 오도한다. 위젯 DOM이 작아 성능 문제는 없으나, 이름이 약속을 어긴다.</td></tr>
+    <tr><th>권고</th><td>래퍼를 제거하고 호출부에서 직접 <code>render()</code>를 부르거나, 주석을 "현재는 전체 재렌더로 단순화(위젯 DOM 소형)"로 정정. 둘 중 후자가 변경 최소.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>3. 사소 항목 (P3)</h2>
+  <table>
+    <tr><th style="width:60px;">ID</th><th>무엇 / 위치 / 권고</th></tr>
+    <tr><td><span class="pill p3">P3-1</span></td><td><b>중복 계산</b> — favorites.js render/clampIndex/slideBy가 매번 <code>favoriteWidgetViewModels(state.projects,state.favorites)</code>를 재계산(렌더 1회에 최대 3회). <span class="loc">favorites.js:185,191,212</span>. 한 번 산출해 지역 변수로 공유 권고(소형 데이터라 저우선).</td></tr>
+    <tr><td><span class="pill p3">P3-2</span></td><td><b>langColor 부분 중복</b> — favorites.js <code>langColor</code>는 app.js 팔레트의 축약본(주석에 "축약본" 명시). 두 팔레트가 향후 달라질 수 있음. <span class="loc">favorites.js:75-83</span>. 표시 보조용이라 무해하나 의도(축약 허용)는 이미 주석화돼 있어 수용 가능.</td></tr>
+    <tr><td><span class="pill p3">P3-3</span></td><td><b>requestClose 폴백 경로</b> — <code>closeWidget</code> 채널 부재 시 <code>window.blur()</code>로 main의 blur→hide를 유발. 동작하나 "blur 의존 닫기"는 간접적. <span class="loc">favorites.js:296-300</span>. 설계가 closeWidget을 선택 채널로 둔 것과 정합 — 현 구현은 채널 없이 blur 폴백만 사용. 주석에 이미 명시됨, 문서화 OK.</td></tr>
+    <tr><td><span class="pill p3">P3-4</span></td><td><b>FLIP 연타 중 First 캡처</b> — 이전 FLIP play(180ms) 미완 상태에서 재reorder 시 First가 애니메이션 중간 위치를 캡처할 수 있음(시각적 글리치, 정확성 아님). <span class="loc">app.js:2846</span>. 실사용 빈도 낮음. 필요 시 reorder 진입 시 진행 중 transform 강제 종료.</td></tr>
+    <tr><td><span class="pill p3">P3-5</span></td><td><b>preload onTray 주석 정합</b> — preload.js의 grep상 보였던 <code>\</code>는 표시 artifact였고 실제 주석은 정상. <code>onTray</code> action을 <code>['dashboard']</code>로 축소(SEC-L1)했고 app.js dispatchTrayAction도 dashboard 단일로 정합 — 3층(preload·app·tray) 일관 확인. 잔여 작업 없음.</td></tr>
+    <tr><td><span class="pill p3">P3-6</span></td><td><b>위젯 키보드 keydown 전역 바인딩</b> — favorites.js가 <code>window.addEventListener('keydown')</code>로 Esc/화살표를 처리. 위젯 단일 페이지라 무해하나, 입력 포커스가 향후 텍스트 입력 요소에 들어갈 경우 화살표 가로채기 가능. 현재 입력 요소 없음 → 문제 없음. <span class="loc">favorites.js:318-322</span>. 향후 입력 추가 시 재검토 메모.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>4. 모듈 경계 · 테스트 품질 평가</h2>
+  <h3>모듈 경계 (양호)</h3>
+  <ul>
+    <li><b>전송 vs 도메인 분리</b> — favoritesWidget.js는 창 생성·위치·생명주기(전송)만 담당, 즐겨찾기 도메인 로직 0. broadcast는 register.js, 영속·검증은 uiState.js 불변. 경계 깨끗.</li>
+    <li><b>preload-favorites 최소성</b> — 정확히 6채널, ipcRenderer/generic invoke 비노출, 채널명 하드코딩. 정적+런타임 모킹 테스트로 강력 채널 16개 미노출 확인. SEC-M3 충실.</li>
+    <li><b>main 변경 최소</b> — onShowFavorites 콜백 1개 교체·doFinalQuit 1줄·deps 1줄(getFavoritesWidgetWc)·screen require. 설계 §10 "치환·최소 추가"와 일치. 위젯은 deps 주입(헤드리스 테스트 가능)으로 결합도 낮춤.</li>
+    <li><b>CSP 단일원천</b> — favorites.html 메타 ≡ index.html 메타 ≡ security.js CSP_POLICY 문자열 동일(실측 비교 + 테스트 고정). 드리프트 방어 OK.</li>
+  </ul>
+  <h3>테스트 품질 (거짓 안심 없음)</h3>
+  <table>
+    <tr><th style="width:230px;">테스트</th><th>의미 있는 검증인가</th></tr>
+    <tr><td>favorites-widget.test.js</td><td><span class="pill ok">실효</span> 모킹 BrowserWindow로 창 속성 1:1·alwaysOnTop 토글·blur grace 타이머(실 130ms 대기로 hide 발화·재focus 취소까지)·멀티모니터 좌표·dispose 멱등·close→hide를 <b>관찰 가능한 부수효과로</b> 검증. SEC-H1은 deps에 applyCspHeaders 부재를 단언해 "재호출 불가"를 구조적으로 고정. 거짓 안심 없음.</td></tr>
+    <tr><td>preload-favorites-contract.test.js</td><td><span class="pill ok">실효</span> Module._load 모킹으로 실제 노출 객체 캡처 → 6개 정확·강력 16개 미노출·하드코딩 채널·payload shape·unsubscribe 반환까지. 정적 grep과 런타임 캡처 이중. 강함.</td></tr>
+    <tr><td>favorites-broadcast.test.js</td><td><span class="pill ok">실효</span> 실제 register.js+uiStateStore로 setFavorite→broadcast 경로 검증. payload 키 정확히 <code>['favorites']</code>·파괴 wc 미수신·위젯 null·실패 시 미push·legacy deps 미주입·위젯 origin guard 통과까지 경계 망라.</td></tr>
+    <tr><td>favorites-renderer.test.js</td><td><span class="pill ok">대체로 실효</span> computeFlip 경계(reduce·신규·이동0·비Map)·focusGate·favoritesChangedView·뷰모델·XSS 보존 모두 의미 있음. <b>한계</b>: 동형성(app≡fav) 단언이 focusGate·favoritesChangedView 2개뿐 — nextSlideIndex·뷰모델 교차 단언 없음(P2-1). DOM 렌더·게이팅 버튼 disabled는 순수 로직 외라 미커버(QA 영역).</td></tr>
+    <tr><td>favorites-html-csp.test.js</td><td><span class="pill ok">실효</span> 메타 CSP 문자열 동일·인라인 script 본문 0·on* 0·외부 출처 0·강력 채널 미참조·innerHTML 0. 정적이지만 회귀 방지에 정확.</td></tr>
+  </table>
+  <div class="note"><b>동형성 테스트 실효성 결론:</b> app≡fav 동형 단언은 <b>실효적이나 커버리지가 부분적</b>이다(2/4 함수). frontend 보고대로 "동형성 테스트로 고정"은 맞지만, nextSlideIndex·뷰모델 드리프트는 현재 그물에 안 걸린다 → P2-1 권고(교차 단언 확장)로 보강 권장.</div>
+</section>
+
+<section>
+  <h2>5. 확인 필요 (설계 의도 쟁점)</h2>
+  <ul>
+    <li><b>app.js 4개 함수 잔존의 공식 정책</b> — "동형성 테스트 기준점으로 의도 보존"인지 "이전 누락으로 남은 죽은 코드"인지 PM/tech-lead 확인 필요. 전자면 @deprecated 주석으로 박제, 후자면 삭제(P2-1·P2-2). 둘 다 동작·보안 무영향.</li>
+    <li><b>refresh 트리거 정규 경로</b> — show 복귀 stale 해소를 focus와 visibilitychange 중 무엇을 정규로 볼지(설계 §7 "show마다 getUiState 재조회"는 둘 다 허용). 중복 왕복 허용 여부 확인(P2-3).</li>
+  </ul>
+</section>
+
+<footer>
+  Project-SPIP · M7 코드 품질 리뷰 #1 · 2026-06-21 · 판정 PASS(P1 0) · 코드 직접 수정 없음
+</footer>
+
+</main>
+</body>
+</html>

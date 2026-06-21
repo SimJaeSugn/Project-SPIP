@@ -42,12 +42,12 @@
 
   <h1>Project-SPIP — 진행 현황판</h1>
   <p class="sub">PC 내 흩어진 VS Code 프로젝트를 스캔해 인사이트를 보여주는 로컬 대시보드</p>
-  <p class="meta">기준일 2026-06-21 · 현재 단계: <span class="badge done">M6 백로그 5기능(R-17~R-21) 구현 완료 · 검증 통과</span> · 다음: 후속/백로그(비차단) + 사용자 PC 1회 수동 확인(트레이·DnD·다이얼로그·클립보드·슬라이더·Q4) · v1.0.1</p>
+  <p class="meta">기준일 2026-06-21 · 현재 단계: <span class="badge done">M7(R-22 별도 즐겨찾기 토스트 창 · R-23 카드 드래그 애니메이션) 구현 완료 · 검증 통과</span> · 다음: 후속/백로그(비차단) + 사용자 PC 1회 수동 확인(토스트 등장·blur 닫힘·독립 표시·FLIP·DnD·트레이·다이얼로그·클립보드·Q4) · v1.0.1</p>
 
   <!-- 핵심 지표 -->
   <h2>핵심 지표</h2>
   <div class="grid kpis">
-    <div class="kpi"><div class="v">416</div><div class="l">테스트 통과 / 0 실패</div></div>
+    <div class="kpi"><div class="v">474</div><div class="l">테스트 통과 / 0 실패</div></div>
     <div class="kpi"><div class="v">100%</div><div class="l">탐지율 (게이트 ≥95%)</div></div>
     <div class="kpi"><div class="v">0.154ms</div><div class="l">필터 (게이트 200ms)</div></div>
     <div class="kpi"><div class="v">0</div><div class="l">외부 의존성</div></div>
@@ -88,15 +88,20 @@
         <text x="700" y="74" fill="#e2e8f0">M4 후속</text>
         <text x="700" y="92" fill="#64748b" font-size="10.5">완료</text>
 
-        <circle cx="820" cy="40" r="13" fill="#064e3b" stroke="#34d399" stroke-width="2"/>
-        <text x="820" y="44" fill="#34d399" font-size="13" font-weight="700">✓</text>
-        <text x="820" y="74" fill="#e2e8f0">데스크톱 전환</text>
-        <text x="820" y="92" fill="#64748b" font-size="10.5">Electron·실 GUI</text>
+        <circle cx="780" cy="40" r="13" fill="#064e3b" stroke="#34d399" stroke-width="2"/>
+        <text x="780" y="44" fill="#34d399" font-size="13" font-weight="700">✓</text>
+        <text x="780" y="74" fill="#e2e8f0">데스크톱 전환</text>
+        <text x="780" y="92" fill="#64748b" font-size="10.5">Electron·실 GUI</text>
+
+        <circle cx="855" cy="40" r="13" fill="#064e3b" stroke="#34d399" stroke-width="2"/>
+        <text x="855" y="44" fill="#34d399" font-size="13" font-weight="700">✓</text>
+        <text x="855" y="74" fill="#e2e8f0">M6 백로그</text>
+        <text x="855" y="92" fill="#64748b" font-size="10.5">5기능·통과</text>
 
         <circle cx="930" cy="40" r="13" fill="#064e3b" stroke="#34d399" stroke-width="2"/>
         <text x="930" y="44" fill="#34d399" font-size="13" font-weight="700">✓</text>
-        <text x="930" y="74" fill="#e2e8f0">M6 백로그</text>
-        <text x="930" y="92" fill="#64748b" font-size="10.5">5기능·검증 통과</text>
+        <text x="930" y="74" fill="#e2e8f0">M7</text>
+        <text x="930" y="92" fill="#64748b" font-size="10.5">위젯·FLIP·통과</text>
       </g>
     </svg>
   </div>
@@ -162,6 +167,22 @@
     </div>
   </div>
 
+  <!-- M7 -->
+  <h2>M7 (R-22 별도 즐겨찾기 토스트 창 · R-23 카드 드래그 애니메이션) — 구현 완료 · 검증 통과</h2>
+  <div class="panel">
+    <p style="margin:0 0 10px;font-size:13.5px;color:#cbd5e1;">사용자 요청 2건을 점진 확장으로 반영했다. <b>R-22</b>는 M6의 즐겨찾기 슬라이더(메인창 내 오버레이)를 <b>대시보드와 독립된 별도 프레임리스 토스트형 창</b>으로 전환해(우측 하단·트레이에서 열림) <b>대시보드를 닫아 트레이에만 있어도</b> 즐겨찾기가 뜨도록 했고(ADR-M6-5 Superseded → ADR-M7-1), <b>R-23</b>은 카드 순서변경 시 <b>FLIP 애니메이션</b>을 추가했다. 새 창에도 메인창과 동등한 보안 통제(동일 webPreferences·app:// 로드·CSP·하드닝·senderFrame 검증)를 적용하고, preload는 위젯 전용 축소 allowlist(6채널)로 표면을 좁혔다. 설계 정본: <span class="links"><a href="../architecture/m7-design.html">m7-design.html</a></span>(rev.2). 설계 reviewer 2회·보안 2회 PASS·구현 다면검증(보안 PASS·코드 P1 0·QA 통합가능)·전체 <b>474 테스트 통과</b>(M7 신규 58 포함).</p>
+    <table>
+      <thead><tr><th>ID</th><th>기능</th><th>구현(실제)</th><th>상태</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">R-22</td><td>즐겨찾기 독립 토스트 창</td><td><code>electron/favoritesWidget.js</code> — 단일 위젯 <code>BrowserWindow</code>(<code>frame:false</code>·<code>transparent</code>·<code>resizable:false</code>·<code>movable:false</code>·<code>skipTaskbar</code>·<code>parent</code> 미지정 독립 생명주기). 우측하단 <code>workArea</code> 좌표 계산(<code>positionBottomRight</code>)·최초 1회 생성 후 hide/show 재사용·<code>doFinalQuit</code>에서만 <code>dispose</code>(멱등). show 시 <code>setAlwaysOnTop(true,'floating')</code>, blur 시 해제+100ms grace 후 hide(SEC-H2). <code>public/favorites.html</code>+<code>public/favorites.js</code>(렌더러·L-1 textContent·focus 게이팅) · <code>electron/preload-favorites.js</code>(축소 allowlist 6채널: getUiState·getProjects·open·copyText·setFavorite·onFavoritesChanged). <code>electron/main.js</code> 트레이 '즐겨찾기'→<code>favoritesWidget.show</code>(메인창 hidden이어도 등장). <code>electron/ipc/register.js</code> <code>spip:favorites-changed</code> 단방향 push(메인+위젯 wc 화이트리스트, <code>{favorites:string[]}</code>만). <code>public/app.js</code> 메인창 슬라이더 오버레이 제거</td><td><span class="badge done">완료</span></td></tr>
+        <tr><td class="mono">R-23</td><td>카드 reorder 애니메이션</td><td><code>public/app.js</code> — FLIP(First-Last-Invert-Play). <code>captureCardRects</code>(<code>.cards [data-card-id]</code> rect 캐시·드래그 중 카드 제외)→<code>flipReorder(mutate)</code>가 render 전후 위치차를 invert(transform) 후 rAF로 180ms play. 좌표 diff는 순수함수 <code>computeFlip</code>으로 분리(단위테스트). <code>prefers-reduced-motion: reduce</code> 시 전이 0(즉시 적용). 드래그·키보드 reorder(<code>reorderByMove</code>) 공통 경로. 카드뷰 한정(table 밀도는 reorder 트리거 없음). 렌더러 전용 — IPC·main·보안 무관</td><td><span class="badge done">완료</span></td></tr>
+      </tbody>
+    </table>
+    <div class="note">
+      <b>헤드리스 한계 — 사용자 PC 1회 수동 확인 필요(추측 PASS 아님).</b> 코드·정책 정합·단위·실기동 스모크는 PASS이나 GUI/OS 표시·입력 상호작용은 헤드리스에서 실증 불가라 분리한다(QA 8건). <b>토스트 등장</b> 트레이 '즐겨찾기' 클릭 시 우측하단 토스트가 즉시 뜸(대시보드가 트레이에 숨어 있어도) · <b>독립 표시</b> 메인창을 닫아 트레이 상주 상태에서도 위젯 단독 등장 · <b>blur 닫힘</b> 위젯 밖 클릭 시 100ms grace 후 hide·재포커스 시 취소 · <b>focus 게이팅</b> 비포커스 상태 첫 클릭은 포커스만 획득(open·copyText·setFavorite 미실행) · <b>FLIP 시각</b> 드래그/키보드 순서변경 시 카드가 점프 없이 부드럽게 이동·<code>prefers-reduced-motion</code> 시 즉시 적용 · <b>양 창 동기화</b> 메인·위젯 동시 표시 중 한쪽 즐겨찾기 토글이 다른 쪽에 즉시 반영(broadcast).
+    </div>
+  </div>
+
   <!-- 검증 게이트 -->
   <h2>검증 게이트 이력 (전부 PASS)</h2>
   <table>
@@ -190,6 +211,11 @@
       <tr><td>M6 구현 보안 게이트</td><td>security-reviewer</td><td>1회 (치명·높음 0)</td><td><span class="badge pass">PASS</span></td><td class="links"><a href="../reviews/m6_security_review_1.html">m6_security_review_1</a></td></tr>
       <tr><td>M6 코드 품질</td><td>code-reviewer</td><td>1회 (P1=0·P2 5·P3 7, P2-3 시정 반영)</td><td><span class="badge pass">PASS</span></td><td class="links"><a href="../reviews/m6_code_review_1.html">m6_code_review_1</a></td></tr>
       <tr><td>M6 동작·통합(다면)</td><td>qa-engineer</td><td>1회 (416 통과·통합 가능)</td><td><span class="badge pass">통합 가능</span></td><td class="links"><a href="../reviews/m6_qa_1.html">m6_qa_1</a> · U-1~U-6 사용자 PC 확인</td></tr>
+      <tr><td>M7 설계 (R-22·R-23)</td><td>reviewer</td><td>2회 (1회→반영→PASS)</td><td><span class="badge pass">PASS</span></td><td class="links"><a href="../reviews/m7_design_review_2.html">m7_design_review_2</a></td></tr>
+      <tr><td>M7 설계 보안</td><td>security-reviewer</td><td>2회 (조건부 높음2→해소)</td><td><span class="badge pass">PASS</span></td><td class="links"><a href="../reviews/m7_design_security_review_2.html">m7_design_security_review_2</a></td></tr>
+      <tr><td>M7 구현 보안 게이트</td><td>security-reviewer</td><td>1회 (치명·높음 0)</td><td><span class="badge pass">PASS</span></td><td class="links"><a href="../reviews/m7_security_review_1.html">m7_security_review_1</a></td></tr>
+      <tr><td>M7 코드 품질</td><td>code-reviewer</td><td>1회 (P1=0)</td><td><span class="badge pass">PASS</span></td><td class="links"><a href="../reviews/m7_code_review_1.html">m7_code_review_1</a></td></tr>
+      <tr><td>M7 동작·통합(다면)</td><td>qa-engineer</td><td>1회 (474 통과·통합 가능)</td><td><span class="badge pass">통합 가능</span></td><td class="links"><a href="../reviews/m7_qa_1.html">m7_qa_1</a> · 사용자 PC 확인 8건</td></tr>
     </tbody>
   </table>
 
@@ -197,8 +223,8 @@
   <h2>요구 진척</h2>
   <div class="panel">
     <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px;">
-      <span><b style="color:#34d399;">28건 구현 완료</b> (MVP 17 = 기능 11 + 비기능 5 + 품질 N-01, M4 후속 6, M6 백로그 5)</span>
-      <span class="mono">28 / 28 (100%)</span>
+      <span><b style="color:#34d399;">30건 구현 완료</b> (MVP 17 = 기능 11 + 비기능 5 + 품질 N-01, M4 후속 6, M6 백로그 5, M7 2)</span>
+      <span class="mono">30 / 30 (100%)</span>
     </div>
     <div class="barwrap"><div class="bar" style="width:100%;"></div></div>
     <table style="margin-top:14px;">
@@ -208,6 +234,7 @@
         <tr><td>MVP 비기능</td><td class="mono">N-02·03·04·05·06 (+N-01 품질)</td><td><span class="badge done">구현 완료</span></td></tr>
         <tr><td>M4 후속</td><td class="mono">R-03·05·09·15·16 · N-07</td><td><span class="badge done">구현 완료</span></td></tr>
         <tr><td>M6 백로그</td><td class="mono">R-17·18·19·20·21</td><td><span class="badge done">구현 완료</span></td></tr>
+        <tr><td>M7</td><td class="mono">R-22·23</td><td><span class="badge done">구현 완료</span></td></tr>
       </tbody>
     </table>
     <p class="meta" style="margin-top:8px;">상세: <span class="links"><a href="traceability.html">traceability.html</a></span> (요구→설계→구현→검증 추적, 빈 칸 0)</p>
@@ -259,17 +286,17 @@
     <b>기획</b>
     <ul><li><a href="../PRD.html">PRD.html</a> (§12 마일스톤·M4 정의)</li><li><a href="../FeatureSpec.html">FeatureSpec.html</a></li><li><a href="../UserStories.html">UserStories.html</a></li></ul>
     <b>설계</b>
-    <ul><li><a href="../architecture/architecture.html">architecture.html</a></li><li><a href="../architecture/m4-design.html">m4-design.html</a> (M4 후속 6건 설계)</li><li><a href="../architecture/electron-migration.html">electron-migration.html</a> (v1.1 · 데스크톱 전환 · §4 IPC 계약·§6 보안)</li><li><a href="../architecture/m6-design.html">m6-design.html</a> (rev.2 · 백로그 5기능 R-17~R-21 설계)</li><li><a href="../architecture/adr.html">adr.html</a> (ADR 6건)</li></ul>
+    <ul><li><a href="../architecture/architecture.html">architecture.html</a></li><li><a href="../architecture/m4-design.html">m4-design.html</a> (M4 후속 6건 설계)</li><li><a href="../architecture/electron-migration.html">electron-migration.html</a> (v1.1 · 데스크톱 전환 · §4 IPC 계약·§6 보안)</li><li><a href="../architecture/m6-design.html">m6-design.html</a> (rev.2 · 백로그 5기능 R-17~R-21 설계)</li><li><a href="../architecture/m7-design.html">m7-design.html</a> (rev.2 · R-22 즐겨찾기 독립 토스트 창·R-23 카드 reorder FLIP 설계 델타)</li><li><a href="../architecture/adr.html">adr.html</a> (ADR 6건)</li></ul>
     <b>계획·계약·추적</b>
     <ul><li><a href="../roadmap.html">roadmap.html</a> (S0~S7)</li><li><a href="../api-contract.md">api-contract.md</a></li><li><a href="../traceability.html">traceability.html</a></li></ul>
     <b>디자인</b>
     <ul><li><a href="../design/대시보드.dc.html">대시보드.dc.html</a> (Claude Design 시안)</li></ul>
     <b>실행</b>
-    <ul><li><code>npm start</code> (=<code>electron .</code>) / <code>run.bat</code>(더블클릭, 빌드 없이 실행) — <b>데스크톱 앱 실행</b>(네이티브 폴더 선택·인앱 재스캔·VS Code 열기)</li><li><code>build.bat</code>(더블클릭) / <code>build.ps1</code>(<code>-Portable</code> 옵션) / <code>npm run build</code> · <code>build:portable</code> — 설치본 빌드(Windows NSIS + portable, 미서명)</li><li><code>add-defender-exclusion.bat</code> — 반복 빌드 시 Defender가 app.asar를 잠가 빌드 실패하는 것 방지(1회 관리자 실행)</li><li><code>npm run scan</code> / <code>spip --roots ...</code> — 자동화용 스캔만(<code>--with-size</code>·<code>--all-drives</code>·<code>--depth</code>)</li><li><code>npm run start:web</code> — 과도기 HTTP 서버(127.0.0.1:7421, 제거 예정)</li><li><code>npm test</code> — 테스트 416건</li></ul>
+    <ul><li><code>npm start</code> (=<code>electron .</code>) / <code>run.bat</code>(더블클릭, 빌드 없이 실행) — <b>데스크톱 앱 실행</b>(네이티브 폴더 선택·인앱 재스캔·VS Code 열기)</li><li><code>build.bat</code>(더블클릭) / <code>build.ps1</code>(<code>-Portable</code> 옵션) / <code>npm run build</code> · <code>build:portable</code> — 설치본 빌드(Windows NSIS + portable, 미서명)</li><li><code>add-defender-exclusion.bat</code> — 반복 빌드 시 Defender가 app.asar를 잠가 빌드 실패하는 것 방지(1회 관리자 실행)</li><li><code>npm run scan</code> / <code>spip --roots ...</code> — 자동화용 스캔만(<code>--with-size</code>·<code>--all-drives</code>·<code>--depth</code>)</li><li><code>npm run start:web</code> — 과도기 HTTP 서버(127.0.0.1:7421, 제거 예정)</li><li><code>npm test</code> — 테스트 474건</li></ul>
   </div>
 
   <footer>
-    Project-SPIP 진행 현황판 · 기준일 2026-06-21 · 작업이 진행되면 이 페이지를 단일 진입점으로 갱신합니다.
+    Project-SPIP 진행 현황판 · 기준일 2026-06-21 · 현재 단계: M7(R-22·R-23) 구현 완료·검증 통과(테스트 474/474) · 작업이 진행되면 이 페이지를 단일 진입점으로 갱신합니다.
   </footer>
 
 </div>

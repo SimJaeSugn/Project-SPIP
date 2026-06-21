@@ -23,13 +23,14 @@ if (process.env.ELECTRON_RUN_AS_NODE) {
 
 const path = require('path');
 const fs = require('fs');
-const { app, BrowserWindow, Menu, dialog, ipcMain, protocol, shell, clipboard } = require('electron');
+const { app, BrowserWindow, Menu, dialog, ipcMain, protocol, shell, clipboard, screen } = require('electron');
 
 const { buildContext } = require('./context');
 const { registerIpcHandlers } = require('./ipc/register');
 const { applyCspHeaders, hardenWebContents, TRUSTED_ORIGIN } = require('./security');
 const { buildMenuTemplate } = require('./menu');
 const { createTray } = require('./tray');
+const favoritesWidget = require('./favoritesWidget');
 const { Logger } = require('../lib/common/logger');
 
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
@@ -160,6 +161,8 @@ function onReady() {
     logger,
     trustedOrigin: TRUSTED_ORIGIN,
     getWebContents: () => (win && !win.isDestroyed() ? win.webContents : null),
+    // [M7 SEC-M2] 위젯 wc 지연평가 — favorites-changed broadcast 대상(파괴 시 null).
+    getFavoritesWidgetWc: () => favoritesWidget.getWebContents(),
     getWin: () => win,
   });
 
@@ -183,12 +186,14 @@ function onReady() {
   try {
     tray = createTray({
       onShowDashboard: () => { if (win && !win.isDestroyed()) { win.show(); win.focus(); } },
+      // [M7 §8.1 R4] 트레이 '즐겨찾기' → 독립 위젯 창 show(메인창 push/show 폐기).
+      //   메인창이 hidden(트레이 상주)이어도 위젯 등장(R-22 독립성). applyCspHeaders는 deps 불요
+      //   (SEC-H1: default session에 앱 1회 등록 자동 적용). hardenWebContents는 per-wc라 주입.
       onShowFavorites: () => {
-        if (win && !win.isDestroyed()) {
-          win.show();
-          win.focus();
-          // 트레이 push action 화이트리스트(M6-M-3) — favorites 고정, 메인 win.webContents 단방향.
-          win.webContents.send('spip:tray:favorites');
+        try {
+          favoritesWidget.show({ hardenWebContents, trustedOrigin: TRUSTED_ORIGIN, screen });
+        } catch (err) {
+          logger.error('즐겨찾기 위젯 표시 실패', err);
         }
       },
       onQuit: () => { isQuitting = true; if (win && !win.isDestroyed()) win.close(); else doFinalQuit(); },
@@ -259,6 +264,8 @@ function disposeResources() {
 // [P2-2] 실제 종료 1지점: 자원 dispose는 여기서만(=Q4 통과/창 없음 확정 후). 멱등 설계.
 function doFinalQuit() {
   disposeResources();
+  // [M7 SEC-L3] 즐겨찾기 위젯 정리(멱등) — 미생성/이미 destroy 시 no-op. 단일 종료 경로 불변.
+  try { favoritesWidget.dispose(); } catch (err) { logger.error('위젯 dispose 실패', err); }
   if (tray && typeof tray.destroy === 'function') { tray.destroy(); tray = null; }
   app.exit(0);
 }

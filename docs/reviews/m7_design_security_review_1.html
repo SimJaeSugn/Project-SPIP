@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project-SPIP — M7 설계 보안 검증 (즐겨찾기 위젯 창) 1회차</title>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#1e293b; --text:#e2e8f0; --sub:#94a3b8;
+    --accent:#34d399; --ref:#38bdf8; --line:#334155; --warn:#fbbf24; --danger:#f87171;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:"Segoe UI","Malgun Gothic",system-ui,sans-serif;line-height:1.7;}
+  header{padding:48px 32px 36px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#13203b,#0f172a);}
+  header h1{margin:0 0 8px;font-size:28px;}
+  header .tag{display:inline-block;background:rgba(52,211,153,.12);color:var(--accent);
+    border:1px solid rgba(52,211,153,.4);border-radius:999px;padding:3px 12px;font-size:13px;margin-right:8px;}
+  header p{margin:14px 0 0;color:var(--sub);max-width:1000px;}
+  .meta{margin-top:16px;font-size:13px;color:var(--sub);}
+  main{max-width:1180px;margin:0 auto;padding:32px;}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:24px 28px;margin:22px 0;}
+  h2{margin:0 0 16px;font-size:21px;color:var(--accent);border-left:4px solid var(--accent);padding-left:12px;}
+  h3{font-size:16px;color:var(--ref);margin:22px 0 10px;}
+  p{margin:8px 0;}
+  ul,ol{margin:8px 0;padding-left:22px;}
+  li{margin:5px 0;}
+  code{background:#0b1220;color:var(--ref);padding:1px 6px;border-radius:5px;font-size:13px;}
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13.5px;}
+  th,td{border:1px solid var(--line);padding:9px 11px;text-align:left;vertical-align:top;}
+  th{background:#142035;color:var(--accent);}
+  tr:nth-child(even) td{background:rgba(255,255,255,.02);}
+  .fid{font-family:Consolas,monospace;color:var(--accent);font-weight:700;white-space:nowrap;}
+  .mono{font-family:Consolas,monospace;font-size:12.5px;}
+  .sev{font-size:11px;font-weight:700;padding:2px 9px;border-radius:6px;white-space:nowrap;}
+  .crit{background:rgba(248,113,113,.22);color:#fecaca;border:1px solid rgba(248,113,113,.6);}
+  .high{background:rgba(251,146,60,.18);color:#fed7aa;border:1px solid rgba(251,146,60,.55);}
+  .med{background:rgba(251,191,36,.16);color:#fde68a;border:1px solid rgba(251,191,36,.5);}
+  .low{background:rgba(56,189,248,.16);color:#bae6fd;border:1px solid rgba(56,189,248,.45);}
+  .pass{background:rgba(52,211,153,.16);color:#6ee7b7;border:1px solid rgba(52,211,153,.5);}
+  .stride{font-family:Consolas,monospace;font-size:11px;color:var(--warn);}
+  .note{background:rgba(56,189,248,.08);border:1px solid rgba(56,189,248,.3);border-radius:8px;
+    padding:12px 16px;font-size:13.5px;color:#bae6fd;}
+  .warn-box{background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.3);border-radius:8px;
+    padding:12px 16px;font-size:13.5px;color:#fde68a;}
+  .danger-box{background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.35);border-radius:8px;
+    padding:12px 16px;font-size:13.5px;color:#fecaca;}
+  .verdict{font-size:15px;font-weight:700;padding:10px 16px;border-radius:10px;display:inline-block;margin-top:10px;}
+  .v-cond{background:rgba(251,191,36,.16);color:#fde68a;border:1px solid rgba(251,191,36,.55);}
+  figure{margin:18px 0;background:#0b1220;border:1px solid var(--line);border-radius:10px;padding:18px;}
+  figcaption{color:var(--sub);font-size:12.5px;margin-top:10px;text-align:center;}
+  .legend{display:flex;gap:18px;flex-wrap:wrap;font-size:12.5px;color:var(--sub);margin-top:10px;justify-content:center;}
+  .legend span{display:inline-flex;align-items:center;gap:6px;}
+  .dot{width:11px;height:11px;border-radius:3px;display:inline-block;}
+  .finding{border-left:3px solid var(--line);padding:6px 0 6px 14px;margin:18px 0;}
+  .finding.c{border-color:#f87171;} .finding.h{border-color:#fb923c;}
+  .finding.m{border-color:#fbbf24;} .finding.l{border-color:#38bdf8;}
+  .finding h4{margin:0 0 6px;font-size:15px;}
+  .kv{font-size:13px;color:var(--sub);margin:3px 0;}
+  .kv b{color:var(--text);}
+  footer{text-align:center;color:var(--sub);font-size:12.5px;padding:30px;border-top:1px solid var(--line);}
+</style>
+</head>
+<body>
+<header>
+  <span class="tag">M7 설계 보안 검증</span><span class="tag">즐겨찾기 위젯 BrowserWindow</span><span class="tag">1회차</span>
+  <h1>Project-SPIP — M7 설계 보안 검증 (새 BrowserWindow 공격 표면 위협 모델링)</h1>
+  <p>검증 대상: <code>docs/architecture/m7-design.html</code>(R-22 즐겨찾기 독립 위젯 창 · R-23 카드 FLIP 애니메이션). 기준: <code>electron_design_security_review_2.html</code>·<code>m6_design_security_review_2.html</code>(EC-1~6·senderFrame·preload allowlist·contextIsolation/sandbox·CSP·EM 베이스라인) 및 실측 코드(main.js·security.js·register.js·preload.js·tray.js). M7의 유일한 신규 보안 표면은 <b>위젯 렌더 컨텍스트 1개 + push 채널 1개</b>이며, 본 검증은 그 격리 동등성·표면 축소·동기화 방향성·생명주기·기존 통제 보존을 적대적으로 점검한다.</p>
+  <div class="meta">문서 유형: 보안 검증 보고 · 보안 전담 검증자 · 2026-06-21 · 입력: m7-design.html(681행)·electron/{main,security,tray,preload}.js·electron/ipc/register.js · 기준 리뷰 2건</div>
+  <div class="verdict v-cond">종합 판정: 조건부 PASS — 치명 0 · 높음 2(설계 반영 필수) · 보통 4 · 낮음 3. 높음 2건(SEC-H1 세션 CSP 주입 모델·SEC-H2 transparent/alwaysOnTop UI redressing) 설계 보강 후 구현 게이트 진입 권고.</div>
+</header>
+
+<main>
+
+<section>
+  <h2>1. 자산 · 신뢰 경계 · 위협 모델 요약</h2>
+  <p>보호 자산: 사용자 프로젝트 메타데이터(경로·이름)·ui-state(즐겨찾기/순서)·외부 툴 실행 권한(R-12 open)·클립보드. M7이 추가하는 신뢰 경계는 <b>위젯 렌더 컨텍스트(app://favorites.html)</b> 1개다. 위젯은 메인 창과 동일 app:// origin·동일 main 프로세스 guard를 공유하므로, 검증의 핵심은 "위젯이 메인 창과 <b>동등한 봉합</b>을 빠짐없이 받는가"와 "새 창·새 창 속성(frameless·transparent·alwaysOnTop)·새 push 채널이 <b>기존 통제를 약화·우회하는 경로</b>를 만드는가"이다.</p>
+
+  <figure>
+    <svg viewBox="0 0 1100 430" width="100%" role="img" aria-label="M7 신뢰 경계와 신규 공격 표면">
+      <defs>
+        <marker id="a" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 Z" fill="#34d399"/></marker>
+        <marker id="b" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 Z" fill="#fbbf24"/></marker>
+      </defs>
+      <!-- trust boundary -->
+      <rect x="30" y="30" width="500" height="370" rx="14" fill="none" stroke="#f87171" stroke-width="1.4" stroke-dasharray="6 4"/>
+      <text x="50" y="52" fill="#fca5a5" font-size="11" font-family="Segoe UI">비신뢰: 렌더러(샌드박스) — 두 창</text>
+
+      <rect x="60" y="80" width="200" height="120" rx="10" fill="#0b1220" stroke="#38bdf8" stroke-width="1.6"/>
+      <text x="160" y="106" fill="#38bdf8" font-size="12" text-anchor="middle" font-weight="bold" font-family="Segoe UI">메인 대시보드 창</text>
+      <text x="160" y="126" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">app://index.html</text>
+      <text x="160" y="142" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">preload.js (전체 allowlist)</text>
+      <text x="160" y="162" fill="#6ee7b7" font-size="8.5" text-anchor="middle" font-family="Segoe UI">contextIso·sandbox·CSP·하드닝</text>
+      <text x="160" y="178" fill="#64748b" font-size="8.5" text-anchor="middle" font-family="Segoe UI">기존 — 보존 점검 대상</text>
+
+      <rect x="300" y="80" width="200" height="120" rx="10" fill="#0b1220" stroke="#fbbf24" stroke-width="1.8"/>
+      <text x="400" y="106" fill="#fbbf24" font-size="12" text-anchor="middle" font-weight="bold" font-family="Segoe UI">위젯 창 (신규 표면)</text>
+      <text x="400" y="126" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">app://favorites.html</text>
+      <text x="400" y="142" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">preload-favorites.js (6채널)</text>
+      <text x="400" y="160" fill="#fca5a5" font-size="8.5" text-anchor="middle" font-family="Segoe UI">frameless·transparent·alwaysOnTop</text>
+      <text x="400" y="176" fill="#fcd34d" font-size="8.5" text-anchor="middle" font-family="Segoe UI">동등 봉합 필요 (§5)</text>
+
+      <rect x="60" y="230" width="440" height="60" rx="10" fill="#101a30" stroke="#475569"/>
+      <text x="280" y="255" fill="#e2e8f0" font-size="11" text-anchor="middle" font-weight="bold" font-family="Segoe UI">contextBridge window.spip (창별 allowlist)</text>
+      <text x="280" y="274" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">ipcRenderer 원본 비노출 · 채널명 하드코딩</text>
+
+      <rect x="60" y="320" width="440" height="56" rx="10" fill="#170d0d" stroke="#f87171"/>
+      <text x="280" y="344" fill="#fca5a5" font-size="10.5" text-anchor="middle" font-weight="bold" font-family="Segoe UI">신규 push: spip:favorites-changed (main→양 창 단방향)</text>
+      <text x="280" y="362" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">payload {favorites:string[]} — 역방향 채널 아님</text>
+
+      <!-- trusted main -->
+      <rect x="600" y="60" width="470" height="320" rx="14" fill="none" stroke="#34d399" stroke-width="1.4" stroke-dasharray="6 4"/>
+      <text x="620" y="82" fill="#6ee7b7" font-size="11" font-family="Segoe UI">신뢰: Main 프로세스(Node 전권)</text>
+
+      <rect x="630" y="100" width="410" height="70" rx="10" fill="#0b1220" stroke="#34d399"/>
+      <text x="835" y="124" fill="#34d399" font-size="11.5" text-anchor="middle" font-weight="bold" font-family="Segoe UI">register.js guard (공통 게이트)</text>
+      <text x="835" y="143" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">isTrustedSender(app:// 정확일치·host '..' 거부)</text>
+      <text x="835" y="158" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">try/catch→FORBIDDEN/INTERNAL · 메인+위젯 공통</text>
+
+      <rect x="630" y="190" width="410" height="56" rx="10" fill="#101a30" stroke="#fbbf24"/>
+      <text x="835" y="213" fill="#fcd34d" font-size="11" text-anchor="middle" font-weight="bold" font-family="Segoe UI">favoritesWidget.js (신규) · applyCspHeaders·hardenWebContents</text>
+      <text x="835" y="231" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">SEC-H1: 세션 CSP 주입 모델 명세 필요</text>
+
+      <rect x="630" y="266" width="410" height="50" rx="10" fill="#101a30" stroke="#475569"/>
+      <text x="835" y="288" fill="#e2e8f0" font-size="11" text-anchor="middle" font-weight="bold" font-family="Segoe UI">uiStateStore·toolRegistry·pathGuard·safeExec (재사용·불변)</text>
+      <text x="835" y="305" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="Segoe UI">EC-1~6·H-1/H-2/H-3 — 위젯 invoke도 동일 재검증</text>
+
+      <rect x="630" y="336" width="410" height="36" rx="10" fill="#1a1206" stroke="#38bdf8"/>
+      <text x="835" y="358" fill="#7dd3fc" font-size="10" text-anchor="middle" font-family="Segoe UI">registerAppProtocol (public/ 매핑·이탈 차단) — favorites.html 동일 보호</text>
+
+      <line x1="260" y1="140" x2="628" y2="135" stroke="#34d399" stroke-width="2" marker-end="url(#a)"/>
+      <text x="440" y="128" fill="#34d399" font-size="8.5" font-family="Segoe UI">invoke(메인)</text>
+      <line x1="500" y1="150" x2="628" y2="150" stroke="#34d399" stroke-width="2" marker-end="url(#a)"/>
+      <text x="540" y="172" fill="#34d399" font-size="8.5" font-family="Segoe UI">invoke(위젯)</text>
+      <path d="M628 340 Q400 400 280 378" fill="none" stroke="#fbbf24" stroke-width="2" marker-end="url(#b)"/>
+      <text x="430" y="400" fill="#fbbf24" font-size="8.5" font-family="Segoe UI">favorites-changed push(양 창)</text>
+    </svg>
+    <div class="legend">
+      <span><span class="dot" style="background:#34d399"></span> IPC invoke(공통 guard)</span>
+      <span><span class="dot" style="background:#fbbf24"></span> push(단방향)</span>
+      <span><span class="dot" style="border:1px dashed #f87171;width:9px;height:9px;"></span> 신뢰 경계</span>
+    </div>
+    <figcaption>그림 1. M7 신뢰 경계·신규 공격 표면. 위젯 컨텍스트와 push 채널 1개가 유일한 추가 표면. 동등 봉합(§5)과 단방향성 검증이 핵심.</figcaption>
+  </figure>
+</section>
+
+<section>
+  <h2>2. STRIDE 위협 매트릭스 (위협 1~7 등급화)</h2>
+  <table>
+    <tr><th style="width:60px;">ID</th><th>위협 (지시 항목)</th><th style="width:90px;">STRIDE</th><th style="width:80px;">심각도</th><th style="width:90px;">판정</th></tr>
+    <tr><td class="fid">T1</td><td>새 창 격리 동등성 — webPreferences/webSecurity 동일성, transparent/frameless/alwaysOnTop 약화</td><td class="stride">E/T</td><td><span class="sev high">높음</span></td><td><span class="sev high">조건부</span></td></tr>
+    <tr><td class="fid">T2</td><td>preload 분리(축소) — 강력 채널 미노출·generic invoke 비노출</td><td class="stride">E</td><td><span class="sev low">낮음</span></td><td><span class="sev pass">PASS*</span></td></tr>
+    <tr><td class="fid">T3</td><td>로드 출처·CSP·네비게이션 — app:// 전용·동일 CSP·하드닝·protocol traversal</td><td class="stride">T/I</td><td><span class="sev high">높음</span></td><td><span class="sev high">조건부</span></td></tr>
+    <tr><td class="fid">T4</td><td>senderFrame/IPC — 위젯 IPC도 isTrustedSender·main 재검증 경유</td><td class="stride">S/E</td><td><span class="sev low">낮음</span></td><td><span class="sev pass">PASS</span></td></tr>
+    <tr><td class="fid">T5</td><td>broadcast 동기화 — 단방향 push·신뢰 데이터·main 경유</td><td class="stride">T/I</td><td><span class="sev med">보통</span></td><td><span class="sev med">조건부</span></td></tr>
+    <tr><td class="fid">T6</td><td>생명주기 — hide/show 재사용·doFinalQuit destroy·좀비/트레이 상주·입력 가로채기</td><td class="stride">D/T</td><td><span class="sev med">보통</span></td><td><span class="sev med">조건부</span></td></tr>
+    <tr><td class="fid">T7</td><td>보존 통제 회귀 — EC-1~6·H-1/H-2/H-3·textContent·기존 IPC·오버레이 제거 약화</td><td class="stride">전체</td><td><span class="sev med">보통</span></td><td><span class="sev pass">대체로 PASS</span></td></tr>
+  </table>
+  <p class="kv">* T2 PASS*: 설계 의사코드 기준 PASS이나 SEC-M3(선택 closeWidget·generic 미노출 MUST 명문화) 권고 동반.</p>
+</section>
+
+<section>
+  <h2>3. 발견 항목 (Findings)</h2>
+
+  <div class="finding h">
+    <h4><span class="sev high">높음</span> <span class="fid">SEC-H1</span> — applyCspHeaders 세션 모델 미명세: 위젯 창의 default session 중복 등록 / 누락 모호</h4>
+    <p class="kv"><b>위치:</b> m7-design.html §4.1 의사코드(<code>deps.applyCspHeaders(widget.webContents.session)</code>) · §5 "동일 applyCspHeaders(widget.webContents.session)" · 실측 <code>security.js:40~46</code>(<code>session.webRequest.onHeadersReceived</code>) · <code>main.js:151</code>(<code>applyCspHeaders(win.webContents.session)</code>)</p>
+    <p class="kv"><b>위협(STRIDE):</b> Tampering / Information Disclosure — CSP 미적용/약화 시 위젯에 인젝션·외부 리소스 로드 표면 발생</p>
+    <p class="kv"><b>악용 시나리오:</b> Electron에서 별도 <code>partition</code>을 지정하지 않으면 위젯 창은 메인 창과 <b>동일한 default session</b>을 공유한다. 실측 <code>applyCspHeaders</code>는 <code>session.webRequest.onHeadersReceived(...)</code>에 핸들러를 등록하는데, 이 API는 세션당 <b>최후 등록 핸들러 1개만 유효</b>하다(Electron은 onHeadersReceived 리스너를 덮어쓴다). 따라서 위젯 생성 시 같은 default session에 다시 호출하면 ⓐ 기존 메인 핸들러를 <b>덮어쓰기만</b> 해 무해할 수도 있으나, ⓑ 만약 위젯을 별도 partition으로 분리하는 의도였다면 그 session에는 CSP가 <b>전혀 적용되지 않는</b> 누락이 발생할 수 있다. 설계가 "session" 객체를 무엇으로 보는지(default 공유인지 신규 partition인지)를 명시하지 않아, 구현자가 partition 분리를 택하면 CSP 헤더 주입이 조용히 빠질 수 있다. CSP 메타 태그(favorites.html)가 2차 방어로 남지만 EM-M-1의 "이중주입" 불변이 깨진다.</p>
+    <p class="kv"><b>권고 조치:</b> ① 설계에 위젯이 <b>메인과 동일 default session을 공유</b>함을 명시하고, 따라서 <b>applyCspHeaders 재호출이 불필요/중복</b>임을 적시(또는 멱등성 보장). ② 만약 partition 분리를 택한다면 해당 session에 applyCspHeaders를 반드시 호출하고 onHeadersReceived 단일 등록 제약을 문서화. ③ 어느 경우든 favorites.html의 CSP 메타 태그는 <code>security.js CSP_POLICY</code> 단일 원천과 문자열 동일해야 함을 명세(드리프트 방지). ④ 구현 게이트에 "위젯 응답 헤더에 CSP 존재" 스모크 추가.</p>
+  </div>
+
+  <div class="finding h">
+    <h4><span class="sev high">높음</span> <span class="fid">SEC-H2</span> — transparent + frameless + alwaysOnTop 위젯의 UI redressing / 입력 가로채기 / 클릭통과 표면</h4>
+    <p class="kv"><b>위치:</b> §4.1(<code>frame:false, transparent:true, alwaysOnTop:true, level 'floating'</code>) · ADR-M7-3 · §13 리스크표(transparent 클릭통과)</p>
+    <p class="kv"><b>위협(STRIDE):</b> Tampering / Elevation(UI) — frameless·alwaysOnTop 창은 사용자 인지 경계를 흐려 오클릭·입력 가로채기·클릭재킹 유사 표면을 만든다</p>
+    <p class="kv"><b>악용 시나리오:</b> ① <code>alwaysOnTop:true</code> + <code>transparent:true</code> 위젯은 우측하단에 다른 앱 위로 떠 있어, 위젯 투명 영역이 클릭을 가로채거나(클릭통과 미보장) 반대로 아래 창 입력을 막을 수 있다. ② 위젯 안에는 R-12 실행(open)·copyText 같은 <b>부수효과 액션</b> 버튼이 있는데, frameless라 OS 신뢰 표시(타이틀바)가 없고 사용자가 어느 앱의 UI인지 혼동할 수 있다. ③ 본 위젯 자체는 app:// 로컬 페이지라 외부 공격자가 직접 위젯 DOM을 조작하진 못하나(웹콘텐츠 격리됨), <b>위젯 위에 다른 악성 창이 겹치거나(역 클릭재킹) 위젯이 다른 앱 입력을 가로채는</b> 데스크톱 UX 안전 문제는 남는다. §13이 클릭통과·blur 오작동을 리스크로만 적었을 뿐 통제로 확정하지 않았다.</p>
+    <p class="kv"><b>권고 조치:</b> ① <code>setIgnoreMouseEvents</code> 정책 명시 — 투명 여백은 클릭통과(<code>forward</code>) 또는 불투명 패널로 완전 차단 중 택일을 설계에 확정(현재 "body 배경 패널로 채움"은 권고일 뿐 불명확). ② 부수효과 액션(open/copyText)은 위젯이 <b>focus 상태일 때만</b> 활성(blur 시 비활성)으로 오클릭 방지. ③ <code>alwaysOnTop</code>은 show 시에만, hide 시 해제 명세(ADR-M7-3은 'show 시 적용'만 적음 — 해제 시점 누락). ④ MQ7-2(드래그 이동·<code>-webkit-app-region:drag</code>)는 후속으로 미루되, 도입 시 drag 영역이 액션 버튼과 겹치지 않도록 별도 검토 표시.</p>
+  </div>
+
+  <div class="finding m">
+    <h4><span class="sev med">보통</span> <span class="fid">SEC-M1</span> — hardenWebContents의 will-navigate가 favorites.html 내부 상대 이동을 과도 차단하거나, deny 핸들러 회귀 미검증</h4>
+    <p class="kv"><b>위치:</b> §4.1(<code>deps.hardenWebContents(widget.webContents, {trustedOrigin})</code>) · 실측 <code>security.js:56~74</code></p>
+    <p class="kv"><b>위협(STRIDE):</b> Tampering — 위젯이 외부 탐색/팝업/webview로 탈출하는 경로</p>
+    <p class="kv"><b>악용 시나리오:</b> 설계는 hardenWebContents를 위젯에 호출한다고 명시했고 실측 함수는 <code>will-navigate</code>(app:// 외 차단)·<code>setWindowOpenHandler:deny</code>·<code>will-attach-webview</code> 거부를 모두 적용하므로 구조는 올바르다(PASS 방향). 그러나 ⓐ 위젯은 per-webContents 등록이라 메인과 달리 <b>반드시 명시 호출</b>되어야 하며 누락 시 조용히 약화된다(§13이 "ensureWidget이 생성 시 강제 호출"로 완화 — 양호). ⓑ <code>setWindowOpenHandler:deny</code>가 모든 새 창을 거부하므로, 위젯에서 R-12 open이 <b>새 창이 아닌 main의 shell.openExternal/툴 실행</b> 경로(IPC)임이 보장돼야 한다(위젯 DOM이 <code>window.open</code>/<code>&lt;a target&gt;</code>으로 외부를 못 염). 설계상 open은 IPC invoke라 정합하나 명문 확인 권고.</p>
+    <p class="kv"><b>권고 조치:</b> ① "위젯의 모든 외부 동작은 IPC invoke만, 렌더러 직접 네비/팝업 0"을 §5에 단언으로 추가. ② 구현 게이트에 EC-5 정합 스모크(위젯에서 <code>window.open</code>·외부 <code>location</code> 시도 차단 확인)를 명시(§13에 이미 언급 — 통제로 승격).</p>
+  </div>
+
+  <div class="finding m">
+    <h4><span class="sev med">보통</span> <span class="fid">SEC-M2</span> — broadcast 대상 webContents 지연평가의 파괴 후 send 안전성·임의 대상 금지 보장</h4>
+    <p class="kv"><b>위치:</b> §6.3 의사코드(<code>[mainWc, widgetWc].forEach(wc => wc &amp;&amp; wc.send(...))</code>) · §5 "양 창의 webContents로만 send" · §7</p>
+    <p class="kv"><b>위협(STRIDE):</b> Tampering / Information Disclosure — push 대상 오염·파괴된 wc로 send 시 예외</p>
+    <p class="kv"><b>악용 시나리오:</b> broadcast는 main→renderer 단방향이고 payload가 <code>{favorites:string[]}</code>(id 배열, 형식 검증된 값)뿐이라 데이터 노출 위협은 낮다(설계 방향 양호). 잔여 위험: ⓐ <code>getFavoritesWidgetWc()</code>가 destroy된 wc를 반환하면 <code>wc.send</code>가 throw — 의사코드는 <code>try/catch</code>로 감쌌으나(양호), <code>isDestroyed()</code> 가드를 명시해 main.js의 makeProgressSender 패턴(지연평가+파괴 가드)과 동형화 권고. ⓑ payload에 경로·실행 인자가 절대 실리지 않음을 단언으로 고정(현재 "id 배열뿐"은 서술 — 계약으로 명문화). ⓒ broadcast 대상이 메인 wc + 위젯 wc <b>2개로 한정</b>됨을 보장(임의 BrowserWindow.getAllWindows() 순회 금지 — 향후 창 추가 시 누설 방지).</p>
+    <p class="kv"><b>권고 조치:</b> ① <code>wc &amp;&amp; !wc.isDestroyed() &amp;&amp; wc.send(...)</code>로 가드 명시. ② push payload 스키마를 "id 배열만, 경로/인자/내부상태 금지"로 §6.3 계약에 고정. ③ 대상 wc 화이트리스트(메인·위젯 2개)를 명문화.</p>
+  </div>
+
+  <div class="finding m">
+    <h4><span class="sev med">보통</span> <span class="fid">SEC-M3</span> — preload-favorites.js의 generic invoke 비노출·MUST 명문화 및 onFavoritesChanged 수신 검증</h4>
+    <p class="kv"><b>위치:</b> §5·§6.2 의사코드(<code>preload-favorites.js</code>) · 실측 기준 <code>preload.js</code>(채널명 하드코딩·ipcRenderer 원본 비노출 MUST)</p>
+    <p class="kv"><b>위협(STRIDE):</b> Elevation — 위젯 preload가 generic invoke나 원본 ipcRenderer를 흘리면 6채널 축소가 무의미해짐</p>
+    <p class="kv"><b>악용 시나리오:</b> §6.2 의사코드는 채널명을 하드코딩하고 <code>ipcRenderer</code> 원본을 노출하지 않으며 인자를 <code>String()/!!</code>로 강제해 메인 preload와 동일 패턴이다(PASS 방향). 잔여 점검: ⓐ <code>onFavoritesChanged</code>가 <code>ipcRenderer.on</code>으로 수신하는데, push 채널 1개만 구독하고 콜백에 <b>payload를 그대로 전달</b>한다 — 위젯 렌더러는 이 payload를 신뢰하여 textContent 렌더해야 하며(L-1), main이 보낸 형식 검증된 favorites만 싣는다는 전제가 깨지지 않도록 main 측 단언(SEC-M2)과 묶임. ⓑ 메인 preload의 강력 채널(<code>setToolPath·pickToolExecutable·setOrder·rescan·addRoots·removeRoot·setSortMode·pickFolders</code>)이 위젯 preload에 <b>단 하나도 없어야</b> 한다(설계상 6개 한정 — 표면 축소 양호).</p>
+    <p class="kv"><b>권고 조치:</b> ① "preload-favorites.js는 ipcRenderer 원본·generic invoke 비노출(MUST)·채널명 하드코딩"을 메인 preload와 동일하게 §6.2에 단언으로 명기. ② 위젯 onFavoritesChanged 수신 payload는 main 신뢰값으로 간주하되 위젯 렌더는 textContent(L-1) 유지. ③ 강력 채널 비노출을 추적성 표에 체크리스트로 고정.</p>
+  </div>
+
+  <div class="finding m">
+    <h4><span class="sev med">보통</span> <span class="fid">SEC-M4</span> — 위젯 open(R-12 실행)·copyText가 메인과 동일한 main 재검증을 받는지 명문 확인(IDOR/실행 표면)</h4>
+    <p class="kv"><b>위치:</b> §5(전 채널 main 재검증) · §6.1(open/copyText 재사용) · 실측 <code>register.js:118,130</code>(<code>openInVsCode</code>·<code>copyText</code> guard)</p>
+    <p class="kv"><b>위협(STRIDE):</b> Elevation / Tampering — 위젯이 실행·복사 채널을 동일 검증 없이 호출하면 우회 경로</p>
+    <p class="kv"><b>악용 시나리오:</b> 위젯이 호출하는 <code>spip:openInVsCode</code>·<code>spip:copyText</code>·<code>spip:setFavorite</code>는 실측 <code>register.js</code>에서 <b>동일 guard로 1회만 등록</b>되어 있고, 위젯도 같은 guard를 통과하므로 id 형식·toolId 화이트리스트·pathGuard·resolveBin force·safeExec(.exe·shell:false) 재검증이 <b>그대로 적용</b>된다(EC-1·H-1·H-2 보존 — PASS 방향). 위젯이 새 핸들러를 만들지 않고 기존 채널을 재사용한다는 설계가 이 동등성을 구조적으로 보장한다. 잔여: 위젯 렌더러가 보내는 id가 위젯 표시 교집합(favorites∩스냅샷) 밖의 임의 id일 수 있으나, main 핸들러가 어차피 id 형식·존재를 재검증하므로 IDOR로 확대되지 않음(렌더러 신뢰 0 원칙). 명문 확인만 권고.</p>
+    <p class="kv"><b>권고 조치:</b> ① "위젯의 open/copyText/setFavorite은 신규 핸들러 0, 기존 register guard 핸들러 100% 재사용 → EC-1·H-1·H-2 재검증 자동 승계"를 §5에 단언. ② 위젯 렌더러가 보내는 모든 인자는 비신뢰로 간주(main 재검증이 유일 권위)임을 명기.</p>
+  </div>
+
+  <div class="finding l">
+    <h4><span class="sev low">낮음</span> <span class="fid">SEC-L1</span> — onTray action 축소(favorites 제거) 시 잔여 채널·tray.js TRAY_ACTIONS 정합</h4>
+    <p class="kv"><b>위치:</b> §8.1(preload.js onTray action을 dashboard만으로 축소) · 실측 <code>preload.js:80~90</code>(actions=['dashboard','favorites']) · <code>tray.js:18</code>(TRAY_ACTIONS)</p>
+    <p class="kv"><b>위협(STRIDE):</b> 표면 정리(미정리 시 죽은 수신 채널) — 보안 위협은 낮으나 표면 위생</p>
+    <p class="kv"><b>악용 시나리오:</b> M7은 트레이 '즐겨찾기'를 메인창 push가 아닌 favoritesWidget.show로 바꾸므로 <code>spip:tray:favorites</code> push가 사라진다. 설계는 onTray를 dashboard만으로 축소(또는 favorites 분기 무시)한다고 했다. favorites 분기를 남기면 아무도 send하지 않는 죽은 수신 채널이 되어 표면 위생만 저하(권한 상승은 아님). tray.js TRAY_ACTIONS는 호환 위해 유지 가능하다고 했으나, 화이트리스트와 실제 push 채널 집합이 불일치하면 추적성 혼란.</p>
+    <p class="kv"><b>권고 조치:</b> onTray actions에서 favorites 제거를 확정(권장)하거나, 유지 시 "수신만·미사용" 주석 명시. TRAY_ACTIONS는 메뉴 라벨 정의용으로만 쓰이면 무해 — 용도 분리 명기.</p>
+  </div>
+
+  <div class="finding l">
+    <h4><span class="sev low">낮음</span> <span class="fid">SEC-L2</span> — favorites.html CSP 메타와 security.js CSP_POLICY 문자열 드리프트 위험</h4>
+    <p class="kv"><b>위치:</b> §5(favorites.html meta http-equiv에 "메인과 동일 CSP") · 실측 <code>security.js:18~29</code>(CSP_POLICY 단일 원천)</p>
+    <p class="kv"><b>위협(STRIDE):</b> Tampering — 메타 CSP가 헤더 CSP와 달라지면 약한 쪽 약점 발생</p>
+    <p class="kv"><b>악용 시나리오:</b> CSP는 헤더(applyCspHeaders)와 메타 태그 이중주입이 베이스라인(EM-M-1)이다. favorites.html 메타가 손으로 작성돼 <code>security.js CSP_POLICY</code>와 문자열이 어긋나면(예: img-src data: 누락, script-src 완화) 위젯에서 메타 기준이 적용돼 미묘한 약화 발생. 설계는 "security.js의 CSP_POLICY 단일 원천 재사용"이라 했으나 메타는 빌드타임 정적 문자열이라 동기화 보장 수단이 불명확.</p>
+    <p class="kv"><b>권고 조치:</b> index.html 메타와 favorites.html 메타가 <b>동일 문자열</b>임을 구현 게이트에서 비교(또는 빌드 시 CSP_POLICY로부터 생성). 두 페이지 메타가 문자 단위 일치하는지 테스트 추가.</p>
+  </div>
+
+  <div class="finding l">
+    <h4><span class="sev low">낮음</span> <span class="fid">SEC-L3</span> — 위젯 hide 재사용 시 stale 렌더 컨텍스트의 정보 잔존 / dispose 멱등성</h4>
+    <p class="kv"><b>위치:</b> §4.3(hide 재사용·doFinalQuit에서만 destroy) · ADR-M7-2 · 실측 <code>main.js:260</code>(doFinalQuit 멱등)</p>
+    <p class="kv"><b>위협(STRIDE):</b> Information Disclosure / DoS(좀비) — hide된 위젯에 즐겨찾기 데이터가 잔존, dispose 누락 시 좀비</p>
+    <p class="kv"><b>악용 시나리오:</b> hide 재사용은 위젯 DOM에 즐겨찾기(경로·이름)가 메모리에 남는다 — 같은 사용자 세션 내라 위협 낮음(외부 도달 0, app:// 격리). dispose는 doFinalQuit에서만 호출되며 실측 doFinalQuit은 _disposed 멱등 가드가 있으나 favoritesWidget.dispose() 자체의 멱등성(이미 destroy/null)은 위젯 모듈 책임 — 설계 §6.4가 "멱등"이라 명시(양호). 잔여: 메인창 close-to-tray 후 위젯만 떠 있고 메인창이 destroy되지 않은 상태에서 broadcast 대상 mainWc가 hidden wc로 send되는 경우 — send 자체는 hidden wc에도 유효하므로 무해.</p>
+    <p class="kv"><b>권고 조치:</b> ① favoritesWidget.dispose()의 멱등성(중복 호출·미생성 시 no-op)을 계약으로 명문화(이미 §6.4 언급 — 단언 승격). ② doFinalQuit 순서에 위젯 dispose가 기존 scanController dispose·tray.destroy·app.exit 순서를 깨지 않음을 명기(P2-2 단일 종료 경로 불변 — 설계 §4.3에 이미 있음, 확인).</p>
+  </div>
+</section>
+
+<section>
+  <h2>4. 보존 통제 — PASS 명시 (기존 베이스라인 회귀 점검)</h2>
+  <table>
+    <tr><th style="width:280px;">통제 (출처)</th><th style="width:90px;">판정</th><th>근거(실측 코드 대조)</th></tr>
+    <tr><td>위젯 webPreferences 동등(contextIsolation·nodeIntegration:false·sandbox·webSecurity)</td><td><span class="sev pass">PASS</span></td><td>§4.1/§5가 메인창(<code>main.js:140~146</code>)과 1:1 동일 4옵션 명시. 빠진 옵션 없음(transparent/frame/alwaysOnTop은 보안 4옵션과 직교). EC-2/EC-3 동등.</td></tr>
+    <tr><td>app:// 전용 로드(file:// 미사용)·protocol traversal 가드</td><td><span class="sev pass">PASS</span></td><td>§5 <code>loadURL('app://favorites.html')</code>. 실측 <code>registerAppProtocol</code>(<code>main.js:98~125</code>)이 public/ 정규화·이탈 차단(<code>:109~113</code>) — favorites.html도 동일 보호, 추가 코드 0. EM-M-1.</td></tr>
+    <tr><td>senderFrame 검증 — 위젯 IPC도 isTrustedSender 경유(T4)</td><td><span class="sev pass">PASS</span></td><td>위젯 origin=app://favorites.html → 실측 <code>isTrustedSender</code>(<code>register.js:40~75</code>) URL 파싱·정확 origin 비교·host '..' 거부 통과. 양 창 동일 guard, 분기/예외 0. EC-5·EI-L-1 보존.</td></tr>
+    <tr><td>전 채널 main 재검증(EC-1·H-1 pathGuard·H-2 safeExec·H-3 JSON 가드)</td><td><span class="sev pass">PASS</span></td><td>위젯은 신규 invoke 0·기존 핸들러 재사용(<code>register.js:118/130/142</code>). open·copyText·setFavorite 모두 동일 guard 1회 등록 → 재검증 자동 승계. 우회 경로 없음.</td></tr>
+    <tr><td>preload 최소 allowlist(채널명 하드코딩·ipcRenderer 원본 비노출)</td><td><span class="sev pass">PASS*</span></td><td>§6.2 의사코드가 메인 preload(<code>preload.js</code>) 패턴 동일 적용·6채널로 축소(메인보다 좁음). *SEC-M3로 MUST 명문화 권고.</td></tr>
+    <tr><td>하드닝(will-navigate·setWindowOpenHandler:deny·webview 거부)</td><td><span class="sev pass">PASS*</span></td><td>§4.1/§5가 위젯에 <code>hardenWebContents</code> 호출 명시. 실측(<code>security.js:56~74</code>) 3종 적용. *SEC-M1로 "렌더러 직접 네비 0" 단언 권고.</td></tr>
+    <tr><td>textContent(L-1) — 위젯 표시 문자열</td><td><span class="sev pass">PASS</span></td><td>§5가 name/path/라벨 전부 textContent 렌더(기존 슬라이더 이식) 명시. 저장형 XSS(RC-2) 차단 유지.</td></tr>
+    <tr><td>메인창 EC-1~6·H-1/H-2/H-3·기존 IPC·close-to-tray(R-21)</td><td><span class="sev pass">PASS</span></td><td>M7은 메인창 webPreferences·guard·CSP·하드닝·생명주기(doFinalQuit 단일 경로) 무수정. 오버레이 제거(§8.2)는 렌더러 UI 삭제일 뿐 main 통제 0 변경. window-all-closed no-op 유지.</td></tr>
+    <tr><td>오버레이 제거가 통제 약화 미발생</td><td><span class="sev pass">PASS</span></td><td>제거 대상(renderFavoritesSlider 등 app.js 렌더러 함수·slider state)은 보안 경계 없는 DOM 로직. R-20 토글/필터/별 버튼·main 검증 유지. 표면 순증가는 위젯 컨텍스트 1개로 한정(M6 "표면 0"→M7 "표면 +1, 동등 봉합").</td></tr>
+    <tr><td>R-23 FLIP 애니메이션(렌더러 전용)</td><td><span class="sev pass">PASS</span></td><td>§9 transform/transition만, 새 IPC·입력·권한 0. textContent 불변. 런타임 dep 0(EM ADR-EM-1) 유지. 보안 무관 확인.</td></tr>
+    <tr><td>RUN_AS_NODE 차단(EM-M-3)·단일 인스턴스 락</td><td><span class="sev pass">PASS</span></td><td>M7 무관·무수정(<code>main.js:19~22,77~89</code>). second-instance argv 비신뢰 처리 불변.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>5. 확인 필요 (위험 수용 결정 — PM/아키텍트)</h2>
+  <ul>
+    <li><b>MQ7-2 (드래그 이동):</b> frameless 창 <code>-webkit-app-region:drag</code> 도입 시 액션 버튼 영역과 drag 영역 충돌·오클릭 검토 필요. MVP 고정 우측하단 권고(SEC-H2 연계) — 후속 도입 시 별도 보안 점검.</li>
+    <li><b>MQ7-3 (메인 UI 위젯 트리거):</b> 메인창에서 위젯을 띄우려면 신규 invoke <code>spip:showFavoritesWidget</code> 1개가 추가될 수 있다 — 추가 시 register guard 등록·senderFrame 검증 자동 승계(저위험)이나 "신규 invoke 0" 설계 주장이 깨지므로 PM 결정 필요.</li>
+    <li><b>위젯 세션 분리 여부(SEC-H1):</b> default session 공유(권고) vs partition 분리 — 후자 선택 시 CSP/하드닝 재적용 필수. 아키텍트 확정 필요.</li>
+  </ul>
+  <div class="note">위 3건은 치명/높음을 새로 만들지 않으나 SEC-H1·SEC-H2와 직접 연동된다. SEC-H1·SEC-H2를 설계에 반영하며 함께 확정 권고.</div>
+</section>
+
+<section>
+  <h2>6. 종합 판정</h2>
+  <div class="danger-box" style="border-color:rgba(251,191,36,.5);color:#fde68a;background:rgba(251,191,36,.08);">
+    <p style="margin:4px 0;"><b>판정: 조건부 PASS (CONDITIONAL).</b> 치명 0건. 높음 2건(SEC-H1·SEC-H2)은 <b>설계 반영 필수</b> — 보안 게이트는 두 항목이 설계 델타에 명문 반영된 뒤 통과한다.</p>
+    <p style="margin:4px 0;"><b>발견 건수:</b> 치명 0 · 높음 2 · 보통 4 · 낮음 3 (총 9).</p>
+    <p style="margin:4px 0;"><b>요약:</b> M7의 신규 표면은 위젯 렌더 컨텍스트 1개 + push 채널 1개로 정확히 한정되며, 설계는 메인 창과 동등한 통제(동일 webPreferences·app:// 로드·하드닝·senderFrame·textContent)와 더 좁은 preload(6채널)를 의도해 표면을 축소한다 — 방향성은 견고하다. senderFrame 동등 통과(T4)·기존 main 재검증 승계(T7)·오버레이 제거 무약화·FLIP 무관(R-23)은 실측 코드 대조로 PASS. 다만 ⓐ CSP 세션 주입 모델(SEC-H1 — default 공유/멱등 vs partition 누락)이 모호하고, ⓑ transparent·frameless·alwaysOnTop 위젯의 UI redressing/클릭통과/alwaysOnTop 해제 시점(SEC-H2)이 리스크로만 적혀 통제로 확정되지 않았다. 두 높음 항목과 보통 4건(broadcast 가드·preload MUST 명문화·open/copyText 재검증 단언·will-navigate 단언)을 설계에 반영하면 PASS 전환 가능하다. 직접 수정하지 않고 시정 항목만 제시한다.</p>
+  </div>
+  <p class="kv"><b>보고서 경로:</b> <code>E:\03.프로젝트\Project-SPIP\docs\reviews\m7_design_security_review_1.html</code></p>
+</section>
+
+<footer>
+  Project-SPIP — M7 설계 보안 검증 1회차 · 보안 전담 검증자 · 2026-06-21 · 대상 m7-design.html · 기준 electron_design_security_review_2·m6_design_security_review_2 + 실측 코드 · 판정: 조건부 PASS(치명 0·높음 2·보통 4·낮음 3) · 코드 직접 수정 없음(시정 항목만).
+</footer>
+
+</main>
+</body>
+</html>

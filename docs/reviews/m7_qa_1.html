@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>M7 통합·동작 QA 리포트 — Project-SPIP</title>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#161b22; --panel2:#1c2333; --border:#30363d;
+    --fg:#e6edf3; --muted:#9aa7b4; --accent:#58a6ff;
+    --pass:#3fb950; --fail:#f85149; --warn:#d29922; --info:#a371f7;
+    --code:#1f2630;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+    font-family:"Segoe UI",system-ui,-apple-system,sans-serif;line-height:1.6;font-size:15px}
+  .wrap{max-width:1080px;margin:0 auto;padding:32px 24px 80px}
+  h1{font-size:26px;margin:0 0 4px;letter-spacing:-.3px}
+  h2{font-size:20px;margin:38px 0 12px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+  h3{font-size:16px;margin:24px 0 8px;color:var(--accent)}
+  .sub{color:var(--muted);font-size:13.5px;margin-bottom:24px}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:18px 20px;margin:16px 0}
+  .verdict{background:linear-gradient(135deg,#15351f,#0d2415);border:1px solid #2ea04366;
+    border-radius:12px;padding:20px 22px;margin:22px 0}
+  .verdict.cond{background:linear-gradient(135deg,#3a2f12,#241d0d);border-color:#d2992266}
+  .verdict h2{border:0;margin:0 0 8px}
+  table{width:100%;border-collapse:collapse;margin:12px 0;font-size:14px}
+  th,td{border:1px solid var(--border);padding:9px 11px;text-align:left;vertical-align:top}
+  th{background:var(--panel2);color:#cdd9e5;font-weight:600}
+  td code,p code,li code{background:var(--code);padding:1px 6px;border-radius:5px;font-size:12.5px;color:#a5d6ff}
+  .pill{display:inline-block;padding:1px 9px;border-radius:20px;font-size:12px;font-weight:700;white-space:nowrap}
+  .p-pass{background:#1f3d28;color:#56d364;border:1px solid #2ea04355}
+  .p-fail{background:#3d1f1f;color:#ff7b72;border:1px solid #f8514955}
+  .p-warn{background:#3d3415;color:#e3b341;border:1px solid #d2992255}
+  .p-na{background:#272d36;color:#9aa7b4;border:1px solid #44505c}
+  .p-info{background:#2a213d;color:#c297ff;border:1px solid #a371f755}
+  ul{margin:8px 0 8px 0;padding-left:22px}
+  li{margin:4px 0}
+  .muted{color:var(--muted)}
+  .kbd{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12.5px}
+  pre{background:var(--code);border:1px solid var(--border);border-radius:8px;padding:12px 14px;
+    overflow:auto;font-size:12.5px;color:#c9d4e0}
+  .sev-b{color:#ff7b72;font-weight:700}
+  .sev-h{color:#ff9b6b;font-weight:700}
+  .sev-m{color:#e3b341;font-weight:700}
+  .sev-l{color:#7ee787;font-weight:700}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:14px 0}
+  .stat{background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:14px}
+  .stat .n{font-size:24px;font-weight:800}
+  .stat .l{font-size:12.5px;color:var(--muted)}
+  .tag{font-size:11.5px;color:var(--muted)}
+  footer{margin-top:48px;color:var(--muted);font-size:12.5px;border-top:1px solid var(--border);padding-top:16px}
+  svg{max-width:100%;height:auto}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>M7 통합·동작 검증 리포트</h1>
+  <div class="sub">
+    별도 즐겨찾기 위젯 창(R-22) + 카드 reorder FLIP 애니메이션(R-23) · QA 엔지니어 ·
+    2026-06-21 · 입력: <code>docs/architecture/m7-design.html</code> (rev.2) · 구현 <code>electron/**</code>·<code>public/**</code><br>
+    검증 방법: 실제 <code>npm test</code> 실행 · 경계면 교차 비교 · <b>헤드리스 Electron 실제 기동 스모크</b>(offscreen 위젯 창 생성·<code>app://favorites.html</code> 로드·렌더러 <code>window.spip</code> 인트로스펙션)
+  </div>
+
+  <div class="grid">
+    <div class="stat"><div class="n" style="color:var(--pass)">474 / 474</div><div class="l">npm test 통과 (fail 0)</div></div>
+    <div class="stat"><div class="n" style="color:var(--pass)">58</div><div class="l">M7 전용 단위/계약 테스트 통과</div></div>
+    <div class="stat"><div class="n" style="color:var(--pass)">6 / 6</div><div class="l">위젯 preload 채널 (런타임 확인)</div></div>
+    <div class="stat"><div class="n" style="color:var(--pass)">0</div><div class="l">발견 블로커/높음 버그</div></div>
+  </div>
+
+  <div class="verdict">
+    <h2>종합 판정: <span style="color:var(--pass)">통합 가능 (PASS)</span></h2>
+    <p>M7 두 요구(R-22 즐겨찾기 독립 위젯 창 · R-23 카드 reorder FLIP)는 설계(rev.2) 계약과 수용 기준을
+    <b>코드·테스트·실기동 스모크 3중으로 충족</b>한다. 전체 474 테스트 통과(M7 신규 58 포함), 경계면
+    (preload-favorites ↔ favorites.js 6채널·register broadcast ↔ 위젯 구독·main onShowFavorites ↔ favoritesWidget)
+    이 정확히 맞물리며, <b>헤드리스 Electron을 실제 기동</b>해 위젯 창이 <code>app://favorites.html</code>을 로드하고
+    축소 preload 6채널만 노출(generic invoke·ipcRenderer·강력채널 0)하며 CSP 헤더가 위젯 로드에 적용되고
+    <code>window.open</code>이 deny됨을 런타임으로 확인했다.</p>
+    <p>차단성(블로커/높음) 버그 0. <b>실 GUI 동작(토스트 우측하단 등장·blur 자동 닫힘·FLIP 시각 부드러움·
+    멀티모니터 좌표·focus 게이팅 체감)</b>은 헤드리스 한계로 코드/단위까지만 검증했고, 아래 "사용자 PC 확인 필요"
+    목록으로 분리한다(추측 PASS 아님).</p>
+  </div>
+
+  <h2>1. 테스트 실행 (실제 근거)</h2>
+  <div class="card">
+    <pre>$ npm test
+ℹ tests 474
+ℹ pass 474
+ℹ fail 0
+
+$ node --test test/favorites-widget.test.js test/preload-favorites-contract.test.js \
+      test/favorites-broadcast.test.js test/favorites-renderer.test.js test/favorites-html-csp.test.js
+ℹ tests 58   ℹ pass 58   ℹ fail 0</pre>
+    <p>전체 474 통과, 실패 0. M7 전용 신규 테스트 파일 5종(favorites-widget·preload-favorites-contract·
+    favorites-broadcast·favorites-renderer·favorites-html-csp) 58건 전부 통과.
+    <code>node --check</code>로 변경 파일 7종(favoritesWidget·preload-favorites·register·main·preload·app·favorites) 구문 무결 확인.</p>
+  </div>
+
+  <h2>2. 경계면 교차 비교 — preload-favorites ↔ favorites.js (지난 채널/payload 불일치 전례)</h2>
+  <div class="card">
+    <table>
+      <tr><th>채널 / API</th><th>preload-favorites.js (노출)</th><th>favorites.js (사용)</th><th>판정</th></tr>
+      <tr><td><code>getUiState()</code></td><td><code>invoke('spip:getUiState')</code></td><td><code>call('getUiState')</code> → <code>ui.favorites</code> 사용</td><td><span class="pill p-pass">일치</span></td></tr>
+      <tr><td><code>getProjects()</code></td><td><code>invoke('spip:getProjects')</code></td><td><code>call('getProjects')</code> → <code>pr.projects</code> 사용</td><td><span class="pill p-pass">일치</span></td></tr>
+      <tr><td><code>open(id,toolId?)</code></td><td><code>invoke('spip:openInVsCode',{id,toolId?})</code></td><td><code>call('open', id)</code> (toolId 생략 → main 'code' 하위호환)</td><td><span class="pill p-pass">일치</span></td></tr>
+      <tr><td><code>copyText(t)</code></td><td><code>invoke('spip:copyText',{text})</code></td><td><code>call('copyText', path)</code></td><td><span class="pill p-pass">일치</span></td></tr>
+      <tr><td><code>setFavorite(id,on)</code></td><td><code>invoke('spip:setFavorite',{id,on})</code></td><td><code>call('setFavorite', id, false)</code> (해제)</td><td><span class="pill p-pass">일치</span></td></tr>
+      <tr><td><code>onFavoritesChanged(cb)</code></td><td><code>on('spip:favorites-changed')</code> → <code>cb(payload)</code>, unsub 반환</td><td><code>spip.onFavoritesChanged(p => favoritesChangedView(p))</code></td><td><span class="pill p-pass">일치</span></td></tr>
+    </table>
+    <p><b>payload 정합:</b> broadcast가 보내는 <code>{ favorites:string[] }</code>(register.js:145)와 위젯 수신
+    <code>favoritesChangedView(payload)</code>(payload.favorites 배열 검증·문자열 필터)가 정확히 맞물린다.
+    SEC-M2 — 경로/실행인자/내부상태 미포함을 broadcast 단위테스트가 단언(통과).</p>
+    <p><b>closeWidget 미노출 ↔ blur 폴백 정합:</b> 설계가 closeWidget을 "선택"으로 두었고 구현은
+    <b>미노출</b>이다. favorites.js <code>requestClose()</code>는 <code>has('closeWidget')</code>가 false면
+    <code>window.blur()</code>를 호출해 폴백한다 → main의 <code>widget.on('blur')</code> → floating 해제 +
+    100ms grace 후 hide. 헤드리스 단위에서 blur→grace→hide·재focus 취소 경로 모두 통과.
+    실제 <code>window.blur()</code>가 OS 레벨 BrowserWindow blur 이벤트를 유발하는지는 GUI 런타임 의존
+    (아래 6번 항목으로 분리).</p>
+    <p><b>헤드리스 런타임 확인:</b> 실제 Electron 기동 후 렌더러에서 <code>Object.keys(window.spip)</code> =
+    <code>["copyText","getProjects","getUiState","onFavoritesChanged","open","setFavorite"]</code> — <b>정확히 6개, 그 외 0</b>.
+    <span class="pill p-pass">PASS</span></p>
+  </div>
+
+  <h2>3. 오버레이 제거 회귀 (app.js)</h2>
+  <div class="card">
+    <table>
+      <tr><th>항목</th><th>확인</th><th>판정</th></tr>
+      <tr><td>슬라이더 함수/상태 제거</td><td><code>renderFavoritesSlider·openFavoritesSlider·closeFavoritesSlider·syncSliderIndex·onSliderKeydown·store.state.slider</code> 잔존 참조 <b>0</b> (Grep 전역·소스파일 기준). 주석으로 제거 사실만 명시.</td><td><span class="pill p-pass">PASS</span></td></tr>
+      <tr><td>R-20 즐겨찾기 토글</td><td><code>toggleFavorite·isFavorite·favoriteButton</code>(별 토글, app.js:1972) 유지</td><td><span class="pill p-pass">PASS</span></td></tr>
+      <tr><td>R-20 즐겨찾기만 필터</td><td><code>favoritesOnly</code> 토글 버튼(app.js:1647)·<code>matchesFavoritesFilter</code> AND 합류 유지</td><td><span class="pill p-pass">PASS</span></td></tr>
+      <tr><td>R-20 별(★) 버튼</td><td>카드·표 양쪽 <code>favoriteButton</code> 렌더 유지</td><td><span class="pill p-pass">PASS</span></td></tr>
+      <tr><td>필터바 '슬라이더' 버튼 제거</td><td>app.js:1657 주석으로 제거 — 잔존 버튼 0</td><td><span class="pill p-pass">PASS</span></td></tr>
+      <tr><td><code>dispatchTrayAction</code></td><td>화이트리스트 <code>'dashboard'</code> 단일로 축소(app.js:819). <code>favorites</code> → default → <code>{handler:null}</code></td><td><span class="pill p-pass">PASS</span></td></tr>
+      <tr><td><code>onTrayCommand</code> favorites 분기</td><td>제거 — <code>dashboard</code>만 처리, 그 외 graceful 무시(app.js:2512)</td><td><span class="pill p-pass">PASS</span></td></tr>
+      <tr><td>preload.js <code>onTray</code> 축소</td><td><code>actions = ['dashboard']</code>(preload.js:83) — <code>spip:tray:favorites</code> 수신 채널 제거(SEC-L1)</td><td><span class="pill p-pass">PASS</span></td></tr>
+    </table>
+    <p>R4 3층 정합(preload·app·tray)이 일관 반영됨. 죽은 수신 채널 잔존 0.</p>
+  </div>
+
+  <h2>4. FLIP 애니메이션 (R-23)</h2>
+  <div class="card">
+    <table>
+      <tr><th>요건</th><th>확인 (app.js)</th><th>판정</th></tr>
+      <tr><td>commitReorder → flipReorder 위임</td><td><code>commitReorder</code>(2608)가 <code>flipReorder(() => { sortMode=manual; order=merged; render(); })</code>로 mutate 위임(2621)</td><td><span class="pill p-pass">PASS</span></td></tr>
+      <tr><td>computeFlip 순수 산출</td><td><code>computeFlip(firstMap,lastMap,reduce)</code>(833) 순수·DOM 비의존. 계약 <code>dx=prev.left-now.left, dy=prev.top-now.top</code> 정확. 단위테스트 5건 통과</td><td><span class="pill p-pass">PASS</span></td></tr>
+      <tr><td>prefers-reduced-motion 즉시 적용</td><td><code>prefersReducedMotion()</code> true 시 First 캡처 skip·mutate 후 early return(전이 0). styles.css <code>@media (prefers-reduced-motion: reduce){ .cards .card{transition:none!important} }</code> 방어(585)</td><td><span class="pill p-pass">PASS</span></td></tr>
+      <tr><td>키보드 이동도 적용</td><td><code>reorderByMove</code>(2600) → <code>commitReorder</code> → flipReorder 동일 경로</td><td><span class="pill p-pass">PASS</span></td></tr>
+      <tr><td>카드뷰 한정(table 미적용)</td><td>캡처/play 모두 <code>.cards [data-card-id]</code> 한정(2827·2852). <b>renderTable에는 draggable·moveButton·reorder 트리거가 전혀 없음</b>(행 클릭=드로어만, 2024~2082) → R5 정합(누락 아님)</td><td><span class="pill p-pass">PASS</span></td></tr>
+      <tr><td>data-card-id 키 재사용 (R3)</td><td>신규 속성 부여 없이 기존 <code>dataset.cardId</code>를 FLIP 키로 사용</td><td><span class="pill p-pass">PASS</span></td></tr>
+      <tr><td>드래그 중 카드 제외</td><td><code>.is-dragging</code> 클래스 카드는 캡처 skip(2831, 네이티브 DnD 추종)</td><td><span class="pill p-pass">PASS</span></td></tr>
+    </table>
+  </div>
+
+  <h2>5. 헤드리스 Electron 스모크 (실제 기동)</h2>
+  <div class="card">
+    <p>임시 offscreen 하니스로 실제 Electron 프로세스를 기동해 <code>protocol.handle('app')</code>(public/ 매핑)·
+    <code>applyCspHeaders</code>(default session 1회)·<code>favoritesWidget.ensureWidget</code>(hardenWebContents 주입)을
+    구성하고 위젯 창을 생성·로드한 결과(<code>SMOKE_RESULT</code> 실측):</p>
+    <table>
+      <tr><th>스모크 항목</th><th>실측 결과</th><th>판정</th></tr>
+      <tr><td>위젯 창 생성</td><td><code>windowCreated: true</code> (parent 미지정 top-level)</td><td><span class="pill p-pass">PASS</span></td></tr>
+      <tr><td><code>app://favorites.html</code> 로드</td><td><code>didFinishLoad: true</code> (did-fail-load 미발생)</td><td><span class="pill p-pass">PASS</span></td></tr>
+      <tr><td>preload 6채널 노출</td><td><code>["copyText","getProjects","getUiState","onFavoritesChanged","open","setFavorite"]</code> 전부 function</td><td><span class="pill p-pass">PASS</span></td></tr>
+      <tr><td>generic invoke 부재</td><td><code>genericInvoke: "undefined"</code></td><td><span class="pill p-pass">PASS</span></td></tr>
+      <tr><td>ipcRenderer/require 부재</td><td><code>window.spip.ipcRenderer / window.ipcRenderer / window.require = undefined/undefined/undefined</code></td><td><span class="pill p-pass">PASS</span></td></tr>
+      <tr><td>강력채널 비노출 (SEC-M3)</td><td><code>strongChannelsExposed: []</code> (setToolPath·setOrder·rescan·pickFolders 등 0)</td><td><span class="pill p-pass">PASS</span></td></tr>
+      <tr><td>CSP 헤더 위젯 로드 적용 (SEC-H1)</td><td><code>cspHeaderApplied</code> = CSP_POLICY 전체 문자열(default-src 'none' … frame-ancestors 'none')</td><td><span class="pill p-pass">PASS</span></td></tr>
+      <tr><td>하드닝 — window.open deny (SEC-M1)</td><td><code>windowOpenResult: "denied(null)"</code> (setWindowOpenHandler:deny 동작)</td><td><span class="pill p-pass">PASS</span></td></tr>
+    </table>
+    <p><b>CSP 메타 단일원천 정합(SEC-L2):</b> <code>favorites.html</code> 메타 CSP가 <code>index.html</code> 메타·
+    <code>security.js CSP_POLICY.join('; ')</code>와 <b>문자 단위 동일</b>함을 코드 대조 + favorites-html-csp 테스트로 확인.</p>
+    <p><b>트레이 → 위젯 show 경로:</b> main.js <code>onShowFavorites</code>(192)가
+    <code>favoritesWidget.show({hardenWebContents, trustedOrigin, screen})</code>를 호출하며 <b>메인창 상태를 참조하지 않는다</b>
+    (win.show/push 폐기). 위젯은 parent 미지정 top-level이라 메인창 hidden과 무관 — 스모크에서 메인창 없이
+    위젯 단독 생성·로드 성공으로 독립성 구조를 확인. 단, 실제 트레이 클릭→show 체감(메인 트레이 상주 상태)은 GUI 의존(6번).</p>
+  </div>
+
+  <h2>6. 요구 추적 (R-22 · R-23)</h2>
+  <div class="card">
+    <table>
+      <tr><th>요구</th><th>백로그 의도</th><th>구현 충족</th><th>판정</th></tr>
+      <tr><td class="kbd">R-22</td><td>즐겨찾기 = 별도 프레임리스 토스트 창·우측하단·대시보드 닫혀도(트레이 상주) 동작(독립)</td>
+        <td>frameless·transparent·skipTaskbar·movable:false·우측하단 workArea 좌표·parent 미지정 독립 생명주기·hide 재사용·doFinalQuit dispose 멱등. 동기화 broadcast({favorites}) 양 창. 구조·단위·스모크 충족</td>
+        <td><span class="pill p-pass">충족</span></td></tr>
+      <tr><td class="kbd">R-23</td><td>카드 reorder 시 부드러운 이동 애니메이션</td>
+        <td>FLIP(First-Last-Invert-Play) 180ms·라이브러리 0·reduced-motion 존중·키보드 이동 포함·카드뷰 한정. 순수 computeFlip 단위 통과</td>
+        <td><span class="pill p-pass">충족</span></td></tr>
+    </table>
+  </div>
+
+  <h2>7. 회귀 — 기존 lib/MVP/M4/M6/Electron 보존</h2>
+  <div class="card">
+    <ul>
+      <li><b>전체 474 테스트 통과</b> — 기존 스위트(walker·scanner·detector·collectors·server·staticHandler·ipc-*·tray·uiStateStore·security 등) fail 0.</li>
+      <li><b>기존 IPC 불변</b> — <code>spip:setFavorite</code> 핸들러는 <code>uiStateIpc.setFavorite</code>(검증·영속)를 그대로 호출하고 성공 시 broadcast로 <b>감싸기만</b> 함(register.js:157). getUiState/getProjects/openInVsCode/copyText/setOrder 등 핸들러 등록·검증 로직 무수정. 신규 invoke 채널 0(push 1개만 추가).</li>
+      <li><b>CLI 불변</b> — <code>scan.js</code>·<code>npm run scan</code> 경로 무관(M7은 Electron/렌더러 한정).</li>
+      <li><b>보안 베이스라인 불변</b> — security.js(CSP_POLICY·applyCspHeaders·hardenWebContents)·register guard(isTrustedSender) 무수정. 위젯도 동일 헬퍼 재사용.</li>
+      <li><b>단일 종료 경로(P2-2) 보존</b> — doFinalQuit에 위젯 dispose 1줄 추가(멱등). disposeResources _disposed 가드·before-quit 비dispose 정책 유지.</li>
+    </ul>
+  </div>
+
+  <h2>8. 발견 버그 / 관찰 사항</h2>
+  <div class="card">
+    <p><b>블로커/높음/보통: 없음.</b> 아래는 낮음/관찰(차단성 아님).</p>
+    <table>
+      <tr><th>#</th><th>무엇이 / 어디서</th><th>기대 vs 실제</th><th>재현/근거</th><th>심각도</th></tr>
+      <tr>
+        <td>O-1</td>
+        <td>위젯 헤더 × 닫기는 <code>closeWidget</code> 미노출 시 <code>window.blur()</code> 폴백에 의존(favorites.js:299).</td>
+        <td>기대: × 클릭 시 위젯 즉시 hide. 실제(코드): blur 이벤트 유발 → main grace 후 hide. <code>window.blur()</code>가 항상 OS 레벨 BrowserWindow 'blur'를 발생시키는지는 플랫폼/포커스 상태 의존 — 헤드리스로 단정 불가.</td>
+        <td>코드 경로 확인. 단위테스트는 blur 핸들러 직접 호출로 검증(실제 window.blur 트리거는 미검증).</td>
+        <td><span class="sev-l">낮음</span> (GUI 확인 권고)</td>
+      </tr>
+      <tr>
+        <td>O-2</td>
+        <td>docs(<code>traceability.html</code>·<code>progress.html</code>)에 구버전 슬라이더 함수명 잔존.</td>
+        <td>소스 코드에는 잔존 0이나 문서는 M6 서술 유지. 동작 무관(문서 영역).</td>
+        <td>Grep 결과 docs만 매치. → 문서 갱신은 <code>reviewer</code> 영역으로 위임.</td>
+        <td><span class="sev-l">낮음</span> (역할 경계: 문서)</td>
+      </tr>
+    </table>
+  </div>
+
+  <h2>9. 사용자 PC 확인 필요 (헤드리스 한계 — 추측 PASS 아님)</h2>
+  <div class="card">
+    <p>아래는 실 GUI 디스플레이/입력이 있어야 체감·확정 가능한 항목이다. 코드/단위는 통과했으나 런타임 시각·OS 거동은 미검증으로 분리한다.</p>
+    <ul>
+      <li><b>토스트 등장 위치</b> — 트레이 '즐겨찾기' → 위젯이 실제로 우측 하단(작업표시줄 위, margin 16)에 뜨는지. 멀티모니터/작업표시줄 위치 변경 시 커서 모니터 기준 배치.</li>
+      <li><b>blur 자동 닫힘 + grace</b> — 다른 앱 클릭(blur) 시 100ms 후 hide, 위젯 내부 클릭으로 인한 순간 blur는 닫히지 않는지(재focus 취소). 특히 × 버튼 <code>window.blur()</code> 폴백이 실제로 닫는지(O-1).</li>
+      <li><b>대시보드 닫힘(트레이 상주) 중 독립 동작</b> — 메인창 X→hide 상태에서 트레이 '즐겨찾기'로 위젯 정상 등장(R-22 핵심 시나리오). 구조는 확인됨, 실 트레이 클릭 체감 미확인.</li>
+      <li><b>FLIP 시각 부드러움</b> — 카드 드래그/키보드 이동 시 다른 카드가 180ms로 자연스럽게 비켜주는지, 점프/깜빡임 없는지. reduced-motion 켠 OS에서 즉시 적용.</li>
+      <li><b>focus 게이팅 체감(SEC-H2)</b> — 비포커스 위젯의 액션 버튼 비활성, 첫 클릭은 포커스만(액션 미실행).</li>
+      <li><b>transparent/둥근 모서리 외형 + 폴백</b> — Windows transparent+frameless 렌더, 환경 부담 시 불투명 폴백(ADR-M7-5).</li>
+      <li><b>양 창 동시 열림 동기화</b> — 메인·위젯 동시 표시 중 한쪽 별 토글 시 다른 쪽 즉시 반영(broadcast). 깜빡임 없는 idempotent 수렴.</li>
+      <li><b>alwaysOnTop floating 전이</b> — show 시 floating, hide/blur 시 해제가 다른 앱 입력을 가로채지 않는지.</li>
+    </ul>
+  </div>
+
+  <h2>10. 검증 방법 요약 (재현)</h2>
+  <div class="card">
+    <pre># 1) 전체 + M7 테스트
+npm test                                   # 474/474 pass
+node --test test/favorites-*.test.js test/preload-favorites-contract.test.js
+
+# 2) 구문 무결
+node --check electron/favoritesWidget.js electron/preload-favorites.js \
+             electron/ipc/register.js electron/main.js public/app.js public/favorites.js
+
+# 3) 헤드리스 실기동 스모크(임시 하니스로 수행·검증 후 제거)
+#    - protocol.handle('app') public/ 매핑 + applyCspHeaders(defaultSession)
+#    - favoritesWidget.ensureWidget({hardenWebContents, trustedOrigin})
+#    - wc.executeJavaScript 로 window.spip 키/타입·window.open·CSP 헤더 인트로스펙션
+#    결과: 6채널만·generic invoke 0·ipcRenderer 0·강력채널 0·CSP 적용·window.open denied(null)</pre>
+    <p class="muted">역할 경계: 본 리포트는 동작·통합만 본다. 코드 품질=<code>code-reviewer</code>, 보안 취약점=<code>security-reviewer</code>,
+    문서/계획=<code>reviewer</code> 영역(O-2 문서 잔존 등).</p>
+  </div>
+
+  <footer>
+    Project-SPIP — M7 QA 리포트 (m7_qa_1) · 저장: <code>docs/reviews/m7_qa_1.html</code> ·
+    판정: 통합 가능(PASS) · 블로커/높음 0 · 사용자 PC 확인 8건 분리 · 2026-06-21
+  </footer>
+
+</div>
+</body>
+</html>

@@ -68,10 +68,10 @@
 </head>
 <body>
 <header>
-  <span class="tag">추적성 매트릭스</span><span class="tag">v1.4</span><span class="tag">현재 단계: M6 백로그 5기능(R-17~R-21) 구현 완료·검증 통과</span>
+  <span class="tag">추적성 매트릭스</span><span class="tag">v1.5</span><span class="tag">현재 단계: M7(R-22 즐겨찾기 독립 토스트 창·R-23 카드 reorder FLIP) 구현 완료·검증 통과</span>
   <h1>Project-SPIP — 추적성 매트릭스</h1>
   <p>요구가 <b>기획 → 설계 결정/모듈 → 구현 위치 → 검증</b>까지 끊기지 않고 이어지는지를 한 표로 관리하는 1급 산출물.
-  PRD의 모든 요구(기능 R-01~R-16, 비기능 N-01~N-07) + M6 백로그(R-17~R-21)를 행으로 가지며, 각 요구를 아키텍처 설계서 §14 매핑·본문 §5~§9 모듈/계약/API·§7 디렉터리 트리(구현 위치)와 검증 기록(QA·코드·보안 PASS)에 연결한다.</p>
+  PRD의 모든 요구(기능 R-01~R-16, 비기능 N-01~N-07) + M6 백로그(R-17~R-21) + M7(R-22·R-23)를 행으로 가지며, 각 요구를 아키텍처 설계서 §14 매핑·본문 §5~§9 모듈/계약/API·§7 디렉터리 트리(구현 위치)와 검증 기록(QA·코드·보안 PASS)에 연결한다.</p>
   <div class="note">
     <b>전송: Electron IPC (과도기 HTTP 보존).</b> 제품이 로컬 웹앱 → <b>Electron 데스크톱 앱</b>으로 이전 완료되어 전송 계층이 <b>HTTP → Electron IPC</b>로 바뀌었다. 사용자 표면(R-04 루트 설정·R-12 열기·R-15 진행·R-16 재스캔)의 구현 위치·검증을 Electron 기준으로 갱신했다(아래 해당 행에 표기). 도메인 로직(walker·detector·collectors·scanController·pathGuard·safeExec)은 전송 무관하게 그대로 재사용된다. IPC 계약 정본: <code>docs/architecture/electron-migration.html</code> §4. 과도기 HTTP 서버(<code>server.js</code>·<code>lib/server/*</code> · <code>npm run start:web</code>)는 <b>아직 보존</b>되며 후속 제거 예정(코드리뷰 P2-2). 요구 상태는 전부 <b>구현 완료</b> 유지.
     <br><b>막바지 버그픽스 2건 반영(상태 변동 없음, 검증 칸 갱신).</b> ① <b>스캔 후 무한 로딩</b> — <code>scanController.start()</code>가 <code>finalizing</code>/<code>done</code>/<code>error</code> 터미널 phase를 push하지 않아 스캔 완료 후 대시보드 전환이 안 되던 문제(R-15 진행 push·R-16 재스캔 후 갱신 관련) → 터미널 phase emit 추가(세대 가드 유지)·회귀 테스트 <code>test/scanController-onprogress.test.js</code>. ② <b>패키징 앱 실행 크래시</b> — <code>build/afterPack.js</code>의 <code>EnableEmbeddedAsarIntegrityValidation</code> fuse가 Windows+electron-builder 24.x에서 <code>FindResource</code> FATAL을 유발(패키징/배포 관련) → 그 fuse만 비활성(나머지 보안 fuse 유지)·<code>app://</code> 핸들러 fs 직접 읽기(asar-aware)·<code>did-fail-load</code> 시 창 강제 표시. <b>실 GUI에서 창 정상 표시·동작 확인됨.</b> 버전 <code>package.json 1.0.1</code>.
@@ -79,7 +79,10 @@
   <div class="note" style="background:rgba(167,139,250,.08);border-color:rgba(167,139,250,.3);color:#ddd6fe;">
     <b>M6 백로그 5기능(R-17~R-21) 추가·구현 완료.</b> 사용자 백로그(<code>docs/ref.md</code>)를 Electron IPC 위에 구현했다 — R-17 경로 복사(<code>copyText</code>) · R-18 외부 툴 경로 설정(확장형 툴 레지스트리·<code>code</code> 경로 지정·PATH 안내·force 재검증·.exe만) · R-19 카드 드래그/키보드 순서변경(<code>auto↔manual</code>·<code>ui-state.order</code>) · R-20 즐겨찾기(<code>ui-state.favorites</code>·필터) · R-21 트레이 상주(대시보드/종료/즐겨찾기·close-to-tray·즐겨찾기 슬라이더 오버레이). 도메인 로직은 <code>lib/common/{toolRegistry,uiStateStore}.js</code> 순수 함수로 분리(헤드리스 단위테스트). 설계 정본: <code>docs/architecture/m6-design.html</code>(rev.2). 설계 2회 검증 PASS·구현 다면검증(보안 PASS·코드 P1 0·QA 통합가능, P2-3 시정 반영)·전체 <b>416 테스트 통과</b>. GUI/OS 상호작용(트레이 클릭·DnD·네이티브 다이얼로그·클립보드·슬라이더·Q4)은 헤드리스 한계로 <b>사용자 PC 1회 수동 확인</b>(QA U-1~U-6).
   </div>
-  <div class="meta">문서 유형: 추적성 매트릭스 · 작성: 기술 문서 작성자 · 최종 갱신: 2026-06-21 · 현재 단계: <b>전체(MVP+M4+M6) 구현 완료·검증 통과</b> · 입력: PRD v1.0 / architecture.html rev.2 / m4-design.html / m6-design.html rev.2 / adr.html rev.2 / S0~S7 + M4 후속 6건 + M6 백로그 5건 구현물 / 검증 PASS(MVP S7 + M4 설계 2회·다면검증 + M6 설계 2회·보안·코드·QA)</div>
+  <div class="note" style="background:rgba(167,139,250,.08);border-color:rgba(167,139,250,.3);color:#ddd6fe;">
+    <b>M7(R-22·R-23) 추가·구현 완료.</b> 사용자 요청 2건을 점진 확장으로 반영했다 — <b>R-22</b> 즐겨찾기를 메인창 내 오버레이가 아닌 <b>대시보드와 독립된 별도 프레임리스 토스트형 창</b>으로 전환(우측하단·트레이에서 열림·대시보드가 트레이에 숨어 있어도 등장). 새 창에도 메인창과 동등 보안(동일 webPreferences·<code>app://favorites.html</code>·CSP default session 공유·per-wc 하드닝·senderFrame 정확일치)을 적용하고 위젯 전용 축소 preload(6채널)로 표면을 좁혔다. 메인창 슬라이더 오버레이는 제거됨(ADR-M6-5 Superseded → ADR-M7-1). <b>R-23</b> 카드 reorder FLIP 애니메이션(<code>prefers-reduced-motion</code> 존중·카드뷰 한정·렌더러 전용). 설계 정본: <code>docs/architecture/m7-design.html</code>(rev.2). 설계 reviewer 2회·보안 2회 PASS·구현 다면검증(보안 PASS·코드 P1 0·QA 통합가능)·전체 <b>474 테스트 통과</b>(M7 신규 58 포함). GUI/OS 상호작용(토스트 등장·blur 닫힘·독립 표시·FLIP 시각·양 창 동기화)은 헤드리스 한계로 <b>사용자 PC 1회 수동 확인</b>.
+  </div>
+  <div class="meta">문서 유형: 추적성 매트릭스 · 작성: 기술 문서 작성자 · 최종 갱신: 2026-06-21 · 현재 단계: <b>전체(MVP+M4+M6+M7) 구현 완료·검증 통과</b> · 입력: PRD v1.0 / architecture.html rev.2 / m4-design.html / m6-design.html rev.2 / m7-design.html rev.2 / adr.html rev.2 / S0~S7 + M4 후속 6건 + M6 백로그 5건 + M7 2건 구현물 / 검증 PASS(MVP S7 + M4 설계 2회·다면검증 + M6 설계 2회·보안·코드·QA + M7 설계 2회·보안 2회·구현 보안·코드·QA)</div>
 </header>
 
 <main>
@@ -87,15 +90,16 @@
 <section id="summary">
   <h2>요약</h2>
   <div class="grid">
-    <div class="card"><div class="k">전체 요구 수</div><div class="kpi">28</div><div class="v">기능 R 21건(R-01~R-21) + 비기능 N 7건. 추적 누락 0.</div></div>
+    <div class="card"><div class="k">전체 요구 수</div><div class="kpi">30</div><div class="v">기능 R 23건(R-01~R-23) + 비기능 N 7건. 추적 누락 0.</div></div>
     <div class="card"><div class="k">MVP 집합</div><div class="kpi">16</div><div class="v">기능 11(R-01·02·04·06·07·08·10·11·12·13·14) + 비기능 5(N-02·03·04·05·06)</div></div>
     <div class="card"><div class="k">M4 후속</div><div class="kpi">6</div><div class="v">R-03·R-05·R-09·R-15·R-16 + N-07(접근성) — 전건 <b>구현 완료</b></div></div>
     <div class="card"><div class="k">M6 백로그</div><div class="kpi">5</div><div class="v">R-17·R-18·R-19·R-20·R-21 — 전건 <b>구현 완료·검증 통과</b></div></div>
+    <div class="card"><div class="k">M7</div><div class="kpi">2</div><div class="v">R-22(즐겨찾기 독립 토스트 창)·R-23(카드 reorder FLIP) — 전건 <b>구현 완료·검증 통과</b></div></div>
     <div class="card"><div class="k">품질 기준</div><div class="kpi">1</div><div class="v">N-01(성능) — 기능 스토리 아닌 산출물 품질 기준으로 적용</div></div>
-    <div class="card"><div class="k">현재 상태</div><div class="kpi" style="font-size:16px;">M6 백로그 5기능 구현 완료·검증 통과</div><div class="v">전송 Electron IPC. QA 통합가능·코드 P1 0·보안 PASS. 테스트 416/416·탐지율 100%·필터 0.154ms.</div></div>
+    <div class="card"><div class="k">현재 상태</div><div class="kpi" style="font-size:16px;">M7(R-22·R-23) 구현 완료·검증 통과</div><div class="v">전송 Electron IPC. QA 통합가능·코드 P1 0·보안 PASS. 테스트 474/474·탐지율 100%·필터 0.154ms.</div></div>
   </div>
   <div class="note">
-    <b>현재 단계 = 전체(MVP+M4) 구현 완료·검증 통과.</b> S0~S7 구현물 + M4 후속 6건 구현물(<code>scan.js</code>·<code>server.js</code>·<code>lib/server/scanController.js</code>·<code>lib/scan/driveEnum.js</code>·<code>lib/scan/collectors/size.js</code>·<code>lib/scan/walker.js</code>(depthLimit)·<code>public/**</code> 진행/접근성·<code>test/**</code>)이 실재한다. 본 매트릭스의 "구현 위치"는 <b>실제 파일 경로</b>이고, "검증" 칸은 다면 검증의 <b>실측 결과</b>를 반영한다. 통과한 검증: <b>QA(통합·동작) GO · 코드 품질 PASS · 보안 게이트 PASS(치명·높음·중간·낮음 0)</b>. 핵심 실측: <code>node --test</code> <b>213/213</b> 통과(MVP 107 → M4 포함 213) · 탐지율 100%(게이트 ≥95%) · 클라이언트 필터/정렬 5000건 0.154ms(게이트 200ms). M4 후속 6건(R-03·05·09·15·16·N-07)은 모두 <b>구현 완료</b>로 전이했다.
+    <b>현재 단계 = 전체(MVP+M4+M6+M7) 구현 완료·검증 통과.</b> S0~S7 구현물 + M4 후속 6건 구현물(<code>scan.js</code>·<code>server.js</code>·<code>lib/server/scanController.js</code>·<code>lib/scan/driveEnum.js</code>·<code>lib/scan/collectors/size.js</code>·<code>lib/scan/walker.js</code>(depthLimit)·<code>public/**</code> 진행/접근성·<code>test/**</code>)이 실재한다. 본 매트릭스의 "구현 위치"는 <b>실제 파일 경로</b>이고, "검증" 칸은 다면 검증의 <b>실측 결과</b>를 반영한다. 통과한 검증: <b>QA(통합·동작) GO · 코드 품질 PASS · 보안 게이트 PASS(치명·높음·중간·낮음 0)</b>. 핵심 실측: <code>node --test</code> <b>213/213</b> 통과(MVP 107 → M4 포함 213) · 탐지율 100%(게이트 ≥95%) · 클라이언트 필터/정렬 5000건 0.154ms(게이트 200ms). M4 후속 6건(R-03·05·09·15·16·N-07)은 모두 <b>구현 완료</b>로 전이했다.
   </div>
   <div class="danger-box">
     <b>보안 통제 연결(높음 3건) — 구현 코드에서 실재·동작 확인.</b> 설계 rev.2에 구조적으로 해소된 <span class="sid">H-1</span>(심링크/realpath 우회) · <span class="sid">H-2</span>(PATH 하이재킹/위장 바이너리) · <span class="sid">H-3</span>(JSON 폭탄·ReDoS 등 부분신뢰 입력)는 모두 <span class="nid">N-03</span>에 연결되며, S7 보안 게이트에서 코드 정독 + 회귀(107건) + 적대적 프로브로 <b>실재·동작이 입증</b>됐다.
@@ -112,9 +116,9 @@
 </section>
 
 <section id="matrix">
-  <h2>추적성 매트릭스 — 전체 요구 (R-01~R-21, N-01~N-07)</h2>
+  <h2>추적성 매트릭스 — 전체 요구 (R-01~R-23, N-01~N-07)</h2>
 
-  <h3>기능 요구 (R-01 ~ R-21)</h3>
+  <h3>기능 요구 (R-01 ~ R-23)</h3>
   <div class="tbl-wrap">
   <table>
     <tr>
@@ -311,9 +315,27 @@
       <td class="rid">R-21</td>
       <td class="req">트레이 상주 — 우클릭 대시보드/종료/즐겨찾기. 대시보드는 닫아도 트레이 잔류, 종료는 창+트레이 완전 종료, 즐겨찾기는 우측하단 슬라이딩 UI</td>
       <td><span class="pill m4" style="background:rgba(167,139,250,.16);color:#c4b5fd;border:1px solid rgba(167,139,250,.45)">M6</span></td>
-      <td><b>[전송: IPC push]</b> <code>tray.js</code> <code>createTray</code>(메뉴 대시보드 열기/즐겨찾기/종료·action 화이트리스트 M6-M-3). <code>main.js</code> close-to-tray(X→<code>win.hide()</code>·최초 1회 풍선 안내)·완전 종료는 트레이 '종료'만(<code>isQuitting</code>→<code>doFinalQuit</code> 종료 1지점). 트레이 '즐겨찾기'→<code>spip:tray:favorites</code> 단방향 push→즐겨찾기 슬라이더 오버레이(좌우 래핑). 완전 종료 시 스캔 중이면 Q4 확인 다이얼로그. ADR-M6-4 · M6 §3.3·§9.2</td>
-      <td class="mono">electron/tray.js(createTray·buildTrayMenuTemplate·TRAY_ACTIONS)<br>electron/main.js(close-to-tray·isQuitting·doFinalQuit·displayBalloon·Q4)<br>electron/preload.js(onTrayFavorites)<br>public/app.js(slider 상태·renderFavoritesSlider·favoriteViewModels·trayActionFromHandler)</td>
-      <td>QA 통합 가능 — buildTrayMenuTemplate·colse-to-tray hide/!destroy offscreen 스모크·tray:favorites push 라우팅·슬라이더 모듈러 래핑 단위. 보안 PASS(action 화이트리스트·단방향 push). 낮음 O-1(<code>tray:dashboard</code> 미push, win.show 설계대로) 정보성. <b>416/416</b>. <span class="planned">U-4·U-5·Q4: 트레이 아이콘/메뉴 클릭·더블클릭 복원·풍선·슬라이더 시각/키보드·스캔 중 종료 다이얼로그는 사용자 PC 확인(헤드리스 한계)</span></td>
+      <td><b>[전송: IPC push]</b> <code>tray.js</code> <code>createTray</code>(메뉴 대시보드 열기/즐겨찾기/종료·콜백 onShowDashboard/onShowFavorites/onQuit). <code>main.js</code> close-to-tray(X→<code>win.hide()</code>·최초 1회 풍선 안내)·완전 종료는 트레이 '종료'만(<code>isQuitting</code>→<code>doFinalQuit</code> 종료 1지점). 완전 종료 시 스캔 중이면 Q4 확인 다이얼로그. ADR-M6-4 · M6 §3.3·§9.2 · <b>[M7]</b> 트레이 '즐겨찾기'는 <code>onShowFavorites</code> 콜백이 <code>favoritesWidget.show()</code>로 독립 위젯 창을 연다(R-22·메인창 hidden이어도 등장). M6의 메인창 슬라이더 오버레이·<code>spip:tray:favorites</code> push 경로는 제거됨(ADR-M6-5 Superseded → ADR-M7-1)</td>
+      <td class="mono">electron/tray.js(createTray·buildTrayMenuTemplate·TRAY_ACTIONS)<br>electron/main.js(close-to-tray·isQuitting·doFinalQuit·displayBalloon·Q4·onShowFavorites→favoritesWidget.show)<br>public/app.js(dispatchTrayAction 'dashboard' 단일)<br><span style="color:#94a3b8">[M7 이전] 즐겨찾기 표시는 favoritesWidget.js/favorites.html(R-22)로 이전 — renderFavoritesSlider·tray:favorites push 제거</span></td>
+      <td>QA 통합 가능 — buildTrayMenuTemplate·close-to-tray hide/!destroy offscreen 스모크·tray 콜백(onShowFavorites) 라우팅 단위. 보안 PASS(action 화이트리스트·단방향 push). <b>416/416</b>(M6 기준). <span class="planned">U-4·Q4: 트레이 아이콘/메뉴 클릭·더블클릭 복원·풍선·스캔 중 종료 다이얼로그는 사용자 PC 확인(헤드리스 한계)</span><br><b>[M7]</b> 트레이 '즐겨찾기'는 메인창 push가 아닌 <code>favoritesWidget.show()</code>로 독립 위젯 창을 연다(R-22). M6의 슬라이더 오버레이는 제거됨</td>
+      <td><span class="pill st-design">구현 완료</span></td>
+    </tr>
+    <tr>
+      <td class="rid">R-22</td>
+      <td class="req">즐겨찾기를 메인창 내 오버레이가 아닌 <b>별도 프레임리스 토스트형 창</b>으로 — 우측 하단 등장, 대시보드를 닫아 트레이에만 있어도 트레이 '즐겨찾기'로 떠야 함(독립성)</td>
+      <td><span class="pill m4" style="background:rgba(167,139,250,.16);color:#c4b5fd;border:1px solid rgba(167,139,250,.45)">M7</span></td>
+      <td><b>[전송: IPC + push]</b> 메인창과 독립된 단일 위젯 <code>BrowserWindow</code>(<code>frame:false</code>·<code>transparent</code>·<code>resizable/movable:false</code>·<code>skipTaskbar</code>·<code>parent</code> 미지정 독립 생명주기·hide/show 재사용·<code>doFinalQuit</code>에서만 dispose). 메인창과 동등 보안(동일 webPreferences·<code>app://favorites.html</code> 로드·CSP default session 공유·per-wc <code>hardenWebContents</code>·senderFrame 정확일치). 위젯 전용 축소 preload(allowlist 6채널). show 시 <code>setAlwaysOnTop(true,'floating')</code>·blur 시 해제+100ms grace 후 hide·focus 게이팅(SEC-H2). <code>spip:favorites-changed</code> 단방향 push(메인+위젯 wc 화이트리스트·<code>{favorites:string[]}</code>만)로 양 창 동기화. 신규 invoke 채널 0. ADR-M6-5(오버레이) Superseded → ADR-M7-1. M7 §4·§5·§6·§7·§8</td>
+      <td class="mono">electron/favoritesWidget.js(ensureWidget·show·hide·dispose·positionBottomRight·blur grace)<br>electron/preload-favorites.js(축소 allowlist 6: getUiState·getProjects·open·copyText·setFavorite·onFavoritesChanged)<br>public/favorites.html · public/favorites.js(렌더러·L-1 textContent·focusGate·favoriteWidgetViewModels·nextSlideIndex)<br>electron/main.js(onShowFavorites→favoritesWidget.show·getFavoritesWidgetWc·doFinalQuit dispose)<br>electron/ipc/register.js(broadcastFavorites·spip:favorites-changed)<br>electron/tray.js(onShowFavorites 콜백)<br>public/app.js(메인창 슬라이더 오버레이 제거·dispatchTrayAction 'dashboard' 단일 축소)</td>
+      <td>QA 통합 가능 — preload-favorites ↔ favorites.js 6채널·register broadcast ↔ 위젯 구독·main onShowFavorites ↔ favoritesWidget 경계면 일치. 보안 PASS(치명·높음 0 — 동일 보안 베이스라인 0 약화·축소 allowlist·focus 게이팅·alwaysOnTop 표시중만·movable:false·setIgnoreMouseEvents 미사용). 코드 P1 0. <b>474/474</b>(M7 신규 58). test/favorites-widget·preload-favorites-contract·favorites-broadcast·favorites-renderer·favorites-html-csp. <span class="planned">사용자 PC: 토스트 등장·blur 닫힘·메인창 트레이 상주 시 독립 표시·양 창 동기화는 헤드리스 한계로 1회 확인</span></td>
+      <td><span class="pill st-design">구현 완료</span></td>
+    </tr>
+    <tr>
+      <td class="rid">R-23</td>
+      <td class="req">대시보드 카드 순서변경 시 <b>부드러운 이동 애니메이션</b></td>
+      <td><span class="pill m4" style="background:rgba(167,139,250,.16);color:#c4b5fd;border:1px solid rgba(167,139,250,.45)">M7</span></td>
+      <td><b>[렌더러 전용]</b> FLIP(First-Last-Invert-Play) — render() 전후 <code>[data-card-id]</code> 별 rect를 실측 캐시→invert(transform)→rAF로 180ms play. 키는 실측 <code>dataset.cardId</code>(R3 정합). 좌표 diff는 순수함수 <code>computeFlip</code>으로 분리. <code>prefers-reduced-motion: reduce</code> 존중(전이 0·즉시 적용). 드래그·키보드 reorder(<code>reorderByMove</code>) 공통 경로. 적용 범위 <code>.cards</code>(카드뷰) 한정 — table 밀도는 reorder 트리거 없음(R5). IPC·main·보안 무관(DOM 트랜지션만). M7 §9</td>
+      <td class="mono">public/app.js(computeFlip·captureCardRects·prefersReducedMotion·flipReorder·reorderByMove·commitReorder)</td>
+      <td>QA 통합 가능 — 순수 <code>computeFlip</code>(좌표 diff·reduce 시 빈 배열) 단위·드래그 중 카드 제외·키보드 경로 정합. 코드 P1 0. <b>474/474</b>. <span class="planned">사용자 PC: 실 드래그/키보드 시 카드 부드러운 이동·prefers-reduced-motion 즉시 적용 시각 확인(헤드리스 한계)</span></td>
       <td><span class="pill st-design">구현 완료</span></td>
     </tr>
   </table>
@@ -445,13 +467,17 @@
     <tr><td>M6 구현 보안 게이트</td><td class="pass">PASS</td><td><code>docs/reviews/m6_security_review_1.html</code> — 치명 0·높음 0 → 게이트 통과. toolId 화이트리스트(<code>KNOWN_TOOL_IDS</code>)·setToolPath 절대·.exe·realpath force 재검증·args drop·실행인자 <code>[projectPath]</code> 고정·트레이 action 화이트리스트 코드 실재+프로브(cursor/형식위반/.bat·.lnk 거부) 입증</td></tr>
     <tr><td>M6 코드 품질 검증</td><td class="pass">PASS</td><td><code>docs/reviews/m6_code_review_1.html</code> — P1(정확성 결함) 0(P2 5·P3 7 권고). 도메인/전송 분리·순수함수 단위테스트 충실. <b>P2-3</b>(commitReorder reorder 후 setSortMode 중복 영속) <b>시정 반영</b>. 나머지 P2/P3은 동작·안전 비파괴 개선</td></tr>
     <tr><td>M6 동작·통합 다면 검증</td><td class="pass">통합 가능</td><td><code>docs/reviews/m6_qa_1.html</code> — <b>npm test 416/416</b>(fail 0)·신규 9채널 경계면 일치·백로그 5기능 충족·CLI/기존 IPC/MVP/M4/Electron 회귀 0·실 Electron offscreen 스모크. GUI 상호작용(DnD·트레이·다이얼로그·클립보드·슬라이더·Q4)은 헤드리스 한계로 <b>사용자 PC 1회 수동 확인</b>(U-1~U-6, 차단 아님)</td></tr>
+    <tr><td>M7 설계 검증 (2회차)</td><td class="pass">PASS</td><td><code>docs/reviews/m7_design_review_2.html</code> · <code>m7_design_security_review_2.html</code> — 즐겨찾기 독립 위젯 창(R-22)·카드 reorder FLIP(R-23) 설계 델타 reviewer 2회·보안 2회 PASS. 보안 조건부(높음 2 — SEC-H1 CSP 세션 모델·SEC-H2 UI redressing/클릭통과)→통제 확정으로 해소(default session 공유·CSP 앱 1회 등록·movable:false·표시중만 floating·focus 게이팅·setIgnoreMouseEvents 미사용). 코드 착수 가능</td></tr>
+    <tr><td>M7 구현 보안 게이트</td><td class="pass">PASS</td><td><code>docs/reviews/m7_security_review_1.html</code> — 치명·높음 0 → 게이트 통과. 위젯 창이 메인 보안 베이스라인을 0 약화(동일 webPreferences·app:// 로드·per-wc 하드닝·축소 allowlist 6채널·신규 invoke 0·push 1개만). SEC-H1/H2 통제 코드 실재(default session 공유·alwaysOnTop 표시중만·movable:false·blur grace·focus 게이팅·favorites-changed payload {favorites}만)</td></tr>
+    <tr><td>M7 코드 품질 검증</td><td class="pass">PASS</td><td><code>docs/reviews/m7_code_review_1.html</code> — P1(정확성 결함) 0. favoritesWidget 단일 인스턴스·dispose 멱등·positionBottomRight workArea 좌표 순수성·FLIP computeFlip 분리·기존 IPC 핸들러 무수정(broadcast 감싸기만). 도메인/전송 분리 유지</td></tr>
+    <tr><td>M7 동작·통합 다면 검증</td><td class="pass">통합 가능</td><td><code>docs/reviews/m7_qa_1.html</code> — <b>npm test 474/474</b>(fail 0·M7 신규 58)·신규 5스위트(favorites-widget·preload-favorites-contract·favorites-broadcast·favorites-renderer·favorites-html-csp)·preload↔renderer 6채널/broadcast↔구독/main↔widget 경계면 일치·기존 전 스위트 회귀 0. GUI/OS 상호작용(토스트 등장·blur 닫힘·독립 표시·focus 게이팅·FLIP 시각·양 창 동기화)은 헤드리스 한계로 <b>사용자 PC 1회 수동 확인 8건</b>(차단 아님)</td></tr>
     <tr><td>막바지 버그픽스 (스캔 전환·패키징 크래시)</td><td class="pass">PASS</td><td>전환 후 발견된 블로커 2건 해소. ① 스캔 후 무한 로딩 — <code>scanController.start()</code> 터미널 phase(<code>finalizing</code>/<code>done</code>/<code>error</code>) push 누락 → emit 추가(세대 가드 유지), 회귀 <code>test/scanController-onprogress.test.js</code>. ② 패키징 앱 무반응 — <code>EnableEmbeddedAsarIntegrityValidation</code> fuse(Win+electron-builder 24.x) <code>FindResource</code> FATAL → 그 fuse만 off(나머지 보안 fuse 유지), <code>app://</code> 핸들러 fs 직접 읽기·<code>did-fail-load</code> 창 강제 표시. <b>npm test 306/306</b>. <b>실 GUI에서 앱 실행·창 표시·스캔→대시보드 전환 동작 확인됨.</b> 버전 1.0.1</td></tr>
   </table>
   <div class="note">
-    <b>추적 누락 0 확인.</b> 전체 요구 28건(기능 R-01~R-21 21건 + 비기능 N-01~N-07 7건)이 모두 본 매트릭스에 행으로 존재하며, 각 행의 "설계 결정/모듈"·"구현 위치"·"검증"·"상태" 칸이 모두 채워졌다(빈 칸 없음). MVP 16(R-01·02·04·06·07·08·10·11·12·13·14 + N-02·03·04·05·06)은 S7 QA·코드·보안 3면 PASS로, M4 후속 6(R-03·05·09·15·16·N-07)은 M4 설계 2회·다면검증 QA(GO)·코드·보안 + 재검증 2회로, M6 백로그 5(R-17·18·19·20·21)는 M6 설계 2회·보안 PASS·코드 P1 0·QA 통합가능으로 모두 <b>구현 완료</b>이며, 품질기준 1(N-01)은 측정 완료다. 즉 전체 28건이 <b>구현 완료·검증 통과</b>로 일관된다.
+    <b>추적 누락 0 확인.</b> 전체 요구 30건(기능 R-01~R-23 23건 + 비기능 N-01~N-07 7건)이 모두 본 매트릭스에 행으로 존재하며, 각 행의 "설계 결정/모듈"·"구현 위치"·"검증"·"상태" 칸이 모두 채워졌다(빈 칸 없음). MVP 16(R-01·02·04·06·07·08·10·11·12·13·14 + N-02·03·04·05·06)은 S7 QA·코드·보안 3면 PASS로, M4 후속 6(R-03·05·09·15·16·N-07)은 M4 설계 2회·다면검증 QA(GO)·코드·보안 + 재검증 2회로, M6 백로그 5(R-17·18·19·20·21)는 M6 설계 2회·보안 PASS·코드 P1 0·QA 통합가능으로, M7 2(R-22·23)는 M7 설계 2회·보안 2회 PASS·구현 보안 PASS·코드 P1 0·QA 통합가능으로 모두 <b>구현 완료</b>이며, 품질기준 1(N-01)은 측정 완료다. 즉 전체 30건이 <b>구현 완료·검증 통과</b>로 일관된다.
   </div>
   <div class="note" style="background:rgba(167,139,250,.08);border-color:rgba(167,139,250,.3);color:#ddd6fe;">
-    <b>M6 사용자 PC 수동 확인(헤드리스 한계·차단 아님).</b> GUI/OS 상호작용은 헤드리스에서 실증 불가라 분리한다(QA U-1~U-6): U-1 카드 DnD→manual·재시작 후 순서 유지 · U-2 <code>pickToolExecutable</code> 네이티브 파일 다이얼로그·실 <code>code.exe</code> 지정·<code>.bat/.lnk</code> 거부 · U-3 실 클립보드 붙여넣기 · U-4 트레이 아이콘/메뉴(대시보드·즐겨찾기·종료)·더블클릭 복원·풍선 1회 · U-5 즐겨찾기 슬라이더 시각/키보드 래핑 · Q4 스캔 진행 중 종료 확인 다이얼로그 분기. 코드·정책 정합은 PASS.
+    <b>M6·M7 사용자 PC 수동 확인(헤드리스 한계·차단 아님).</b> GUI/OS 상호작용은 헤드리스에서 실증 불가라 분리한다. <b>[M6]</b> U-1 카드 DnD→manual·재시작 후 순서 유지 · U-2 <code>pickToolExecutable</code> 네이티브 파일 다이얼로그·실 <code>code.exe</code> 지정·<code>.bat/.lnk</code> 거부 · U-3 실 클립보드 붙여넣기 · U-4 트레이 아이콘/메뉴(대시보드·즐겨찾기·종료)·더블클릭 복원·풍선 1회 · Q4 스캔 진행 중 종료 확인 다이얼로그 분기. <b>[M7]</b> 트레이 '즐겨찾기' 클릭 시 우측하단 토스트 즉시 등장 · 대시보드를 닫아 트레이에만 있어도 위젯 독립 표시 · 위젯 밖 클릭(blur) 시 100ms grace 후 hide·재포커스 시 취소 · 비포커스 첫 클릭은 포커스만(액션 미실행, focus 게이팅) · 드래그/키보드 reorder 시 카드 FLIP 시각·<code>prefers-reduced-motion</code> 시 즉시 적용 · 메인·위젯 동시 표시 중 한쪽 별 토글이 다른 쪽 즉시 반영(broadcast). 코드·정책 정합은 PASS.
   </div>
   <div class="note" style="background:rgba(251,191,36,.08);border-color:rgba(251,191,36,.3);color:#fde68a;">
     <b>후속/백로그(출시 비차단).</b> 정식 N-01 30초 벤치(지정 루트 ~200개 콜드캐시), 전체 드라이브 실스캔 실측, 스크린리더 실측(N-07 자동검증 외 수기 워크스루), 협조적 취소(<code>AbortSignal</code>) 도입 등은 비차단 후속 항목으로 남는다. 현재 watchdog는 hang 시 락을 강제 해제해 가용성 데드락은 방지하나, 버려진 스캔의 즉시 협조적 중단은 후속이다.
@@ -459,6 +485,6 @@
 </section>
 
 </main>
-<footer>Project-SPIP · 추적성 매트릭스 v1.4 · 요구 28건(R 21 + N 7) · MVP 16 + 품질 1 + M4 6 + M6 5 · 추적 누락 0 · 전송 Electron IPC(과도기 HTTP 보존) · 현재 단계: M6 백로그 5기능(R-17~R-21) 구현 완료·검증 통과(QA 통합가능 · 코드 P1 0 · 보안 PASS · 테스트 416/416 · 탐지율 100% · 필터 0.154ms) · 자족형 HTML 산출물</footer>
+<footer>Project-SPIP · 추적성 매트릭스 v1.5 · 요구 30건(R 23 + N 7) · MVP 16 + 품질 1 + M4 6 + M6 5 + M7 2 · 추적 누락 0 · 전송 Electron IPC(과도기 HTTP 보존) · 현재 단계: M7(R-22·R-23) 구현 완료·검증 통과(QA 통합가능 · 코드 P1 0 · 보안 PASS · 테스트 474/474 · 탐지율 100% · 필터 0.154ms) · 자족형 HTML 산출물</footer>
 </body>
 </html>

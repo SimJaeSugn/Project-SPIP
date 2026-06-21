@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>M7 설계 델타 — 독립 검증 보고 (2회차 재검증)</title>
+<style>
+  :root{--bg:#0f172a;--panel:#1e293b;--text:#e2e8f0;--sub:#94a3b8;--accent:#34d399;--ref:#38bdf8;--line:#334155;--warn:#fbbf24;--danger:#f87171;}
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:"Segoe UI","Malgun Gothic",system-ui,sans-serif;line-height:1.7;}
+  header{padding:44px 32px 32px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#13203b,#0f172a);}
+  header h1{margin:0 0 8px;font-size:27px;}
+  header .tag{display:inline-block;background:rgba(52,211,153,.12);color:var(--accent);border:1px solid rgba(52,211,153,.4);border-radius:999px;padding:3px 12px;font-size:13px;margin-right:8px;}
+  .verdict{display:inline-block;font-size:15px;font-weight:800;padding:6px 18px;border-radius:8px;margin-top:14px;}
+  .pass{background:rgba(52,211,153,.16);color:#6ee7b7;border:1px solid rgba(52,211,153,.5);}
+  .meta{margin-top:14px;font-size:13px;color:var(--sub);}
+  main{max-width:1120px;margin:0 auto;padding:32px;}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px 26px;margin:20px 0;}
+  h2{margin:0 0 14px;font-size:20px;color:var(--accent);border-left:4px solid var(--accent);padding-left:12px;}
+  h3{font-size:15px;color:var(--ref);margin:18px 0 8px;}
+  p{margin:8px 0;}
+  ul{margin:8px 0;padding-left:22px;}
+  li{margin:5px 0;}
+  code{background:#0b1220;color:var(--ref);padding:1px 6px;border-radius:5px;font-size:12.5px;font-family:Consolas,monospace;}
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13px;}
+  th,td{border:1px solid var(--line);padding:9px 11px;text-align:left;vertical-align:top;}
+  th{background:#142035;color:var(--accent);}
+  tr:nth-child(even) td{background:rgba(255,255,255,.02);}
+  .pill{font-size:11px;font-weight:700;padding:2px 9px;border-radius:6px;white-space:nowrap;}
+  .ok{background:rgba(52,211,153,.16);color:#6ee7b7;border:1px solid rgba(52,211,153,.5);}
+  .fix{background:rgba(56,189,248,.16);color:#7dd3fc;border:1px solid rgba(56,189,248,.45);}
+  .reg{background:rgba(52,211,153,.16);color:#6ee7b7;border:1px solid rgba(52,211,153,.5);}
+  .note{background:rgba(56,189,248,.08);border:1px solid rgba(56,189,248,.3);border-radius:8px;padding:12px 16px;font-size:13px;color:#bae6fd;}
+  .warn-box{background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.3);border-radius:8px;padding:12px 16px;font-size:13px;color:#fde68a;}
+  .mono{font-family:Consolas,monospace;font-size:12px;}
+  .rid{font-family:Consolas,monospace;color:var(--accent);font-weight:700;}
+  footer{text-align:center;color:var(--sub);font-size:12.5px;padding:28px;border-top:1px solid var(--line);}
+</style>
+</head>
+<body>
+<header>
+  <span class="tag">독립 검증</span><span class="tag">M7 설계 델타</span><span class="tag">2회차 재검증</span>
+  <h1>M7 설계 델타 재검증 보고 (rev.2) — 1회차 권고 해소 + 회귀 확인</h1>
+  <div class="verdict pass">판정: PASS — 1회차 권고 5건(R1·R2·R3·R4·R5) 전부 해소 · 보안 반영 회귀 0 · 블로커 0</div>
+  <div class="meta">검증 대상: <code>docs/architecture/m7-design.html</code> (rev.2) · 1회차 보고: <code>docs/reviews/m7_design_review_1.html</code>(PASS 조건부) · 실측 대조: electron/{main,security}.js·public/app.js·electron/preload.js · 검증자: 독립 리뷰어 · 2026-06-21</div>
+</header>
+
+<main>
+
+<section>
+  <h2>요약</h2>
+  <p>아키텍트가 1회차 PASS(조건부)에서 권고한 <b>P2 2건(R1·R2)·P3 3건(R3·R4·R5)</b>을 rev.2에 반영했다. 본 재검증은 ① 각 권고의 <b>실제 해소 여부</b> ② 보안 조건부 PASS 반영(SEC-H1/H2)이 <b>요구·기존 기능 회귀</b>를 유발하지 않는지 ③ 최종 창 속성·IPC 계약의 <b>일관·완결</b>을 실측 코드 대조로 확인했다.</p>
+  <p>결과: <b>5건 모두 정규 설계로 승격·해소</b>됐고, 해소 과정에서 <b>새로운 모순·회귀를 만들지 않았다</b>. rev.2가 추가로 반영한 SEC-H1(CSP 세션 공유 모델)·SEC-H2(UI redressing 4통제)도 실측 코드(<code>applyCspHeaders(session)</code> 1회 등록·세션당 1핸들러)와 정합하며, "독립 토스트 창"·"우측하단" 요구와 충돌하지 않는다. <b>구현 착수 가능(PASS).</b> 잔여 미결은 MQ7-3(메인 진입점) 1건으로, 설계가 "트레이 경유만 필수, 메인 버튼은 PM 결정"으로 명시해 블로커가 아니다.</p>
+</section>
+
+<section>
+  <h2>1회차 권고 해소 확인</h2>
+  <table>
+    <tr><th style="width:50px;">ID</th><th style="width:60px;">우선</th><th style="width:70px;">결과</th><th>해소 내용 / 실측 대조</th></tr>
+    <tr><td>R1</td><td>P2</td><td><span class="pill ok">해소</span></td><td>
+      <b>요구:</b> §4.1 의사코드를 blur+100ms grace+×/Esc hide로 승격.<br>
+      <b>확인:</b> §4.1 <code>ensureWidget</code> 의사코드(238~265행)가 즉시 hide에서 <code>widget.on('blur')</code>→<code>setAlwaysOnTop(false)</code>+<code>graceTimer=setTimeout(()=&gt;{if(widget&amp;&amp;!widget.isFocused())widget.hide()},100)</code>로 갱신됨. <code>widget.on('focus')</code>→<code>clearTimeout(graceTimer)</code>(재포커스 오작동 닫힘 방지)도 추가. <code>hide()</code> 함수가 blur/Esc/×/closeWidget 공통 경로로 명시(274~276). §4.3 닫힘 경로 표·§6.1 note·ADR-M7-3·§13 MQ7-1이 모두 "확정(PM)·승격"으로 상태 갱신. <b>본문 의사코드와 PM 결정 일치 — 해소.</b></td></tr>
+    <tr><td>R2</td><td>P2</td><td><span class="pill ok">해소</span></td><td>
+      <b>요구:</b> broadcast가 favorites만이고 order/sortMode 비대상인 근거 §7 명문화.<br>
+      <b>확인:</b> §7에 <b>"broadcast 범위 = favorites만(R2 근거)"</b> 전용 행 신설 — 3개 근거 명시(① 위젯은 즐겨찾기만 표시 ② 즐겨찾기는 집합이며 위젯이 자체 표시 순서 사용·메인 order 비종속 ③ MVP 1장 슬라이딩). 추가로 "위젯 최초 데이터·stale 해소" 행에 <b>"show마다 getUiState+getProjects 재조회를 stale 해소 정규 수단으로 확정"</b>을 못박아 1회차 권고 ①②를 둘 다 채택. "단일 진실 원천(ui-state.json)과 충돌하지 않음" 명시. <b>비대칭을 의도된 범위 축소로 근거화 — 해소.</b></td></tr>
+    <tr><td>R3</td><td>P3</td><td><span class="pill ok">해소</span></td><td>
+      <b>요구:</b> FLIP 키를 실측 <code>data-card-id</code>로 정합(설계 <code>data-id</code> 정정).<br>
+      <b>확인:</b> §9.2 의사코드가 <code>querySelectorAll(sel+' [data-card-id]')</code>·<code>elx.dataset.cardId</code>로 전부 정정(552·553·557·558행). 주석에 "카드 요소는 이미 data-card-id를 가짐(실측 app.js:1870)·신규 data-id 부여 안 함·중복 속성 금지" 명시. §10 트리·§11 추적표도 "기존 data-card-id 재사용"으로 통일. <b>실측 대조:</b> app.js:1870 <code>card.dataset.cardId = vm.id</code> 확인 — 설계와 1:1 일치. <b>data-id 잔재 없음 — 해소.</b></td></tr>
+    <tr><td>R4</td><td>P3</td><td><span class="pill ok">해소</span></td><td>
+      <b>요구:</b> onTray·onTrayCommand favorites 제거를 §8.1에 3층(preload·app.js·tray)으로 명시.<br>
+      <b>확인:</b> §8.1에 <b>"R4 — onTray favorites 제거 3층 정합(단일 표)" note 신설</b> — ① preload.js onTray(80~90행)를 <code>['dashboard']</code>로 축소 ② app.js onTrayCommand favorites 분기(2473~2476행) 제거 ③ tray.js TRAY_ACTIONS는 라벨 정의용 호환 유지(동작은 main이 위젯 show로 처리)를 한 표에 모음. "세 층 일시 불일치 방지·동시 반영(SEC-L1)" 명시. <b>실측 대조:</b> preload.js:82 <code>['dashboard','favorites']</code>·app.js:2473~2476 favorites 분기 모두 실재 확인 — 인용 정확. <b>3층 단일 표로 모임 — 해소.</b></td></tr>
+    <tr><td>R5</td><td>P3</td><td><span class="pill ok">해소</span></td><td>
+      <b>요구:</b> table 밀도 reorder 존재 여부 실측 확인 후 FLIP 적용 범위 명시.<br>
+      <b>확인:</b> §9.2 "적용 범위(R5)" 행이 <b>"실측 확인: table 밀도(renderTable app.js:1985~) 행에 draggable·reorderByDrop/reorderByMove 핸들러가 전혀 없다 → 드래그 reorder 경로 부재"</b>로 갱신. "FLIP cards 한정은 누락이 아니라 reorder 트리거 부재에 정합"으로 결론. MQ7-5도 "확정: cards만"으로 갱신.<br>
+      <b>독립 실측 재확인:</b> renderTable(1985~2039) 행(<code>tr</code>)은 <code>click: openDrawer</code>만 가지고 <b>draggable 속성·reorder 핸들러 없음</b>(드래그는 renderCards의 카드 1869행 <code>setAttribute('draggable','true')</code>에만 존재). 설계 주장과 코드 일치. <b>UX 비대칭 없음 확인 — 해소.</b></td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>보안 반영(SEC-H1/H2) 회귀 확인</h2>
+  <p>rev.2가 보안 조건부 PASS(높음 2)를 함께 반영했다. 이 통제가 R-22 요구(독립 토스트 창·우측하단)·기존 기능 회귀를 만드는지 추적성·정합 관점에서 점검했다(실제 보안 충분성은 security-reviewer 소관).</p>
+  <table>
+    <tr><th style="width:160px;">반영 항목</th><th style="width:70px;">회귀</th><th>실측 대조 / 정합</th></tr>
+    <tr><td>SEC-H1 — CSP 세션 공유(앱 1회 등록·위젯 재호출 안 함)</td><td><span class="pill reg">없음</span></td><td>
+      <b>실측:</b> main.js:151 <code>applyCspHeaders(win.webContents.session)</code>(session 인자만·partition 무관)·security.js:40~46 <code>session.webRequest.onHeadersReceived</code> 등록. onHeadersReceived는 <b>세션당 1핸들러</b>가 사실이며, 위젯이 default session 공유 시 앱 1회 등록이 위젯 로드에도 자동 적용된다는 설계 주장은 코드와 정합. ensureWidget deps에서 applyCspHeaders 제거(242행)·재호출 금지 주석(253~254) 일관. 메타 CSP는 CSP_POLICY 단일 원천 동일(SEC-L2). <b>위젯이 CSP 미적용으로 새는 표면 없음 — 회귀 0.</b></td></tr>
+    <tr><td>SEC-H2 — 4통제(movable:false·hide 시 alwaysOnTop 해제·focus 게이팅·클릭통과 비허용)</td><td><span class="pill reg">없음</span></td><td>
+      ① <code>movable:false</code>·드래그핸들 미사용(248행)은 MQ7-2 확정과 일치, "우측하단 고정 토스트"는 R-22 요구(우측하단 등장)와 <b>오히려 부합</b> — 사용자가 위치 이동을 요구하지 않았고 positionBottomRight(§4.2)가 매 show 재계산. ② show 시 floating ON·hide/blur 시 OFF(258·271·275) — 토스트 가시성은 표시 중 유지되므로 "토스트답게 위로 뜸" 요구 충족, 숨김 시만 해제라 UX 회귀 없음. ③ focus 게이팅은 <b>표시는 비포커스 허용·액션 실행만 focus 후</b>(§5·§13)라 토스트 표시 자체를 막지 않음. ④ 클릭통과 비허용(setIgnoreMouseEvents 미사용)은 ADR-M7-5에서 "위젯 클릭=위젯, 밖 클릭=blur"라는 단순 경계로 정리 — 토스트 인터랙션(열기·복사·해제) 정상. <b>독립 토스트 창 요구·기존 기능 회귀 0.</b></td></tr>
+    <tr><td>위젯 비드래그 고정 vs "우측하단 토스트" 요구 부합</td><td><span class="pill reg">부합</span></td><td>사용자 요구는 "우측 하단 등장"이며 위치 이동(드래그)은 요구 사항이 아니다. <code>movable:false</code>+positionBottomRight 고정은 요구를 <b>정확히 충족</b>하며, 드래그 이동은 MQ7-2에서 "후속·별도 보안 점검"으로 명시 보류 — 요구 충족과 보안 통제가 양립. <b>충돌 없음.</b></td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>최종 창 속성 · IPC 계약 일관·완결 확인</h2>
+  <table>
+    <tr><th style="width:200px;">계약 항목</th><th style="width:70px;">결과</th><th>확인</th></tr>
+    <tr><td>창 속성(BrowserWindow 옵션) 일관</td><td><span class="pill ok">일관</span></td><td>§4.1 표·의사코드(244~252)·§4.3·ADR-M7-3/M7-5가 모두 <code>frame:false·transparent:true(폴백)·resizable:false·movable:false·skipTaskbar:true·alwaysOnTop:false(생성)·parent 미지정·webPreferences 메인 동일</code>로 일치. 생성 시 alwaysOnTop:false·show 시에만 floating이 표·의사코드·ADR 3곳 모두 동일 서술 — 모순 없음.</td></tr>
+    <tr><td>push 채널 1개(<code>spip:favorites-changed</code>)</td><td><span class="pill ok">완결</span></td><td>§3 note·§5 SEC-M2·§6.1 표·§6.3 의사코드·§11 추적표가 모두 "신규 push 1개·main→renderer 단방향·payload <code>{favorites:string[]}</code> 한정·대상 wc 메인+위젯 2개 화이트리스트·isDestroyed 가드"로 일관. <b>실측 대조:</b> register.js broadcast 래핑이 uiState.setFavorite <code>{ok,favorites}</code> 재사용(1회차 확인)과 정합.</td></tr>
+    <tr><td>invoke 재사용 6채널(새 invoke 0)</td><td><span class="pill ok">완결</span></td><td>§6.1·§6.2 preload·§11.1 체크리스트가 노출 6개(getUiState·getProjects·open·copyText·setFavorite·onFavoritesChanged)로 일치. 단, onFavoritesChanged는 invoke가 아닌 on/send 구독이므로 <b>"invoke 재사용 6"의 엄밀 분해</b>는 invoke 5(getUiState·getProjects·open·copyText·setFavorite)+push 구독 1로 보는 게 정확하나, 설계가 "노출 함수 6개"로 일관 표기하고 SEC-M3 체크리스트가 채널 성격을 정확히 구분하므로 <b>혼선·모순 아님</b>(표기 차이). 강력 채널 8개 전부 미노출 명시.</td></tr>
+    <tr><td>preload 6채널(축소 allowlist)</td><td><span class="pill ok">완결</span></td><td>§6.2 의사코드가 ipcRenderer 원본 비노출·generic invoke 비노출·채널명 하드코딩(SEC-M3 MUST)로 메인 preload 패턴 동형. (선택)closeWidget은 주석 처리로 표면 추가 없음.</td></tr>
+    <tr><td>MQ7-3 트레이 전용 유지 명시</td><td><span class="pill ok">명시</span></td><td>§13 MQ7-3 note: "메인 UI에서 위젯 호출은 renderer→main 트리거 필요, 새 invoke <code>spip:showFavoritesWidget</code>(ⓐ) 또는 메뉴(ⓑ) — <b>현 설계는 트레이 경유만 필수로 본다</b>"로 명시. 메인 진입점은 PM 결정으로 남기되 트레이 흐름만으로 R-22 독립성이 완결됨을 §8.1·그림4가 보장. <b>블로커 아님.</b></td></tr>
+  </table>
+  <div class="note"><b>doFinalQuit 단일 경로 회귀:</b> 실측 main.js:260~264 doFinalQuit(disposeResources→tray.destroy→app.exit)·<code>_disposed</code> 멱등 가드(255) 확인. §4.3·§6.4 dispose가 "위젯 정리 1줄 추가·멱등 no-op(SEC-L3)"로 기존 단일 종료 경로를 깨지 않음 — P2-2 불변 유지.</div>
+</section>
+
+<section>
+  <h2>회귀 점검 — 새 모순 유입 여부</h2>
+  <ul>
+    <li><b>R3 정정의 파급:</b> data-id→data-card-id 정정이 §9.2·§10·§11·ADR-M7-4 4곳에 일관 반영. 어느 한 곳에 옛 data-id 잔재가 남아 모순을 만들지 않음(전수 확인). <span class="pill reg">회귀 0</span></li>
+    <li><b>R1 grace 추가의 파급:</b> grace 타이머가 §4.1·§4.3·§6.1·§6.4 dispose(clearTimeout)·ADR-M7-3·§13에 일관 서술. dispose/closed 핸들러에 <code>clearTimeout(graceTimer)</code> 정리 포함(263·339·429) — 타이머 누수 없음. <span class="pill reg">회귀 0</span></li>
+    <li><b>R2 show마다 재조회의 파급:</b> §4.3 show 시퀀스 ⑤ 데이터 적재·§7 stale 해소 정규 수단이 일치. show마다 getUiState+getProjects 재조회가 반응성 목표(&lt;200ms·재로드 비용 0 주장)와 긴장할 수 있으나, 데이터는 IPC 1~2회·렌더만이라 창 재생성 비용과 무관 — 품질 목표와 충돌 아님. <span class="pill reg">회귀 0</span></li>
+    <li><b>R4 3층 정리의 파급:</b> §8.1 표·note·§10 트리·§11 추적표가 preload 축소·app.js onTrayCommand 제거·tray.js 호환 유지로 일치. 1회차에서 확인한 R-20 토글/필터/별버튼 불변(슬라이더만 제거)도 §8.2에서 유지 — 즐겨찾기 코어 기능 회귀 없음. <span class="pill reg">회귀 0</span></li>
+    <li><b>R5 범위 명시의 파급:</b> table reorder 부재가 §9.2·ADR-M7-4 결과·§13 MQ7-5·리스크 표에 일관. 향후 table reorder 도입 시 확장 경로 명시. <span class="pill reg">회귀 0</span></li>
+  </ul>
+</section>
+
+<section>
+  <h2>실측 대조 — 2회차 신규 확인 결과</h2>
+  <ul>
+    <li><b>main.js:151</b> <code>applyCspHeaders(win.webContents.session)</code> — session 인자 1개(partition 무관). SEC-H1 "default session 공유·앱 1회 등록" 전제 정확.</li>
+    <li><b>security.js:40~46</b> applyCspHeaders가 <code>session.webRequest.onHeadersReceived</code> 등록(세션당 1핸들러) — "위젯 재호출 시 중복/덮어쓰기" 우려·"재호출 안 함" 결정 근거 정확.</li>
+    <li><b>app.js:1870</b> <code>card.dataset.cardId = vm.id</code> — 카드만 data-card-id 보유. R3 정정 대상 정확.</li>
+    <li><b>app.js:1869</b> 카드 <code>setAttribute('draggable','true')</code> vs <b>renderTable(1985~2039)</b> 행에 draggable·reorder 핸들러 부재 — R5 "table reorder 경로 부재" 주장 정확.</li>
+    <li><b>app.js:2473~2476</b> onTrayCommand favorites 분기·<b>preload.js:82</b> <code>['dashboard','favorites']</code> — R4 3층 인용 라인 정확.</li>
+    <li><b>main.js:186~193</b> onShowFavorites 현재 win.show+send('spip:tray:favorites') — §8.1 "M6(현재)" 컬럼·위젯 show 교체 대상 정확.</li>
+    <li><b>main.js:260~264</b> doFinalQuit 단일 경로·<code>_disposed</code> 멱등 가드(255) — §4.3 dispose 1줄 추가·SEC-L3 멱등 전제 정확.</li>
+  </ul>
+  <div class="note"><b>역할 경계:</b> 본 검증은 추적성·일관성·완결성·실행가능성만 판정한다. 위젯 컨텍스트의 실제 보안 충분성(SEC-H1/H2 통제의 효과·preload 6채널 노출면 적정)은 <b>security-reviewer</b>, 빌드·동작·수용기준 충족은 <b>qa-engineer</b> 소관이다. 본 재검증은 "SEC 반영이 추적표·본문·실측과 정합하고 요구·기존 기능 회귀를 만들지 않음"까지만 확인했다.</div>
+</section>
+
+<section>
+  <h2>확인 필요 (PM 판단 · 블로커 아님)</h2>
+  <ul>
+    <li><b>MQ7-3</b> — 메인 UI에서 위젯을 띄우는 진입점(새 invoke <code>spip:showFavoritesWidget</code> vs 메뉴 경유)을 둘지. 현 설계는 트레이 경유만 필수로 보아 R-22 독립성이 완결되므로 <b>구현 착수 블로커 아님</b>. 메인 버튼 도입 시 새 invoke 1개가 추가되어 §5·§11 보안 표면 재산정 필요 — 그 시점에 재검증 권고.</li>
+  </ul>
+  <p>중대 쟁점 아님 — AskUserQuestion 상신 없이 PM 차기 결정으로 흡수 가능.</p>
+</section>
+
+<footer>
+  M7 설계 델타 독립 검증 2회차(재검증) · 판정 <b>PASS</b> · 1회차 권고 R1~R5 전부 해소 · 보안 반영(SEC-H1/H2) 회귀 0 · 새 모순 유입 0 · 잔여 미결 MQ7-3 1건(블로커 아님) · 2026-06-21
+</footer>
+
+</main>
+</body>
+</html>

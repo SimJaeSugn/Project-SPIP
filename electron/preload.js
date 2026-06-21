@@ -74,12 +74,13 @@ contextBridge.exposeInMainWorld('spip', {
     return () => { for (const off of handlers) off(); }; // unsubscribe 함수 반환
   },
 
-  // [M6 R-21] 트레이 명령 구독 — main이 보내는 'spip:tray:<action>'를 renderer 콜백으로 중계.
-  //   action ∈ dashboard|favorites (화이트리스트, M6-M-3). 채널명 하드코딩(MUST).
-  //   콜백 shape: cb({ action }). unsubscribe 함수 반환. (onMenu와 동일 패턴)
+  // [M6 R-21 / M7 R4·§8.1] 트레이 명령 구독 — main이 보내는 'spip:tray:<action>'를 renderer 콜백으로 중계.
+  //   ★M7: 트레이 '즐겨찾기'가 메인창 push가 아닌 favoritesWidget.show()로 바뀌어 'spip:tray:favorites'
+  //   push가 사라진다 → action을 ['dashboard']로 축소(SEC-L1: 죽은 수신 채널 잔존 방지).
+  //   채널명 하드코딩(MUST). 콜백 shape: cb({ action }). unsubscribe 함수 반환. (onMenu와 동일 패턴)
   onTray: (cb) => {
     if (typeof cb !== 'function') return () => {};
-    const actions = ['dashboard', 'favorites'];
+    const actions = ['dashboard'];
     const handlers = actions.map((action) => {
       const channel = 'spip:tray:' + action;
       const h = () => cb({ action });

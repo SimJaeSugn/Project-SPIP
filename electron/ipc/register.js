@@ -76,14 +76,15 @@ function isTrustedSender(event, opts) {
 
 /**
  * ipcMain에 모든 채널을 등록한다.
- * @param {object} deps { ipcMain, dialog, clipboard, getWebContents, getWin, ctx, logger, trustedOrigin?, allowFileUrl? }
+ * @param {object} deps { ipcMain, dialog, clipboard, getWebContents, getFavoritesWidgetWc, getWin, ctx, logger, trustedOrigin?, allowFileUrl? }
  *   - ctx: { config, store, scanController, cachePath, logger }
- *   - getWebContents: () => webContents  (진행 푸시 대상, 지연 평가)
+ *   - getWebContents: () => webContents  (진행 푸시 대상·메인창, 지연 평가)
+ *   - getFavoritesWidgetWc: () => webContents  (위젯 창, 지연 평가·파괴 시 null) — favorites-changed broadcast 대상(SEC-M2)
  *   - getWin: () => BrowserWindow  (dialog 부모)
  *   - clipboard: Electron clipboard(R-17 copyText 주입)
  */
 function registerIpcHandlers(deps) {
-  const { ipcMain, dialog, clipboard, getWebContents, getWin, ctx, logger } = deps;
+  const { ipcMain, dialog, clipboard, getWebContents, getFavoritesWidgetWc, getWin, ctx, logger } = deps;
   const senderOpts = { trustedOrigin: deps.trustedOrigin || TRUSTED_ORIGIN, allowFileUrl: !!deps.allowFileUrl };
 
   // 진행 푸시 콜백(F-1/§4.3) — rescan이 start로 전달.
@@ -137,9 +138,27 @@ function registerIpcHandlers(deps) {
     win: typeof getWin === 'function' ? getWin() : undefined,
   })));
 
+  // [M7 SEC-M2] 즐겨찾기 변경 broadcast(단방향 push) — setFavorite 성공 시 메인 wc + 위젯 wc 양쪽에 동기화.
+  //   payload 스키마 = { favorites:string[] }만(경로/실행 인자/내부 상태 금지). 대상 wc는 메인·위젯 2개로
+  //   화이트리스트(getAllWindows() 순회 금지 — 향후 창 추가 시 누설 방지). send 전 !isDestroyed() 가드.
+  const broadcastFavorites = (favorites) => {
+    const payload = { favorites }; // 형식 검증된 id 배열뿐(uiState가 반환한 res.favorites)
+    const mainWc = (typeof getWebContents === 'function') ? getWebContents() : null;
+    const widgetWc = (typeof getFavoritesWidgetWc === 'function') ? getFavoritesWidgetWc() : null;
+    [mainWc, widgetWc].forEach((wc) => {
+      if (wc && typeof wc.isDestroyed === 'function' && !wc.isDestroyed() && typeof wc.send === 'function') {
+        try { wc.send('spip:favorites-changed', payload); } catch (_) { /* noop */ }
+      }
+    });
+  };
+
   // [M6 R-19/R-20] UI 상태 — uiState.js.
   guard('spip:getUiState', () => uiStateIpc.getUiState(ctx));
-  guard('spip:setFavorite', (args) => uiStateIpc.setFavorite(args, ctx));
+  guard('spip:setFavorite', async (args) => {
+    const res = await uiStateIpc.setFavorite(args, ctx); // 기존 핸들러(검증·영속) 불변
+    if (res && res.ok && Array.isArray(res.favorites)) broadcastFavorites(res.favorites);
+    return res;
+  });
   guard('spip:setOrder', (args) => uiStateIpc.setOrder(args, ctx));
   guard('spip:setSortMode', (args) => uiStateIpc.setSortMode(args, ctx));
 }

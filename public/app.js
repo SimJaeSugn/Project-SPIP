@@ -809,16 +809,63 @@ function matchesFavoritesFilter(vm, favoritesOnly, favorites) {
 }
 
 /**
- * R-21: 트레이 push 액션({action}) → renderer 핸들러 토큰(순수). onMenu 패턴 정합.
- *   계약(§4.1·§9.2): action ∈ dashboard | favorites (고정 화이트리스트). 그 외 → null(graceful).
+ * R-21/M7-R4: 트레이 push 액션({action}) → renderer 핸들러 토큰(순수). onMenu 패턴 정합.
+ *   계약(m7 §8.1): 'favorites' 는 더 이상 메인창에 push 되지 않고 main 이 위젯 창을 직접 연다.
+ *   따라서 화이트리스트를 'dashboard' 단일로 축소(SEC-L1: 죽은 수신 채널 잔존 방지).
+ *   그 외(과거 'favorites' 포함) → null(graceful 무시).
  */
 function dispatchTrayAction(msg) {
   const action = (msg && typeof msg === 'object' && typeof msg.action === 'string') ? msg.action : '';
   switch (action) {
     case 'dashboard': return { handler: 'dashboard' };
-    case 'favorites': return { handler: 'favorites' };
     default: return { handler: null };
   }
+}
+
+/**
+ * R-23: FLIP(First-Last-Invert-Play) 좌표 diff 계산(순수, DOM 비의존).
+ *   render() 전후의 cardId→rect 맵 두 개를 받아 각 카드의 invert(translate) 값을 산출한다.
+ *   - reduce(prefers-reduced-motion) 가 true 면 빈 배열(전이 0).
+ *   - 이전 rect 가 없는(신규) 카드는 skip. dx=dy=0(이동 없음)도 skip.
+ *   반환: [{ id, dx, dy }] — 호출부가 transform=translate(dx,dy) → '' 로 play.
+ *   계약(m7 §9.2): dx = prev.left - now.left, dy = prev.top - now.top.
+ */
+function computeFlip(firstMap, lastMap, reduce) {
+  if (reduce) return [];
+  const first = (firstMap instanceof Map) ? firstMap : new Map();
+  const last = (lastMap instanceof Map) ? lastMap : new Map();
+  const out = [];
+  for (const [id, now] of last) {
+    const prev = first.get(id);
+    if (!prev || !now) continue; // 신규 카드 — FLIP 대상 아님
+    const dx = prev.left - now.left;
+    const dy = prev.top - now.top;
+    if (!dx && !dy) continue; // 이동 없음
+    out.push({ id, dx, dy });
+  }
+  return out;
+}
+
+/**
+ * SEC-H2: 위젯 focus 게이팅 상태(순수, DOM 비의존).
+ *   부수효과 액션(open·copyText·setFavorite)은 위젯이 focus 상태일 때만 활성.
+ *   비포커스 상태에서의 액션 클릭은 "포커스만 획득"(액션 미실행)으로 게이팅한다.
+ *   계약(m7 §5 focus 게이팅): focused=false → { allow:false, focusOnly:true }.
+ *                            focused=true  → { allow:true,  focusOnly:false }.
+ */
+function focusGate(focused) {
+  const ok = focused === true;
+  return { allow: ok, focusOnly: !ok };
+}
+
+/**
+ * R-22: spip:favorites-changed push payload → 정규화된 favorites 배열(순수).
+ *   계약(m7 §6.1·SEC-M2): payload = { favorites:string[] }. 문자열만 통과.
+ *   손상/비배열/비객체 → null(무시: 기존 상태 유지). 빈 배열은 유효(전부 해제).
+ */
+function favoritesChangedView(payload) {
+  if (!payload || typeof payload !== 'object' || !Array.isArray(payload.favorites)) return null;
+  return payload.favorites.filter((x) => typeof x === 'string');
 }
 
 /**
@@ -863,7 +910,7 @@ function initBrowser() {
       sortMode: 'auto',          // R-19: 'auto' | 'manual'
       favoritesOnly: false,      // R-20: '즐겨찾기만' 필터
       dragId: null,              // R-19: 드래그 중인 카드 id
-      slider: { open: false, index: 0 }, // R-21: 즐겨찾기 슬라이더 오버레이 상태
+      // [M7 §8.1] 즐겨찾기 슬라이더 오버레이(store.state.slider) 제거 — 독립 위젯 창(favorites.html)으로 이전.
     },
     // R-15: 진행 통지 컨텍스트(Electron push 모델 — 폴링 타이머 제거)
     scan: {
@@ -1241,7 +1288,7 @@ function initBrowser() {
 
     if (store.state.selectedId) root.appendChild(renderDrawer());
     if (store.showSettings) root.appendChild(renderSettings());
-    if (store.state.slider.open) root.appendChild(renderFavoritesSlider()); // R-21
+    // [M7 §8.1] 즐겨찾기 슬라이더 오버레이 제거 — 독립 위젯 창(app://favorites.html)으로 이전.
     return root;
   }
 
@@ -1607,15 +1654,7 @@ function initBrowser() {
     favOnly.appendChild(el('span', { text: '즐겨찾기만' }));
     bar.appendChild(favOnly);
 
-    // R-21: 즐겨찾기 슬라이더 오버레이 트리거(UI)
-    const sliderBtn = el('button', {
-      cls: 'btn',
-      attrs: { type: 'button', 'aria-label': '즐겨찾기 슬라이더 열기' },
-      on: { click: () => openFavoritesSlider() },
-    });
-    sliderBtn.appendChild(starIcon(true, 13));
-    sliderBtn.appendChild(el('span', { text: '슬라이더' }));
-    bar.appendChild(sliderBtn);
+    // [M7 §8.1] '슬라이더' 버튼 제거 — 즐겨찾기는 트레이 '즐겨찾기' → 독립 위젯 창에서 표시.
 
     // 카드/표 토글
     bar.appendChild(segToggle([
@@ -2467,16 +2506,13 @@ function initBrowser() {
     }
     store.trayUnsubscribe = null;
   }
-  /** onTray 콜백 본체 — action 토큰 디스패치(매핑은 순수 dispatchTrayAction). */
+  /** onTray 콜백 본체 — action 토큰 디스패치(매핑은 순수 dispatchTrayAction).
+   *  [M7 §8.1·R4] 'favorites' 분기 제거 — 트레이 '즐겨찾기'는 main 이 위젯 창을 직접 열고
+   *  메인창에 push 하지 않는다. onTray 는 'dashboard'(대시보드 포커스)만 수신한다. */
   function onTrayCommand(msg) {
     const { handler } = dispatchTrayAction(msg);
-    if (handler === 'favorites') {
-      // 즐겨찾기 슬라이더 오버레이 표시(대시보드 뷰에서만 의미)
-      if (store.state.view === 'dashboard') openFavoritesSlider();
-      else { store.state.view = 'dashboard'; openFavoritesSlider(); }
-    } else if (handler === 'dashboard') {
-      // 대시보드 포커스/표시(슬라이더 닫고 대시보드로)
-      store.state.slider.open = false;
+    if (handler === 'dashboard') {
+      // 대시보드 포커스/표시
       if (store.state.view !== 'dashboard' && store.viewModels.length) store.state.view = 'dashboard';
       render();
     }
@@ -2525,13 +2561,11 @@ function initBrowser() {
     if (!id) return;
     // 낙관적: 메모리 즉시 반영
     store.state.favorites = toggleFavorite(store.state.favorites, id, on);
-    if (store.state.slider.open) syncSliderIndex();
     render();
     if (!bridgeHas('setFavorite')) return; // 웹/테스트 graceful
     const res = await ipc('setFavorite', id, on);
     if (res && res.ok && Array.isArray(res.favorites)) {
       store.state.favorites = res.favorites.filter((x) => typeof x === 'string');
-      if (store.state.slider.open) syncSliderIndex();
       render();
     } else if (res && res.ok === false) {
       toast('즐겨찾기 저장에 실패했습니다.', true);
@@ -2572,7 +2606,6 @@ function initBrowser() {
    *   전체 order 를 "새 표시순서 → 표시목록 밖 기존 항목" 으로 재구성해 저장한다(누락 방지).
    */
   function commitReorder(newDisplayIds) {
-    store.state.sortMode = 'manual';
     // 전체 order 기준선: 기존 order + 스냅샷의 모든 id(누락 보강)
     const allIds = store.viewModels.map((vm) => vm.id).filter((x) => typeof x === 'string');
     const displaySet = new Set(newDisplayIds);
@@ -2582,10 +2615,15 @@ function initBrowser() {
     const merged = newDisplayIds.concat(rest);
     // allIds 중 어디에도 없는(신규) 항목 뒤 append
     for (const id of allIds) if (!merged.includes(id)) merged.push(id);
-    store.state.order = merged;
-    // [P2-3] sortMode는 2575행에서 이미 manual로 로컬 설정됨. 영속은 아래 setOrder가
-    //   manual을 동반하므로, 여기서 applySortMode(=별도 setSortMode IPC)를 또 부르지 않는다(중복 제거).
-    render();
+    // [R-23] render() 전후 카드 위치를 FLIP 으로 보간(카드뷰만). state 변경 + render 를
+    //   flipReorder(mutate) 로 위임 — capture(First) → mutate(Last) → invert → rAF play.
+    //   sortMode 도 mutate 내부에서 manual 로 설정해 capture 시점(First)과 정합 유지.
+    flipReorder(() => {
+      store.state.sortMode = 'manual';
+      store.state.order = merged;
+      // [P2-3] 영속은 아래 setOrder 가 manual 을 동반하므로 별도 setSortMode IPC 미호출(중복 제거).
+      render();
+    });
     if (!bridgeHas('setOrder')) return; // 웹/테스트 graceful
     ipc('setOrder', merged).then((res) => {
       if (res && res.ok) {
@@ -2613,7 +2651,6 @@ function initBrowser() {
     store.state.favorites = uv.favorites;
     store.state.order = uv.order;
     store.state.sortMode = uv.sortMode;
-    syncSliderIndex();
   }
 
   /** getConfig() 동기화 → store.config / store.roots 갱신 후 재렌더. */
@@ -2777,123 +2814,63 @@ function initBrowser() {
   }
 
   /* =====================================================================
-   * R-21: 즐겨찾기 슬라이더 오버레이 (메인창 내 우측하단 오버레이 — 별도 창 아님)
-   *   - favorites ∩ 스냅샷 교집합을 좌우 슬라이딩으로 표시(소멸 id skip).
-   *   - 좌/우 버튼 + 화살표 키 + 점 인디케이터(N-07). Esc 닫기.
+   * R-23: 카드 reorder FLIP 애니메이션 (렌더러 전용 — IPC·보안 무관)
+   *   현 reorder 는 render() 가 카드 DOM 을 전부 재구성(노드 교체)하므로 카드가 점프한다.
+   *   FLIP(First-Last-Invert-Play): mutate(=render) 전후의 [data-card-id] 별 rect 를
+   *   실측 캐시 → invert(transform) → rAF 로 play(180ms). 키는 기존 dataset.cardId(R3).
+   *   prefers-reduced-motion 존중(필수): 모션 비활성 시 transition 생략하고 즉시 적용.
+   *   적용 범위는 .cards(카드뷰)만 — table 밀도는 reorder 트리거 자체가 없음(R5).
    * ===================================================================== */
-  function openFavoritesSlider() {
-    store.state.slider.open = true;
-    syncSliderIndex();
-    render();
-  }
-  function closeFavoritesSlider() {
-    store.state.slider.open = false;
-    render();
-  }
-  /** 즐겨찾기 목록 변동 시 인덱스를 범위 내로 보정. */
-  function syncSliderIndex() {
-    const favs = favoriteViewModels(store.viewModels, store.state.favorites);
-    const n = favs.length;
-    if (n === 0) { store.state.slider.index = 0; return; }
-    if (store.state.slider.index >= n) store.state.slider.index = n - 1;
-    if (store.state.slider.index < 0) store.state.slider.index = 0;
-  }
-  function slideBy(dir) {
-    const favs = favoriteViewModels(store.viewModels, store.state.favorites);
-    store.state.slider.index = nextSlideIndex(store.state.slider.index, dir, favs.length);
-    render();
-  }
-
-  function renderFavoritesSlider() {
-    const favs = favoriteViewModels(store.viewModels, store.state.favorites);
-    const titleId = 'fav-slider-title';
-    const overlay = el('aside', {
-      cls: 'fav-slider',
-      attrs: { role: 'dialog', 'aria-modal': 'false', 'aria-labelledby': titleId },
-    });
-
-    const head = el('div', { cls: 'fav-slider__head' });
-    head.appendChild(el('div', { cls: 'fav-slider__title', text: '즐겨찾기', attrs: { id: titleId } }));
-    head.appendChild(el('div', { cls: 'spacer' }));
-    head.appendChild(el('button', {
-      cls: 'drawer__close', text: '×', attrs: { type: 'button', 'aria-label': '즐겨찾기 슬라이더 닫기' },
-      on: { click: closeFavoritesSlider },
-    }));
-    overlay.appendChild(head);
-
-    if (favs.length === 0) {
-      overlay.appendChild(el('div', { cls: 'fav-slider__empty', children: [
-        starIcon(false, 28),
-        el('div', { cls: 'fav-slider__empty-title', text: '즐겨찾기가 없습니다' }),
-        el('div', { cls: 'fav-slider__empty-sub', text: '카드의 별(★)을 눌러 즐겨찾기에 추가하세요.' }),
-      ]}));
-      // 키보드: Esc 닫기
-      overlay.addEventListener('keydown', onSliderKeydown);
-      setTimeout(() => { try { overlay.querySelector('.drawer__close').focus(); } catch (_) { /* ignore */ } }, 0);
-      return overlay;
+  function captureCardRects() {
+    const map = new Map();
+    if (typeof document === 'undefined') return map;
+    const nodes = document.querySelectorAll('.cards [data-card-id]');
+    for (const n of nodes) {
+      const id = n.dataset && n.dataset.cardId;
+      if (!id) continue;
+      if (n.classList && n.classList.contains('is-dragging')) continue; // 드래그 중 카드는 네이티브 DnD 가 추종
+      map.set(id, n.getBoundingClientRect());
     }
-
-    let idx = store.state.slider.index;
-    idx = ((idx % favs.length) + favs.length) % favs.length;
-    store.state.slider.index = idx;
-    const vm = favs[idx];
-
-    const stage = el('div', { cls: 'fav-slider__stage' });
-    const prev = el('button', {
-      cls: 'fav-slider__nav fav-slider__nav--prev', attrs: { type: 'button', 'aria-label': '이전 즐겨찾기' },
-      on: { click: () => slideBy(-1) },
-    });
-    prev.appendChild(svg([{ t: 'path', d: 'M15 18l-6-6 6-6' }], { size: 18, sw: 2.2 }));
-    if (favs.length < 2) prev.disabled = true;
-
-    const cardWrap = el('div', { cls: 'fav-slider__card' });
-    cardWrap.appendChild(el('div', { cls: 'fav-slider__card-head', children: [
-      dot(vm.language, 9),
-      el('div', { cls: 'fav-slider__name', text: vm.name, title: vm.name }), // L-1
-    ]}));
-    cardWrap.appendChild(el('div', { cls: 'fav-slider__path mono', text: vm.path, title: vm.path })); // L-1
-    const sActs = el('div', { cls: 'fav-slider__acts' });
-    sActs.appendChild(openButton(vm, 'btn btn--dark btn--sm'));
-    sActs.appendChild(copyPathButton(vm, 'btn btn--sm'));
-    sActs.appendChild(el('button', {
-      cls: 'btn btn--sm', text: '즐겨찾기 해제',
-      attrs: { type: 'button', 'aria-label': '즐겨찾기 해제: ' + vm.name },
-      on: { click: () => setFavorite(vm.id, false) },
-    }));
-    cardWrap.appendChild(sActs);
-
-    const next = el('button', {
-      cls: 'fav-slider__nav fav-slider__nav--next', attrs: { type: 'button', 'aria-label': '다음 즐겨찾기' },
-      on: { click: () => slideBy(1) },
-    });
-    next.appendChild(svg([{ t: 'path', d: 'M9 18l6-6-6-6' }], { size: 18, sw: 2.2 }));
-    if (favs.length < 2) next.disabled = true;
-
-    stage.appendChild(prev);
-    stage.appendChild(cardWrap);
-    stage.appendChild(next);
-    overlay.appendChild(stage);
-
-    // 점 인디케이터 + 위치 표시(색 외 텍스트, N-07)
-    const dots = el('div', { cls: 'fav-slider__dots', attrs: { 'aria-hidden': 'true' } });
-    for (let i = 0; i < favs.length; i++) {
-      dots.appendChild(el('span', { cls: 'fav-slider__dot' + (i === idx ? ' is-active' : '') }));
-    }
-    overlay.appendChild(dots);
-    overlay.appendChild(el('div', {
-      cls: 'fav-slider__pos mono', attrs: { role: 'status', 'aria-live': 'polite' },
-      text: (idx + 1) + ' / ' + favs.length,
-    }));
-
-    overlay.addEventListener('keydown', onSliderKeydown);
-    setTimeout(() => { try { next.focus(); } catch (_) { /* ignore */ } }, 0);
-    return overlay;
+    return map;
   }
-
-  function onSliderKeydown(e) {
-    if (e.key === 'Escape') { e.preventDefault(); closeFavoritesSlider(); return; }
-    if (e.key === 'ArrowLeft') { e.preventDefault(); slideBy(-1); return; }
-    if (e.key === 'ArrowRight') { e.preventDefault(); slideBy(1); }
+  function prefersReducedMotion() {
+    return !!(typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+      && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  }
+  /**
+   * mutate() (= order 변경 + render) 전후의 카드 위치차를 FLIP 으로 보간한다.
+   * 좌표 diff 산출은 순수 computeFlip 으로 위임(테스트 대상). play 는 DOM transform.
+   */
+  function flipReorder(mutate) {
+    const reduce = prefersReducedMotion();
+    const first = reduce ? new Map() : captureCardRects();
+    mutate();                                   // Last: order 변경 + render()
+    if (reduce) return;                          // 모션 민감 사용자 — 즉시 적용(전이 0)
+    if (typeof document === 'undefined' || typeof requestAnimationFrame !== 'function') return;
+    const last = new Map();
+    const nodeById = new Map();
+    for (const n of document.querySelectorAll('.cards [data-card-id]')) {
+      const id = n.dataset && n.dataset.cardId;
+      if (!id) continue;
+      last.set(id, n.getBoundingClientRect());
+      nodeById.set(id, n);
+    }
+    const diffs = computeFlip(first, last, false);
+    for (const { id, dx, dy } of diffs) {
+      const n = nodeById.get(id);
+      if (!n) continue;
+      n.style.transition = 'none';                // Invert
+      n.style.transform = 'translate(' + dx + 'px,' + dy + 'px)';
+    }
+    if (!diffs.length) return;
+    requestAnimationFrame(() => {                 // Play
+      for (const { id } of diffs) {
+        const n = nodeById.get(id);
+        if (!n) continue;
+        n.style.transition = 'transform 180ms cubic-bezier(.2,.8,.2,1)';
+        n.style.transform = '';
+      }
+    });
   }
 
   function debounce(fn, ms) {
@@ -3040,6 +3017,10 @@ if (typeof module !== 'undefined' && module.exports) {
     matchesFavoritesFilter,
     dispatchTrayAction,
     uiStateView,
+    // M7 (R-22/R-23) 순수 로직
+    computeFlip,
+    focusGate,
+    favoritesChangedView,
   };
 } else if (typeof document !== 'undefined') {
   if (document.readyState === 'loading') {

@@ -197,9 +197,11 @@ test('favoriteViewModels: 빈 favorites / 비배열 graceful', () => {
   assert.deepStrictEqual(favoriteViewModels(VMS, null), []);
   assert.deepStrictEqual(favoriteViewModels(null, ['a']), []);
 });
-test('dispatchTrayAction: dashboard|favorites 화이트리스트 매핑', () => {
+test('dispatchTrayAction: dashboard 단일 화이트리스트 매핑 (M7 §8.1·R4)', () => {
+  // ★M7: 트레이 '즐겨찾기'는 main 이 위젯 창을 직접 열고 메인창에 push 하지 않는다 →
+  //   onTray 화이트리스트를 'dashboard' 단일로 축소(SEC-L1). 과거 'favorites' 는 null.
   assert.strictEqual(dispatchTrayAction({ action: 'dashboard' }).handler, 'dashboard');
-  assert.strictEqual(dispatchTrayAction({ action: 'favorites' }).handler, 'favorites');
+  assert.strictEqual(dispatchTrayAction({ action: 'favorites' }).handler, null);
 });
 test('dispatchTrayAction: 화이트리스트 밖/비정상 → null(graceful)', () => {
   assert.strictEqual(dispatchTrayAction({ action: 'quit' }).handler, null);
@@ -280,7 +282,7 @@ test('IPC: getTools 어댑터 — 응답 → toolViews 매핑(args 무시)', asy
   assert.ok(!('args' in views[0]));
 });
 
-test('IPC: onTray 구독 — favorites/dashboard 콜백 디스패치 + unsubscribe 계약', () => {
+test('IPC: onTray 구독 — dashboard 디스패치(M7 favorites 제외) + unsubscribe 계약', () => {
   const routed = [];
   function onTrayCommand(msg) {
     const { handler } = dispatchTrayAction(msg);
@@ -291,10 +293,10 @@ test('IPC: onTray 구독 — favorites/dashboard 콜백 디스패치 + unsubscri
   const onTray = (cb) => { registered = cb; return () => { unsubscribed = true; }; };
 
   const unsub = onTray(onTrayCommand);
-  registered({ action: 'favorites' });
+  registered({ action: 'favorites' }); // ★M7: 더 이상 라우팅 안 됨(위젯 창은 main 직접 열기)
   registered({ action: 'dashboard' });
   registered({ action: 'bogus' }); // 무시
-  assert.deepStrictEqual(routed, ['favorites', 'dashboard']);
+  assert.deepStrictEqual(routed, ['dashboard']);
   assert.strictEqual(typeof unsub, 'function');
   unsub();
   assert.strictEqual(unsubscribed, true);
