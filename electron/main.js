@@ -23,7 +23,7 @@ if (process.env.ELECTRON_RUN_AS_NODE) {
 
 const path = require('path');
 const fs = require('fs');
-const { app, BrowserWindow, Menu, dialog, ipcMain, protocol, shell, net } = require('electron');
+const { app, BrowserWindow, Menu, dialog, ipcMain, protocol, shell } = require('electron');
 
 const { buildContext } = require('./context');
 const { registerIpcHandlers } = require('./ipc/register');
@@ -35,6 +35,28 @@ const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 const PRELOAD = path.join(__dirname, 'preload.js');
 // [P3-4] TRUSTED_ORIGIN은 security.js 단일 원천에서 import(이중정의 제거).
 const IS_DEV = !app.isPackaged;
+
+// app:// 응답 Content-Type 매핑(확장자 기준). 누락 확장자는 octet-stream.
+const MIME_TYPES = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.mjs': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.ico': 'image/x-icon',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
+  '.ttf': 'font/ttf',
+  '.map': 'application/json; charset=utf-8',
+};
+function contentTypeFor(filePath) {
+  return MIME_TYPES[path.extname(filePath).toLowerCase()] || 'application/octet-stream';
+}
 
 let win = null;
 let ctx = null;
@@ -80,17 +102,16 @@ function registerAppProtocol() {
     if (resolved !== PUBLIC_DIR && !resolved.startsWith(rootWithSep)) {
       return new Response('Forbidden', { status: 403 });
     }
-    // [P2-5] existsSync+statSync 중복(TOCTOU·2회 syscall)을 단일 statSync(try) 조회로 정리.
-    let st;
+    // 패키징(asar) 환경에서는 Chromium net의 file://이 asar 내부를 못 읽으므로
+    // (asar 지원은 Node fs에만 패치됨) fs로 직접 읽어 바이트로 응답한다 — dev·패키징 양쪽 동작.
+    // 디렉터리면 readFileSync가 EISDIR로 throw → catch → 404.
+    let body;
     try {
-      st = fs.statSync(resolved);
+      body = fs.readFileSync(resolved);
     } catch (_) {
       return new Response('Not Found', { status: 404 });
     }
-    if (!st.isFile()) {
-      return new Response('Not Found', { status: 404 });
-    }
-    return net.fetch('file://' + resolved.split(path.sep).join('/'));
+    return new Response(body, { status: 200, headers: { 'content-type': contentTypeFor(resolved) } });
   });
 }
 
@@ -148,6 +169,12 @@ function onReady() {
 
   win.loadURL('app://index.html');
   win.once('ready-to-show', () => win.show());
+  // 방어: 렌더러 로드가 실패하면 ready-to-show가 영영 안 와서 창이 숨은 채(=무반응) 멈춘다.
+  //   실패를 로깅하고 창을 강제 표시해 사용자가 상태를 인지하도록 한다.
+  win.webContents.on('did-fail-load', (_e, code, desc, url) => {
+    logger.error('renderer 로드 실패', { code, desc, url });
+    if (win && !win.isDestroyed()) win.show();
+  });
 
   // 종료 시 스캔 진행 중이면 확인 다이얼로그(Q4).
   win.on('close', (e) => {

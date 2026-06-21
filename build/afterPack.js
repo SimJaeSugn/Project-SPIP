@@ -6,7 +6,10 @@
  *   · RunAsNode                              비활성 — RUN_AS_NODE 악용 차단
  *   · EnableNodeCliInspectArguments          비활성 — --inspect 등 디버그 인자 차단
  *   · OnlyLoadAppFromAsar                     활성  — asar 외 앱 로드 금지
- *   · EnableEmbeddedAsarIntegrityValidation   활성  — asar 무결성 검증
+ *   · EnableEmbeddedAsarIntegrityValidation   비활성 — (주의) Windows+electron-builder 24.x 에서
+ *       무결성 해시 리소스가 exe에 자동 주입되지 않아, 활성화하면 런타임에
+ *       'FindResource failed(0x715)' FATAL 로 앱이 즉시 죽는다(창 안 뜸). 그래서 끈다.
+ *       (재활성하려면 electron-builder 의 네이티브 asarIntegrity 지원/신버전 필요.)
  *   · EnableNodeOptionsEnvironmentVariable    비활성 — NODE_OPTIONS 악용 차단
  *
  * @electron/fuses는 devDependency. 미설치 시(설치 실패 환경) 경고만 남기고 빌드를 막지 않는다
@@ -35,7 +38,8 @@ exports.default = async function afterPack(context) {
     [FuseV1Options.RunAsNode]: false,
     [FuseV1Options.EnableNodeCliInspectArguments]: false,
     [FuseV1Options.OnlyLoadAppFromAsar]: true,
-    [FuseV1Options.EnableEmbeddedAsarIntegrityValidation]: true,
+    // Windows+electron-builder 24.x: 무결성 리소스 미주입으로 활성화 시 FindResource FATAL → 끈다.
+    [FuseV1Options.EnableEmbeddedAsarIntegrityValidation]: false,
     [FuseV1Options.EnableNodeOptionsEnvironmentVariable]: false,
   });
 
