@@ -1,5 +1,8 @@
 node_modules/
 *.log
 
+# Electron 빌드 산출물 (electron-builder)
+dist/
+
 # Claude Code: 공유용 settings.json은 커밋, 개인용 local 설정은 제외
 .claude/settings.local.json
