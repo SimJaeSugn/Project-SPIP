@@ -13,6 +13,9 @@ const os = require('os');
 const path = require('path');
 
 const excludeRules = require('../lib/scan/excludeRules');
+const detector = require('../lib/scan/detector');
+const config = require('../lib/common/config');
+const uiStateStore = require('../lib/common/uiStateStore');
 const folders = require('../electron/ipc/folders');
 const actions = require('../electron/ipc/actions');
 const pathGuard = require('../lib/common/pathGuard');
@@ -133,6 +136,66 @@ test('removeExcludeResolve — 정확 일치 1건 제거, 미존재는 NOT_FOUND
   assert.deepStrictEqual(r.excludes, ['E:\\old']);
   const r2 = folders.removeExcludeResolve('nope', ['E:\\old'], { logger: quiet(), configPath: cfgPath });
   assert.deepStrictEqual(r2, { ok: false, code: 'NOT_FOUND' });
+});
+
+/* ───── ui-state: 별칭(names)·테마·재스캔 머지(reconcile) ───── */
+
+test('uiStateStore.normalizeState — names sanitize / theme 화이트리스트 / 기본값', () => {
+  const s = uiStateStore.normalizeState({
+    favorites: ['aa11'], order: ['aa11'], sortMode: 'manual',
+    names: { aa11: '  My App  ', 'BAD!': 'x', bb22: '' }, theme: 'dark',
+  });
+  assert.deepStrictEqual(s.names, { aa11: 'My App' }); // trim + 잘못된 id·빈값 제거
+  assert.strictEqual(s.theme, 'dark');
+  const d = uiStateStore.normalizeState({});
+  assert.deepStrictEqual(d.names, {});
+  assert.strictEqual(d.theme, 'system');
+  assert.strictEqual(uiStateStore.normalizeState({ theme: 'evil' }).theme, 'system');
+});
+
+test('uiStateStore.reconcileState — 현재 id로 즐겨찾기/순서 정리, 별칭 보존, 빈집합 무변경', () => {
+  const state = { favorites: ['aa11', 'bb22'], order: ['bb22', 'aa11'], sortMode: 'manual', names: { aa11: 'A', cc33: 'C' }, theme: 'light' };
+  const r = uiStateStore.reconcileState(state, new Set(['aa11']));
+  assert.strictEqual(r.changed, true);
+  assert.deepStrictEqual(r.state.favorites, ['aa11']);
+  assert.deepStrictEqual(r.state.order, ['aa11']);
+  assert.deepStrictEqual(r.state.names, { aa11: 'A', cc33: 'C' }); // 별칭은 보존(재등장 대비)
+  const r2 = uiStateStore.reconcileState(state, new Set());
+  assert.strictEqual(r2.changed, false); // 빈 집합 → 정리하지 않음(안전)
+  assert.deepStrictEqual(r2.state.favorites, ['aa11', 'bb22']);
+});
+
+/* ───── 프로젝트 인식 기준(detectSignals) ───── */
+
+test('detector — 설정 시그널(이름/글로브/정규식)로 인식', () => {
+  const base = tmpDir();
+  const proj = path.join(base, 'p'); fs.mkdirSync(proj);
+  fs.writeFileSync(path.join(proj, 'app.csproj'), 'x');
+  assert.strictEqual(detector.detect(proj, { signals: ['*.csproj'] }).isProject, true);   // 글로브
+  assert.strictEqual(detector.detect(proj, { signals: ['package.json'] }).isProject, false); // 정확 이름(없음)
+  assert.strictEqual(detector.detect(proj, { signals: ['/\\.csproj$/'] }).isProject, true);  // 정규식
+  assert.strictEqual(detector.detect(proj, { signals: [] }).isProject, false);             // 빈 시그널 → 미인식
+});
+
+test('config.normalizeDetectSignals — 미설정 시드 / 빈배열 유지 / 중복 제거', () => {
+  const q = quiet();
+  assert.deepStrictEqual(config.normalizeDetectSignals(undefined, q), config.DEFAULTS.detectSignals.slice());
+  assert.deepStrictEqual(config.normalizeDetectSignals([], q), []);
+  assert.deepStrictEqual(config.normalizeDetectSignals(['a', 'a', 'b'], q), ['a', 'b']);
+});
+
+test('folders detectSignals — 추가(정규식 검증)/삭제(기본값 항목도)/기본값 복원 영속', () => {
+  const base = tmpDir();
+  const cfg = path.join(base, 'c.json');
+  const add = folders.addDetectSignalsResolve(['*.gradle.kts', '/[/'], ['package.json'], { logger: quiet(), configPath: cfg });
+  assert.ok(add.detectSignals.includes('*.gradle.kts'));
+  assert.ok(add.rejected.some((r) => r.reason === 'BAD_REGEX'));
+  const rm = folders.removeDetectSignalResolve('package.json', ['package.json', '*.gradle.kts'], { logger: quiet(), configPath: cfg });
+  assert.deepStrictEqual(rm.detectSignals, ['*.gradle.kts']); // 기본값 항목도 삭제 가능
+  const restore = folders.restoreDetectSignalsResolve({ logger: quiet(), configPath: cfg });
+  assert.deepStrictEqual(restore.detectSignals, config.DEFAULTS.detectSignals.slice());
+  const persisted = JSON.parse(fs.readFileSync(cfg, 'utf8'));
+  assert.deepStrictEqual(persisted.detectSignals, config.DEFAULTS.detectSignals.slice());
 });
 
 /* ───── #5 폴더 선택에서 드라이브 루트 허용 (별도 기능 아님) ───── */

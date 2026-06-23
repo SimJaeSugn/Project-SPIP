@@ -124,6 +124,43 @@ async function openInVsCode(args, ctx) {
 }
 
 /**
+ * spip:openPath — id로 프로젝트 폴더를 OS 파일 탐색기에서 연다(shell.openPath).
+ * openInVsCode와 동일한 검증 체인: id 역참조 → canonicalize(H-1) → 화이트리스트 isAllowed.
+ *   임의 경로 실행 표면을 만들지 않도록 경로 인자는 받지 않고 id로만 역참조한다.
+ * @param {object} args { id }
+ * @param {object} ctx { store, pathGuard?, shell }
+ * @returns {Promise<{ok:true,code:'OPENING'} | {ok:false,code:string}>}
+ */
+async function openPath(args, ctx) {
+  const store = ctx.store;
+  const pg = (ctx && ctx.pathGuard) || pathGuard;
+  const shell = ctx && ctx.shell;
+
+  const id = sanitizeOpenId(args);
+  if (id === null) return { ok: false, code: 'ID_NOT_FOUND' };
+
+  const project = store.getById(id);
+  if (!project) return { ok: false, code: 'ID_NOT_FOUND' };
+
+  // H-1: 실경로 화이트리스트 검증(소멸/비허용 거부).
+  const real = pg.canonicalize(project.path);
+  if (real === null) return { ok: false, code: 'PATH_GONE' };
+  if (!pg.isAllowed(project.path, store.getAllowKeySet())) {
+    return { ok: false, code: 'PATH_NOT_ALLOWED' };
+  }
+  if (!shell || typeof shell.openPath !== 'function') return { ok: false, code: 'INTERNAL' };
+
+  try {
+    // shell.openPath: 성공 시 빈 문자열, 실패 시 오류 메시지 반환(throw 아님).
+    const err = await shell.openPath(real);
+    if (err) return { ok: false, code: 'OPEN_FAILED' };
+    return { ok: true, code: 'OPENING' };
+  } catch (_) {
+    return { ok: false, code: 'OPEN_FAILED' };
+  }
+}
+
+/**
  * spip:rescan — 재스캔 트리거. 게이트·락·start (actionHandlers.rescan 이식).
  * 경로는 config에서만 가져온다(인자로 경로 안 받음 — H-1 정합).
  * @param {object} args { withSize?, allDrives? }
@@ -198,4 +235,4 @@ function rescan(args, ctx) {
   return { ok: true, code: 'SCAN_STARTED', scanId: acquired.scanId, startedAt: acquired.startedAt };
 }
 
-module.exports = { openInVsCode, rescan, sanitizeOpenId, sanitizeToolId, sanitizeRescanOpts, MAX_INFLIGHT_PER_ID, MAX_ID_LEN };
+module.exports = { openInVsCode, openPath, rescan, sanitizeOpenId, sanitizeToolId, sanitizeRescanOpts, MAX_INFLIGHT_PER_ID, MAX_ID_LEN };

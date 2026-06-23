@@ -42,5 +42,6 @@ test('탐지 신호 배열 반환(signals)', () => {
   const candidates = walker.walk([root], { logger: quiet() });
   const projects = Array.from(detector.detectStream(candidates, { logger: quiet() }));
   const py = projects.find((p) => path.basename(p.path) === 'py-proj');
-  assert.ok(py && py.signals.includes('git') && py.signals.includes('python'));
+  // 시그널 토큰은 이제 매칭된 패턴 문자열(설정 기반). py-proj 는 .git + pyproject.toml 보유.
+  assert.ok(py && py.signals.includes('.git') && py.signals.includes('pyproject.toml'));
 });

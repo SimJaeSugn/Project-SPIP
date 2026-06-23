@@ -246,6 +246,59 @@ function removeExcludeResolve(rawPattern, currentExcludes, ctx) {
   return { ok: true, excludes };
 }
 
+/* ───── 프로젝트 인식 기준(detectSignals: 이름/글로브/정규식) 관리 ───── */
+
+const MAX_DETECT = config.LIMITS.maxDetectSignals; // 100
+
+function persistDetectSignals(signals, ctx) {
+  config.persistConfigKeys({ detectSignals: signals }, ctx);
+}
+
+/** 인식 기준 추가 — 이름/`*.ext`/`/정규식/`. 길이·개수·중복·정규식 유효성 검증. */
+function addDetectSignalsResolve(rawPatterns, current, ctx) {
+  if (!Array.isArray(rawPatterns)) return { ok: false, code: 'INVALID' };
+  ctx = ctx || {};
+  const cur = Array.isArray(current) ? current.slice() : [];
+  const added = [];
+  const rejected = [];
+  for (const raw of rawPatterns.slice(0, MAX_DETECT)) {
+    const v = (typeof raw === 'string') ? raw.trim() : '';
+    if (!v) { rejected.push({ path: String(raw).slice(0, 256), reason: 'INVALID' }); continue; }
+    if (v.length > config.LIMITS.maxExcludePatternLen) { rejected.push({ path: v.slice(0, 64) + '…', reason: 'TOO_LONG' }); continue; }
+    if (excludeRules.isRegexExclude(v) && !excludeRules.compileExcludeRegex(v)) { rejected.push({ path: v, reason: 'BAD_REGEX' }); continue; }
+    if (cur.includes(v) || added.includes(v)) { rejected.push({ path: v, reason: 'DUP' }); continue; }
+    if (cur.length + added.length >= MAX_DETECT) { rejected.push({ path: v, reason: 'LIMIT' }); continue; }
+    added.push(v);
+  }
+  const detectSignals = config.normalizeDetectSignals([...cur, ...added], ctx.logger || { warn() {} });
+  persistDetectSignals(detectSignals, ctx);
+  return { ok: true, added, rejected, detectSignals };
+}
+
+/** 인식 기준 1건 제거(정확 일치). 기본값 항목도 삭제 가능(복원으로 되돌림). */
+function removeDetectSignalResolve(rawPattern, current, ctx) {
+  ctx = ctx || {};
+  if (typeof rawPattern !== 'string' || !rawPattern) return { ok: false, code: 'INVALID' };
+  const cur = Array.isArray(current) ? current.slice() : [];
+  let matched = false;
+  const detectSignals = [];
+  for (const e of cur) {
+    if (!matched && e === rawPattern) { matched = true; continue; }
+    detectSignals.push(e);
+  }
+  if (!matched) return { ok: false, code: 'NOT_FOUND' };
+  persistDetectSignals(detectSignals, ctx);
+  return { ok: true, detectSignals };
+}
+
+/** 인식 기준을 기본값(시드)으로 복원. */
+function restoreDetectSignalsResolve(ctx) {
+  ctx = ctx || {};
+  const detectSignals = config.DEFAULTS.detectSignals.slice();
+  persistDetectSignals(detectSignals, ctx);
+  return { ok: true, detectSignals };
+}
+
 // ───── IPC 핸들러(Electron API 사용 — register.js에서 dialog 주입) ─────
 
 /**
@@ -331,6 +384,38 @@ function removeExclude(args, ctx) {
   return result;
 }
 
+/** ctx.config.detectSignals 메모리 갱신. */
+function syncDetectSignals(ctx, signals) {
+  if (ctx && ctx.config && Array.isArray(signals)) ctx.config.detectSignals = signals;
+}
+/** spip:getDetectSignals — 현재 인식 기준 + 기본값(복원 안내용). */
+function getDetectSignals(ctx) {
+  const current = (ctx.config && Array.isArray(ctx.config.detectSignals)) ? ctx.config.detectSignals : [];
+  return { ok: true, detectSignals: current.slice(), defaults: config.DEFAULTS.detectSignals.slice() };
+}
+/** spip:addDetectSignals(patterns) 핸들러. */
+function addDetectSignals(args, ctx) {
+  const patterns = (args && typeof args === 'object') ? args.patterns : undefined;
+  const current = (ctx.config && Array.isArray(ctx.config.detectSignals)) ? ctx.config.detectSignals : [];
+  const result = addDetectSignalsResolve(patterns, current, ctx);
+  if (result.ok) syncDetectSignals(ctx, result.detectSignals);
+  return result;
+}
+/** spip:removeDetectSignal(pattern) 핸들러. */
+function removeDetectSignal(args, ctx) {
+  const p = (args && typeof args === 'object') ? args.pattern : undefined;
+  const current = (ctx.config && Array.isArray(ctx.config.detectSignals)) ? ctx.config.detectSignals : [];
+  const result = removeDetectSignalResolve(p, current, ctx);
+  if (result.ok) syncDetectSignals(ctx, result.detectSignals);
+  return result;
+}
+/** spip:restoreDetectSignals 핸들러 — 기본값 복원. */
+function restoreDetectSignals(_args, ctx) {
+  const result = restoreDetectSignalsResolve(ctx);
+  if (result.ok) syncDetectSignals(ctx, result.detectSignals);
+  return result;
+}
+
 module.exports = {
   addRoots,
   removeRoot,
@@ -338,10 +423,17 @@ module.exports = {
   getExcludes,
   addExcludes,
   removeExclude,
+  getDetectSignals,
+  addDetectSignals,
+  removeDetectSignal,
+  restoreDetectSignals,
   addRootsResolve,
   removeRootResolve,
   addExcludesResolve,
   removeExcludeResolve,
+  addDetectSignalsResolve,
+  removeDetectSignalResolve,
+  restoreDetectSignalsResolve,
   canonicalizeDir,
   isSystemDir,
   isDriveRoot,

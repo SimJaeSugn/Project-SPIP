@@ -879,7 +879,9 @@ function uiStateView(res) {
   const favorites = (Array.isArray(r.favorites) ? r.favorites : []).filter((x) => typeof x === 'string');
   const order = (Array.isArray(r.order) ? r.order : []).filter((x) => typeof x === 'string');
   const sortMode = (r.sortMode === 'manual') ? 'manual' : 'auto';
-  return { favorites, order, sortMode };
+  const names = (r.names && typeof r.names === 'object' && !Array.isArray(r.names)) ? r.names : {};
+  const theme = (r.theme === 'light' || r.theme === 'dark' || r.theme === 'system') ? r.theme : 'system';
+  return { favorites, order, sortMode, names, theme };
 }
 
 /* =====================================================================
@@ -912,6 +914,12 @@ function initBrowser() {
       favoritesOnly: false,      // R-20: '즐겨찾기만' 필터
       // [M7 §8.1] 즐겨찾기 슬라이더 오버레이(store.state.slider) 제거 — 독립 위젯 창(favorites.html)으로 이전.
     },
+    // 프로젝트 표시 별칭·테마(ui-state 영속).
+    projectNames: {},            // { id: alias } — vm.name 우선 적용
+    detectedNames: {},           // { id: 감지명 } — 별칭 해제 시 복원용(viewModels 빌드 시 캡처)
+    editingName: null,           // 드로어에서 이름 편집 중인 id
+    nameInput: '',               // 이름 편집 입력값(컨트롤드)
+    theme: 'system',             // 'light' | 'dark' | 'system'
     // R-15: 진행 통지 컨텍스트(Electron push 모델 — 폴링 타이머 제거)
     scan: {
       ownScanId: null,           // rescan SCAN_STARTED scanId(M4-L-1 대조)
@@ -940,6 +948,11 @@ function initBrowser() {
     excludes: [],                // getConfig().excludes
     excludeInput: '',            // 제외 항목 직접 입력(컨트롤드)
     busyExcludes: false,         // 제외 추가/삭제 in-flight
+    // 프로젝트 인식 기준(detectSignals: 이름/글로브/정규식)
+    detectSignals: [],           // 현재 인식 기준
+    detectDefaults: [],          // 기본값(복원 안내용)
+    detectInput: '',             // 직접 입력(컨트롤드)
+    busyDetect: false,           // 추가/삭제/복원 in-flight
     trayUnsubscribe: null,       // R-21: spip.onTray 구독 해제 함수
     projectsUpdatedUnsubscribe: null, // R-24: spip.onProjectsUpdated 구독 해제 함수
     // 자동 업데이트(사용자 주도) 상태 — 설정 드로어의 "소프트웨어 업데이트" 섹션이 표시.
@@ -1280,7 +1293,7 @@ function initBrowser() {
     if (store.roots.length === 0) {
       wrap.appendChild(el('div', { cls: 'rootmgr__empty', text: '아직 추가된 폴더가 없습니다.' }));
     } else {
-      const ul = el('ul', { cls: 'rootmgr__list', attrs: { role: 'list' } });
+      const ul = el('ul', { cls: 'rootmgr__list spip-scroll', attrs: { role: 'list' } });
       for (const p of store.roots) {
         const li = el('li', { cls: 'rootmgr__item' });
         li.appendChild(el('span', { cls: 'rootmgr__path mono', text: p, title: p })); // L-1 textContent
@@ -1352,6 +1365,8 @@ function initBrowser() {
     refreshTools();
     // 업데이트 상태(현재 버전·패키징 여부·마지막 status)도 동기화(설정 오픈 시에만).
     refreshUpdateState();
+    // 프로젝트 인식 기준도 동기화(설정 오픈 시에만).
+    refreshDetectSignals();
   }
   function closeSettings() {
     store.showSettings = false;
@@ -1429,17 +1444,37 @@ function initBrowser() {
         ]}),
         // 2) 제외 항목(#4)
         renderExcludeSettings(),
-        // 3) 재스캔 옵션 (getConfig 기반)
+        // 3) 프로젝트 인식 기준(detectSignals)
+        renderDetectSettings(),
+        // 4) 재스캔 옵션 (getConfig 기반)
         renderScanOptions(),
         // 4) 외부 툴 경로(R-18)
         renderToolSettings(),
-        // 5) 소프트웨어 업데이트(자동 업데이트 클라이언트)
+        // 5) 테마(라이트/다크/시스템)
+        renderThemeSettings(),
+        // 6) 소프트웨어 업데이트(자동 업데이트 클라이언트)
         renderUpdateSettings(),
       ],
     });
   }
 
   /** 재스캔 옵션 UI: withSize · allDrives(allowAllDrives 게이트) · 정책 표시(getConfig). */
+  /** 테마 설정 — 라이트/다크/시스템. segToggle(라이트 테마용) 재사용. */
+  function renderThemeSettings() {
+    const block = el('div', { cls: 'insight', children: [el('div', { cls: 'insight__title', text: '테마' })] });
+    if (!bridgeHas('setTheme')) {
+      block.appendChild(el('div', { cls: 'rootmgr__empty', text: '이 환경에서는 테마를 변경할 수 없습니다.' }));
+      return block;
+    }
+    block.appendChild(el('p', { cls: 'settings__opt-sub', text: '밝은 테마 / 어두운 테마 / 시스템 설정 따름 중에서 선택합니다.' }));
+    block.appendChild(segToggle([
+      ['light', '라이트', store.theme === 'light', () => onSetTheme('light')],
+      ['dark', '다크', store.theme === 'dark', () => onSetTheme('dark')],
+      ['system', '시스템', store.theme === 'system', () => onSetTheme('system')],
+    ]));
+    return block;
+  }
+
   function renderScanOptions() {
     const cv = configView(store.config);
     const block = el('div', { cls: 'insight', children: [el('div', { cls: 'insight__title', text: '스캔 옵션' })] });
@@ -1793,7 +1828,7 @@ function initBrowser() {
     if (store.excludes.length === 0) {
       block.appendChild(el('div', { cls: 'rootmgr__empty', text: '추가된 제외 항목이 없습니다(기본 제외 규칙만 적용).' }));
     } else {
-      const ul = el('ul', { cls: 'rootmgr__list', attrs: { role: 'list' } });
+      const ul = el('ul', { cls: 'rootmgr__list spip-scroll', attrs: { role: 'list' } });
       for (const e of store.excludes) {
         const li = el('li', { cls: 'rootmgr__item' });
         li.appendChild(el('span', { cls: 'rootmgr__path mono', text: e, title: e })); // L-1
@@ -1840,6 +1875,117 @@ function initBrowser() {
     } else {
       toast('제외 항목 삭제에 실패했습니다.', true);
     }
+    render();
+  }
+
+  /* =====================================================================
+   * 프로젝트 인식 기준 (detectSignals) — 디렉터리에 이 중 하나라도 있으면 프로젝트로 인식.
+   *   이름(package.json) · 글로브(*.csproj) · 정규식(/.../). 추가·삭제·기본값 복원.
+   * ===================================================================== */
+  function renderDetectSettings() {
+    const block = el('div', { cls: 'insight', children: [el('div', { cls: 'insight__title', text: '프로젝트 인식 기준' })] });
+    if (!bridgeHas('addDetectSignals')) {
+      block.appendChild(el('div', { cls: 'rootmgr__empty', text: '이 환경에서는 인식 기준을 설정할 수 없습니다.' }));
+      return block;
+    }
+    block.appendChild(el('p', { cls: 'settings__opt-sub', text: '폴더 안에 아래 항목이 하나라도 있으면 프로젝트로 인식합니다. 정확한 이름(package.json), 확장자 글로브(*.csproj), 정규식(/패턴/)을 쓸 수 있습니다. 기본값은 시드로 제공되며, 삭제해도 “기본값 복원”으로 되돌릴 수 있습니다.' }));
+
+    // 직접 입력 + 추가
+    const inputRow = el('div', { cls: 'rootmgr__inputrow' });
+    const input = el('input', {
+      cls: 'rootmgr__input',
+      attrs: { type: 'text', placeholder: '이름 · *.확장자 · /정규식/', 'aria-label': '인식 기준 추가', autocomplete: 'off', spellcheck: 'false' },
+    });
+    input.value = store.detectInput;
+    input.addEventListener('input', (e) => { store.detectInput = e.target.value || ''; });
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); onAddDetect(); } });
+    const addBtn = el('button', { cls: 'btn', text: '추가', attrs: { 'aria-label': '인식 기준 추가' }, on: { click: onAddDetect } });
+    if (store.busyDetect) { input.disabled = true; addBtn.disabled = true; }
+    inputRow.appendChild(input);
+    inputRow.appendChild(addBtn);
+    block.appendChild(inputRow);
+
+    // 목록 + 기본값 복원
+    const head = el('div', { cls: 'detect__head' });
+    head.appendChild(el('div', { cls: 'rootmgr__label', text: '인식 기준 (' + store.detectSignals.length + ')' }));
+    const restoreBtn = el('button', {
+      cls: 'link-btn', text: '기본값 복원', attrs: { type: 'button', 'aria-label': '인식 기준 기본값 복원' },
+      on: { click: onRestoreDetect },
+    });
+    if (store.busyDetect) restoreBtn.disabled = true;
+    head.appendChild(restoreBtn);
+    block.appendChild(head);
+
+    if (store.detectSignals.length === 0) {
+      block.appendChild(el('div', { cls: 'rootmgr__empty', text: '인식 기준이 없습니다 — 어떤 폴더도 프로젝트로 인식되지 않습니다. “기본값 복원”을 누르세요.' }));
+    } else {
+      const defaultsSet = new Set(store.detectDefaults);
+      const ul = el('ul', { cls: 'rootmgr__list spip-scroll', attrs: { role: 'list' } });
+      for (const s of store.detectSignals) {
+        const li = el('li', { cls: 'rootmgr__item' });
+        li.appendChild(el('span', { cls: 'rootmgr__path mono', text: s, title: s }));
+        if (defaultsSet.has(s)) li.appendChild(el('span', { cls: 'detect__badge', text: '기본' }));
+        const rm = el('button', {
+          cls: 'rootmgr__remove', text: '삭제',
+          attrs: { type: 'button', 'aria-label': '인식 기준 제거: ' + s },
+          on: { click: () => onRemoveDetect(s) },
+        });
+        if (store.busyDetect) rm.disabled = true;
+        li.appendChild(rm);
+        ul.appendChild(li);
+      }
+      block.appendChild(ul);
+    }
+    return block;
+  }
+
+  async function refreshDetectSignals() {
+    if (!bridgeHas('getDetectSignals')) return;
+    const res = await ipc('getDetectSignals');
+    if (res && res.ok) {
+      store.detectSignals = Array.isArray(res.detectSignals) ? res.detectSignals.filter((x) => typeof x === 'string') : [];
+      store.detectDefaults = Array.isArray(res.defaults) ? res.defaults.filter((x) => typeof x === 'string') : [];
+    }
+    render();
+  }
+  function applyDetectResult(res, okMsg) {
+    if (res && res.ok && Array.isArray(res.detectSignals)) {
+      store.detectSignals = res.detectSignals.filter((x) => typeof x === 'string');
+      if (okMsg) toast(okMsg);
+      return true;
+    }
+    return false;
+  }
+  async function onAddDetect() {
+    const v = (store.detectInput || '').trim();
+    if (!v) { toast('이름·*.확장자·/정규식/ 중 하나를 입력하세요.', true); return; }
+    if (!bridgeHas('addDetectSignals')) return;
+    store.busyDetect = true; render();
+    const res = await ipc('addDetectSignals', [v]);
+    store.busyDetect = false;
+    if (applyDetectResult(res, (res.added && res.added.length) ? '인식 기준을 추가했습니다.' : null)) {
+      if (res.added && res.added.length) store.detectInput = '';
+      else if (res.rejected && res.rejected.some((r) => r.reason === 'BAD_REGEX')) toast('정규식 형식이 올바르지 않습니다.', true);
+      else if (res.rejected && res.rejected.length) toast('이미 있거나 추가할 수 없는 항목입니다.', true);
+    } else {
+      toast('인식 기준 추가에 실패했습니다.', true);
+    }
+    render();
+  }
+  async function onRemoveDetect(pattern) {
+    if (!bridgeHas('removeDetectSignal')) return;
+    store.busyDetect = true; render();
+    const res = await ipc('removeDetectSignal', pattern);
+    store.busyDetect = false;
+    if (!applyDetectResult(res)) toast('인식 기준 삭제에 실패했습니다.', true);
+    render();
+  }
+  async function onRestoreDetect() {
+    if (!bridgeHas('restoreDetectSignals')) return;
+    store.busyDetect = true; render();
+    const res = await ipc('restoreDetectSignals');
+    store.busyDetect = false;
+    if (!applyDetectResult(res, '기본값으로 복원했습니다.')) toast('기본값 복원에 실패했습니다.', true);
     render();
   }
 
@@ -2447,9 +2593,14 @@ function initBrowser() {
       menu.appendChild(el('div', { cls: 'orbit__ctxmenu-title', text: orb.menu.name || '프로젝트' }));
       menu.appendChild(el('div', { cls: 'orbit__ctxmenu-path mono', text: orb.menu.path, title: orb.menu.path }));
       const p = orb.menu.path;
+      const id = orb.menu.id;
       menu.appendChild(el('button', {
         cls: 'orbit__ctxmenu-btn', text: '이 폴더를 제외에 추가', attrs: { type: 'button' },
         on: { click: () => { orb.menu = null; render(); orbExcludeDir(p); } },
+      }));
+      menu.appendChild(el('button', {
+        cls: 'orbit__ctxmenu-btn', text: '경로 열기', attrs: { type: 'button' },
+        on: { click: () => { orb.menu = null; render(); openProjectPath(id); } },
       }));
       stage.appendChild(ov);
       stage.appendChild(menu);
@@ -2901,8 +3052,8 @@ function initBrowser() {
     footer.appendChild(meta);
     const acts = el('div', { cls: 'card__acts' });
     // 카드 순서 변경은 드래그(SortableJS)로만 — 좌/우 이동 버튼은 제거(사용자 요청).
-    // R-17: 경로 복사
-    acts.appendChild(copyPathButton(vm, 'btn btn--ghost btn--sm'));
+    // 경로 열기(탐색기)
+    acts.appendChild(openPathButton(vm, 'btn btn--ghost btn--sm'));
     acts.appendChild(el('button', { cls: 'btn btn--ghost', text: '상세', on: { click: () => openDrawer(vm.id) } }));
     acts.appendChild(openButton(vm, 'btn btn--dark'));
     footer.appendChild(acts);
@@ -2929,12 +3080,12 @@ function initBrowser() {
     return btn;
   }
 
-  /** R-17: 경로 복사 버튼(클립보드는 main copyText IPC — navigator.clipboard 미사용). */
-  function copyPathButton(vm, cls) {
+  /** 경로 열기 버튼 — id로 프로젝트 폴더를 OS 탐색기에서 연다(main이 화이트리스트 검증). */
+  function openPathButton(vm, cls) {
     const btn = el('button', {
-      cls: cls || 'btn btn--ghost btn--sm', text: '경로 복사',
-      attrs: { type: 'button', 'aria-label': '경로 복사: ' + vm.path },
-      on: { click: (e) => { e.stopPropagation(); copyPath(vm.path); } },
+      cls: cls || 'btn btn--ghost btn--sm', text: '경로 열기',
+      attrs: { type: 'button', 'aria-label': '폴더 열기: ' + vm.path },
+      on: { click: (e) => { e.stopPropagation(); openProjectPath(vm.id); } },
     });
     return btn;
   }
@@ -2995,7 +3146,7 @@ function initBrowser() {
       const tdAct = el('td', { cls: 'ta-right' });
       const actWrap = el('div', { cls: 'table__acts' });
       actWrap.appendChild(favoriteButton(vm)); // R-20
-      actWrap.appendChild(copyPathButton(vm, 'btn btn--ghost btn--sm')); // R-17
+      actWrap.appendChild(openPathButton(vm, 'btn btn--ghost btn--sm')); // 경로 열기(탐색기)
       actWrap.appendChild(openButton(vm, 'btn btn--ghost btn--sm'));
       // 행 클릭(드로어)와 분리
       tdAct.appendChild(actWrap);
@@ -3030,6 +3181,7 @@ function initBrowser() {
   function closeDrawer() {
     store.state.selectedId = null;
     store._drawerShown = false; // 다음 열림에 진입 슬라이드 재적용
+    store.editingName = null; store.nameInput = ''; // 이름 편집 상태 정리
     const opener = store._drawerOpener;
     store._drawerOpener = null;
     render();
@@ -3059,11 +3211,41 @@ function initBrowser() {
     // header
     const head = el('div', { cls: 'drawer__head' });
     head.appendChild(dot(vm.language, 9));
-    const nameEl = el('div', { cls: 'drawer__name', text: vm.name, attrs: { id: titleId } });
-    head.appendChild(el('div', { cls: 'drawer__titlewrap', children: [
-      nameEl,
-      el('div', { cls: 'drawer__path mono', text: vm.path }),
-    ]}));
+    const titlewrap = el('div', { cls: 'drawer__titlewrap' });
+    if (store.editingName === vm.id) {
+      // 이름 편집 모드 — 입력 + 저장/취소(+별칭 해제).
+      const input = el('input', { cls: 'drawer__name-input', attrs: { type: 'text', 'aria-label': '프로젝트 표시 이름', maxlength: '120', autocomplete: 'off', spellcheck: 'false' } });
+      input.value = store.nameInput;
+      input.addEventListener('input', (e) => { store.nameInput = e.target.value || ''; });
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); onSaveName(vm.id); }
+        else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); onCancelName(); }
+      });
+      const editRow = el('div', { cls: 'drawer__name-edit', children: [
+        input,
+        el('button', { cls: 'btn btn--sm btn--dark', text: '저장', attrs: { type: 'button' }, on: { click: () => onSaveName(vm.id) } }),
+        el('button', { cls: 'btn btn--sm', text: '취소', attrs: { type: 'button' }, on: { click: onCancelName } }),
+      ]});
+      titlewrap.appendChild(editRow);
+      if (store.projectNames[vm.id]) {
+        const det = store.detectedNames[vm.id] || '';
+        titlewrap.appendChild(el('button', { cls: 'link-btn drawer__name-reset', text: '감지명으로 복원' + (det ? ' (' + det + ')' : ''), attrs: { type: 'button' }, on: { click: () => onSaveName(vm.id, '') } }));
+      }
+      titlewrap.appendChild(el('div', { cls: 'drawer__path mono', text: vm.path }));
+      setTimeout(() => { try { input.focus(); input.select(); } catch (_) { /* ignore */ } }, 0);
+    } else {
+      const nameEl = el('div', { cls: 'drawer__name', attrs: { id: titleId } });
+      nameEl.appendChild(el('span', { text: vm.name }));
+      if (store.projectNames[vm.id]) nameEl.appendChild(el('span', { cls: 'drawer__alias-badge', text: '별칭' }));
+      if (bridgeHas('setProjectName')) {
+        const editBtn = el('button', { cls: 'drawer__name-edit-btn', attrs: { type: 'button', 'aria-label': '이름 수정', title: '이름 수정' }, on: { click: () => onStartEditName(vm) } });
+        editBtn.appendChild(svg([{ t: 'path', d: 'M12 20h9' }, { t: 'path', d: 'M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z' }], { size: 13, sw: 1.8 }));
+        nameEl.appendChild(editBtn);
+      }
+      titlewrap.appendChild(nameEl);
+      titlewrap.appendChild(el('div', { cls: 'drawer__path mono', text: vm.path }));
+    }
+    head.appendChild(titlewrap);
     const close = el('button', { cls: 'drawer__close', text: '×', attrs: { 'aria-label': '닫기' }, on: { click: closeDrawer } });
     head.appendChild(close);
     aside.appendChild(head);
@@ -3075,9 +3257,9 @@ function initBrowser() {
     openBtn.textContent = store.state.opening[vm.id] ? '여는 중…' : 'VS Code로 열기';
     openBtn.prepend(svg([{ t: 'path', d: 'M5 12h14M13 6l6 6-6 6' }], { size: 14 }));
     bodyWrap.appendChild(openBtn);
-    // R-17/R-20: 경로 복사 + 즐겨찾기 토글
+    // 경로 열기(탐색기) + 즐겨찾기 토글
     const drawerActs = el('div', { cls: 'drawer__acts' });
-    drawerActs.appendChild(copyPathButton(vm, 'btn'));
+    drawerActs.appendChild(openPathButton(vm, 'btn'));
     const favWrap = favoriteButton(vm);
     favWrap.classList.add('fav-btn--labeled');
     favWrap.appendChild(el('span', { cls: 'fav-btn__label', text: isFavorite(store.state.favorites, vm.id) ? '즐겨찾기됨' : '즐겨찾기' }));
@@ -3371,7 +3553,12 @@ function initBrowser() {
       } else {
         store.raw = payload.projects;
         store.viewModels = payload.projects.map(toViewModel);
+        captureDetectedNames(); applyProjectNames(); // 감지명 캡처 + 별칭 적용
       }
+      // ★ 재스캔/스캔 완료 후 UI 상태(즐겨찾기·수동순서·별칭)를 다시 적재한다. 이전엔 reloadAfterScan이
+      //   viewModels만 재구성하고 ui-state를 재로드하지 않아 대시보드 카드에 즐겨찾기 별이 사라졌다
+      //   (특히 firstRun→스캔 경로에선 처음부터 미로드). getUiState가 현재 스냅샷 id로 머지·정리도 수행.
+      if (bridgeHas('getUiState')) { try { await loadUiState(); } catch (_) { /* graceful */ } }
       // scanning(스캔 done) 또는 dashboard/firstRun(메뉴 새로고침)에서만 결과 뷰로 전환.
       // 그 외(error/loading 등)는 현 뷰 유지 — 사용자 컨텍스트 보존.
       const v = store.state.view;
@@ -3497,6 +3684,7 @@ function initBrowser() {
       changed = true;
     }
     if (!changed) return;
+    captureDetectedNames(); applyProjectNames(); // 갱신/신규 항목에 감지명 캡처 + 별칭 적용
     // stale KPI 로컬 보정(freshness 변동 반영).
     if (store.stats && typeof store.stats === 'object') {
       store.stats.staleCount = store.viewModels.filter((v) => v && v.isStale).length;
@@ -3636,6 +3824,47 @@ function initBrowser() {
   }
 
   /* =====================================================================
+   * 경로 열기 — id로 프로젝트 폴더를 OS 탐색기에서 연다(main이 화이트리스트 검증 후 shell.openPath).
+   * ===================================================================== */
+  /* =====================================================================
+   * 프로젝트 표시 이름(별칭) 편집 — ui-state에 영속(setProjectName).
+   * ===================================================================== */
+  function onStartEditName(vm) {
+    store.editingName = vm.id;
+    store.nameInput = store.projectNames[vm.id] || vm.name || '';
+    render();
+  }
+  function onCancelName() {
+    store.editingName = null;
+    store.nameInput = '';
+    render();
+  }
+  async function onSaveName(id, forceVal) {
+    if (!bridgeHas('setProjectName')) { store.editingName = null; render(); return; }
+    const val = (forceVal !== undefined) ? forceVal : (store.nameInput || '').trim();
+    const res = await ipc('setProjectName', id, val);
+    if (res && res.ok && res.names && typeof res.names === 'object') {
+      store.projectNames = res.names;
+      applyProjectNames();
+      store.editingName = null; store.nameInput = '';
+      toast(val ? '이름을 변경했습니다.' : '별칭을 해제했습니다(감지명 복원).');
+    } else {
+      toast('이름 변경에 실패했습니다.', true);
+    }
+    render();
+  }
+
+  async function openProjectPath(id) {
+    if (!id) return;
+    if (!bridgeHas('openPath')) { toast('이 환경에서는 폴더 열기를 사용할 수 없습니다.', true); return; }
+    const res = await ipc('openPath', id);
+    if (res && res.ok) toast('폴더를 여는 중…');
+    else if (res && res.code === 'PATH_GONE') toast('경로를 찾을 수 없습니다(이동·삭제됨).', true);
+    else if (res && res.code === 'PATH_NOT_ALLOWED') toast('허용되지 않은 경로입니다.', true);
+    else toast('폴더를 열지 못했습니다.', true);
+  }
+
+  /* =====================================================================
    * R-20: 즐겨찾기 토글 (낙관적 메모리 반영 → setFavorite 영속)
    * ===================================================================== */
   async function setFavorite(id, on) {
@@ -3770,6 +3999,56 @@ function initBrowser() {
     store.state.favorites = uv.favorites;
     store.state.order = uv.order;
     store.state.sortMode = uv.sortMode;
+    store.projectNames = uv.names || {};
+    store.theme = uv.theme || 'system';
+    applyProjectNames();   // 별칭을 현재 viewModels에 반영
+    applyTheme();          // 테마 적용(라이트/다크/시스템)
+  }
+
+  /** viewModels 빌드 직후 감지명을 캡처(별칭 해제 시 복원 기준). */
+  function captureDetectedNames() {
+    const det = {};
+    for (const vm of store.viewModels) det[vm.id] = (store.detectedNames[vm.id] != null) ? store.detectedNames[vm.id] : vm.name;
+    store.detectedNames = det;
+  }
+  /** 표시 이름 = 별칭(있으면) || 감지명. vm.name을 덮어써 모든 표시·검색에 일괄 반영(DRY). */
+  function applyProjectNames() {
+    const names = store.projectNames || {};
+    const det = store.detectedNames || {};
+    for (const vm of store.viewModels) {
+      const alias = names[vm.id];
+      vm.name = (typeof alias === 'string' && alias) ? alias : (det[vm.id] != null ? det[vm.id] : vm.name);
+    }
+  }
+
+  /* =====================================================================
+   * 테마 (라이트/다크/시스템) — data-theme 속성 + CSS 변수 오버라이드.
+   * ===================================================================== */
+  function prefersDark() {
+    try { return !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches); } catch (_) { return false; }
+  }
+  function resolveTheme() {
+    if (store.theme === 'light' || store.theme === 'dark') return store.theme;
+    return prefersDark() ? 'dark' : 'light'; // system
+  }
+  function applyTheme() {
+    try { document.documentElement.setAttribute('data-theme', resolveTheme()); } catch (_) { /* ignore */ }
+  }
+  /** 테마 변경(낙관적 반영 + IPC 영속). */
+  function onSetTheme(theme) {
+    store.theme = (theme === 'light' || theme === 'dark' || theme === 'system') ? theme : 'system';
+    applyTheme();
+    render();
+    if (bridgeHas('setTheme')) ipc('setTheme', store.theme);
+  }
+  /** 시스템 테마 변경 구독(앱 1회) — theme==='system'일 때만 재적용. */
+  function subscribeSystemTheme() {
+    try {
+      const mq = window.matchMedia('(prefers-color-scheme: dark)');
+      const h = () => { if (store.theme === 'system') applyTheme(); };
+      if (typeof mq.addEventListener === 'function') mq.addEventListener('change', h);
+      else if (typeof mq.addListener === 'function') mq.addListener(h); // 구형
+    } catch (_) { /* matchMedia 부재 graceful */ }
   }
 
   /** getConfig() 동기화 → store.config / store.roots 갱신 후 재렌더. */
@@ -4036,6 +4315,7 @@ function initBrowser() {
 
       store.raw = payload.projects;
       store.viewModels = payload.projects.map(toViewModel);
+      captureDetectedNames(); // 감지명 캡처(별칭은 loadUiState 후 applyProjectNames)
       store.state.view = 'dashboard';
       // 설정 패널/재스캔에서 쓸 config 를 비동기로 미리 적재(렌더 비블로킹)
       ipc('getConfig').then((cfg) => {
@@ -4072,6 +4352,9 @@ function initBrowser() {
   subscribeProjectsUpdated();
   // 자동 업데이트 진행 구독(앱 1회). 부재 시 graceful — 내부 가드.
   subscribeUpdateStatus();
+  // 테마 즉시 적용(시스템 기본) + 시스템 테마 변경 구독. ui-state 적재 시 사용자 설정으로 갱신.
+  applyTheme();
+  subscribeSystemTheme();
 
   // teardown: 창 unload 시 구독 해제(누수 방지 — 메뉴·진행·트레이·주시·업데이트 구독 모두).
   function teardown() {

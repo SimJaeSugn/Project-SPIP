@@ -85,7 +85,7 @@ function isTrustedSender(event, opts) {
  *   - clipboard: Electron clipboard(R-17 copyText 주입)
  */
 function registerIpcHandlers(deps) {
-  const { ipcMain, dialog, clipboard, getWebContents, getFavoritesWidgetWc, getWin, ctx, logger } = deps;
+  const { ipcMain, dialog, clipboard, shell, getWebContents, getFavoritesWidgetWc, getWin, ctx, logger } = deps;
   const senderOpts = { trustedOrigin: deps.trustedOrigin || TRUSTED_ORIGIN, allowFileUrl: !!deps.allowFileUrl };
 
   // 진행 푸시 콜백(F-1/§4.3) — rescan이 start로 전달.
@@ -118,6 +118,7 @@ function registerIpcHandlers(deps) {
 
   // actions — rescan에 sendProgress 주입.
   guard('spip:openInVsCode', (args) => actionsIpc.openInVsCode(args, ctx));
+  guard('spip:openPath', (args) => actionsIpc.openPath(args, Object.assign({}, ctx, { shell })));
   guard('spip:rescan', (args) => actionsIpc.rescan(args, Object.assign({}, ctx, { sendProgress })));
 
   // folders — dialog/win 주입.
@@ -132,6 +133,12 @@ function registerIpcHandlers(deps) {
   guard('spip:getExcludes', () => foldersIpc.getExcludes(ctx));
   guard('spip:addExcludes', (args) => foldersIpc.addExcludes(args, ctx));
   guard('spip:removeExclude', (args) => foldersIpc.removeExclude(args, ctx));
+
+  // 프로젝트 인식 기준(detectSignals) — 이름/글로브/정규식. 조회·추가·삭제·기본값 복원.
+  guard('spip:getDetectSignals', () => foldersIpc.getDetectSignals(ctx));
+  guard('spip:addDetectSignals', (args) => foldersIpc.addDetectSignals(args, ctx));
+  guard('spip:removeDetectSignal', (args) => foldersIpc.removeDetectSignal(args, ctx));
+  guard('spip:restoreDetectSignals', (args) => foldersIpc.restoreDetectSignals(args, ctx));
   // 드라이브(#5)는 별도 채널 없이 폴더 선택(addRoots/pickFolders)에서 드라이브 루트를 그대로 허용한다.
 
   // [M6 R-17] 클립보드 — main clipboard 주입.
@@ -180,6 +187,9 @@ function registerIpcHandlers(deps) {
   });
   guard('spip:setOrder', (args) => uiStateIpc.setOrder(args, ctx));
   guard('spip:setSortMode', (args) => uiStateIpc.setSortMode(args, ctx));
+  // 프로젝트 표시 별칭 + 테마(라이트/다크/시스템).
+  guard('spip:setProjectName', (args) => uiStateIpc.setProjectName(args, ctx));
+  guard('spip:setTheme', (args) => uiStateIpc.setTheme(args, ctx));
 
   // 자동 업데이트(사용자 주도) — 제어는 autoUpdate.js(electron-updater). 진행 상황은 단방향 push
   //   'spip:update:status'(initAutoUpdate 가 getWebContents 로 메인창에 send). 미패키징은 NOT_PACKAGED.

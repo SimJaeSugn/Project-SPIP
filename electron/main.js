@@ -163,6 +163,7 @@ function onReady() {
     ipcMain,
     dialog,
     clipboard, // [R-17] main clipboard 주입(copyText).
+    shell,     // 경로 열기(shell.openPath) 주입.
     ctx,
     logger,
     trustedOrigin: TRUSTED_ORIGIN,

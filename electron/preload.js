@@ -44,8 +44,19 @@ contextBridge.exposeInMainWorld('spip', {
   }),
   removeExclude: (pattern) => ipcRenderer.invoke('spip:removeExclude', { pattern: String(pattern) }),
 
+  // 프로젝트 인식 기준(detectSignals: 이름/글로브/정규식) — 조회·추가·삭제·기본값 복원.
+  getDetectSignals: () => ipcRenderer.invoke('spip:getDetectSignals'),
+  addDetectSignals: (patterns) => ipcRenderer.invoke('spip:addDetectSignals', {
+    patterns: Array.isArray(patterns) ? patterns.map((p) => String(p)) : patterns,
+  }),
+  removeDetectSignal: (pattern) => ipcRenderer.invoke('spip:removeDetectSignal', { pattern: String(pattern) }),
+  restoreDetectSignals: () => ipcRenderer.invoke('spip:restoreDetectSignals'),
+
   // [M6 R-17] 경로 복사 — main clipboard.writeText만. 채널명 하드코딩.
   copyText: (t) => ipcRenderer.invoke('spip:copyText', { text: String(t) }),
+
+  // 경로 열기 — id로 프로젝트 폴더를 OS 탐색기에서 연다(main이 화이트리스트 검증 후 shell.openPath).
+  openPath: (id) => ipcRenderer.invoke('spip:openPath', { id: String(id) }),
 
   // [M6 R-18] 외부 툴 경로 설정. setToolPath는 args 없음(M6-H-2). path=null은 지정 해제.
   getTools: () => ipcRenderer.invoke('spip:getTools'),
@@ -64,6 +75,10 @@ contextBridge.exposeInMainWorld('spip', {
   setFavorite: (id, on) => ipcRenderer.invoke('spip:setFavorite', { id: String(id), on: !!on }),
   setOrder: (ids) => ipcRenderer.invoke('spip:setOrder', { ids: Array.isArray(ids) ? ids.map(String) : [] }),
   setSortMode: (m) => ipcRenderer.invoke('spip:setSortMode', { mode: String(m) }),
+
+  // 프로젝트 표시 별칭(빈 문자열이면 해제) + 테마(light|dark|system).
+  setProjectName: (id, name) => ipcRenderer.invoke('spip:setProjectName', { id: String(id), name: name == null ? '' : String(name) }),
+  setTheme: (theme) => ipcRenderer.invoke('spip:setTheme', { theme: String(theme) }),
 
   // 이벤트 구독(on/send) — 콜백만 받고 ipcRenderer 원본은 노출하지 않음(보안).
   onScanProgress: (cb) => {

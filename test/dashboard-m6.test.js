@@ -217,7 +217,7 @@ test('dispatchTrayAction: 항상 {handler} shape(부수효과 없음 — 순수)
 /* ─────────────── 공통: uiStateView (getUiState 초기 상태) ─────────────── */
 test('uiStateView: 계약 shape 매핑', () => {
   const v = uiStateView({ ok: true, favorites: ['a'], order: ['a', 'b'], sortMode: 'manual' });
-  assert.deepStrictEqual(v, { favorites: ['a'], order: ['a', 'b'], sortMode: 'manual' });
+  assert.deepStrictEqual(v, { favorites: ['a'], order: ['a', 'b'], sortMode: 'manual', names: {}, theme: 'system' });
 });
 test('uiStateView: sortMode 화이트리스트 밖 → auto', () => {
   assert.strictEqual(uiStateView({ sortMode: 'evil' }).sortMode, 'auto');
@@ -229,7 +229,7 @@ test('uiStateView: 비배열/비문자열 항목 graceful 필터', () => {
   assert.deepStrictEqual(v.order, []);
 });
 test('uiStateView: null/손상 → 기본값', () => {
-  assert.deepStrictEqual(uiStateView(null), { favorites: [], order: [], sortMode: 'auto' });
+  assert.deepStrictEqual(uiStateView(null), { favorites: [], order: [], sortMode: 'auto', names: {}, theme: 'system' });
 });
 
 /* ─────────────── IPC 어댑터 로직 (window.spip 모킹) ─────────────── */

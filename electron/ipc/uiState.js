@@ -26,16 +26,28 @@ function resolveStore(ctx) {
 }
 
 function toResponse(state) {
-  return { favorites: state.favorites, order: state.order, sortMode: state.sortMode };
+  return { favorites: state.favorites, order: state.order, sortMode: state.sortMode, names: state.names, theme: state.theme };
 }
 
 /**
- * spip:getUiState — 현재 UI 상태 반환(graceful).
- * @returns {{ok:true,favorites,order,sortMode}}
+ * spip:getUiState — 현재 UI 상태 반환(graceful). 스냅샷이 있으면 즐겨찾기·순서를
+ *   현재 프로젝트 id 집합에 맞춰 머지·정리(재스캔으로 사라진 항목 제거)하고 변경 시 영속한다.
+ * @returns {{ok:true,favorites,order,sortMode,names,theme}}
  */
 function getUiState(ctx) {
   const { store, storeCtx } = resolveStore(ctx);
-  const state = store.read(storeCtx);
+  let state = store.read(storeCtx);
+  const snap = ctx && ctx.store; // 스냅샷 store(프로젝트 목록)
+  if (snap && typeof snap.getProjects === 'function' && snap.hasSnapshot) {
+    const ids = new Set();
+    for (const p of snap.getProjects()) { if (p && typeof p.id === 'string') ids.add(p.id); }
+    const rec = uiStateStore.reconcileState(state, ids);
+    if (rec.changed) {
+      try { state = store.write(rec.state, storeCtx); } catch (_) { state = rec.state; }
+    } else {
+      state = rec.state;
+    }
+  }
   return Object.assign({ ok: true }, toResponse(state));
 }
 
@@ -94,4 +106,37 @@ function setSortMode(args, ctx) {
   return { ok: true, sortMode: written.sortMode };
 }
 
-module.exports = { getUiState, setFavorite, setOrder, setSortMode };
+/**
+ * spip:setProjectName — id의 표시 별칭 설정/해제. 빈 이름이면 별칭 제거(감지명 복원).
+ *   sanitize(제어문자 제거·길이 상한)는 write 내부 normalizeNames가 강제.
+ * @param {object} args { id, name }
+ * @returns {{ok:true,names} | {ok:false,code:'INVALID_ID'}}
+ */
+function setProjectName(args, ctx) {
+  const id = args && typeof args === 'object' ? args.id : undefined;
+  if (typeof id !== 'string' || !uiStateStore.ID_RE.test(id)) return { ok: false, code: 'INVALID_ID' };
+  const name = (args && typeof args.name === 'string') ? args.name : '';
+  const { store, storeCtx } = resolveStore(ctx);
+  const state = store.read(storeCtx);
+  const names = Object.assign({}, state.names);
+  const trimmed = name.trim();
+  if (trimmed) names[id] = trimmed; else delete names[id];
+  const next = store.write(Object.assign({}, state, { names }), storeCtx);
+  return { ok: true, names: next.names };
+}
+
+/**
+ * spip:setTheme — 'light'|'dark'|'system' 화이트리스트.
+ * @param {object} args { theme }
+ * @returns {{ok:true,theme}}
+ */
+function setTheme(args, ctx) {
+  const theme = args && typeof args === 'object' ? args.theme : undefined;
+  const next = uiStateStore.THEMES.has(theme) ? theme : 'system';
+  const { store, storeCtx } = resolveStore(ctx);
+  const state = store.read(storeCtx);
+  const written = store.write(Object.assign({}, state, { theme: next }), storeCtx);
+  return { ok: true, theme: written.theme };
+}
+
+module.exports = { getUiState, setFavorite, setOrder, setSortMode, setProjectName, setTheme };
