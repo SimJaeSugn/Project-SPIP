@@ -1388,7 +1388,7 @@ function initBrowser() {
     head.appendChild(close);
     dialog.appendChild(head);
 
-    const body = el('div', { cls: 'modal__body' });
+    const body = el('div', { cls: 'modal__body spip-scroll' });
     for (const c of (opts.bodyChildren || [])) if (c) body.appendChild(c);
     dialog.appendChild(body);
     overlay.appendChild(dialog);
