@@ -2,9 +2,21 @@
  * 즐겨찾기 위젯 창 스타일 (app://favorites.html — 별도 토스트형 BrowserWindow)
  * [M8-DESIGN] Claude Design "즐겨찾기 트레이" 이식 — 프로스티드(글래스) 플라이아웃 패널 +
  *   카드(300px)를 단일 트랙에 가로로 깔고 드래그/관성/휠/양끝 화살표로 스크롤. 하단 진행 바.
- * 외부 CDN 금지(CSP) → 시스템 폰트 스택(Geist/Pretendard 대체).
+ * 폰트: 디자인 템플릿과 동일한 Pretendard(메인과 동일). 외부 CDN은 CSP로 금지 → 로컬 번들
+ *   PretendardVariable.woff2 를 app:// 동일 오리진에서 로드(font-src 'self'). 미설치 시 시스템 폴백.
  * 다크/라이트(OS prefers-color-scheme) 자동 대응. 색 외 텍스트 보조(N-07). prefers-reduced-motion 존중.
  * ===================================================================== */
+
+/* 디자인 템플릿 동일 폰트(Pretendard) — 메인 styles.css와 동일 정의(이 창은 favorites.css만 로드). */
+@font-face {
+  font-family: 'Pretendard Variable';
+  font-weight: 45 920;
+  font-style: normal;
+  font-display: swap;
+  src: local('Pretendard Variable'), local('Pretendard'),
+       url('./fonts/PretendardVariable.woff2') format('woff2-variations'),
+       url('./fonts/PretendardVariable.woff2') format('woff2');
+}
 
 :root {
   --fav-panel: rgba(255, 255, 255, .86);
@@ -38,7 +50,7 @@
   --fav-ahead-bg: #dbeafe; --fav-ahead-fg: #1d4ed8; --fav-ahead-bd: #bfdbfe;
   --fav-behind-bg: #ede9fe; --fav-behind-fg: #6d28d9; --fav-behind-bd: #ddd6fe;
   --fav-clean-bg: #dcfce7; --fav-clean-fg: #15803d; --fav-clean-bd: #bbf7d0;
-  --fav-font: 'Geist', system-ui, -apple-system, 'Segoe UI', 'Malgun Gothic', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Pretendard', sans-serif;
+  --fav-font: 'Pretendard Variable', Pretendard, 'Geist', system-ui, -apple-system, 'Segoe UI', 'Malgun Gothic', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
   --fav-mono: 'Geist Mono', ui-monospace, 'Cascadia Mono', 'Consolas', 'D2Coding', 'Courier New', monospace;
 }
 

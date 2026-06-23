@@ -1,9 +1,23 @@
 /* =====================================================================
  * Project-SPIP 대시보드 스타일 — Claude Design 시안 라이트 테마 재현
- * 폰트: 외부 CDN 금지(CSP) → 시스템 폰트 스택으로 대체(레이아웃·색·간격은 시안 충실).
+ * 폰트: 디자인 템플릿과 동일한 Pretendard 적용. 외부 CDN은 CSP(font-src 'self')로 금지되므로
+ *       PretendardVariable.woff2 를 public/fonts/ 에 로컬 번들(가변폰트 1파일·전 weight).
+ *       미설치/미번들 환경에서도 안전하도록 시스템 폰트 스택으로 폴백한다.
  * 팔레트: bg #f6f6f5 / panel #fff / border #e7e5e4 / text #1c1917·#57534e·#78716c·#a8a29e
  *         accent indigo #4f46e5·#eef2ff / git 정상#15803d 미커밋#b45309 미푸시#1d4ed8
  * ===================================================================== */
+
+/* 디자인 템플릿 동일 폰트(Pretendard). local() 먼저 — OS에 설치돼 있으면 그걸 쓰고,
+   없으면 번들된 가변폰트(woff2)를 app:// 동일 오리진에서 로드(CSP font-src 'self' 통과). */
+@font-face {
+  font-family: 'Pretendard Variable';
+  font-weight: 45 920;
+  font-style: normal;
+  font-display: swap;
+  src: local('Pretendard Variable'), local('Pretendard'),
+       url('./fonts/PretendardVariable.woff2') format('woff2-variations'),
+       url('./fonts/PretendardVariable.woff2') format('woff2');
+}
 
 :root {
   --bg: #f6f6f5;
@@ -28,7 +42,7 @@
   --push: #1d4ed8;
   --push-bg: #dbeafe;
   --push-border: #bfdbfe;
-  --font: system-ui, -apple-system, 'Segoe UI', 'Malgun Gothic', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
+  --font: 'Pretendard Variable', Pretendard, system-ui, -apple-system, 'Segoe UI', 'Malgun Gothic', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
   --mono: ui-monospace, 'Cascadia Mono', 'Consolas', 'D2Coding', 'Courier New', monospace;
 }
 
