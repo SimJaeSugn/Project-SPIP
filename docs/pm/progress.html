@@ -42,12 +42,12 @@
 
   <h1>Project-SPIP — 진행 현황판</h1>
   <p class="sub">PC 내 흩어진 VS Code 프로젝트를 스캔해 인사이트를 보여주는 로컬 대시보드</p>
-  <p class="meta">기준일 2026-06-21 · 현재 단계: <span class="badge done">M8(R-24 상태 주시 · 라이브 갱신) 구현 완료 · 검증 통과</span> · 다음: 후속/백로그(비차단) + 사용자 PC 1회 수동 확인(라이브 갱신·드래그 중 보류·스캔 경합 + 기존 토스트·FLIP·DnD·트레이·다이얼로그·Q4) · 테스트 503/503 · v1.0.1</p>
+  <p class="meta">기준일 2026-06-23 · 현재 단계: <span class="badge done">M11(v1.4.0) 구현 완료</span> · 테스트 525/525 · v1.4.0</p>
 
   <!-- 핵심 지표 -->
   <h2>핵심 지표</h2>
   <div class="grid kpis">
-    <div class="kpi"><div class="v">474</div><div class="l">테스트 통과 / 0 실패</div></div>
+    <div class="kpi"><div class="v">525</div><div class="l">테스트 통과 / 0 실패</div></div>
     <div class="kpi"><div class="v">100%</div><div class="l">탐지율 (게이트 ≥95%)</div></div>
     <div class="kpi"><div class="v">0.154ms</div><div class="l">필터 (게이트 200ms)</div></div>
     <div class="kpi"><div class="v">0</div><div class="l">외부 의존성</div></div>
@@ -57,10 +57,10 @@
   <!-- 파이프라인 -->
   <h2>파이프라인 (기획 → 설계 → 구현 → 검증 → 데스크톱 전환)</h2>
   <div class="panel">
-    <svg viewBox="0 0 1000 120" width="100%" role="img" aria-label="진행 파이프라인">
+    <svg viewBox="0 0 1310 120" width="100%" role="img" aria-label="진행 파이프라인">
       <!-- 연결선 -->
-      <line x1="70" y1="40" x2="930" y2="40" stroke="#334155" stroke-width="3"/>
-      <line x1="70" y1="40" x2="930" y2="40" stroke="#34d399" stroke-width="3"/>
+      <line x1="70" y1="40" x2="1265" y2="40" stroke="#334155" stroke-width="3"/>
+      <line x1="70" y1="40" x2="1265" y2="40" stroke="#34d399" stroke-width="3"/>
       <!-- 노드 -->
       <g font-family="Segoe UI" font-size="12.5" text-anchor="middle">
         <circle cx="70"  cy="40" r="13" fill="#064e3b" stroke="#34d399" stroke-width="2"/>
@@ -102,6 +102,26 @@
         <text x="930" y="44" fill="#34d399" font-size="13" font-weight="700">✓</text>
         <text x="930" y="74" fill="#e2e8f0">M7</text>
         <text x="930" y="92" fill="#64748b" font-size="10.5">위젯·FLIP·통과</text>
+
+        <circle cx="1005" cy="40" r="13" fill="#064e3b" stroke="#34d399" stroke-width="2"/>
+        <text x="1005" y="44" fill="#34d399" font-size="13" font-weight="700">✓</text>
+        <text x="1005" y="74" fill="#e2e8f0">M8</text>
+        <text x="1005" y="92" fill="#64748b" font-size="10.5">상태 주시·통과</text>
+
+        <circle cx="1080" cy="40" r="13" fill="#064e3b" stroke="#34d399" stroke-width="2"/>
+        <text x="1080" y="44" fill="#34d399" font-size="13" font-weight="700">✓</text>
+        <text x="1080" y="74" fill="#e2e8f0">M9</text>
+        <text x="1080" y="92" fill="#64748b" font-size="10.5">업데이트·설정</text>
+
+        <circle cx="1155" cy="40" r="13" fill="#064e3b" stroke="#34d399" stroke-width="2"/>
+        <text x="1155" y="44" fill="#34d399" font-size="13" font-weight="700">✓</text>
+        <text x="1155" y="74" fill="#e2e8f0">M10</text>
+        <text x="1155" y="92" fill="#64748b" font-size="10.5">궤도맵·정규식</text>
+
+        <circle cx="1230" cy="40" r="13" fill="#064e3b" stroke="#34d399" stroke-width="2"/>
+        <text x="1230" y="44" fill="#34d399" font-size="13" font-weight="700">✓</text>
+        <text x="1230" y="74" fill="#e2e8f0">M11</text>
+        <text x="1230" y="92" fill="#64748b" font-size="10.5">인식·표시·테마</text>
       </g>
     </svg>
   </div>
@@ -198,6 +218,48 @@
     </div>
   </div>
 
+  <!-- M9 -->
+  <h2>M9 (R-25~R-28 · v1.2.0) — 자동 업데이트 · 설정 모달 · 제외 항목 · 드라이브 스캔</h2>
+  <div class="panel">
+    <p style="margin:0 0 10px;font-size:13.5px;color:#cbd5e1;">사용자 요청 4건을 한 묶음으로 반영했다. <b>R-25</b> GitHub Releases 자동 업데이트(electron-updater)를 추가해 앱 내에서 확인·다운로드·설치가 가능해졌다. <b>R-26</b> 설정·도움말을 우측 드로어에서 <b>중앙 팝업(모달)</b>로 교체했다. <b>R-27</b> 폴더명 또는 절대경로를 제외 항목으로 추가하는 기능을 구현했다. <b>R-28</b> 드라이브 루트(C:, D:)를 폴더 선택에서 스캔 대상으로 지정할 수 있게 했다(시스템 폴더 제외·깊이 제한 자동 적용). 또한 Pretendard 폰트를 번들로 포함했다(v1.2.1). 테스트는 <code>test/m9-features.test.js</code> 포함 단위 커버리지로 검증된다.</p>
+    <table>
+      <thead><tr><th>ID</th><th>기능</th><th>구현(실제)</th><th>상태</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">R-25</td><td>자동 업데이트</td><td><code>electron/autoUpdate.js</code> — electron-updater 연동·설정 내 확인/다운로드/설치·실시간 진행 push. <code>electron-builder.yml</code> GitHub Releases 게시 설정</td><td><span class="badge done">완료</span></td></tr>
+        <tr><td class="mono">R-26</td><td>설정·도움말 팝업 모달</td><td><code>public/app.js</code>·<code>public/styles.css</code> — 우측 드로어 제거·중앙 팝업으로 전환. 첫 실행 폴더 지정 화면 스크롤 수정. 도움말에 프로젝트 인식 패턴·항목 산출 기준 설명 추가</td><td><span class="badge done">완료</span></td></tr>
+        <tr><td class="mono">R-27</td><td>제외 항목 추가</td><td><code>lib/scan/excludeRules.js</code> — 이름형/절대경로형 분류(<code>buildExcludeSet</code>·<code>isUnderExcludedPath</code> 세그먼트 매칭). <code>electron/ipc/folders.js</code> <code>addExcludesResolve</code>/<code>removeExcludeResolve</code> 영속. 설정 UI 제외 항목 관리</td><td><span class="badge done">완료</span></td></tr>
+        <tr><td class="mono">R-28</td><td>드라이브 스캔 지원</td><td><code>electron/ipc/folders.js</code> <code>addRootsResolve</code> — 드라이브 루트(<code>isDriveRoot</code>) 채택 예외·시스템 폴더는 계속 차단. <code>actions.rescan</code> — 드라이브 루트 포함 시 allDrives 보호 자동 적용</td><td><span class="badge done">완료</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- M10 -->
+  <h2>M10 (R-29~R-30 · v1.3.0) — 궤도 맵(Orbit Map) · 제외 정규식</h2>
+  <div class="panel">
+    <p style="margin:0 0 10px;font-size:13.5px;color:#cbd5e1;">사용자 요청 2건을 반영했다. <b>R-29</b> 프로젝트를 별/궤도로 시각화하는 <b>궤도 맵 뷰</b>를 추가했다. 나이=반지름·용량=크기·언어=색으로 인코딩하며, pan/zoom/hover/클릭 상세, 드라이브/언어 배치 토글, 시간 되감기, 정리 모드, 인사이트 카드·언어 칩 연동 강조, 노드 우클릭→디렉터리 제외, 검색을 정규식으로도 입력 가능하며 바로 제외 추가도 지원한다. <b>R-30</b> 제외 항목에 정규식 지원(<code>/패턴/</code> 형식·전체 경로 매칭·구분자 정규화)을 추가하고 설정 UI에 예시 칩을 제공했다. 모달 깜빡임 수정·재렌더 시 스크롤 위치 유지·오버레이 열림 중 배경 재렌더 차단 등 UX 개선도 포함됐다. 신규 테스트 추가(<code>test/m9-features.test.js</code> 정규식 케이스).</p>
+    <table>
+      <thead><tr><th>ID</th><th>기능</th><th>구현(실제)</th><th>상태</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">R-29</td><td>궤도 맵 뷰</td><td><code>public/app.js</code> Canvas 기반 궤도 맵 렌더러 — <code>OrbitMap</code> 클래스. <code>public/styles.css</code> 궤도 CSS. pan/zoom(<code>wheel</code>·<code>mousedown</code>)/hover 툴팁/클릭 상세 패널. 진입 시 검색·필터 초기화</td><td><span class="badge done">완료</span></td></tr>
+        <tr><td class="mono">R-30</td><td>제외 정규식 지원</td><td><code>lib/scan/excludeRules.js</code> <code>isRegexExclude</code>·<code>compileExcludeRegex</code>·<code>matchesExcludeRegex</code> 추가. 잘못된 정규식은 BAD_REGEX 거부·g/y 플래그 자동 제거. 슬래시 정규화로 Windows 역슬래시 경로 매칭. <code>electron/ipc/folders.js</code> <code>addExcludesResolve</code> BAD_REGEX 검증 연동</td><td><span class="badge done">완료</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- M11 -->
+  <h2>M11 (R-31~R-33 · v1.4.0) — 인식 기준 관리 · 표시 이름 편집 · 테마 설정</h2>
+  <div class="panel">
+    <p style="margin:0 0 10px;font-size:13.5px;color:#cbd5e1;">사용자 요청 3건을 반영했다. <b>R-31</b> 프로젝트 인식 기준(detectSignals — 이름/<code>*.확장자</code>/<code>/정규식/</code>)을 설정에서 직접 추가·제거·기본값 복원할 수 있게 했다. <b>R-32</b> 프로젝트 표시 이름을 직접 편집하고 감지명으로 복원하는 기능을 추가했다. <b>R-33</b> 라이트/다크/시스템 테마 설정 및 폴더 열기 버튼을 추가했다. 관련 IPC(<code>spip:getDetectSignals</code> 등)·<code>lib/common/config.js</code> normalizeDetectSignals·<code>lib/common/uiStateStore.js</code> names/theme 영속·<code>lib/scan/detector.js</code> 설정 시그널 통합을 포함한다. 신규 테스트(<code>test/m9-features.test.js</code> detectSignals·names·theme 케이스) 포함.</p>
+    <table>
+      <thead><tr><th>ID</th><th>기능</th><th>구현(실제)</th><th>상태</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">R-31</td><td>인식 기준 관리</td><td><code>electron/ipc/folders.js</code> <code>addDetectSignalsResolve</code>·<code>removeDetectSignalResolve</code>·<code>restoreDetectSignalsResolve</code>(BAD_REGEX 검증·중복 제거·영속). <code>lib/common/config.js</code> <code>normalizeDetectSignals</code>·DEFAULTS 정의. <code>lib/scan/detector.js</code> opts.signals 수용(글로브/정규식/이름 판별)</td><td><span class="badge done">완료</span></td></tr>
+        <tr><td class="mono">R-32</td><td>표시 이름 편집</td><td><code>electron/ipc/uiState.js</code> <code>spip:setName{id,name}</code>→<code>ui-state.json.names</code> 맵 영속(id 형식검증·길이 64·trim·빈값→삭제·감지명 복원). <code>lib/common/uiStateStore.js</code> <code>normalizeState</code> names sanitize·<code>reconcileState</code> names 보존. renderer 카드 인라인 편집 UI</td><td><span class="badge done">완료</span></td></tr>
+        <tr><td class="mono">R-33</td><td>테마 설정 + 폴더 열기</td><td><code>electron/ipc/uiState.js</code> <code>spip:setTheme{theme}</code>→화이트리스트(<code>light|dark|system</code>) 검증·영속. <code>lib/common/uiStateStore.js</code> theme 필드. renderer <code>applyTheme</code>(<code>prefers-color-scheme</code> 시스템 추적). <code>electron/ipc/actions.js</code> <code>spip:openFolder{id}</code> → <code>shell.openPath</code>(pathGuard 검증)</td><td><span class="badge done">완료</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
   <!-- 검증 게이트 -->
   <h2>검증 게이트 이력 (전부 PASS)</h2>
   <table>
@@ -231,6 +293,8 @@
       <tr><td>M7 구현 보안 게이트</td><td>security-reviewer</td><td>1회 (치명·높음 0)</td><td><span class="badge pass">PASS</span></td><td class="links"><a href="../reviews/m7_security_review_1.html">m7_security_review_1</a></td></tr>
       <tr><td>M7 코드 품질</td><td>code-reviewer</td><td>1회 (P1=0)</td><td><span class="badge pass">PASS</span></td><td class="links"><a href="../reviews/m7_code_review_1.html">m7_code_review_1</a></td></tr>
       <tr><td>M7 동작·통합(다면)</td><td>qa-engineer</td><td>1회 (474 통과·통합 가능)</td><td><span class="badge pass">통합 가능</span></td><td class="links"><a href="../reviews/m7_qa_1.html">m7_qa_1</a> · 사용자 PC 확인 8건</td></tr>
+      <tr><td>M8 구현 (R-24)</td><td>개발·단위테스트</td><td>설계 정본 m8-design.html(rev.1) · 503 테스트 통과(신규 12)</td><td><span class="badge pass">통과</span></td><td class="links"><a href="../architecture/m8-design.html">m8-design.html</a></td></tr>
+      <tr><td>M9~M11 (R-25~R-33 · v1.2.0~v1.4.0)</td><td>직접 구현·단위테스트</td><td>하네스 외 직접 개발 — m9-features.test.js 포함 525 테스트 통과</td><td><span class="badge pass">525 통과</span></td><td><code>test/m9-features.test.js</code> 외 단위테스트</td></tr>
     </tbody>
   </table>
 
@@ -238,8 +302,8 @@
   <h2>요구 진척</h2>
   <div class="panel">
     <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px;">
-      <span><b style="color:#34d399;">30건 구현 완료</b> (MVP 17 = 기능 11 + 비기능 5 + 품질 N-01, M4 후속 6, M6 백로그 5, M7 2)</span>
-      <span class="mono">30 / 30 (100%)</span>
+      <span><b style="color:#34d399;">40건 구현 완료</b> (MVP 17 = 기능 11 + 비기능 5 + 품질 N-01, M4 후속 6, M6 백로그 5, M7 2, M8 1, M9 4, M10 2, M11 3)</span>
+      <span class="mono">40 / 40 (100%)</span>
     </div>
     <div class="barwrap"><div class="bar" style="width:100%;"></div></div>
     <table style="margin-top:14px;">
@@ -250,6 +314,10 @@
         <tr><td>M4 후속</td><td class="mono">R-03·05·09·15·16 · N-07</td><td><span class="badge done">구현 완료</span></td></tr>
         <tr><td>M6 백로그</td><td class="mono">R-17·18·19·20·21</td><td><span class="badge done">구현 완료</span></td></tr>
         <tr><td>M7</td><td class="mono">R-22·23</td><td><span class="badge done">구현 완료</span></td></tr>
+        <tr><td>M8</td><td class="mono">R-24</td><td><span class="badge done">구현 완료</span></td></tr>
+        <tr><td>M9 (v1.2.0)</td><td class="mono">R-25·26·27·28</td><td><span class="badge done">구현 완료</span></td></tr>
+        <tr><td>M10 (v1.3.0)</td><td class="mono">R-29·30</td><td><span class="badge done">구현 완료</span></td></tr>
+        <tr><td>M11 (v1.4.0)</td><td class="mono">R-31·32·33</td><td><span class="badge done">구현 완료</span></td></tr>
       </tbody>
     </table>
     <p class="meta" style="margin-top:8px;">상세: <span class="links"><a href="traceability.html">traceability.html</a></span> (요구→설계→구현→검증 추적, 빈 칸 0)</p>
@@ -301,17 +369,17 @@
     <b>기획</b>
     <ul><li><a href="../PRD.html">PRD.html</a> (§12 마일스톤·M4 정의)</li><li><a href="../FeatureSpec.html">FeatureSpec.html</a></li><li><a href="../UserStories.html">UserStories.html</a></li></ul>
     <b>설계</b>
-    <ul><li><a href="../architecture/architecture.html">architecture.html</a></li><li><a href="../architecture/m4-design.html">m4-design.html</a> (M4 후속 6건 설계)</li><li><a href="../architecture/electron-migration.html">electron-migration.html</a> (v1.1 · 데스크톱 전환 · §4 IPC 계약·§6 보안)</li><li><a href="../architecture/m6-design.html">m6-design.html</a> (rev.2 · 백로그 5기능 R-17~R-21 설계)</li><li><a href="../architecture/m7-design.html">m7-design.html</a> (rev.2 · R-22 즐겨찾기 독립 토스트 창·R-23 카드 reorder FLIP 설계 델타)</li><li><a href="../architecture/adr.html">adr.html</a> (ADR 6건)</li></ul>
+    <ul><li><a href="../architecture/architecture.html">architecture.html</a></li><li><a href="../architecture/m4-design.html">m4-design.html</a> (M4 후속 6건 설계)</li><li><a href="../architecture/electron-migration.html">electron-migration.html</a> (v1.1 · 데스크톱 전환 · §4 IPC 계약·§6 보안)</li><li><a href="../architecture/m6-design.html">m6-design.html</a> (rev.2 · 백로그 5기능 R-17~R-21 설계)</li><li><a href="../architecture/m7-design.html">m7-design.html</a> (rev.2 · R-22 즐겨찾기 독립 토스트 창·R-23 카드 reorder FLIP 설계 델타)</li><li><a href="../architecture/m8-design.html">m8-design.html</a> (rev.1 · R-24 상태 주시·라이브 갱신 설계)</li><li><a href="../architecture/adr.html">adr.html</a> (ADR 6건)</li></ul>
     <b>계획·계약·추적</b>
     <ul><li><a href="../roadmap.html">roadmap.html</a> (S0~S7)</li><li><a href="../api-contract.md">api-contract.md</a></li><li><a href="../traceability.html">traceability.html</a></li></ul>
     <b>디자인</b>
     <ul><li><a href="../design/대시보드.dc.html">대시보드.dc.html</a> (Claude Design 시안)</li></ul>
     <b>실행</b>
-    <ul><li><code>npm start</code> (=<code>electron .</code>) / <code>run.bat</code>(더블클릭, 빌드 없이 실행) — <b>데스크톱 앱 실행</b>(네이티브 폴더 선택·인앱 재스캔·VS Code 열기)</li><li><code>build.bat</code>(더블클릭) / <code>build.ps1</code>(<code>-Portable</code> 옵션) / <code>npm run build</code> · <code>build:portable</code> — 설치본 빌드(Windows NSIS + portable, 미서명)</li><li><code>add-defender-exclusion.bat</code> — 반복 빌드 시 Defender가 app.asar를 잠가 빌드 실패하는 것 방지(1회 관리자 실행)</li><li><code>npm run scan</code> / <code>spip --roots ...</code> — 자동화용 스캔만(<code>--with-size</code>·<code>--all-drives</code>·<code>--depth</code>)</li><li><code>npm run start:web</code> — 과도기 HTTP 서버(127.0.0.1:7421, 제거 예정)</li><li><code>npm test</code> — 테스트 474건</li></ul>
+    <ul><li><code>npm start</code> (=<code>electron .</code>) / <code>run.bat</code>(더블클릭, 빌드 없이 실행) — <b>데스크톱 앱 실행</b>(네이티브 폴더 선택·인앱 재스캔·VS Code 열기)</li><li><code>build.bat</code>(더블클릭) / <code>build.ps1</code>(<code>-Portable</code> 옵션) / <code>npm run build</code> · <code>build:portable</code> — 설치본 빌드(Windows NSIS + portable, 미서명)</li><li><code>add-defender-exclusion.bat</code> — 반복 빌드 시 Defender가 app.asar를 잠가 빌드 실패하는 것 방지(1회 관리자 실행)</li><li><code>npm run scan</code> / <code>spip --roots ...</code> — 자동화용 스캔만(<code>--with-size</code>·<code>--all-drives</code>·<code>--depth</code>)</li><li><code>npm run start:web</code> — 과도기 HTTP 서버(127.0.0.1:7421, 제거 예정)</li><li><code>npm test</code> — 테스트 525건</li></ul>
   </div>
 
   <footer>
-    Project-SPIP 진행 현황판 · 기준일 2026-06-21 · 현재 단계: M7(R-22·R-23) 구현 완료·검증 통과(테스트 474/474) · 작업이 진행되면 이 페이지를 단일 진입점으로 갱신합니다.
+    Project-SPIP 진행 현황판 · 기준일 2026-06-23 · 현재 단계: M11(v1.4.0) 구현 완료(테스트 525/525) · 작업이 진행되면 이 페이지를 단일 진입점으로 갱신합니다.
   </footer>
 
 </div>
