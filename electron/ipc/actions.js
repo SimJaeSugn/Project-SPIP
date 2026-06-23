@@ -167,6 +167,16 @@ function rescan(args, ctx) {
     }
   }
 
+  // [#5] 스캔 루트에 드라이브 루트(C:\ 등)가 포함되면 all-drives 보호장치(시스템 폴더 제외 +
+  //   더 낮은 깊이 상한)를 켠다 — all-drives 모드가 아니어도 드라이브 단위 스캔은 동일 위험이므로.
+  //   드라이브 열거(전체 확장)는 하지 않고 사용자가 고른 드라이브만 스캔한다(effectiveAllDrives와 구분).
+  const isDriveRoot = (r) => {
+    const s = String(r).replace(/[\\/]+$/, '');
+    return /^[A-Za-z]:$/.test(s) || s === '' || r === '/';
+  };
+  const hasDriveRoot = scanRoots.some(isDriveRoot);
+  const driveProtect = effectiveAllDrives || hasDriveRoot;
+
   // 락 시도. 실패(이미 진행 중) → SCAN_IN_PROGRESS(현 scanId 동봉).
   const acquired = controller.acquire({ note });
   if (!acquired) {
@@ -178,7 +188,7 @@ function rescan(args, ctx) {
     config,
     roots: scanRoots,
     withSize,
-    allDrives: effectiveAllDrives,
+    allDrives: driveProtect,
     store: ctx.store,
     cachePath: ctx.cachePath,
     logger,

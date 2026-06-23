@@ -48,4 +48,12 @@ portable:
   artifactName: ${productName}-${version}-portable.${ext}
 
 # 코드 서명: 미서명 배포(위험 수용, PM 확정 Q5). SmartScreen 경고 안내는 설치 문서로.
-# 자동 업데이트: 범위 외(단일 사용자 로컬 도구).
+
+# ★ 자동 업데이트 게시 위치(GitHub Releases). electron-builder 가 릴리즈에 인스톨러와 함께
+#   latest.yml·*.blockmap 을 올리고 app-update.yml 을 패키지에 번들 → electron-updater 가
+#   설치본에서 latest.yml 을 보고 새 버전을 감지한다(클라이언트: electron/autoUpdate.js, 사용자 주도).
+publish:
+  - provider: github
+    owner: SimJaeSugn
+    repo: Project-SPIP
+    releaseType: release

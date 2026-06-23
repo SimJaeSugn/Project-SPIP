@@ -32,6 +32,7 @@ const { buildMenuTemplate } = require('./menu');
 const { createTray } = require('./tray');
 const { resolveAppRelPath } = require('./appProtocol');
 const favoritesWidget = require('./favoritesWidget');
+const { initAutoUpdate } = require('./autoUpdate');
 const { Logger } = require('../lib/common/logger');
 
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
@@ -71,6 +72,8 @@ let ctx = null;
 let tray = null;
 // [R-21] 트레이 '종료'·앱 quit 시에만 true. close-to-tray 분기 기준(§9.2).
 let isQuitting = false;
+// 업데이트 설치 재시작(quitAndInstall) 경로 표식 — close 시 Q4(스캔 확인) 건너뛰고 즉시 종료.
+let isInstalling = false;
 // [R-21/MQ-4] 최초 hide 시 트레이 풍선 안내를 1회만 표시.
 let trayBalloonShown = false;
 const logger = new Logger();
@@ -251,6 +254,9 @@ function onReady() {
       }
       return;
     }
+    // 업데이트 설치 재시작(quitAndInstall) 경로: Q4(스캔 확인) 건너뛰고 즉시 정리·종료.
+    //   quitAndInstall 이 인스톨러를 detached 로 이미 spawn 했으므로 app.exit 후에도 설치는 진행.
+    if (isInstalling) { doFinalQuit(); return; }
     // 완전 종료 경로(isQuitting=true)에서만 Q4 적용.
     const phase = ctx && ctx.scanController ? ctx.scanController.status().phase : 'idle';
     if (phase === 'scanning' || phase === 'finalizing') {
@@ -273,6 +279,19 @@ function onReady() {
   //   지연평가 가드로 자연 격리된다(파괴된 wc로 send 안 함). 추가로 reload 시 renderer 쪽 구독
   //   (onScanProgress·onMenu)은 페이지 재로드로 자동 폐기되므로 main 측 누수는 없다.
   win.on('closed', () => { win = null; });
+
+  // 자동 업데이트 클라이언트 초기화(trigger-and-forget) — 패키징 빌드에서만 동작(내부 가드).
+  //   진행 상황은 메인창 webContents 로 'spip:update:status' push. 설치 직전 beforeInstall 로
+  //   isInstalling/isQuitting 을 세워 close-to-tray 를 통과시킨다(인스톨러는 detached 로 생존).
+  try {
+    initAutoUpdate({
+      logger,
+      getWebContents: () => (win && !win.isDestroyed() ? win.webContents : null),
+      beforeInstall: () => { isInstalling = true; isQuitting = true; },
+    });
+  } catch (err) {
+    logger.error('자동 업데이트 초기화 실패 — 업데이트 없이 계속', err);
+  }
 }
 
 // [P2-4] 앱 종료 직전 진행 스캔 watchdog 타이머 등 리소스 정리(타이머 leak 방지).

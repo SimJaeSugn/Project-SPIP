@@ -6,5 +6,8 @@ dist/
 dist2/
 release/
 
+# 게시/서명 토큰을 파일로 둘 경우(커밋 금지)
+electron-builder.env
+
 # Claude Code: 공유용 settings.json은 커밋, 개인용 local 설정은 제외
 .claude/settings.local.json

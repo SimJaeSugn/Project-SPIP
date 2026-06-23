@@ -22,6 +22,7 @@ const foldersIpc = require('./folders');
 const clipboardIpc = require('./clipboard');
 const toolsIpc = require('./tools');
 const uiStateIpc = require('./uiState');
+const autoUpdate = require('../autoUpdate');
 // [P3-4] 신뢰 origin 단일 원천(security.js). 리터럴 이중정의 제거.
 const { TRUSTED_ORIGIN } = require('../security');
 
@@ -127,6 +128,12 @@ function registerIpcHandlers(deps) {
     win: typeof getWin === 'function' ? getWin() : undefined,
   })));
 
+  // 제외 항목(#4) — 폴더명/절대경로 추가·제거(config.excludes 영속). 스캔 시 excludeRules가 적용.
+  guard('spip:getExcludes', () => foldersIpc.getExcludes(ctx));
+  guard('spip:addExcludes', (args) => foldersIpc.addExcludes(args, ctx));
+  guard('spip:removeExclude', (args) => foldersIpc.removeExclude(args, ctx));
+  // 드라이브(#5)는 별도 채널 없이 폴더 선택(addRoots/pickFolders)에서 드라이브 루트를 그대로 허용한다.
+
   // [M6 R-17] 클립보드 — main clipboard 주입.
   guard('spip:copyText', (args) => clipboardIpc.copyText(args, { clipboard }));
 
@@ -173,6 +180,13 @@ function registerIpcHandlers(deps) {
   });
   guard('spip:setOrder', (args) => uiStateIpc.setOrder(args, ctx));
   guard('spip:setSortMode', (args) => uiStateIpc.setSortMode(args, ctx));
+
+  // 자동 업데이트(사용자 주도) — 제어는 autoUpdate.js(electron-updater). 진행 상황은 단방향 push
+  //   'spip:update:status'(initAutoUpdate 가 getWebContents 로 메인창에 send). 미패키징은 NOT_PACKAGED.
+  guard('spip:getUpdateState', () => autoUpdate.getUpdateState());
+  guard('spip:checkForUpdate', () => autoUpdate.checkForUpdates());
+  guard('spip:downloadUpdate', () => autoUpdate.downloadUpdate());
+  guard('spip:installUpdate', () => autoUpdate.quitAndInstall());
 }
 
 module.exports = { registerIpcHandlers, isTrustedSender, TRUSTED_ORIGIN };

@@ -1,6 +1,6 @@
 {
   "name": "project-spip",
-  "version": "1.0.1",
+  "version": "1.2.0",
   "description": "PC에 흩어진 VSCode 프로젝트를 스캔해 간략한 설명과 함께 보여주는 로컬 대시보드",
   "type": "commonjs",
   "main": "electron/main.js",
@@ -12,6 +12,7 @@
     "start": "electron .",
     "build": "electron-builder",
     "build:portable": "electron-builder --win portable",
+    "release": "electron-builder --win --publish always",
     "start:web": "node server.js",
     "serve:http": "node server.js",
     "dev": "node scan.js && node server.js",
@@ -19,6 +20,9 @@
   },
   "engines": {
     "node": ">=18"
+  },
+  "dependencies": {
+    "electron-updater": "^6.3.9"
   },
   "devDependencies": {
     "@electron/fuses": "^1.8.0",

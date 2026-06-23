@@ -69,7 +69,7 @@ test('getConfig — 명시 shape만 노출(size:{enabled,maxBytes,maxEntries})',
       port: 7421, // 비노출 키
     },
   });
-  assert.deepStrictEqual(Object.keys(r).sort(), ['allowAllDrives', 'scanRoots', 'size', 'staleDays']);
+  assert.deepStrictEqual(Object.keys(r).sort(), ['allowAllDrives', 'excludes', 'scanRoots', 'size', 'staleDays']);
   assert.deepStrictEqual(r.scanRoots, ['/proj/a']);
   assert.strictEqual(r.allowAllDrives, true);
   assert.deepStrictEqual(Object.keys(r.size).sort(), ['enabled', 'maxBytes', 'maxEntries']);

@@ -32,6 +32,8 @@ const paths = require('../../lib/common/paths');
 
 const MAX_ROOTS = config.LIMITS.maxScanRoots; // 64
 const MAX_PATH_LEN = 4096;
+const MAX_EXCLUDES = config.LIMITS.maxExcludes; // 200
+const MAX_EXCLUDE_LEN = config.LIMITS.maxExcludePatternLen; // 256
 const FILE_MODE = 0o600;
 
 /**
@@ -117,7 +119,9 @@ function addRootsResolve(rawPaths, currentRoots, ctx) {
     }
     const real = canonicalizeDir(raw, deps);
     if (!real) { rejected.push({ path: raw, reason: 'NOT_FOUND' }); continue; }
-    if (isSystemDir(real, deps)) { rejected.push({ path: raw, reason: 'SYSTEM_DIR' }); continue; }
+    // 드라이브 루트(C:\ 등)는 폴더 선택에서 그대로 스캔 대상으로 허용(#5) — 스캔 시 시스템 폴더
+    //   제외 + 깊이 제한이 자동 적용된다(actions.rescan). 명명된 시스템 폴더(Windows 등)는 계속 차단.
+    if (isSystemDir(real, deps) && !isDriveRoot(real)) { rejected.push({ path: raw, reason: 'SYSTEM_DIR' }); continue; }
     if (current.includes(real) || added.includes(real)) { rejected.push({ path: raw, reason: 'DUP' }); continue; }
     added.push(real);
   }
@@ -169,6 +173,74 @@ function removeRootResolve(rawPath, currentRoots, ctx) {
  */
 function persistScanRoots(roots, ctx) {
   config.persistConfigKeys({ scanRoots: roots }, ctx);
+}
+
+/** config.excludes를 0600 원자적 쓰기로 영속(persistConfigKeys 위임). */
+function persistExcludes(excludes, ctx) {
+  config.persistConfigKeys({ excludes }, ctx);
+}
+
+/**
+ * 드라이브 루트(C:\ · POSIX '/') 여부. canonicalize된 실경로 기준.
+ * @param {string} real
+ * @returns {boolean}
+ */
+function isDriveRoot(real) {
+  if (typeof real !== 'string' || !real) return false;
+  const stripped = real.replace(/[\\/]+$/, '');
+  if (/^[A-Za-z]:$/.test(stripped)) return true; // C:
+  if (stripped === '' || real === '/') return true; // POSIX 루트
+  return false;
+}
+
+/* ───── 제외 항목(#4: 폴더명 또는 절대경로) 관리 ───── */
+
+/**
+ * 제외 항목 입력 대비 채택/거부 산출 + config.excludes 병합·영속.
+ *   각 항목은 폴더명(예: 'temp') 또는 절대경로(예: 'E:\\old'). 검증은 길이/개수/중복만 —
+ *   매칭 의미(이름 vs 경로)는 스캔 시 excludeRules가 판정한다(절대경로는 canonicalize).
+ * @param {string[]} rawPatterns
+ * @param {string[]} currentExcludes
+ * @param {object} ctx { logger, config, configPath?, deps? }
+ * @returns {{ok:true,added,rejected,excludes} | {ok:false,code:'INVALID'}}
+ */
+function addExcludesResolve(rawPatterns, currentExcludes, ctx) {
+  if (!Array.isArray(rawPatterns)) return { ok: false, code: 'INVALID' };
+  ctx = ctx || {};
+  const current = Array.isArray(currentExcludes) ? currentExcludes.slice() : [];
+  const added = [];
+  const rejected = [];
+  for (const raw of rawPatterns.slice(0, MAX_EXCLUDES)) {
+    const v = (typeof raw === 'string') ? raw.trim() : '';
+    if (!v) { rejected.push({ path: String(raw).slice(0, 256), reason: 'INVALID' }); continue; }
+    if (v.length > MAX_EXCLUDE_LEN) { rejected.push({ path: v.slice(0, 64) + '…', reason: 'TOO_LONG' }); continue; }
+    if (current.includes(v) || added.includes(v)) { rejected.push({ path: v, reason: 'DUP' }); continue; }
+    if (current.length + added.length >= MAX_EXCLUDES) { rejected.push({ path: v, reason: 'LIMIT' }); continue; }
+    added.push(v);
+  }
+  // 최종 영속: normalizeExcludes로 한 번 더 통과(단일 원천 유지).
+  const excludes = config.normalizeExcludes([...current, ...added], ctx.logger || { warn() {} });
+  persistExcludes(excludes, ctx);
+  return { ok: true, added, rejected, excludes };
+}
+
+/**
+ * removeExclude — 입력과 정확히 일치하는 제외 항목 1건 제거.
+ * @returns {{ok:true,excludes} | {ok:false,code:'NOT_FOUND'|'INVALID'}}
+ */
+function removeExcludeResolve(rawPattern, currentExcludes, ctx) {
+  ctx = ctx || {};
+  if (typeof rawPattern !== 'string' || !rawPattern) return { ok: false, code: 'INVALID' };
+  const current = Array.isArray(currentExcludes) ? currentExcludes.slice() : [];
+  let matched = false;
+  const excludes = [];
+  for (const e of current) {
+    if (!matched && e === rawPattern) { matched = true; continue; }
+    excludes.push(e);
+  }
+  if (!matched) return { ok: false, code: 'NOT_FOUND' };
+  persistExcludes(excludes, ctx);
+  return { ok: true, excludes };
 }
 
 // ───── IPC 핸들러(Electron API 사용 — register.js에서 dialog 주입) ─────
@@ -227,14 +299,49 @@ function syncConfig(ctx, roots) {
   if (ctx && ctx.config && Array.isArray(roots)) ctx.config.scanRoots = roots;
 }
 
+/** ctx.config.excludes를 메모리에서도 갱신. */
+function syncExcludes(ctx, excludes) {
+  if (ctx && ctx.config && Array.isArray(excludes)) ctx.config.excludes = excludes;
+}
+
+/** spip:getExcludes — 현재 제외 항목 목록. */
+function getExcludes(ctx) {
+  const current = (ctx.config && Array.isArray(ctx.config.excludes)) ? ctx.config.excludes : [];
+  return { ok: true, excludes: current.slice() };
+}
+
+/** spip:addExcludes(patterns) 핸들러. */
+function addExcludes(args, ctx) {
+  const patterns = (args && typeof args === 'object') ? args.patterns : undefined;
+  const current = (ctx.config && Array.isArray(ctx.config.excludes)) ? ctx.config.excludes : [];
+  const result = addExcludesResolve(patterns, current, ctx);
+  if (result.ok) syncExcludes(ctx, result.excludes);
+  return result;
+}
+
+/** spip:removeExclude(pattern) 핸들러. */
+function removeExclude(args, ctx) {
+  const p = (args && typeof args === 'object') ? args.pattern : undefined;
+  const current = (ctx.config && Array.isArray(ctx.config.excludes)) ? ctx.config.excludes : [];
+  const result = removeExcludeResolve(p, current, ctx);
+  if (result.ok) syncExcludes(ctx, result.excludes);
+  return result;
+}
+
 module.exports = {
   addRoots,
   removeRoot,
   pickFolders,
+  getExcludes,
+  addExcludes,
+  removeExclude,
   addRootsResolve,
   removeRootResolve,
+  addExcludesResolve,
+  removeExcludeResolve,
   canonicalizeDir,
   isSystemDir,
+  isDriveRoot,
   persistScanRoots,
   MAX_ROOTS,
   MAX_PATH_LEN,

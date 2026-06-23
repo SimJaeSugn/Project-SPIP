@@ -37,6 +37,13 @@ contextBridge.exposeInMainWorld('spip', {
   }),
   removeRoot: (path) => ipcRenderer.invoke('spip:removeRoot', { path: String(path) }),
 
+  // 제외 항목(#4: 폴더명 또는 절대경로). 인자 형태를 preload에서 1차 고정(main이 재검증).
+  getExcludes: () => ipcRenderer.invoke('spip:getExcludes'),
+  addExcludes: (patterns) => ipcRenderer.invoke('spip:addExcludes', {
+    patterns: Array.isArray(patterns) ? patterns.map((p) => String(p)) : patterns,
+  }),
+  removeExclude: (pattern) => ipcRenderer.invoke('spip:removeExclude', { pattern: String(pattern) }),
+
   // [M6 R-17] 경로 복사 — main clipboard.writeText만. 채널명 하드코딩.
   copyText: (t) => ipcRenderer.invoke('spip:copyText', { text: String(t) }),
 
@@ -44,6 +51,13 @@ contextBridge.exposeInMainWorld('spip', {
   getTools: () => ipcRenderer.invoke('spip:getTools'),
   setToolPath: (id, p) => ipcRenderer.invoke('spip:setToolPath', { id: String(id), path: p == null ? null : String(p) }),
   pickToolExecutable: (id) => ipcRenderer.invoke('spip:pickToolExecutable', { id: String(id) }),
+
+  // 자동 업데이트(사용자 주도) — 확인/다운로드/설치 트리거 + 상태 스냅샷. 인자 없음(main이 검증).
+  //   진행 상황은 onUpdateStatus(cb) 구독으로 받는다. 채널명 하드코딩(MUST).
+  getUpdateState: () => ipcRenderer.invoke('spip:getUpdateState'),
+  checkForUpdate: () => ipcRenderer.invoke('spip:checkForUpdate'),
+  downloadUpdate: () => ipcRenderer.invoke('spip:downloadUpdate'),
+  installUpdate: () => ipcRenderer.invoke('spip:installUpdate'),
 
   // [M6 R-19/R-20] UI 상태(즐겨찾기·순서·정렬모드).
   getUiState: () => ipcRenderer.invoke('spip:getUiState'),
@@ -66,6 +80,16 @@ contextBridge.exposeInMainWorld('spip', {
     const h = (_evt, payload) => cb(payload);
     ipcRenderer.on('spip:projectsUpdated', h);
     return () => ipcRenderer.removeListener('spip:projectsUpdated', h); // 해제 함수 반환
+  },
+
+  // 자동 업데이트 진행 상황 구독 — main(autoUpdate.js)이 보내는 'spip:update:status'를 콜백으로 중계.
+  //   payload: { status, version?, percent?, transferred?, total?, bytesPerSecond? }. 채널명 하드코딩.
+  //   콜백만 받고 ipcRenderer 원본은 노출하지 않음(보안). unsubscribe 함수 반환.
+  onUpdateStatus: (cb) => {
+    if (typeof cb !== 'function') return () => {};
+    const h = (_evt, payload) => cb(payload);
+    ipcRenderer.on('spip:update:status', h);
+    return () => ipcRenderer.removeListener('spip:update:status', h);
   },
 
   // 메뉴 명령 구독(P2-1) — main이 보내는 'spip:menu:<action>'를 renderer 콜백으로 중계.

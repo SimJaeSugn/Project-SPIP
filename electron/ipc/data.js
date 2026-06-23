@@ -84,6 +84,8 @@ function getConfig(ctx) {
   const size = (config.size && typeof config.size === 'object') ? config.size : {};
   return {
     scanRoots: Array.isArray(config.scanRoots) ? config.scanRoots.slice() : [],
+    // 사용자 제외 항목(폴더명/절대경로) — 화이트리스트성 비민감 설정이라 노출(설정 UI 표시용).
+    excludes: Array.isArray(config.excludes) ? config.excludes.slice() : [],
     staleDays: typeof config.staleDays === 'number' ? config.staleDays : null,
     allowAllDrives: config.allowAllDrives === true,
     size: {

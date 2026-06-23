@@ -551,6 +551,7 @@ function configView(cfg) {
   return {
     scanRoots: roots,
     rootCount: roots.length,
+    excludes: Array.isArray(c.excludes) ? c.excludes.filter((p) => typeof p === 'string' && p.length) : [],
     staleDays: numOr(c.staleDays, 90),
     allowAllDrives: c.allowAllDrives === true,
     sizeEnabled: size.enabled === true,
@@ -925,15 +926,30 @@ function initBrowser() {
     rootInput: '',               // 경로 직접 입력 필드 값(컨트롤드)
     lastRejected: [],            // 직전 addRoots/pickFolders 거부 항목(표시)
     busyFolders: false,          // 폴더 추가/선택/삭제 in-flight(버튼 비활성)
-    showSettings: false,         // 설정 패널(드로어형) 열림 여부
+    showSettings: false,         // 설정 팝업(모달) 열림 여부
+    showHelp: false,             // #6 도움말 팝업(모달) 열림 여부
     opts: { withSize: false, allDrives: false }, // 재스캔 옵션 UI 상태
     menuUnsubscribe: null,       // P2-1: spip.onMenu 구독 해제 함수(teardown 시 호출)
     // M6 (R-18) 외부 툴 설정 상태
     tools: [],                   // getTools 응답(toolViews 입력)
     toolPathInput: {},           // 툴별 경로 직접 입력 컨트롤드 값 { id: text }
     busyTools: false,            // 툴 경로 설정 in-flight
+    // #4 제외 항목(폴더명/절대경로)
+    excludes: [],                // getConfig().excludes
+    excludeInput: '',            // 제외 항목 직접 입력(컨트롤드)
+    busyExcludes: false,         // 제외 추가/삭제 in-flight
     trayUnsubscribe: null,       // R-21: spip.onTray 구독 해제 함수
     projectsUpdatedUnsubscribe: null, // R-24: spip.onProjectsUpdated 구독 해제 함수
+    // 자동 업데이트(사용자 주도) 상태 — 설정 드로어의 "소프트웨어 업데이트" 섹션이 표시.
+    update: {
+      packaged: null,          // null=미조회, true/false (false면 개발 모드 안내)
+      currentVersion: '',      // app.getVersion()
+      status: 'idle',          // idle|checking|available|not-available|downloading|downloaded|error
+      version: '',             // 감지/다운로드된 새 버전
+      percent: 0,              // 다운로드 진행률(%)
+      busy: false,             // check/download in-flight(버튼 비활성)
+      unsubscribe: null,       // onUpdateStatus 구독 해제 함수
+    },
   };
 
   const app = document.getElementById('app');
@@ -1021,12 +1037,16 @@ function initBrowser() {
     destroyCardSortable();   // [M8] 이전 .cards 의 Sortable 인스턴스 정리(노드 교체 전).
     app.replaceChildren();
     const v = store.state.view;
-    if (v === 'loading') { app.appendChild(renderLoading()); return; }
-    if (v === 'error') { app.appendChild(renderError()); return; }
-    if (v === 'scanning') { app.appendChild(renderScanning()); return; }
-    if (v === 'firstRun') { app.appendChild(renderFirstRun()); return; }
-    app.appendChild(renderDashboard());
-    initCardSortable();      // [M8] 카드뷰면 .cards 에 드래그 재정렬 부착(표/무결과면 no-op).
+    if (v === 'loading') { app.appendChild(renderLoading()); }
+    else if (v === 'error') { app.appendChild(renderError()); }
+    else if (v === 'scanning') { app.appendChild(renderScanning()); }
+    else if (v === 'firstRun') { app.appendChild(renderFirstRun()); }
+    else {
+      app.appendChild(renderDashboard());
+      initCardSortable();    // [M8] 카드뷰면 .cards 에 드래그 재정렬 부착(표/무결과면 no-op).
+    }
+    // 도움말 모달은 모든 뷰 위에 표시(메뉴/헤더에서 어디서든 열림).
+    if (store.showHelp) app.appendChild(renderHelp());
   }
 
   /* ---- 로딩 / 에러 ---- */
@@ -1210,6 +1230,10 @@ function initBrowser() {
     actions.appendChild(pickBtn);
     wrap.appendChild(actions);
 
+    // #5 드라이브 선택 안내 — 폴더 대화상자/직접 입력에서 드라이브 루트(C:\)도 고를 수 있다.
+    //   드라이브를 추가하면 스캔 시 시스템 폴더 제외 + 깊이 제한이 자동 적용된다.
+    wrap.appendChild(el('p', { cls: 'settings__opt-sub', text: '폴더 대화상자에서 드라이브(C:, D:)를 선택하거나 C:\\ 처럼 직접 입력하면 드라이브 전체를 스캔합니다(시스템 폴더 자동 제외·깊이 제한).' }));
+
     // 경로 직접 입력(키보드/붙여넣기 편의 — N-07)
     const inputRow = el('div', { cls: 'rootmgr__inputrow' });
     const pathInput = el('input', {
@@ -1306,6 +1330,8 @@ function initBrowser() {
     refreshConfig();
     // R-18: 툴 해석 상태도 동기화(설정 드로어 오픈 시에만 — 빈도 낮음, §4.1)
     refreshTools();
+    // 업데이트 상태(현재 버전·패키징 여부·마지막 status)도 동기화(설정 오픈 시에만).
+    refreshUpdateState();
   }
   function closeSettings() {
     store.showSettings = false;
@@ -1317,58 +1343,77 @@ function initBrowser() {
     }
   }
 
-  function renderSettings() {
-    const titleId = 'settings-title';
-    const overlay = el('div', { cls: 'drawer-overlay', on: { click: closeSettings } });
-    const aside = el('aside', {
-      cls: 'drawer drawer--settings spip-scroll',
+  /* =====================================================================
+   * 중앙 팝업 모달 컴포넌트 (설정·도움말 공용). 드로어 대신 화면 중앙 오버레이.
+   *   포커스 트랩(N-07)·Esc 닫기·오버레이 클릭 닫기·포커스 복귀. bodyChildren는 DOM 노드 배열.
+   * ===================================================================== */
+  function buildModal(opts) {
+    opts = opts || {};
+    const titleId = opts.titleId || 'modal-title';
+    const onClose = (typeof opts.onClose === 'function') ? opts.onClose : function () {};
+    const overlay = el('div', { cls: 'modal-overlay', on: { click: onClose } });
+    const dialog = el('div', {
+      cls: 'modal' + (opts.wide ? ' modal--wide' : '') + ' spip-scroll',
       attrs: { role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': titleId },
     });
-    aside.addEventListener('click', (e) => e.stopPropagation());
+    dialog.addEventListener('click', (e) => e.stopPropagation());
 
-    const head = el('div', { cls: 'drawer__head' });
-    head.appendChild(el('div', { cls: 'drawer__titlewrap', children: [
-      el('div', { cls: 'drawer__name', text: '설정', attrs: { id: titleId } }),
-      el('div', { cls: 'drawer__path', text: '스캔 폴더와 옵션을 관리합니다' }),
+    const head = el('div', { cls: 'modal__head' });
+    head.appendChild(el('div', { cls: 'modal__titlewrap', children: [
+      el('div', { cls: 'modal__name', text: opts.title || '', attrs: { id: titleId } }),
+      opts.subtitle ? el('div', { cls: 'modal__sub', text: opts.subtitle }) : null,
     ]}));
-    const close = el('button', { cls: 'drawer__close', text: '×', attrs: { 'aria-label': '닫기' }, on: { click: closeSettings } });
+    const close = el('button', { cls: 'modal__close', text: '×', attrs: { 'aria-label': '닫기' }, on: { click: onClose } });
     head.appendChild(close);
-    aside.appendChild(head);
+    dialog.appendChild(head);
 
-    const body = el('div', { cls: 'drawer__body' });
-
-    // 1) 폴더 관리
-    body.appendChild(el('div', { cls: 'insight', children: [
-      el('div', { cls: 'insight__title', text: '스캔 폴더' }),
-      renderRootManager(),
-    ]}));
-
-    // 2) 재스캔 옵션 (getConfig 기반)
-    body.appendChild(renderScanOptions());
-
-    // 3) 외부 툴 경로(R-18) — getTools 해석 상태 + 직접 지정/파일 선택 + PATH 안내
-    body.appendChild(renderToolSettings());
-
-    aside.appendChild(body);
-    overlay.appendChild(aside);
+    const body = el('div', { cls: 'modal__body' });
+    for (const c of (opts.bodyChildren || [])) if (c) body.appendChild(c);
+    dialog.appendChild(body);
+    overlay.appendChild(dialog);
 
     // 키보드: Esc 닫기 + 포커스 트랩(N-07)
-    aside.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') { e.preventDefault(); closeSettings(); return; }
+    dialog.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { e.preventDefault(); onClose(); return; }
       if (e.key !== 'Tab') return;
-      const items = getTabbables(aside);
+      const items = getTabbables(dialog);
       if (items.length === 0) { e.preventDefault(); return; }
       const first = items[0];
       const last = items[items.length - 1];
       const active = document.activeElement;
       if (e.shiftKey) {
-        if (active === first || !aside.contains(active)) { e.preventDefault(); last.focus(); }
+        if (active === first || !dialog.contains(active)) { e.preventDefault(); last.focus(); }
       } else {
-        if (active === last || !aside.contains(active)) { e.preventDefault(); first.focus(); }
+        if (active === last || !dialog.contains(active)) { e.preventDefault(); first.focus(); }
       }
     });
     setTimeout(() => { try { close.focus(); } catch (_) { /* ignore */ } }, 0);
     return overlay;
+  }
+
+  function renderSettings() {
+    return buildModal({
+      titleId: 'settings-title',
+      title: '설정',
+      subtitle: '스캔 폴더·제외·드라이브·옵션을 관리합니다',
+      onClose: closeSettings,
+      wide: true,
+      bodyChildren: [
+        // 1) 폴더 관리 (드라이브 루트 C:\ 도 폴더 선택에서 그대로 추가 가능 — #5)
+        el('div', { cls: 'insight', children: [
+          el('div', { cls: 'insight__title', text: '스캔 폴더' }),
+          renderRootManager(),
+        ]}),
+        // 2) 제외 항목(#4)
+        renderExcludeSettings(),
+        // 3) 재스캔 옵션 (getConfig 기반)
+        renderScanOptions(),
+        // 4) 외부 툴 경로(R-18)
+        renderToolSettings(),
+        // 5) 소프트웨어 업데이트(자동 업데이트 클라이언트)
+        renderUpdateSettings(),
+      ],
+    });
   }
 
   /** 재스캔 옵션 UI: withSize · allDrives(allowAllDrives 게이트) · 정책 표시(getConfig). */
@@ -1527,6 +1572,237 @@ function initBrowser() {
     return row;
   }
 
+  /* =====================================================================
+   * 소프트웨어 업데이트 (자동 업데이트 클라이언트 — electron-updater, 사용자 주도)
+   *   상태 머신(store.update.status):
+   *     idle/not-available → "업데이트 확인"
+   *     checking           → "확인 중…"(버튼 비활성)
+   *     available          → "새 버전 vX 사용 가능" + "다운로드"
+   *     downloading        → 진행 바(percent) + "다운로드 중 NN%"
+   *     downloaded         → "vX 다운로드 완료" + "재시작하여 설치"
+   *     error              → "확인/다운로드 실패" + "다시 시도"
+   *   진행 상황은 spip.onUpdateStatus(cb) 단방향 push 로 실시간 갱신된다(subscribeUpdateStatus).
+   * ===================================================================== */
+  function renderUpdateSettings() {
+    const u = store.update;
+    const block = el('div', { cls: 'insight', children: [el('div', { cls: 'insight__title', text: '소프트웨어 업데이트' })] });
+
+    // 현재 버전(있으면)
+    const kv = el('div', { cls: 'settings__kv' });
+    kv.appendChild(kvRow('현재 버전', el('span', { cls: 'mono kv__v', text: u.currentVersion ? ('v' + u.currentVersion) : '—' })));
+    block.appendChild(kv);
+
+    // 브리지 부재(웹/테스트) 또는 미패키징(개발 모드) → 안내만.
+    if (!bridgeHas('checkForUpdate')) {
+      block.appendChild(el('div', { cls: 'rootmgr__empty', text: '이 환경에서는 업데이트를 확인할 수 없습니다.' }));
+      return block;
+    }
+    if (u.packaged === false) {
+      block.appendChild(el('div', { cls: 'rootmgr__empty', text: '개발 모드에서는 업데이트를 확인할 수 없습니다. (설치본에서만 동작)' }));
+      return block;
+    }
+
+    // 상태 메시지
+    const msg = updateStatusMessage(u);
+    if (msg) block.appendChild(el('div', { cls: 'rootmgr__label', text: msg }));
+
+    // 다운로드 진행 바
+    if (u.status === 'downloading') {
+      const pct = Math.max(0, Math.min(100, Math.round(u.percent || 0)));
+      const bar = el('div', { cls: 'update-bar', attrs: { role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': String(pct) } });
+      const fill = el('div', { cls: 'update-bar__fill' });
+      fill.style.width = pct + '%';
+      bar.appendChild(fill);
+      block.appendChild(bar);
+    }
+
+    // 액션 버튼(상태별)
+    const busy = u.busy || u.status === 'checking' || u.status === 'downloading';
+    if (u.status === 'available') {
+      const dl = el('button', {
+        cls: 'btn btn--dark btn--block', text: busy ? '다운로드 중…' : '다운로드',
+        attrs: { 'aria-label': '업데이트 다운로드' }, on: { click: doDownloadUpdate },
+      });
+      if (busy) dl.disabled = true;
+      block.appendChild(dl);
+    } else if (u.status === 'downloaded') {
+      const install = el('button', {
+        cls: 'btn btn--dark btn--block', text: '재시작하여 설치',
+        attrs: { 'aria-label': '재시작하여 업데이트 설치' }, on: { click: doInstallUpdate },
+      });
+      block.appendChild(install);
+    } else {
+      const label = u.status === 'checking' ? '확인 중…' : (u.status === 'error' ? '다시 시도' : '업데이트 확인');
+      const check = el('button', {
+        cls: 'btn btn--dark btn--block', text: label,
+        attrs: { 'aria-label': '업데이트 확인' }, on: { click: doCheckUpdate },
+      });
+      if (busy) check.disabled = true;
+      block.appendChild(check);
+    }
+
+    return block;
+  }
+
+  /** 업데이트 상태 → 사용자 표시 문구(순수, 고정 토큰만 — L-3). */
+  function updateStatusMessage(u) {
+    switch (u.status) {
+      case 'checking':      return '업데이트를 확인하는 중…';
+      case 'available':     return u.version ? ('새 버전 v' + u.version + ' 을(를) 사용할 수 있습니다.') : '새 버전을 사용할 수 있습니다.';
+      case 'not-available': return '최신 버전을 사용 중입니다.';
+      case 'downloading':   return '업데이트를 다운로드하는 중… ' + Math.round(u.percent || 0) + '%';
+      case 'downloaded':    return u.version ? ('v' + u.version + ' 다운로드 완료 — 재시작하면 설치됩니다.') : '다운로드 완료 — 재시작하면 설치됩니다.';
+      case 'error':         return '업데이트 확인/다운로드에 실패했습니다. 잠시 후 다시 시도하세요.';
+      default:              return '';
+    }
+  }
+
+  /** 설정 오픈 시 현재 버전·패키징 여부·마지막 status 동기화(비동기 — 끝나면 재렌더). */
+  async function refreshUpdateState() {
+    if (!bridgeHas('getUpdateState')) return;
+    const res = await ipc('getUpdateState');
+    if (!res || res.ok === false) return;
+    store.update.packaged = !!res.packaged;
+    store.update.currentVersion = (typeof res.currentVersion === 'string') ? res.currentVersion : '';
+    applyUpdateStatusPayload(res.status);
+    if (store.showSettings) render();
+  }
+
+  /** onUpdateStatus push 페이로드를 store.update 에 반영(순수 매핑). */
+  function applyUpdateStatusPayload(payload) {
+    if (!payload || typeof payload !== 'object') return;
+    const u = store.update;
+    if (typeof payload.status === 'string') u.status = payload.status;
+    if (typeof payload.version === 'string') u.version = payload.version;
+    if (typeof payload.percent === 'number') u.percent = payload.percent;
+    // 진행/완료/오류로 전이하면 in-flight 해제(버튼 복귀).
+    if (u.status !== 'checking' && u.status !== 'downloading') u.busy = false;
+  }
+
+  async function doCheckUpdate() {
+    if (!bridgeHas('checkForUpdate')) return;
+    store.update.busy = true;
+    store.update.status = 'checking';
+    render();
+    const res = await ipc('checkForUpdate');
+    if (res && res.ok === false) {
+      store.update.busy = false;
+      store.update.status = 'error';
+      if (res.code === 'NOT_PACKAGED') store.update.packaged = false;
+      render();
+    }
+    // 성공 시 결과는 onUpdateStatus push(available/not-available)로 도착.
+  }
+
+  async function doDownloadUpdate() {
+    if (!bridgeHas('downloadUpdate')) return;
+    store.update.busy = true;
+    store.update.status = 'downloading';
+    store.update.percent = 0;
+    render();
+    const res = await ipc('downloadUpdate');
+    if (res && res.ok === false) {
+      store.update.busy = false;
+      store.update.status = 'error';
+      render();
+    }
+    // 진행/완료는 download-progress/update-downloaded push로 도착.
+  }
+
+  async function doInstallUpdate() {
+    if (!bridgeHas('installUpdate')) return;
+    // 앱이 곧 종료·재시작된다. 실패해도 graceful(토스트).
+    const res = await ipc('installUpdate');
+    if (res && res.ok === false) {
+      toast('업데이트 설치를 시작하지 못했습니다.', true);
+    }
+  }
+
+  /* =====================================================================
+   * #4 제외 항목 (폴더명 또는 절대경로) — getConfig().excludes / addExcludes / removeExclude
+   *   · 폴더명(예: temp) → 그 이름의 폴더를 모두 제외
+   *   · 절대경로(예: E:\\projects\\old) → 그 폴더(하위 포함)만 제외
+   * ===================================================================== */
+  function renderExcludeSettings() {
+    const block = el('div', { cls: 'insight', children: [el('div', { cls: 'insight__title', text: '제외 항목' })] });
+    if (!bridgeHas('addExcludes')) {
+      block.appendChild(el('div', { cls: 'rootmgr__empty', text: '이 환경에서는 제외 항목을 설정할 수 없습니다.' }));
+      return block;
+    }
+    block.appendChild(el('p', { cls: 'settings__opt-sub', text: '폴더 이름(예: temp)이면 같은 이름의 폴더를 모두, 절대경로(예: E:\\projects\\old)면 그 폴더만 스캔에서 제외합니다. node_modules·.git·dist 등은 기본 제외됩니다.' }));
+
+    // 직접 입력 + 추가
+    const inputRow = el('div', { cls: 'rootmgr__inputrow' });
+    const input = el('input', {
+      cls: 'rootmgr__input',
+      attrs: {
+        type: 'text', placeholder: '폴더 이름 또는 절대경로',
+        'aria-label': '제외할 폴더 이름 또는 절대경로', autocomplete: 'off', spellcheck: 'false',
+      },
+    });
+    input.value = store.excludeInput;
+    input.addEventListener('input', (e) => { store.excludeInput = e.target.value || ''; });
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); onAddExclude(); } });
+    const addBtn = el('button', { cls: 'btn', text: '추가', attrs: { 'aria-label': '제외 항목 추가' }, on: { click: onAddExclude } });
+    if (store.busyExcludes) { input.disabled = true; addBtn.disabled = true; }
+    inputRow.appendChild(input);
+    inputRow.appendChild(addBtn);
+    block.appendChild(inputRow);
+
+    // 목록
+    block.appendChild(el('div', { cls: 'rootmgr__label', text: '제외 목록 (' + store.excludes.length + ')' }));
+    if (store.excludes.length === 0) {
+      block.appendChild(el('div', { cls: 'rootmgr__empty', text: '추가된 제외 항목이 없습니다(기본 제외 규칙만 적용).' }));
+    } else {
+      const ul = el('ul', { cls: 'rootmgr__list', attrs: { role: 'list' } });
+      for (const e of store.excludes) {
+        const li = el('li', { cls: 'rootmgr__item' });
+        li.appendChild(el('span', { cls: 'rootmgr__path mono', text: e, title: e })); // L-1
+        const rm = el('button', {
+          cls: 'rootmgr__remove', text: '삭제',
+          attrs: { type: 'button', 'aria-label': '제외 제거: ' + e },
+          on: { click: () => onRemoveExclude(e) },
+        });
+        if (store.busyExcludes) rm.disabled = true;
+        li.appendChild(rm);
+        ul.appendChild(li);
+      }
+      block.appendChild(ul);
+    }
+    return block;
+  }
+
+  async function onAddExclude() {
+    const v = (store.excludeInput || '').trim();
+    if (!v) { toast('제외할 폴더 이름 또는 경로를 입력하세요.', true); return; }
+    if (!bridgeHas('addExcludes')) return;
+    store.busyExcludes = true; render();
+    const res = await ipc('addExcludes', [v]);
+    store.busyExcludes = false;
+    if (res && res.ok && Array.isArray(res.excludes)) {
+      store.excludes = res.excludes.filter((x) => typeof x === 'string');
+      store.excludeInput = '';
+      if (Array.isArray(res.added) && res.added.length) toast('제외 항목을 추가했습니다.');
+      else if (Array.isArray(res.rejected) && res.rejected.length) toast('이미 있거나 추가할 수 없는 항목입니다.', true);
+    } else {
+      toast('제외 항목 추가에 실패했습니다.', true);
+    }
+    render();
+  }
+
+  async function onRemoveExclude(pattern) {
+    if (!bridgeHas('removeExclude')) return;
+    store.busyExcludes = true; render();
+    const res = await ipc('removeExclude', pattern);
+    store.busyExcludes = false;
+    if (res && res.ok && Array.isArray(res.excludes)) {
+      store.excludes = res.excludes.filter((x) => typeof x === 'string');
+    } else {
+      toast('제외 항목 삭제에 실패했습니다.', true);
+    }
+    render();
+  }
+
   /* ---- 헤더 ---- */
   function renderHeader() {
     const header = el('header', { cls: 'topbar' });
@@ -1559,6 +1835,19 @@ function initBrowser() {
     if (store._snapshotLabel) {
       actions.appendChild(el('span', { cls: 'muted snapshot-label', text: store._snapshotLabel }));
     }
+    // 도움말 버튼(#6) — 스캔 기준·항목 설명 팝업
+    const helpBtn = el('button', {
+      cls: 'btn', text: '도움말',
+      attrs: { 'aria-label': '도움말 열기' },
+      on: { click: openHelp },
+    });
+    helpBtn.prepend(svg([
+      { t: 'circle', cx: '12', cy: '12', r: '9' },
+      { t: 'path', d: 'M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .8-1 1.7' },
+      { t: 'line', x1: '12', y1: '17', x2: '12', y2: '17' },
+    ], { size: 13, sw: 1.8 }));
+    actions.appendChild(helpBtn);
+
     // 설정(폴더 관리 + 옵션) 버튼
     const settingsBtn = el('button', {
       cls: 'btn', text: '설정',
@@ -1942,9 +2231,7 @@ function initBrowser() {
     ]});
     footer.appendChild(meta);
     const acts = el('div', { cls: 'card__acts' });
-    // R-19: 드래그 키보드 대체(N-07) — 좌/우 이동 버튼
-    acts.appendChild(moveButton(displayIds, index, -1));
-    acts.appendChild(moveButton(displayIds, index, 1));
+    // 카드 순서 변경은 드래그(SortableJS)로만 — 좌/우 이동 버튼은 제거(사용자 요청).
     // R-17: 경로 복사
     acts.appendChild(copyPathButton(vm, 'btn btn--ghost btn--sm'));
     acts.appendChild(el('button', { cls: 'btn btn--ghost', text: '상세', on: { click: () => openDrawer(vm.id) } }));
@@ -1980,21 +2267,6 @@ function initBrowser() {
       attrs: { type: 'button', 'aria-label': '경로 복사: ' + vm.path },
       on: { click: (e) => { e.stopPropagation(); copyPath(vm.path); } },
     });
-    return btn;
-  }
-
-  /** R-19: 키보드 순서 이동 버튼(좌=-1/우=+1). 같은 setOrder 경로(N-07 드래그 대체). */
-  function moveButton(displayIds, index, dir) {
-    const label = dir < 0 ? '앞으로 이동' : '뒤로 이동';
-    const btn = el('button', {
-      cls: 'btn btn--ghost btn--sm move-btn',
-      attrs: { type: 'button', 'aria-label': label },
-      title: label,
-      on: { click: (e) => { e.stopPropagation(); reorderByMove(displayIds, index, dir); } },
-    });
-    btn.appendChild(svg([{ t: 'path', d: dir < 0 ? 'M15 18l-6-6 6-6' : 'M9 18l6-6-6-6' }], { size: 14, sw: 2.2 }));
-    const last = displayIds.length - 1;
-    if ((dir < 0 && index <= 0) || (dir > 0 && index >= last)) btn.disabled = true;
     return btn;
   }
 
@@ -2470,6 +2742,26 @@ function initBrowser() {
     }
   }
 
+  /* =====================================================================
+   * 자동 업데이트 진행 구독 (spip.onUpdateStatus → store.update 반영 → 설정 열려있으면 재렌더)
+   *   main(autoUpdate.js)이 보내는 'spip:update:status' 를 받아 실시간 갱신. 부재 시 graceful.
+   * ===================================================================== */
+  function subscribeUpdateStatus() {
+    unsubscribeUpdateStatus();
+    if (!hasBridge() || typeof spip.onUpdateStatus !== 'function') return; // graceful
+    const unsub = spip.onUpdateStatus((payload) => {
+      applyUpdateStatusPayload(payload);
+      if (store.showSettings) render();
+    });
+    store.update.unsubscribe = (typeof unsub === 'function') ? unsub : null;
+  }
+  function unsubscribeUpdateStatus() {
+    if (typeof store.update.unsubscribe === 'function') {
+      try { store.update.unsubscribe(); } catch (_) { /* ignore */ }
+    }
+    store.update.unsubscribe = null;
+  }
+
   /** 메뉴 '새로고침' — 진행 중 스캔이 없을 때 대시보드 데이터 재조회(getProjects/getStats). */
   async function refreshDashboard() {
     if (store.state.view === 'scanning') return; // 스캔 중엔 push 가 갱신
@@ -2554,8 +2846,85 @@ function initBrowser() {
   }
 
   /** 메뉴 '정보' — 간단한 정보 토스트(L-1: textContent). */
-  function showAbout() {
-    toast('Project-SPIP — 로컬 프로젝트 스캐너 (Electron)');
+  /* =====================================================================
+   * #6 도움말 팝업 — 프로젝트 인식 패턴 + 각 항목(설명·언어·변경일자·Git·크기 등) 산출 기준 설명.
+   * ===================================================================== */
+  function showAbout() { openHelp(); } // 메뉴 '정보'·헤더 '도움말' 공용 진입점.
+
+  function openHelp() {
+    store._helpOpener = (typeof document !== 'undefined') ? document.activeElement : null;
+    store.showHelp = true;
+    render();
+  }
+  function closeHelp() {
+    store.showHelp = false;
+    const opener = store._helpOpener;
+    store._helpOpener = null;
+    render();
+    if (opener && typeof opener.focus === 'function' && document.contains(opener)) {
+      try { opener.focus(); } catch (_) { /* ignore */ }
+    }
+  }
+
+  /** 도움말 항목 한 줄(용어 + 설명). */
+  function helpRow(term, desc) {
+    return el('div', { cls: 'help__row', children: [
+      el('div', { cls: 'help__term', text: term }),
+      el('div', { cls: 'help__desc', text: desc }),
+    ]});
+  }
+  /** 도움말 섹션(제목 + 행들). */
+  function helpSection(title, rows) {
+    return el('div', { cls: 'insight', children: [
+      el('div', { cls: 'insight__title', text: title }),
+      el('div', { cls: 'help__list', children: rows }),
+    ]});
+  }
+
+  function renderHelp() {
+    const ver = (store.update && store.update.currentVersion) ? ('v' + store.update.currentVersion) : '';
+
+    // 1) 프로젝트 인식 기준
+    const detect = helpSection('프로젝트로 인식하는 기준', [
+      el('p', { cls: 'help__lead', text: '폴더 안에 아래 “신호” 파일/폴더가 하나라도 있으면 프로젝트로 봅니다. 중첩된 경우 가장 바깥 프로젝트 하나만 셉니다.' }),
+      helpRow('.git', 'Git 저장소'),
+      helpRow('package.json', 'Node.js / 프런트엔드'),
+      helpRow('.vscode · *.code-workspace', 'VS Code 작업공간'),
+      helpRow('pyproject.toml', 'Python'),
+      helpRow('Cargo.toml', 'Rust'),
+      helpRow('go.mod', 'Go'),
+      helpRow('pom.xml · build.gradle', 'Java'),
+      helpRow('composer.json', 'PHP'),
+      helpRow('Gemfile', 'Ruby'),
+      helpRow('*.csproj · *.sln', '.NET'),
+      el('p', { cls: 'help__note', text: '제외: node_modules · .git · dist · build · out · .cache · target · vendor · venv 등 빌드/캐시 폴더와 OS 시스템 폴더는 스캔하지 않습니다. 설정의 “제외 항목”으로 더 추가할 수 있습니다.' }),
+    ]);
+
+    // 2) 각 항목 산출 기준
+    const fields = helpSection('각 항목은 어떻게 정해지나', [
+      helpRow('이름', 'package.json의 name이 있으면 그 값을, 없으면 폴더 이름을 씁니다.'),
+      helpRow('설명', 'package.json의 description을 그대로 표시합니다. 없으면 “설명 없음”.'),
+      helpRow('언어/스택', '의존성(React·Vue·Next 등)을 우선 보고, 없으면 폴더 안 파일 확장자 비율로 대표 언어를 정합니다.'),
+      helpRow('변경일자(최종 수정)', '폴더 내 파일들의 최신 수정시각과 최근 커밋 시각 중 더 최근 값입니다.'),
+      helpRow('방치(stale)', '최종 활동(수정/커밋)이 기준일(기본 90일)보다 오래되면 “방치”로 표시합니다. 기준일은 설정에서 바꿀 수 있습니다.'),
+      helpRow('Git 상태', 'Git 저장소면 브랜치·미커밋 변경(미커밋)·미푸시(ahead)를 표시합니다. 저장소가 아니거나 Git이 없으면 “Git 아님”.'),
+      helpRow('크기/의존성', '의존성 개수는 항상 표시합니다. 디렉터리 용량·node_modules 크기는 설정에서 “용량 수집”을 켰을 때만 측정합니다(미측정이면 “미측정”).'),
+    ]);
+
+    // 3) 앱 정보
+    const about = helpSection('Project-SPIP', [
+      el('p', { cls: 'help__lead', text: 'PC에 흩어진 VS Code 프로젝트를 스캔해 한눈에 보여주는 로컬 데스크톱 앱입니다. 모든 처리는 이 PC에서만 일어나며 외부로 데이터를 전송하지 않습니다.' }),
+      ver ? helpRow('버전', ver) : null,
+    ]);
+
+    return buildModal({
+      titleId: 'help-title',
+      title: '도움말',
+      subtitle: '스캔 기준과 각 항목의 의미',
+      onClose: closeHelp,
+      wide: true,
+      bodyChildren: [detect, fields, about],
+    });
   }
 
   /** R-12: spip.open(id). 연타 방지(opening map). */
@@ -2621,11 +2990,6 @@ function initBrowser() {
         }
       });
     }
-  }
-
-  /** 키보드 이동(index 를 dir 만큼) → 표시 id 순서 재배열 → manual 전환 + 영속. */
-  function reorderByMove(displayIds, index, dir) {
-    commitReorder(moveInOrder(displayIds, index, index + dir));
   }
 
   /**
@@ -2737,6 +3101,7 @@ function initBrowser() {
       store.config = cfg;
       const cv = configView(cfg);
       store.roots = cv.scanRoots;
+      store.excludes = cv.excludes; // #4
       if (!cv.allowAllDrives) store.opts.allDrives = false; // 게이트 강등
     }
     render();
@@ -3014,6 +3379,7 @@ function initBrowser() {
   // 전역 ESC로 드로어/설정 닫기(접근성)
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
+    if (store.showHelp) { closeHelp(); return; }
     if (store.state.selectedId) { closeDrawer(); return; }
     if (store.showSettings) { closeSettings(); }
   });
@@ -3024,13 +3390,16 @@ function initBrowser() {
   subscribeTray();
   // R-24: 상태 주시 라이브 갱신 구독(앱 1회). 부재 시 graceful — 내부 가드.
   subscribeProjectsUpdated();
+  // 자동 업데이트 진행 구독(앱 1회). 부재 시 graceful — 내부 가드.
+  subscribeUpdateStatus();
 
-  // teardown: 창 unload 시 구독 해제(누수 방지 — 메뉴·진행·트레이·주시 구독 모두).
+  // teardown: 창 unload 시 구독 해제(누수 방지 — 메뉴·진행·트레이·주시·업데이트 구독 모두).
   function teardown() {
     unsubscribeMenu();
     unsubscribeScan();
     unsubscribeTray();
     unsubscribeProjectsUpdated();
+    unsubscribeUpdateStatus();
   }
   if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
     window.addEventListener('pagehide', teardown);

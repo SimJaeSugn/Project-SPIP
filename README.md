@@ -37,7 +37,7 @@ cd Project-SPIP
 npm install
 ```
 
-> `electron`·`electron-builder`·`@electron/fuses`는 **devDependencies**입니다. **런타임 외부 의존성은 0**이며(스캔 로직은 Node.js 내장 모듈만 사용), UI도 빌드 도구·프레임워크 없는 순수 HTML/CSS/JS입니다.
+> `electron`·`electron-builder`·`@electron/fuses`는 **devDependencies**입니다. 런타임 의존성은 자동 업데이트 클라이언트인 **`electron-updater` 1개**뿐이며(스캔 로직은 Node.js 내장 모듈만 사용), UI도 빌드 도구·프레임워크 없는 순수 HTML/CSS/JS입니다.
 
 ## 실행 (개발)
 
@@ -87,6 +87,59 @@ npm run build:portable   # portable 단일 실행 파일만
 
 > **코드 서명 안내(수용된 위험):** 현재 배포본은 **미서명**입니다. Windows에서 처음 실행할 때 SmartScreen이 "Windows의 PC 보호" 경고를 띄울 수 있습니다. 이때 **추가 정보 → 실행**을 누르면 실행됩니다. (PM 위험 수용 확정 사항 — `electron-builder.yml` 주석 참고.)
 
+## 릴리즈 게시 · 자동 업데이트
+
+`npm run release` 한 번으로 **GitHub Releases 에 게시**하면(인스톨러 `exe` + `*.blockmap` + `latest.yml`),
+설치본은 `electron-updater` 로 `latest.yml` 을 보고 새 버전을 감지합니다. 업데이트는 **사용자 주도**로,
+앱 **설정 → 소프트웨어 업데이트** 섹션에서 **[업데이트 확인] → [다운로드] → [재시작하여 설치]** 버튼으로
+진행하며 다운로드 진행률이 실시간 표시됩니다(`autoDownload=false`).
+
+게시 위치는 `electron-builder.yml` 의 `publish`(provider: github / owner `SimJaeSugn` / repo `Project-SPIP`)에,
+클라이언트 연동은 `electron/autoUpdate.js`(메인) + `electron/preload.js`(`onUpdateStatus` 등) + `public/app.js`
+(설정 UI)에 있습니다.
+
+### 사전 준비
+
+- **GitHub CLI(`gh`) 로그인**: `gh auth login` (저장소 소유 계정). 게시 토큰은 `gh auth token` 으로 즉석에서 꺼내 씁니다(토큰 커밋 금지).
+- 토큰을 파일로 둘 경우 `electron-builder.env` 에 두고 커밋하지 않습니다(`.gitignore` 등록됨).
+
+### 릴리즈 절차 (매 배포마다)
+
+```bash
+# 1) 버전업 (단조 증가 — 같은 버전 재게시는 업데이트로 인식되지 않음)
+npm version <new-version> --no-git-tag-version    # 예: 1.0.2 (package.json + lock 갱신)
+
+# 2) 커밋 + 태그(vX.Y.Z) + 푸시
+git add -A
+git commit -m "release: v<new-version>"
+git tag v<new-version>
+git push origin master
+git push origin v<new-version>
+
+# 3) 빌드 + 게시 (gh 토큰 주입) — Git Bash/POSIX 쉘 기준
+GH_TOKEN="$(gh auth token)" npm run release
+#   PowerShell:  $env:GH_TOKEN = (gh auth token); npm run release
+
+# 4) (선택) 릴리즈 노트 작성
+gh release edit v<new-version> --title "v<new-version> — <한 줄 제목>" --notes "변경 요약…"
+
+# 5) 확인 — 자산 3종(Setup .exe / .exe.blockmap / latest.yml)이 보여야 정상
+gh release view v<new-version> --json tagName,isDraft,assets \
+  -q '.tagName, ("draft="+(.isDraft|tostring)), (.assets[].name)'
+```
+
+> `npm run release` = `electron-builder --win --publish always`. `--publish always` 가 빌드 산출물(NSIS 설치본·
+> portable·`latest.yml`·`*.blockmap`)을 태그에 해당하는 GitHub Releases 로 업로드합니다.
+
+### 함정 / 주의
+
+1. **게시 토큰 필수** — `GH_TOKEN`/`GITHUB_TOKEN` 미설정 시 publish 실패. `gh` 로그인 상태면 위처럼 즉석 주입.
+2. **버전 단조 증가** — `latest.yml` 버전이 설치본보다 높아야 감지됩니다. 같은 버전 재게시는 인식 안 됨.
+3. **일시적 게시 실패 → 재시도** — 이전 산출물/실행 중 앱이 파일을 잠그면 한 번 실패할 수 있습니다. **그대로 다시 `npm run release`** 하면 대개 성공(실패 시 `gh release view` 로 실게시 여부 확인).
+4. **미서명 = SmartScreen 경고** — 정상이며 배포는 됩니다(위 코드 서명 안내 참고).
+5. **개발 모드에서는 업데이트 확인 불가** — `app.isPackaged` 가드로 설치본에서만 동작합니다(설정 UI에 "개발 모드" 안내 표시).
+6. **검증 한계(정직)** — 코드·빌드·게시까지는 자동 확인되지만, **NSIS 설치본을 실제로 설치해 감지→다운로드→재시작 설치 왕복**까지는 별도 수동 검증이 필요합니다.
+
 ## VS Code로 열기
 
 카드의 **'VS Code로 열기'** 액션은 VS Code 실행 파일을 절대경로로 해석해 실행합니다(`safeExec`, `shell:false`, 실행 인자는 프로젝트 경로 1개 고정). 실행 경로는 **사용자가 설정에서 지정한 경로를 우선** 사용하고, 없으면 **PATH의 `code`로 폴백**합니다. 둘 다 없으면 앱이 죽지 않고 `code CLI를 찾을 수 없음` 안내를 표시합니다.
@@ -133,8 +186,9 @@ spip --roots "C:/work,C:/code"
 | `start` | `electron .` | **데스크톱 앱 실행** |
 | `build` | `electron-builder` | 설치본 빌드(Windows NSIS + portable) |
 | `build:portable` | `electron-builder --win portable` | 포터블 빌드만 |
+| `release` | `electron-builder --win --publish always` | 빌드 + **GitHub Releases 게시**(자동 업데이트용 `latest.yml` 포함) |
 | `scan` | `node scan.js` | 자동화용 스캔(데이터만 생성, bin: `spip`) |
-| `test` | `node --test "test/**/*.test.js"` | 단위·통합 테스트 (474건) |
+| `test` | `node --test "test/**/*.test.js"` | 단위·통합 테스트 (503건) |
 
 > **과도기 HTTP 서버(`start:web`/`serve:http`):** Electron 전환 이전의 로컬 웹 서버(`server.js`, `127.0.0.1`)가 `npm run start:web`으로 **아직 남아 있습니다.** 전환이 완료되어 더 이상 기본 경로가 아니며, **후속으로 제거 예정**입니다(코드 리뷰 P2-2). 일반 사용에는 `npm start`(Electron)를 사용하세요.
 
@@ -186,6 +240,7 @@ Project-SPIP/
 │  ├─ security.js        # CSP·하드닝·신뢰 origin
 │  ├─ menu.js            # 네이티브 메뉴 → spip:menu:* 전송
 │  ├─ tray.js            # 트레이 아이콘·컨텍스트 메뉴(대시보드/즐겨찾기/종료) (R-21)
+│  ├─ autoUpdate.js      # GitHub Releases 자동 업데이트 클라이언트(electron-updater, 사용자 주도)
 │  └─ ipc/               # data·actions·scan·folders·clipboard·tools·uiState·register (순수 (args,ctx)→result)
 ├─ public/               # index.html · styles.css · app.js (빌드 없는 순수 UI, IPC 어댑터)
 │                        # + favorites.html · favorites.js (즐겨찾기 위젯 창 UI, R-22)
@@ -200,7 +255,7 @@ Project-SPIP/
 ├─ build.bat / build.ps1 # Windows 빌드 헬퍼(더블클릭 · -Portable)
 ├─ run.bat               # 빌드 없이 앱 실행(= npm start)
 ├─ add-defender-exclusion.bat  # 반복 빌드 시 Defender 예외 1회 등록(관리자)
-└─ test/                 # node:test 기반 단위·통합 테스트 (474건)
+└─ test/                 # node:test 기반 단위·통합 테스트 (503건)
 ```
 
 ## 동작 방식
