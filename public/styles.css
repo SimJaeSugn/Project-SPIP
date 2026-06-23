@@ -169,8 +169,10 @@ input, button, select { font-family: inherit; }
 .centered-screen > * { margin: auto; }
 .panel-card {
   width: 540px; max-width: 100%; background: #fff; border: 1px solid var(--border);
-  border-radius: 16px; box-shadow: 0 10px 44px rgba(28,25,23,.07); padding: 32px; animation: spipFade .3s ease;
+  border-radius: 16px; box-shadow: 0 10px 44px rgba(28,25,23,.07); padding: 32px;
 }
+/* 진입 애니메이션은 최초 표시(is-enter) 1회만 — 재렌더마다 재생되면 깜빡인다. */
+.panel-card.is-enter { animation: spipFade .3s ease; }
 .panel-card--sm { width: 380px; text-align: center; padding: 36px; }
 .centered-title { font-size: 15px; font-weight: 600; color: var(--t2); margin-top: 16px; }
 .centered-sub { font-size: 13px; color: var(--t4); margin-top: 6px; }
@@ -419,8 +421,9 @@ input, button, select { font-family: inherit; }
 }
 .drawer {
   width: 480px; max-width: 92vw; height: 100%; background: #fff; overflow: auto;
-  box-shadow: -14px 0 44px rgba(28,25,23,.14); animation: spipDrawer .22s ease;
+  box-shadow: -14px 0 44px rgba(28,25,23,.14);
 }
+.drawer.is-enter { animation: spipDrawer .22s ease; }
 .drawer__head {
   position: sticky; top: 0; background: #fff; border-bottom: 1px solid var(--border);
   padding: 18px 20px; display: flex; align-items: flex-start; gap: 12px; z-index: 2;
@@ -519,6 +522,12 @@ input, button, select { font-family: inherit; }
 .settings__opt-sub { font-size: 11.5px; color: var(--t4); margin-top: 2px; line-height: 1.5; }
 .facet__check { width: 15px; height: 15px; margin-top: 1px; flex: none; accent-color: var(--accent); }
 
+/* 제외 항목 예시 칩(클릭 시 입력칸 채움) */
+.exclude-ex { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.exclude-ex__label { font-size: 11px; color: var(--t4); font-weight: 600; }
+.exclude-ex__chip { appearance: none; border: 1px solid var(--border); background: #fafafa; color: var(--t2); font-size: 11px; padding: 3px 8px; border-radius: 7px; cursor: pointer; }
+.exclude-ex__chip:hover { background: var(--accent-bg); border-color: var(--accent-border); color: var(--accent-text); }
+
 /* 소프트웨어 업데이트 다운로드 진행 바(scanview__track 패턴 재사용). */
 .update-bar { height: 8px; background: #f0efed; border-radius: 5px; overflow: hidden; margin: 8px 0; }
 .update-bar__fill { height: 100%; background: var(--accent); border-radius: 5px; transition: width .3s ease; }
@@ -530,10 +539,11 @@ input, button, select { font-family: inherit; }
 }
 .modal {
   width: 560px; max-width: 100%; background: #fff; border: 1px solid var(--border);
-  border-radius: 16px; box-shadow: 0 18px 60px rgba(28,25,23,.22); animation: spipFade .22s ease;
+  border-radius: 16px; box-shadow: 0 18px 60px rgba(28,25,23,.22);
   max-height: calc(100vh - 48px); display: flex; flex-direction: column; overflow: hidden;
 }
 .modal--wide { width: 660px; }
+.modal.is-enter { animation: spipFade .22s ease; }
 .modal__head {
   background: #fff; border-bottom: 1px solid var(--border);
   padding: 18px 22px; display: flex; align-items: flex-start; gap: 12px; flex: none;
@@ -557,6 +567,83 @@ input, button, select { font-family: inherit; }
 .help__term { font-size: 12px; font-weight: 600; color: var(--t1); font-family: var(--mono); word-break: break-word; }
 .help__desc { font-size: 12.5px; color: var(--t3); line-height: 1.55; }
 @media (max-width: 520px) { .help__row { grid-template-columns: 1fr; gap: 2px; } }
+
+/* =========================== 궤도 맵(Orbit Map) — 다크 테마 전용 뷰 (UI 템플릿 정합) =========================== */
+.orbit { height: 100vh; display: flex; overflow: hidden; color: #e7e5e4; font-family: var(--font);
+  background: radial-gradient(120% 120% at 50% 42%, #1b1714 0%, #0c0a09 62%); }
+.orbit__panel { flex: none; width: 316px; height: 100%; display: flex; flex-direction: column; gap: 17px;
+  padding: 20px 20px 22px; border-right: 1px solid rgba(255,255,255,.07); background: rgba(255,255,255,.02); overflow: auto; }
+.orbit__toprow { display: flex; align-items: center; gap: 8px; }
+.orbit__back { align-self: flex-start; appearance: none; border: 1px solid rgba(255,255,255,.14);
+  background: rgba(255,255,255,.03); color: #d6d3d1; font-size: 12.5px; font-weight: 600; padding: 6px 12px; border-radius: 8px; cursor: pointer; }
+.orbit__back:hover { background: rgba(255,255,255,.08); }
+.orbit__search-add { width: 100%; }
+.orbit__search-add:disabled { opacity: .45; cursor: default; }
+/* 우클릭 컨텍스트 메뉴(노드 → 디렉터리 제외) */
+.orbit__ctx-overlay { position: absolute; inset: 0; z-index: 5; }
+.orbit__ctxmenu { position: absolute; z-index: 6; min-width: 200px; max-width: 280px;
+  background: #1c1917; border: 1px solid rgba(255,255,255,.14); border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(0,0,0,.5); padding: 10px; }
+.orbit__ctxmenu-title { font-size: 12.5px; font-weight: 700; color: #fff; }
+.orbit__ctxmenu-path { font-size: 10.5px; color: rgba(255,255,255,.45); margin: 4px 0 8px; word-break: break-all; }
+.orbit__ctxmenu-btn { width: 100%; appearance: none; border: 1px solid rgba(255,255,255,.14);
+  background: rgba(255,255,255,.04); color: #e7e5e4; font-size: 12px; font-weight: 600; padding: 7px 10px; border-radius: 8px; cursor: pointer; }
+.orbit__ctxmenu-btn:hover { background: rgba(129,140,248,.22); border-color: rgba(129,140,248,.5); color: #c7d2fe; }
+.orbit__eyebrow { font-size: 10px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: #818cf8; font-family: var(--mono); }
+.orbit__title { margin: 8px 0 0; font-size: 23px; font-weight: 700; letter-spacing: -.02em; line-height: 1.18; color: #fff; }
+.orbit__lead { margin: 9px 0 0; font-size: 12.5px; line-height: 1.62; color: #a8a29e; text-wrap: pretty; }
+.orbit__kpis { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+.orbit__kpi { appearance: none; width: 100%; text-align: left; font: inherit; color: inherit; cursor: pointer;
+  background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.07); border-radius: 10px; padding: 11px 11px;
+  transition: background .12s ease, border-color .12s ease, box-shadow .12s ease; }
+.orbit__kpi:hover { background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.16); }
+.orbit__kpi.is-on { background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.42); box-shadow: 0 0 0 1px rgba(255,255,255,.18) inset; }
+.orbit__kpi-v { font-size: 21px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+.orbit__kpi-l { font-size: 10.5px; color: #a8a29e; margin-top: 3px; }
+.orbit__box { border: 1px solid rgba(255,255,255,.07); border-radius: 12px; padding: 13px 14px; display: flex; flex-direction: column; gap: 13px; background: rgba(255,255,255,.015); }
+.orbit__box--legend { gap: 10px; }
+.orbit__box-title { font-size: 9.5px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: rgba(255,255,255,.42); font-family: var(--mono); }
+.orbit__group { display: flex; flex-direction: column; gap: 8px; }
+.orbit__group--triage { gap: 7px; }
+.orbit__search-wrap { position: relative; display: flex; align-items: center; }
+.orbit__search-icon { position: absolute; left: 10px; pointer-events: none; }
+.orbit__search { width: 100%; height: 32px; border: 1px solid rgba(255,255,255,.12); border-radius: 8px; background: rgba(255,255,255,.04); color: #e7e5e4; padding: 0 10px 0 30px; font-size: 12.5px; outline: none; }
+.orbit__search:focus { border-color: #818cf8; background: rgba(255,255,255,.06); }
+.orbit__row { display: flex; align-items: center; justify-content: space-between; }
+.orbit__row-label { font-size: 11.5px; color: #a8a29e; font-weight: 600; }
+.orbit__btn-sm { appearance: none; border: 1px solid rgba(255,255,255,.14); background: rgba(255,255,255,.04); color: #d6d3d1; font-size: 11.5px; font-weight: 600; padding: 4px 11px; border-radius: 7px; cursor: pointer; }
+.orbit__btn-sm:hover { background: rgba(255,255,255,.08); }
+.orbit__sliderrow { display: flex; align-items: center; gap: 9px; }
+.orbit__slider { flex: 1; height: 4px; accent-color: #818cf8; cursor: pointer; }
+.orbit__slider--full { width: 100%; }
+.orbit__speed-val { font-size: 11px; color: #a8a29e; font-family: var(--mono); width: 30px; flex: none; }
+.orbit__scrub-val { font-size: 11px; color: #c7d2fe; font-family: var(--mono); }
+.orbit__seg { display: flex; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.09); border-radius: 9px; padding: 2px; gap: 2px; }
+.orbit__seg-btn { flex: 1; appearance: none; border: none; border-radius: 7px; padding: 5px 0; font-size: 11.5px; font-weight: 600; cursor: pointer; background: transparent; color: #a8a29e; }
+.orbit__seg-btn.is-on { background: rgba(129,140,248,.22); color: #c7d2fe; }
+.orbit__triage { width: 100%; appearance: none; border: 1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.03); color: #d6d3d1; font-size: 12px; font-weight: 600; padding: 8px 10px; border-radius: 9px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 7px; }
+.orbit__triage.is-on { background: rgba(251,191,36,.16); border-color: rgba(251,191,36,.5); color: #fbbf24; }
+.orbit__triage-note { font-size: 10.5px; color: #a8a29e; text-align: center; line-height: 1.4; }
+.orbit__reclaim { color: #fbbf24; font-family: var(--mono); }
+.orbit__legend-row { display: flex; align-items: center; gap: 11px; font-size: 12px; color: #c4c0bb; }
+.orbit__sw { flex: none; width: 34px; display: flex; align-items: center; justify-content: center; gap: 4px; }
+.orbit__sw--drive { text-align: center; font-family: var(--mono); font-size: 11px; color: rgba(255,255,255,.4); }
+.orbit__langs { display: flex; flex-direction: column; gap: 9px; }
+.orbit__chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.orbit__chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 9px; border-radius: 8px; font-size: 11.5px; font-weight: 600; cursor: pointer; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.09); color: #a8a29e; }
+.orbit__chip.is-on { background: rgba(129,140,248,.2); border-color: rgba(129,140,248,.55); color: #c7d2fe; }
+.orbit__chip.is-faded { opacity: .5; }
+.orbit__chip-dot { width: 9px; height: 9px; border-radius: 2px; flex: none; display: inline-block; }
+.orbit__chip-n { font-family: var(--mono); font-size: 10px; opacity: .7; }
+.orbit__stage { flex: 1; position: relative; min-width: 0; overflow: hidden; }
+.orbit__canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.orbit__zoom { position: absolute; right: 18px; bottom: 16px; display: flex; flex-direction: column; gap: 6px; }
+.orbit__zoom-btn { appearance: none; width: 34px; height: 34px; border-radius: 9px; border: 1px solid rgba(255,255,255,.14); background: rgba(20,18,16,.72); backdrop-filter: blur(6px); color: #e7e5e4; font-size: 19px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.orbit__zoom-btn:hover { background: rgba(40,37,34,.9); border-color: rgba(255,255,255,.28); }
+.orbit__zoom-btn--out { font-size: 21px; }
+.orbit__zoom-btn--reset { font-size: 14px; color: #a8a29e; font-family: var(--mono); }
+.orbit__hint { position: absolute; left: 20px; bottom: 16px; font-size: 10.5px; color: rgba(255,255,255,.3); font-family: var(--mono); pointer-events: none; }
+@media (max-width: 720px) { .orbit__panel { width: 264px; } }
 
 /* =========================== 반응형 =========================== */
 @media (max-width: 1100px) {

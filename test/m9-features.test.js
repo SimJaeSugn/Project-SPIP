@@ -53,6 +53,55 @@ test('isUnderExcludedPath — 세그먼트 단위 매칭(접두 부분일치 오
   assert.strictEqual(excludeRules.isUnderExcludedPath(pathGuard.canonicalize(sibling), set), false); // 형제(older)
 });
 
+test('정규식 제외 — buildExcludeSet 컴파일 + matchesExcludeRegex(전체 경로, 앞뒤 임의+가운데 패턴)', () => {
+  assert.strictEqual(excludeRules.isRegexExclude('/^te?mp$/i'), true);
+  assert.strictEqual(excludeRules.isRegexExclude('temp'), false);
+  assert.strictEqual(excludeRules.isRegexExclude('E:\\x'), false);
+  const set = excludeRules.buildExcludeSet(['/temp/', '/\\.bak$/']);
+  assert.strictEqual(set.regexes.length, 2);
+  // 앞뒤 임의 경로 + 가운데 패턴: 경로 어디든 temp 포함 → 제외
+  assert.strictEqual(excludeRules.matchesExcludeRegex('E:/proj/temp-old/src', set), true);
+  assert.strictEqual(excludeRules.matchesExcludeRegex('E:/proj/data.bak', set), true); // .bak 로 끝남
+  assert.strictEqual(excludeRules.matchesExcludeRegex('E:/proj/src/app', set), false);
+  // isExcludedName(이름)은 정규식을 보지 않음 — 내장/정확 일치만.
+  assert.strictEqual(excludeRules.isExcludedName('temp-old', set), false);
+});
+
+test('정규식 제외 — 슬래시 정규식이 Windows 역슬래시 경로에도 매칭(구분자 정규화)', () => {
+  const set = excludeRules.buildExcludeSet(['/eclipse/plugins/']);
+  const winPath = 'C:\\DEV\\eGovFrameDev-4.0.0-64bit\\eclipse\\plugins\\org.eclipse.cdt.core\\META-INF';
+  assert.strictEqual(excludeRules.matchesExcludeRegex(winPath, set), true);
+  // eclipse만 있고 plugins가 뒤따르지 않으면 매칭 안 됨.
+  assert.strictEqual(excludeRules.matchesExcludeRegex('C:\\DEV\\eclipse\\features\\x', set), false);
+});
+
+test('정규식 제외 — 닫는 슬래시 유무로 정규식/경로 판정이 갈린다', () => {
+  // 닫는 / 없음 → 정규식 아님(경로형으로 처리됨) → 정규식 매칭 0건.
+  assert.strictEqual(excludeRules.isRegexExclude('/workspace/study'), false);
+  const noClose = excludeRules.buildExcludeSet(['/workspace/study']);
+  assert.strictEqual(noClose.regexes.length, 0);
+  // 닫는 / 있음 → 정규식 → workspace/study substring 매칭(studyEgov01도 prefix로 걸림).
+  const ok = excludeRules.buildExcludeSet(['/workspace/study/']);
+  assert.strictEqual(ok.regexes.length, 1);
+  const p = 'C:\\DEV\\eGovFrameDev-4.0.0-64bit\\workspace\\studyEgov01\\.metadata\\x';
+  assert.strictEqual(excludeRules.matchesExcludeRegex(p, ok), true);
+});
+
+test('compileExcludeRegex — 잘못된 정규식은 null, g/y 플래그 제거', () => {
+  assert.strictEqual(excludeRules.compileExcludeRegex('/[/'), null); // 컴파일 실패
+  const re = excludeRules.compileExcludeRegex('/abc/gy');
+  assert.ok(re instanceof RegExp);
+  assert.strictEqual(re.global, false); // g 제거 → .test lastIndex 안정
+});
+
+test('addExcludesResolve — 잘못된 정규식은 BAD_REGEX로 거부', () => {
+  const base = tmpDir();
+  const cfgPath = path.join(base, 'c.json');
+  const r = folders.addExcludesResolve(['/[/', '/ok$/'], [], { logger: quiet(), configPath: cfgPath });
+  assert.deepStrictEqual(r.added, ['/ok$/']);          // 유효 정규식만 채택
+  assert.ok(r.rejected.some((x) => x.reason === 'BAD_REGEX'));
+});
+
 /* ───── #4 folders 제외 항목 IPC ───── */
 
 test('addExcludesResolve — 이름+경로 채택, 중복 거부, config.excludes 영속', () => {

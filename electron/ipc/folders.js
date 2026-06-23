@@ -29,6 +29,7 @@ const os = require('os');
 const config = require('../../lib/common/config');
 const pathGuard = require('../../lib/common/pathGuard');
 const paths = require('../../lib/common/paths');
+const excludeRules = require('../../lib/scan/excludeRules');
 
 const MAX_ROOTS = config.LIMITS.maxScanRoots; // 64
 const MAX_PATH_LEN = 4096;
@@ -214,6 +215,8 @@ function addExcludesResolve(rawPatterns, currentExcludes, ctx) {
     const v = (typeof raw === 'string') ? raw.trim() : '';
     if (!v) { rejected.push({ path: String(raw).slice(0, 256), reason: 'INVALID' }); continue; }
     if (v.length > MAX_EXCLUDE_LEN) { rejected.push({ path: v.slice(0, 64) + '…', reason: 'TOO_LONG' }); continue; }
+    // 정규식 형식(`/.../`)이면 컴파일 가능 여부 검증(잘못된 정규식 즉시 거부).
+    if (excludeRules.isRegexExclude(v) && !excludeRules.compileExcludeRegex(v)) { rejected.push({ path: v, reason: 'BAD_REGEX' }); continue; }
     if (current.includes(v) || added.includes(v)) { rejected.push({ path: v, reason: 'DUP' }); continue; }
     if (current.length + added.length >= MAX_EXCLUDES) { rejected.push({ path: v, reason: 'LIMIT' }); continue; }
     added.push(v);

@@ -928,6 +928,8 @@ function initBrowser() {
     busyFolders: false,          // 폴더 추가/선택/삭제 in-flight(버튼 비활성)
     showSettings: false,         // 설정 팝업(모달) 열림 여부
     showHelp: false,             // #6 도움말 팝업(모달) 열림 여부
+    // 궤도 맵(Orbit Map) 컨트롤 상태 — 캔버스 루프가 live로 읽는다.
+    orbit: { layout: 'drive', speed: 1, paused: false, scrub: 0, triage: false, hi: null, search: '', kpi: null },
     opts: { withSize: false, allDrives: false }, // 재스캔 옵션 UI 상태
     menuUnsubscribe: null,       // P2-1: spip.onMenu 구독 해제 함수(teardown 시 호출)
     // M6 (R-18) 외부 툴 설정 상태
@@ -1035,26 +1037,44 @@ function initBrowser() {
    * ===================================================================== */
   function render() {
     destroyCardSortable();   // [M8] 이전 .cards 의 Sortable 인스턴스 정리(노드 교체 전).
-    app.replaceChildren();
     const v = store.state.view;
-    if (v === 'loading') { app.appendChild(renderLoading()); }
-    else if (v === 'error') { app.appendChild(renderError()); }
-    else if (v === 'scanning') { app.appendChild(renderScanning()); }
+    // 뷰가 막 바뀐 경우에만 진입 애니메이션(is-enter)을 1회 부여 — 재렌더(스캔 진행 250ms 등)마다
+    //   재생되면 깜빡인다. 같은 뷰의 반복 렌더는 entering=false라 애니메이션 없이 즉시 갱신.
+    const entering = store._lastView !== v;
+    // 재렌더로 노드가 교체되면 스크롤 컨테이너가 새로 생겨 위치가 0으로 초기화된다(설정 모달에서
+    //   버튼 클릭 시 스크롤 튐). 교체 전 위치를 저장해 동일 셀렉터에 복원한다.
+    const SCROLL_SEL = ['.modal__body', '.drawer', '.orbit__panel'];
+    const savedScroll = {};
+    SCROLL_SEL.forEach((sel) => { const e = app.querySelector(sel); if (e) savedScroll[sel] = e.scrollTop; });
+    // 궤도 뷰를 벗어나면 캔버스 RAF·리스너 정리(누수 방지). 궤도 안의 재렌더에선 유지.
+    if (v !== 'orbit' && orb.canvasEl) stopOrbit();
+    app.replaceChildren();
+    if (v === 'loading') { app.appendChild(renderLoading(entering)); }
+    else if (v === 'error') { app.appendChild(renderError(entering)); }
+    else if (v === 'scanning') { app.appendChild(renderScanning(entering)); }
     else if (v === 'firstRun') { app.appendChild(renderFirstRun()); }
+    else if (v === 'orbit') {
+      app.appendChild(renderOrbit());
+      if (store.state.selectedId) app.appendChild(renderDrawer()); // 노드 클릭 상세(기존 드로어 재사용)
+    }
     else {
       app.appendChild(renderDashboard());
       initCardSortable();    // [M8] 카드뷰면 .cards 에 드래그 재정렬 부착(표/무결과면 no-op).
     }
-    // 도움말 모달은 모든 뷰 위에 표시(메뉴/헤더에서 어디서든 열림).
+    // 설정·도움말 모달은 모든 뷰 위에 표시(대시보드·궤도 등 어디서든 열림).
+    if (store.showSettings) app.appendChild(renderSettings());
     if (store.showHelp) app.appendChild(renderHelp());
+    // 저장한 스크롤 위치를 새 컨테이너에 복원(버튼 클릭 등 재렌더 후에도 위치 유지).
+    SCROLL_SEL.forEach((sel) => { if (savedScroll[sel] != null) { const e = app.querySelector(sel); if (e) e.scrollTop = savedScroll[sel]; } });
+    store._lastView = v;
   }
 
   /* ---- 로딩 / 에러 ---- */
-  function renderLoading() {
+  function renderLoading(entering) {
     return el('div', {
       cls: 'centered-screen',
       children: [el('div', {
-        cls: 'panel-card panel-card--sm',
+        cls: 'panel-card panel-card--sm' + (entering ? ' is-enter' : ''),
         children: [
           el('div', { cls: 'spinner' }),
           el('div', { cls: 'centered-title', text: '프로젝트를 불러오는 중…' }),
@@ -1062,11 +1082,11 @@ function initBrowser() {
       })],
     });
   }
-  function renderError() {
+  function renderError(entering) {
     return el('div', {
       cls: 'centered-screen',
       children: [el('div', {
-        cls: 'panel-card panel-card--sm',
+        cls: 'panel-card panel-card--sm' + (entering ? ' is-enter' : ''),
         children: [
           el('div', { cls: 'centered-title', text: '데이터를 불러오지 못했습니다' }),
           el('div', { cls: 'centered-sub', text: store._errorMsg || '잠시 후 다시 시도하세요.' }),
@@ -1084,9 +1104,9 @@ function initBrowser() {
    *   - aria-live(polite) 영역에 진행 텍스트 갱신(N-07 4.1.3)
    *   - 모든 서버 유래 문자열(currentPath·note)은 textContent(L-1, M4-L-2)
    * ===================================================================== */
-  function renderScanning() {
+  function renderScanning(entering) {
     const pv = progressView(store.scan.progress);
-    const card = el('div', { cls: 'panel-card scanview', attrs: { role: 'status', 'aria-live': 'polite', 'aria-atomic': 'true' } });
+    const card = el('div', { cls: 'panel-card scanview' + (entering ? ' is-enter' : ''), attrs: { role: 'status', 'aria-live': 'polite', 'aria-atomic': 'true' } });
 
     // 헤더: 스피너/완료 아이콘 + 제목 + 카운트 + (불확정이면 % 숨김)
     const head = el('div', { cls: 'scanview__head' });
@@ -1313,7 +1333,7 @@ function initBrowser() {
     root.appendChild(body);
 
     if (store.state.selectedId) root.appendChild(renderDrawer());
-    if (store.showSettings) root.appendChild(renderSettings());
+    // 설정 모달은 render()에서 앱 레벨로 append(모든 뷰에서 열리도록 — 궤도 뷰 포함).
     // [M7 §8.1] 즐겨찾기 슬라이더 오버레이 제거 — 독립 위젯 창(app://favorites.html)으로 이전.
     return root;
   }
@@ -1335,6 +1355,7 @@ function initBrowser() {
   }
   function closeSettings() {
     store.showSettings = false;
+    store._settingsShown = false; // 다음 열림에 진입 애니메이션 재적용
     const opener = store._settingsOpener;
     store._settingsOpener = null;
     render();
@@ -1353,7 +1374,7 @@ function initBrowser() {
     const onClose = (typeof opts.onClose === 'function') ? opts.onClose : function () {};
     const overlay = el('div', { cls: 'modal-overlay', on: { click: onClose } });
     const dialog = el('div', {
-      cls: 'modal' + (opts.wide ? ' modal--wide' : '') + ' spip-scroll',
+      cls: 'modal' + (opts.wide ? ' modal--wide' : '') + (opts.enter ? ' is-enter' : '') + ' spip-scroll',
       attrs: { role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': titleId },
     });
     dialog.addEventListener('click', (e) => e.stopPropagation());
@@ -1392,12 +1413,14 @@ function initBrowser() {
   }
 
   function renderSettings() {
+    const enter = !store._settingsShown; store._settingsShown = true; // 진입 애니메이션 1회만
     return buildModal({
       titleId: 'settings-title',
       title: '설정',
       subtitle: '스캔 폴더·제외·드라이브·옵션을 관리합니다',
       onClose: closeSettings,
       wide: true,
+      enter,
       bodyChildren: [
         // 1) 폴더 관리 (드라이브 루트 C:\ 도 폴더 선택에서 그대로 추가 가능 — #5)
         el('div', { cls: 'insight', children: [
@@ -1729,15 +1752,15 @@ function initBrowser() {
       block.appendChild(el('div', { cls: 'rootmgr__empty', text: '이 환경에서는 제외 항목을 설정할 수 없습니다.' }));
       return block;
     }
-    block.appendChild(el('p', { cls: 'settings__opt-sub', text: '폴더 이름(예: temp)이면 같은 이름의 폴더를 모두, 절대경로(예: E:\\projects\\old)면 그 폴더만 스캔에서 제외합니다. node_modules·.git·dist 등은 기본 제외됩니다.' }));
+    block.appendChild(el('p', { cls: 'settings__opt-sub', text: '폴더 이름(예: temp)이면 같은 이름 폴더 모두, 절대경로(예: E:\\projects\\old)면 그 폴더만, 정규식이면 전체 경로에 매칭되는 폴더를 제외합니다. 정규식은 반드시 양쪽 끝을 / 로 감싸세요(닫는 / 가 빠지면 일반 경로로 처리됨). 경로 구분자는 / 로 쓰고(Windows \\ 자동 매칭), 앞뒤 경로가 무엇이든 가운데 패턴만 지정 — 예: /workspace/study/ 는 경로 중간의 workspace/study… 폴더를 제외. node_modules·.git·dist 등은 기본 제외됩니다.' }));
 
     // 직접 입력 + 추가
     const inputRow = el('div', { cls: 'rootmgr__inputrow' });
     const input = el('input', {
       cls: 'rootmgr__input',
       attrs: {
-        type: 'text', placeholder: '폴더 이름 또는 절대경로',
-        'aria-label': '제외할 폴더 이름 또는 절대경로', autocomplete: 'off', spellcheck: 'false',
+        type: 'text', placeholder: '폴더 이름 · 절대경로 · /정규식/',
+        'aria-label': '제외할 폴더 이름·절대경로·정규식', autocomplete: 'off', spellcheck: 'false',
       },
     });
     input.value = store.excludeInput;
@@ -1748,6 +1771,22 @@ function initBrowser() {
     inputRow.appendChild(input);
     inputRow.appendChild(addBtn);
     block.appendChild(inputRow);
+
+    // 예시 칩 — 클릭하면 입력칸을 채운다(검토 후 '추가'). 정규식 예시 포함.
+    const examples = [
+      { v: 'temp', t: '이름: temp 폴더 모두 제외' },
+      { v: '/temp/', t: '정규식: 경로에 temp 포함(앞뒤 임의)' },
+      { v: '/eclipse/plugins/', t: '정규식: 경로 중간의 eclipse/plugins 하위 전부' },
+    ];
+    const exRow = el('div', { cls: 'exclude-ex' });
+    exRow.appendChild(el('span', { cls: 'exclude-ex__label', text: '예시' }));
+    for (const ex of examples) {
+      exRow.appendChild(el('button', {
+        cls: 'exclude-ex__chip mono', text: ex.v, attrs: { type: 'button', title: ex.t, 'aria-label': '예시 입력: ' + ex.v },
+        on: { click: () => { store.excludeInput = ex.v; render(); } },
+      }));
+    }
+    block.appendChild(exRow);
 
     // 목록
     block.appendChild(el('div', { cls: 'rootmgr__label', text: '제외 목록 (' + store.excludes.length + ')' }));
@@ -1783,6 +1822,7 @@ function initBrowser() {
       store.excludes = res.excludes.filter((x) => typeof x === 'string');
       store.excludeInput = '';
       if (Array.isArray(res.added) && res.added.length) toast('제외 항목을 추가했습니다.');
+      else if (Array.isArray(res.rejected) && res.rejected.some((r) => r.reason === 'BAD_REGEX')) toast('정규식 형식이 올바르지 않습니다.', true);
       else if (Array.isArray(res.rejected) && res.rejected.length) toast('이미 있거나 추가할 수 없는 항목입니다.', true);
     } else {
       toast('제외 항목 추가에 실패했습니다.', true);
@@ -1801,6 +1841,622 @@ function initBrowser() {
       toast('제외 항목 삭제에 실패했습니다.', true);
     }
     render();
+  }
+
+  /* =====================================================================
+   * 궤도 맵 (Orbit Map) — 프로젝트를 별/궤도로 시각화하는 캔버스 뷰 (UI 템플릿 이식)
+   *   · 중심에 가까울수록 최근, 외곽일수록 방치(나이=반지름). 크기=디스크 용량, 색=주 언어.
+   *   · 각도 배치: 드라이브(C/D/E…) 또는 언어별 부채꼴(배치 기준 토글, 부드럽게 모핑).
+   *   · dirty/ahead(Git 주의)는 맥동 고리. 방치+node_modules는 '정리 모드'에서 회수 후보로 강조.
+   *   · pan(드래그)·zoom(휠/버튼)·hover(툴팁)·click(포커스+상세 드로어). 시간 되감기(scrub)·속도·일시정지.
+   * 런타임 상태(orb)는 모듈 레벨에 유지해 재렌더로 캔버스를 재생성해도 애니메이션이 끊기지 않게 한다.
+   * ===================================================================== */
+  const orb = {
+    canvasEl: null, octx: null, raf: null,
+    zoom: 1, panX: 0, panY: 0, hoverId: null, focusId: null,
+    geo: null, geoKey: '', angT: 0, layoutMix: 0,
+    stars: null, starsW: 0, starsH: 0, ot0: 0, introT0: 0, lastNow: 0,
+    dragging: false, moved: false, lx: 0, ly: 0, dsx: 0, dsy: 0,
+    tz: null, tpx: null, tpy: null, model: null, reclaimMB: 0, teardown: null,
+    speedLabelEl: null, scrubLabelEl: null, menu: null,
+  };
+
+  /** 검색어가 정규식 형식(`/.../`)이면 컴파일(렌더러 측 — excludeRules와 동일 규칙). 아니면 null. */
+  function orbCompileSearchRegex(q) {
+    if (typeof q !== 'string' || !/^\/.+\/[gimsuy]*$/.test(q)) return null;
+    const m = /^\/(.+)\/([gimsuy]*)$/.exec(q);
+    try { return new RegExp(m[1], m[2].replace(/[gy]/g, '')); } catch (_) { return null; }
+  }
+  /** 노드(vm)가 검색어에 매칭되는지 — 정규식이면 전체 경로(/ 정규화)·이름에, 아니면 substring. */
+  function orbMatch(vm, q) {
+    const query = (q || '').trim();
+    if (!query) return true;
+    const re = orbCompileSearchRegex(query);
+    if (re) { const p = String(vm.path).replace(/\\/g, '/'); return re.test(p) || re.test(vm.name); }
+    return matchesSearch(vm, query);
+  }
+
+  function orbHash(str) { let h = 0; const s = String(str); for (let i = 0; i < s.length; i++) { h = (h * 31 + s.charCodeAt(i)) | 0; } return Math.abs(h); }
+  function orbAgeDays(vm) {
+    const t = vm && vm.lastModified ? Date.parse(vm.lastModified) : NaN;
+    if (!Number.isFinite(t)) return 999;
+    const now = (store.now && store.now.getTime) ? store.now.getTime() : Date.now();
+    return Math.max(0, (now - t) / 86400000);
+  }
+  const orbGlow = (hex, a) => {
+    const h = String(hex).replace('#', '');
+    const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16);
+    return 'rgba(' + (r || 0) + ',' + (g || 0) + ',' + (b || 0) + ',' + a + ')';
+  };
+  function orbRoundRect(ctx, x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
+
+  /** store.viewModels → { rings, nodes } 궤도 모델. 기하(_geo)는 프로젝트 집합이 바뀔 때만 1회 산출. */
+  function buildOrbitModel() {
+    const A = Array.isArray(store.viewModels) ? store.viewModels : [];
+    const sd = configView(store.config).staleDays || 90;
+    const q = (store.orbit.search || '').trim();
+    const lr = (d) => Math.log(1 + Math.max(0, d)) / Math.log(441);
+    const radFrac = (d) => 0.12 + 0.86 * lr(d);
+    const szOf = (p) => (typeof p.totalBytes === 'number' && p.totalBytes > 0) ? p.totalBytes : 0;
+    const maxSz = Math.max(1, ...A.map(szOf));
+
+    const key = A.map((p) => p.id).join('|');
+    if (!orb.geo || orb.geoKey !== key) {
+      orb.geo = {}; orb.geoKey = key;
+      const layoutAngles = (keyOf, order) => {
+        const groups = order.filter((k) => A.some((p) => keyOf(p) === k));
+        A.forEach((p) => { const k = keyOf(p); if (!groups.includes(k)) groups.push(k); });
+        const gapA = 14 * Math.PI / 180, usableA = 2 * Math.PI - gapA * Math.max(1, groups.length);
+        let curA = -Math.PI / 2 + gapA / 2; const out = {};
+        groups.forEach((k) => {
+          const items = A.filter((p) => keyOf(p) === k);
+          const span = usableA * items.length / Math.max(1, A.length);
+          items.forEach((p, i) => { out[p.id] = curA + span * ((i + 0.5) / items.length); });
+          curA += span + gapA;
+        });
+        return out;
+      };
+      const driveOf = (p) => (String(p.path)[0] || 'C').toUpperCase();
+      const langOf = (p) => p.language;
+      const driveA = layoutAngles(driveOf, ['C', 'D', 'E', 'F', 'G']);
+      const langA = layoutAngles(langOf, ['TypeScript', 'JavaScript', 'Node.js', 'Python', 'Go', 'Rust', 'C++', 'C', 'Java', 'HTML', 'CSS']);
+      A.forEach((p) => {
+        const rf = radFrac(orbAgeDays(p));
+        orb.geo[p.id] = {
+          angleDrive: driveA[p.id] != null ? driveA[p.id] : 0,
+          angleLang: langA[p.id] != null ? langA[p.id] : 0,
+          angSpeed: 0.016 + 0.03 * (1 - rf),
+          phase: (orbHash(p.id) % 628) / 100,
+          wob: 0.22 + (orbHash(p.id + 'w') % 40) / 100,
+        };
+      });
+    }
+
+    const ringSeen = {};
+    const rings = [{ d: 7, label: '1주' }, { d: 30, label: '1개월' }, { d: sd, label: '방치 ' + sd + '일+', stale: true }, { d: 365, label: '1년' }]
+      .filter((r) => { if (ringSeen[r.d] || r.d > 420) return false; ringSeen[r.d] = 1; return true; })
+      .sort((a, b) => a.d - b.d)
+      .map((r) => ({ label: r.label, stale: !!r.stale, radFrac: radFrac(r.d) }));
+
+    let reclaimMB = 0;
+    const nodes = A.map((p) => {
+      const g = orb.geo[p.id]; const age = orbAgeDays(p);
+      const nm = (typeof p.nodeModulesBytes === 'number' && p.nodeModulesBytes > 0) ? p.nodeModulesBytes : 0;
+      const stale = p.isStale === true, dirty = p.gitStatus === 'dirty', ahead = (typeof p.ahead === 'number' ? p.ahead : 0);
+      const reclaim = stale && nm > 0; if (reclaim) reclaimMB += nm;
+      const status = !p.isRepo ? { t: 'Git 아님', c: '#a8a29e' }
+        : dirty ? { t: '미커밋', c: '#fbbf24' }
+          : ahead > 0 ? { t: '미푸시 ' + ahead, c: '#60a5fa' }
+            : stale ? { t: '방치', c: '#a8a29e' }
+              : { t: '정상', c: '#34d399' };
+      const sz = szOf(p);
+      return {
+        id: p.id, name: p.name, path: p.path, lang: p.language, color: langColor(p.language),
+        mod: age, nm, sizePx: 12 + Math.sqrt(sz / maxSz) * 40,
+        stale, attention: p.isRepo && (dirty || ahead > 0), reclaim, status,
+        sizeLabel: sizeLabel(p.totalBytes), nmLabel: nm > 0 ? sizeLabel(nm) : '없음', rel: rel(p.lastModified),
+        angleDrive: g.angleDrive, angleLang: g.angleLang, angSpeed: g.angSpeed, phase: g.phase, wob: g.wob,
+        match: orbMatch(p, q), // 정규식(/.../) 또는 substring
+      };
+    });
+    orb.model = { rings, nodes };
+    orb.reclaimMB = reclaimMB;
+    return orb.model;
+  }
+
+  function orbLaAngle(n) { let a = n.angleDrive, b = n.angleLang, m = orb.layoutMix || 0, d = b - a; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; return a + d * m; }
+
+  function orbHitTest(mx, my) {
+    const m = orb.model; if (!m) return null;
+    for (let i = m.nodes.length - 1; i >= 0; i--) { const n = m.nodes[i]; if (n._x == null) continue; const dx = mx - n._x, dy = my - n._y; if (dx * dx + dy * dy <= (n._r + 5) * (n._r + 5)) return n.id; }
+    return null;
+  }
+  function orbZoomAt(mx, my, nz) {
+    const cv = orb.canvasEl; if (!cv) return;
+    nz = Math.max(0.5, Math.min(6, nz));
+    const cx = cv.clientWidth / 2, cy = cv.clientHeight / 2, z = orb.zoom || 1;
+    orb.panX = mx - cx - ((mx - cx - orb.panX) / z) * nz;
+    orb.panY = my - cy - ((my - cy - orb.panY) / z) * nz;
+    orb.zoom = nz;
+  }
+  function orbFocusNode(id) {
+    const m = orb.model, cv = orb.canvasEl; if (!m || !cv) return;
+    const n = m.nodes.find((x) => x.id === id); if (!n) return;
+    orb.focusId = id;
+    const baseR = Math.min(cv.clientWidth, cv.clientHeight) * 0.45;
+    const ang = orbLaAngle(n) + (orb.angT || 0) * n.angSpeed;
+    const effDays = Math.max(0, n.mod - (store.orbit.scrub || 0) * 30);
+    const rf = 0.12 + 0.86 * (Math.log(1 + effDays) / Math.log(441));
+    const off = rf * baseR, tz = 1.85;
+    orb.tz = tz; orb.tpx = -off * Math.cos(ang) * tz - cv.clientWidth * 0.16; orb.tpy = -off * Math.sin(ang) * tz;
+  }
+  function orbClearFocus() { orb.focusId = null; orb.tz = 1; orb.tpx = 0; orb.tpy = 0; }
+
+  function attachOrbit(canvas) {
+    orb.zoom = 1; orb.panX = 0; orb.panY = 0; orb.dragging = false; orb.moved = false;
+    orb.octx = canvas.getContext('2d');
+    orb.ot0 = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+    orb.introT0 = orb.ot0; orb.angT = orb.angT || 0;
+    orb.layoutMix = store.orbit.layout === 'lang' ? 1 : 0; orb.stars = null;
+    const pos = (e) => { const r = canvas.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+    const onMove = (e) => {
+      if (orb.dragging) {
+        orb.panX += e.clientX - orb.lx; orb.panY += e.clientY - orb.ly; orb.lx = e.clientX; orb.ly = e.clientY;
+        if (Math.abs(e.clientX - orb.dsx) + Math.abs(e.clientY - orb.dsy) > 4) orb.moved = true;
+        orb.hoverId = null; canvas.style.cursor = 'grabbing'; return;
+      }
+      const m = pos(e); orb.hoverId = orbHitTest(m.x, m.y); canvas.style.cursor = orb.hoverId ? 'pointer' : 'grab';
+    };
+    const onLeave = () => { orb.hoverId = null; canvas.style.cursor = 'default'; };
+    const onDown = (e) => { if (e.button !== 0) return; orb.tz = orb.tpx = orb.tpy = null; orb.focusId = null; orb.dragging = true; orb.moved = false; orb.lx = orb.dsx = e.clientX; orb.ly = orb.dsy = e.clientY; };
+    const onUp = () => { orb.dragging = false; };
+    // 우클릭 → 노드 위면 컨텍스트 메뉴(디렉터리 제외). 빈 곳이면 메뉴 닫기.
+    const onCtx = (e) => {
+      e.preventDefault();
+      const m = pos(e); const id = orbHitTest(m.x, m.y);
+      if (id) {
+        const n = orb.model && orb.model.nodes.find((x) => x.id === id);
+        orb.menu = { x: m.x, y: m.y, id, name: n ? n.name : '', path: n ? n.path : '' };
+      } else { orb.menu = null; }
+      render();
+    };
+    const onClick = (e) => {
+      if (orb.moved) return;
+      const m = pos(e); const id = orbHitTest(m.x, m.y);
+      if (id) { orbFocusNode(id); openDrawer(id); }
+      else if (orb.focusId || store.state.selectedId) { orbClearFocus(); if (store.state.selectedId) closeDrawer(); }
+    };
+    const onWheel = (e) => { e.preventDefault(); orb.tz = orb.tpx = orb.tpy = null; orb.focusId = null; const m = pos(e); const f = Math.exp(-e.deltaY * 0.0015); orbZoomAt(m.x, m.y, (orb.zoom || 1) * f); };
+    canvas.addEventListener('mousemove', onMove);
+    canvas.addEventListener('mouseleave', onLeave);
+    canvas.addEventListener('mousedown', onDown);
+    window.addEventListener('mouseup', onUp);
+    canvas.addEventListener('click', onClick);
+    canvas.addEventListener('wheel', onWheel, { passive: false });
+    canvas.addEventListener('contextmenu', onCtx);
+    orb.teardown = () => {
+      canvas.removeEventListener('mousemove', onMove); canvas.removeEventListener('mouseleave', onLeave);
+      canvas.removeEventListener('mousedown', onDown); window.removeEventListener('mouseup', onUp);
+      canvas.removeEventListener('click', onClick); canvas.removeEventListener('wheel', onWheel);
+      canvas.removeEventListener('contextmenu', onCtx);
+    };
+  }
+
+  function orbitLoop(now) {
+    if (!orb.canvasEl) { orb.raf = null; return; }
+    const dt = orb.lastNow ? Math.min(0.05, (now - orb.lastNow) / 1000) : 0; orb.lastNow = now;
+    const sp = (store.orbit.paused || orb.focusId) ? 0 : (store.orbit.speed || 1);
+    orb.angT += dt * sp;
+    orbitFrame((now - orb.ot0) / 1000, now);
+    orb.raf = requestAnimationFrame(orbitLoop);
+  }
+
+  function orbitFrame(t, now) {
+    const cv = orb.canvasEl, ctx = orb.octx, model = orb.model; if (!cv || !ctx || !model) return;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const cw = cv.clientWidth, ch = cv.clientHeight; if (!cw || !ch) return;
+    if (cv.width !== Math.round(cw * dpr) || cv.height !== Math.round(ch * dpr)) { cv.width = Math.round(cw * dpr); cv.height = Math.round(ch * dpr); }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, cw, ch);
+
+    if (orb.tz != null) {
+      orb.zoom += (orb.tz - orb.zoom) * 0.12;
+      orb.panX = (orb.panX || 0) + (orb.tpx - (orb.panX || 0)) * 0.12;
+      orb.panY = (orb.panY || 0) + (orb.tpy - (orb.panY || 0)) * 0.12;
+      if (Math.abs(orb.tz - orb.zoom) < 0.01) { orb.zoom = orb.tz; orb.panX = orb.tpx; orb.panY = orb.tpy; orb.tz = orb.tpx = orb.tpy = null; }
+    }
+    const lt = store.orbit.layout === 'lang' ? 1 : 0;
+    orb.layoutMix = (orb.layoutMix || 0) + (lt - (orb.layoutMix || 0)) * 0.08;
+
+    const z = orb.zoom || 1;
+    const cx = cw / 2 + (orb.panX || 0), cy = ch / 2 + (orb.panY || 0), R = Math.min(cw, ch) * 0.45 * z;
+    const hi = store.orbit.hi, aT = orb.angT || 0, scrub = store.orbit.scrub || 0, triage = store.orbit.triage;
+    const fActive = !!(store.orbit.search || '').trim();
+    const intro = Math.min(1, (now - (orb.introT0 || now)) / 950), ease = 1 - Math.pow(1 - intro, 3);
+    const liveRF = (n) => 0.12 + 0.86 * (Math.log(1 + Math.max(0, n.mod - scrub * 30)) / Math.log(441));
+    const angleOf = (n) => { let a = n.angleDrive, b = n.angleLang, mx = orb.layoutMix || 0, d = b - a; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; return a + d * mx; };
+    const kpi = store.orbit.kpi;
+    const kpiMatch = (n) => !kpi || (kpi === 'active' ? !n.stale : kpi === 'attention' ? n.attention : kpi === 'stale' ? n.stale : true);
+    const isDim = (n) => (hi && n.lang !== hi) || (fActive && !n.match) || (triage && !n.reclaim) || !kpiMatch(n);
+    const MONO = "ui-monospace, 'Consolas', monospace";
+
+    // starfield
+    if (!orb.stars || orb.starsW !== cw || orb.starsH !== ch) { orb.stars = []; orb.starsW = cw; orb.starsH = ch; const N = Math.round(cw * ch / 9000); for (let i = 0; i < N; i++) orb.stars.push({ x: Math.random() * cw, y: Math.random() * ch, r: Math.random() * 1.1 + 0.3, p: Math.random() * 6.28, s: 0.3 + Math.random() * 0.7 }); }
+    ctx.fillStyle = '#cdd3ff';
+    orb.stars.forEach((s2) => { ctx.globalAlpha = 0.05 + 0.07 * Math.sin(t * 0.8 * s2.s + s2.p); ctx.beginPath(); ctx.arc((s2.x + t * 2 * s2.s) % cw, s2.y, s2.r, 0, Math.PI * 2); ctx.fill(); });
+    ctx.globalAlpha = 1;
+
+    // rings
+    model.rings.forEach((r) => {
+      const rad = r.radFrac * R;
+      ctx.beginPath(); ctx.arc(cx, cy, rad, 0, Math.PI * 2);
+      ctx.lineWidth = 1; ctx.strokeStyle = r.stale ? 'rgba(251,191,36,.30)' : 'rgba(255,255,255,.06)';
+      if (r.stale) ctx.setLineDash([5, 7]); ctx.stroke(); ctx.setLineDash([]);
+      ctx.font = '9px ' + MONO; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      const ly = cy - rad, tw = ctx.measureText(r.label).width;
+      ctx.fillStyle = '#0c0a09'; ctx.fillRect(cx - tw / 2 - 4, ly - 7, tw + 8, 14);
+      ctx.fillStyle = r.stale ? 'rgba(251,191,36,.72)' : 'rgba(255,255,255,.34)'; ctx.fillText(r.label, cx, ly);
+    });
+
+    // orbit trails
+    ctx.globalAlpha = ease;
+    model.nodes.forEach((n) => {
+      if (isDim(n)) return;
+      const ang = angleOf(n) + aT * n.angSpeed, rad = liveRF(n) * R;
+      ctx.beginPath(); ctx.arc(cx, cy, rad, ang - 0.36, ang);
+      ctx.strokeStyle = orbGlow(n.color, n.stale ? 0.08 : 0.16); ctx.lineWidth = Math.max(1, n.sizePx * z * 0.16); ctx.stroke();
+    });
+    ctx.globalAlpha = 1;
+
+    // constellation lines for highlighted language
+    if (hi) {
+      model.nodes.forEach((n) => {
+        if (n.lang !== hi) return;
+        const ang = angleOf(n) + aT * n.angSpeed, rad = liveRF(n) * R;
+        const x = cx + rad * Math.cos(ang), y = cy + rad * Math.sin(ang);
+        ctx.strokeStyle = orbGlow(n.color, 0.22); ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(x, y); ctx.stroke();
+      });
+    }
+
+    // core star
+    const pulse = 0.5 + 0.5 * Math.sin(t * 2);
+    const cr = (30 + 12 * pulse) * z;
+    const cg = ctx.createRadialGradient(cx, cy, 0, cx, cy, cr);
+    cg.addColorStop(0, 'rgba(129,140,248,' + (0.34 + 0.16 * pulse) + ')'); cg.addColorStop(1, 'rgba(129,140,248,0)');
+    ctx.fillStyle = cg; ctx.beginPath(); ctx.arc(cx, cy, cr, 0, Math.PI * 2); ctx.fill();
+    const sg = ctx.createRadialGradient(cx - 3 * z, cy - 3 * z, 0, cx, cy, 9 * z);
+    sg.addColorStop(0, '#e0e7ff'); sg.addColorStop(1, '#818cf8');
+    ctx.fillStyle = sg; ctx.beginPath(); ctx.arc(cx, cy, 8 * z, 0, Math.PI * 2); ctx.fill();
+    ctx.font = "600 11px 'Pretendard Variable', sans-serif"; ctx.fillStyle = 'rgba(255,255,255,.6)'; ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillText(scrub === 0 ? '지금' : scrub + '개월 전', cx, cy + 9 * z + 5);
+
+    // nodes
+    model.nodes.forEach((n) => {
+      const ang = angleOf(n) + aT * n.angSpeed;
+      const rad = (liveRF(n) * R) * (1 + 0.7 * (1 - ease)) + Math.sin(t * n.wob + n.phase) * 4 * z;
+      const x = cx + rad * Math.cos(ang), y = cy + rad * Math.sin(ang);
+      const sz = n.sizePx * z; n._x = x; n._y = y; n._r = sz / 2;
+      const dim = isDim(n), hov = orb.hoverId === n.id, focused = store.state.selectedId === n.id;
+      const matchPulse = fActive && n.match && !dim;
+      const psc = matchPulse ? (1 + 0.12 * Math.sin(t * 4 + n.phase)) : 1;
+      const twk = 0.82 + 0.18 * Math.sin(t * 2.4 + n.phase);
+      if (!n.stale && !dim) {
+        const gr = sz * (hov ? 2 : 1.5) * psc;
+        const g = ctx.createRadialGradient(x, y, sz * 0.3, x, y, gr);
+        g.addColorStop(0, orbGlow(n.color, 0.5 * twk)); g.addColorStop(1, orbGlow(n.color, 0));
+        ctx.globalAlpha = ease; ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, gr, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1;
+      }
+      if (!dim && ((n.attention && !n.stale) || (triage && n.reclaim))) {
+        const col = (triage && n.reclaim) ? '#fbbf24' : n.color;
+        const prog = (t / 2.2) % 1, hr = sz * 0.5 * (1 + 1.3 * prog);
+        ctx.globalAlpha = 0.55 * (1 - prog) * ease; ctx.lineWidth = 1.5; ctx.strokeStyle = col;
+        ctx.beginPath(); ctx.arc(x, y, hr, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1;
+      }
+      if (focused) {
+        ctx.globalAlpha = 0.9; ctx.lineWidth = 2; ctx.strokeStyle = '#c7d2fe';
+        ctx.beginPath(); ctx.arc(x, y, sz / 2 + 6 + 2 * Math.sin(t * 3), 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1;
+      }
+      const br = sz / 2 * (hov ? 1.16 : 1) * psc;
+      ctx.globalAlpha = (dim ? 0.16 : (n.stale ? 0.55 : 1)) * ease;
+      ctx.fillStyle = dim ? '#5b5b58' : n.color;
+      ctx.beginPath(); ctx.arc(x, y, br, 0, Math.PI * 2); ctx.fill();
+      ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(255,255,255,' + (n.stale ? 0.12 : 0.34) + ')'; ctx.stroke();
+      ctx.globalAlpha = (dim ? 0.16 : (hov ? 1 : (n.stale ? 0.32 : 0.55))) * ease;
+      ctx.font = (hov ? '600 ' : '') + Math.max(8, Math.min(9 * z, 17)).toFixed(1) + 'px ' + MONO; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+      ctx.fillStyle = (triage && n.reclaim && !dim) ? '#fbbf24' : (hov ? '#ffffff' : '#e7e5e4');
+      ctx.fillText((triage && n.reclaim) ? n.name + '  ▸ ' + n.nmLabel : n.name, x, y + br + 5);
+      ctx.globalAlpha = 1;
+    });
+
+    // hover tooltip
+    const hn = orb.hoverId ? model.nodes.find((n) => n.id === orb.hoverId) : null;
+    if (hn && hn._x != null) {
+      const pad = 12, bw = 220;
+      ctx.font = '10px ' + MONO;
+      const pathLines = []; let cur = '';
+      for (const ch2 of String(hn.path)) { if (ctx.measureText(cur + ch2).width > bw - pad * 2) { pathLines.push(cur); cur = ch2; } else cur += ch2; }
+      if (cur) pathLines.push(cur);
+      const bh = pad * 2 + 18 + pathLines.length * 13 + 8 + 15 + 6 + 14;
+      let bx = Math.max(8, Math.min(cw - bw - 8, hn._x - bw / 2));
+      let by = hn._y - hn._r - bh - 14; if (by < 8) by = hn._y + hn._r + 14;
+      ctx.fillStyle = '#1c1917'; ctx.strokeStyle = 'rgba(255,255,255,.12)'; ctx.lineWidth = 1;
+      orbRoundRect(ctx, bx, by, bw, bh, 11); ctx.fill(); ctx.stroke();
+      let ty = by + pad; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+      ctx.fillStyle = hn.color; ctx.beginPath(); ctx.arc(bx + pad + 4, ty + 7, 4, 0, Math.PI * 2); ctx.fill();
+      ctx.font = "600 13px 'Pretendard Variable', sans-serif"; ctx.fillStyle = '#fff'; ctx.fillText(hn.name, bx + pad + 14, ty); ty += 18;
+      ctx.font = '10px ' + MONO; ctx.fillStyle = 'rgba(255,255,255,.42)';
+      pathLines.forEach((l) => { ctx.fillText(l, bx + pad, ty); ty += 13; }); ty += 8;
+      ctx.font = '600 11px ' + MONO;
+      ctx.fillStyle = 'rgba(255,255,255,.7)'; ctx.fillText(hn.lang, bx + pad, ty);
+      const lw = ctx.measureText(hn.lang).width;
+      ctx.fillStyle = 'rgba(255,255,255,.2)'; ctx.fillText('·', bx + pad + lw + 7, ty);
+      ctx.fillStyle = hn.status.c; ctx.fillText(hn.status.t, bx + pad + lw + 16, ty); ty += 15 + 6;
+      ctx.font = '11px ' + MONO; ctx.fillStyle = 'rgba(255,255,255,.45)';
+      ctx.fillText(hn.rel + '  ·  ' + hn.sizeLabel, bx + pad, ty);
+    }
+  }
+
+  function stopOrbit() {
+    if (orb.raf) { cancelAnimationFrame(orb.raf); orb.raf = null; }
+    if (orb.teardown) { try { orb.teardown(); } catch (_) { /* ignore */ } orb.teardown = null; }
+    orb.canvasEl = null; orb.octx = null; orb.hoverId = null; orb.menu = null;
+  }
+
+  function enterOrbit() {
+    // 진입할 때마다 검색·필터/강조 상태 초기화(검색어·언어 강조·인사이트 강조·정리 모드·시간 되감기).
+    //   배치 기준(layout)·속도·일시정지 등 표시 설정은 유지.
+    store.orbit.search = '';
+    store.orbit.hi = null;
+    store.orbit.kpi = null;
+    store.orbit.triage = false;
+    store.orbit.scrub = 0;
+    orb.focusId = null; orb.menu = null; // 포커스/컨텍스트 메뉴도 초기화
+    store.state.view = 'orbit';
+    orb.introT0 = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+    render();
+  }
+  function exitOrbit() {
+    stopOrbit();
+    store.state.view = store.viewModels && store.viewModels.length ? 'dashboard' : 'firstRun';
+    render();
+  }
+
+  /** 공통: 값(이름/경로/정규식)을 제외에 추가하고 토스트로 결과 안내. */
+  async function orbAddExclude(value, okMsg) {
+    const v = (value || '').trim();
+    if (!v || !bridgeHas('addExcludes')) return;
+    const res = await ipc('addExcludes', [v]);
+    if (res && res.ok && Array.isArray(res.added) && res.added.length) {
+      if (Array.isArray(res.excludes)) store.excludes = res.excludes.filter((x) => typeof x === 'string');
+      toast(okMsg + ' — 다음 스캔부터 적용됩니다.');
+    } else if (res && res.rejected && res.rejected.some((r) => r.reason === 'BAD_REGEX')) {
+      toast('정규식 형식이 올바르지 않습니다.', true);
+    } else if (res && res.ok) {
+      toast('이미 제외 목록에 있습니다.');
+    } else {
+      toast('제외 추가에 실패했습니다.', true);
+    }
+  }
+  function orbExcludeDir(path) { orbAddExclude(path, '이 폴더를 제외에 추가했습니다'); }
+  function orbAddExcludeFromSearch() {
+    const q = (store.orbit.search || '').trim();
+    if (!q) { toast('검색창에 이름·경로·정규식을 입력하세요.', true); return; }
+    orbAddExclude(q, '검색값을 제외에 추가했습니다');
+  }
+
+  /** 궤도 컨트롤 패널의 KPI/배지 미니 박스. */
+  function orbKpi(value, label, color, key) {
+    const v = el('div', { cls: 'orbit__kpi-v', text: String(value) });
+    v.style.color = color; // CSSOM — CSP(style-src 'self')가 인라인 style 속성을 막으므로 속성 대신 직접 설정
+    const on = store.orbit.kpi === key;
+    return el('button', {
+      cls: 'orbit__kpi' + (on ? ' is-on' : ''),
+      attrs: { type: 'button', 'aria-pressed': on ? 'true' : 'false', 'aria-label': label + ' 강조 토글' },
+      children: [v, el('div', { cls: 'orbit__kpi-l', text: label })],
+      on: { click: () => { store.orbit.kpi = on ? null : key; render(); } },
+    });
+  }
+
+  function renderOrbit() {
+    buildOrbitModel();
+    const o = store.orbit;
+    const A = Array.isArray(store.viewModels) ? store.viewModels : [];
+    const sd = configView(store.config).staleDays || 90;
+    const activeCount = A.filter((p) => !p.isStale).length;
+    const staleCount = A.filter((p) => p.isStale).length;
+    const attention = (orb.model.nodes || []).filter((n) => n.attention).length;
+    const langCounts = {};
+    A.forEach((p) => { langCounts[p.language] = (langCounts[p.language] || 0) + 1; });
+    const langs = Object.keys(langCounts).sort((a, b) => langCounts[b] - langCounts[a]);
+
+    const root = el('div', { cls: 'orbit' });
+
+    /* ── 좌측 컨트롤 패널 ── */
+    const aside = el('aside', { cls: 'orbit__panel spip-scroll' });
+    const topRow = el('div', { cls: 'orbit__toprow' });
+    topRow.appendChild(el('button', {
+      cls: 'orbit__back', text: '← 대시보드', attrs: { type: 'button', 'aria-label': '대시보드로 돌아가기' },
+      on: { click: exitOrbit },
+    }));
+    if (bridgeHas('getConfig')) {
+      topRow.appendChild(el('button', {
+        cls: 'orbit__back', text: '설정', attrs: { type: 'button', 'aria-label': '설정 열기' },
+        on: { click: openSettings },
+      }));
+    }
+    aside.appendChild(topRow);
+    aside.appendChild(el('div', { children: [
+      el('div', { cls: 'orbit__eyebrow', text: 'Project Orbit · 실험적 뷰' }),
+      el('h1', { cls: 'orbit__title', children: [document.createTextNode('내 머신의'), el('br'), document.createTextNode('프로젝트 궤도')] }),
+      el('p', { cls: 'orbit__lead', text: '중심에 가까울수록 최근에 만진 프로젝트, 바깥으로 밀려날수록 오래 잊힌 프로젝트입니다. 점의 크기는 디스크 용량, 색은 주 언어예요.' }),
+    ]}));
+
+    // KPI
+    aside.appendChild(el('div', { cls: 'orbit__kpis', children: [
+      orbKpi(activeCount, '활동 중', '#34d399', 'active'),
+      orbKpi(attention, 'Git 주의', '#fbbf24', 'attention'),
+      orbKpi(staleCount, '외곽·방치', '#d6d3d1', 'stale'),
+    ]}));
+
+    // 컨트롤 박스 (그룹 간격 13px, 그룹 내부 8px / 정리모드 7px — 템플릿 정합)
+    const ctrl = el('div', { cls: 'orbit__box' });
+    ctrl.appendChild(el('div', { cls: 'orbit__box-title', text: '컨트롤' }));
+
+    // 검색(돋보기 아이콘 + 입력)
+    const searchWrap = el('div', { cls: 'orbit__search-wrap' });
+    searchWrap.appendChild(svg(
+      [{ t: 'circle', cx: '11', cy: '11', r: '7' }, { t: 'line', x1: '21', y1: '21', x2: '16.5', y2: '16.5' }],
+      { size: 13, stroke: 'rgba(255,255,255,.4)', cls: 'orbit__search-icon' }
+    ));
+    const searchInput = el('input', {
+      cls: 'orbit__search', attrs: { type: 'search', placeholder: '이름·경로·/정규식/ 검색', 'aria-label': '궤도 검색(이름·경로·정규식)', autocomplete: 'off', spellcheck: 'false' },
+    });
+    searchInput.value = o.search;
+    searchWrap.appendChild(searchInput);
+    // 검색 그룹: 검색 + "이 검색을 제외 추가"(입력값을 그대로 제외 항목으로). 정규식 미리보기 후 바로 추가.
+    const searchG = el('div', { cls: 'orbit__group' });
+    searchG.appendChild(searchWrap);
+    const exAddBtn = el('button', {
+      cls: 'orbit__btn-sm orbit__search-add', text: '이 검색을 제외에 추가', attrs: { type: 'button', 'aria-label': '검색값을 제외 항목으로 추가' },
+      on: { click: orbAddExcludeFromSearch },
+    });
+    const canAdd = bridgeHas('addExcludes');
+    exAddBtn.disabled = !((o.search || '').trim()) || !canAdd;
+    // 입력은 focus 보존 위해 render() 없이 모델만 갱신 → 버튼 disabled 도 여기서 직접 토글.
+    searchInput.addEventListener('input', (e) => {
+      store.orbit.search = e.target.value || '';
+      buildOrbitModel();
+      exAddBtn.disabled = !(store.orbit.search.trim()) || !canAdd;
+    });
+    searchG.appendChild(exAddBtn);
+    ctrl.appendChild(searchG);
+
+    // 모션(일시정지 + 속도)
+    const motionG = el('div', { cls: 'orbit__group' });
+    const motionRow = el('div', { cls: 'orbit__row' });
+    motionRow.appendChild(el('span', { cls: 'orbit__row-label', text: '모션' }));
+    motionRow.appendChild(el('button', {
+      cls: 'orbit__btn-sm', text: o.paused ? '재생' : '일시정지', attrs: { type: 'button' },
+      on: { click: () => { store.orbit.paused = !store.orbit.paused; render(); } },
+    }));
+    motionG.appendChild(motionRow);
+    const speedRow = el('div', { cls: 'orbit__sliderrow' });
+    const speedLabel = el('span', { cls: 'orbit__speed-val', text: (o.speed).toFixed(1) + '×' });
+    orb.speedLabelEl = speedLabel;
+    const speed = el('input', { cls: 'orbit__slider', attrs: { type: 'range', min: '0.2', max: '3', step: '0.1', value: String(o.speed), 'aria-label': '회전 속도' } });
+    speed.addEventListener('input', (e) => { const v = parseFloat(e.target.value) || 1; store.orbit.speed = v; if (orb.speedLabelEl) orb.speedLabelEl.textContent = v.toFixed(1) + '×'; });
+    speedRow.appendChild(speedLabel); speedRow.appendChild(speed);
+    motionG.appendChild(speedRow);
+    ctrl.appendChild(motionG);
+
+    // 시간 되감기(scrub)
+    const scrubG = el('div', { cls: 'orbit__group' });
+    const scrubHead = el('div', { cls: 'orbit__row' });
+    scrubHead.appendChild(el('span', { cls: 'orbit__row-label', text: '시간 되감기' }));
+    const scrubLabel = el('span', { cls: 'orbit__scrub-val', text: o.scrub === 0 ? '현재' : o.scrub + '개월 전' });
+    orb.scrubLabelEl = scrubLabel;
+    scrubHead.appendChild(scrubLabel);
+    scrubG.appendChild(scrubHead);
+    const scrub = el('input', { cls: 'orbit__slider orbit__slider--full', attrs: { type: 'range', min: '0', max: '12', step: '1', value: String(o.scrub), 'aria-label': '시간 되감기(개월)' } });
+    scrub.addEventListener('input', (e) => { const v = parseInt(e.target.value, 10) || 0; store.orbit.scrub = v; if (orb.scrubLabelEl) orb.scrubLabelEl.textContent = v === 0 ? '현재' : v + '개월 전'; });
+    scrubG.appendChild(scrub);
+    ctrl.appendChild(scrubG);
+
+    // 배치 기준
+    const layoutG = el('div', { cls: 'orbit__group' });
+    layoutG.appendChild(el('span', { cls: 'orbit__row-label', text: '배치 기준' }));
+    const seg = el('div', { cls: 'orbit__seg' });
+    [['drive', '드라이브'], ['lang', '언어']].forEach(([val, label]) => {
+      seg.appendChild(el('button', { cls: 'orbit__seg-btn' + (o.layout === val ? ' is-on' : ''), text: label, attrs: { type: 'button' }, on: { click: () => { store.orbit.layout = val; render(); } } }));
+    });
+    layoutG.appendChild(seg);
+    ctrl.appendChild(layoutG);
+
+    // 정리 모드
+    const triageG = el('div', { cls: 'orbit__group orbit__group--triage' });
+    triageG.appendChild(el('button', { cls: 'orbit__triage' + (o.triage ? ' is-on' : ''), text: '정리 모드', attrs: { type: 'button' }, on: { click: () => { store.orbit.triage = !store.orbit.triage; render(); } } }));
+    triageG.appendChild(el('div', { cls: 'orbit__triage-note', children: [
+      document.createTextNode('방치 + node_modules '),
+      el('b', { cls: 'orbit__reclaim', text: sizeLabel(orb.reclaimMB || 0) }),
+      document.createTextNode(' 회수 가능'),
+    ]}));
+    ctrl.appendChild(triageG);
+    aside.appendChild(ctrl);
+
+    // 읽는 법 (각 항목 좌측 34px 스와치 + 설명 — 템플릿 정합)
+    const legend = el('div', { cls: 'orbit__box orbit__box--legend' });
+    legend.appendChild(el('div', { cls: 'orbit__box-title', text: '읽는 법' }));
+    const orbCircle = (d, bg, extra) => { const c = el('span'); c.style.cssText = 'width:' + d + 'px;height:' + d + 'px;border-radius:50%;background:' + bg + ';' + (extra || ''); return c; };
+    const legendRow = (swNode, txt) => el('div', { cls: 'orbit__legend-row', children: [swNode, el('span', { text: txt })] });
+    const swDist = el('span', { cls: 'orbit__sw' });
+    const distBar = el('span'); distBar.style.cssText = 'width:34px;height:13px;border-radius:7px;background:linear-gradient(90deg,#818cf8,rgba(129,140,248,.08))';
+    swDist.appendChild(distBar);
+    legend.appendChild(legendRow(swDist, '거리 — 중심=최근, 외곽=방치'));
+    legend.appendChild(legendRow(el('span', { cls: 'orbit__sw', children: [orbCircle(7, '#8a8580'), orbCircle(14, '#8a8580')] }), '크기 — 디스크 용량'));
+    legend.appendChild(legendRow(el('span', { cls: 'orbit__sw', children: [orbCircle(9, '#3178c6'), orbCircle(9, '#cba70f')] }), '색 — 주 언어'));
+    legend.appendChild(legendRow(el('span', { cls: 'orbit__sw', children: [orbCircle(11, '#fbbf24', 'box-shadow:0 0 0 4px rgba(251,191,36,.22)')] }), '맥동 고리 — Git 주의'));
+    legend.appendChild(legendRow(el('span', { cls: 'orbit__sw orbit__sw--drive', text: 'C·D·E' }), '부채꼴 — 드라이브'));
+    aside.appendChild(legend);
+
+    // 언어 칩(클릭해 강조)
+    if (langs.length) {
+      const langBox = el('div', { cls: 'orbit__langs' });
+      langBox.appendChild(el('div', { cls: 'orbit__box-title', text: '언어 · 클릭해 강조' }));
+      const chips = el('div', { cls: 'orbit__chips' });
+      langs.forEach((lang) => {
+        const on = o.hi === lang;
+        const chip = el('button', { cls: 'orbit__chip' + (on ? ' is-on' : '') + (o.hi && !on ? ' is-faded' : ''), attrs: { type: 'button' }, on: { click: () => { store.orbit.hi = on ? null : lang; render(); } } });
+        const dotn = el('span', { cls: 'orbit__chip-dot' }); dotn.style.background = langColor(lang);
+        chip.appendChild(dotn);
+        chip.appendChild(document.createTextNode(' ' + lang + ' '));
+        chip.appendChild(el('span', { cls: 'orbit__chip-n', text: String(langCounts[lang]) }));
+        chips.appendChild(chip);
+      });
+      langBox.appendChild(chips);
+      aside.appendChild(langBox);
+    }
+
+    root.appendChild(aside);
+
+    /* ── 우측 캔버스 스테이지 ── */
+    const stage = el('div', { cls: 'orbit__stage' });
+    // 영속 캔버스 노드를 재사용(재렌더로 컨텍스트·픽셀을 잃지 않게 — 1회만 attach).
+    if (!orb.canvasEl) {
+      const cv = el('canvas', { cls: 'orbit__canvas' });
+      orb.canvasEl = cv;
+      attachOrbit(cv);
+    }
+    if (!orb.raf) orb.raf = requestAnimationFrame(orbitLoop);
+    stage.appendChild(orb.canvasEl);
+
+    const zoomBox = el('div', { cls: 'orbit__zoom' });
+    const zc = () => { const cv = orb.canvasEl; return cv ? { x: cv.clientWidth / 2, y: cv.clientHeight / 2 } : { x: 0, y: 0 }; };
+    zoomBox.appendChild(el('button', { cls: 'orbit__zoom-btn', text: '+', attrs: { type: 'button', title: '확대' }, on: { click: () => { orb.tz = orb.tpx = orb.tpy = null; orb.focusId = null; const c = zc(); orbZoomAt(c.x, c.y, (orb.zoom || 1) * 1.3); } } }));
+    zoomBox.appendChild(el('button', { cls: 'orbit__zoom-btn orbit__zoom-btn--out', text: '−', attrs: { type: 'button', title: '축소' }, on: { click: () => { orb.tz = orb.tpx = orb.tpy = null; orb.focusId = null; const c = zc(); orbZoomAt(c.x, c.y, (orb.zoom || 1) / 1.3); } } }));
+    zoomBox.appendChild(el('button', { cls: 'orbit__zoom-btn orbit__zoom-btn--reset', text: '⤢', attrs: { type: 'button', title: '원래대로' }, on: { click: () => { orbClearFocus(); } } }));
+    stage.appendChild(zoomBox);
+    stage.appendChild(el('div', { cls: 'orbit__hint', text: '스크롤 확대 · 드래그 이동 · 클릭해 포커스·상세 · 우클릭해 폴더 제외' }));
+
+    // 우클릭 컨텍스트 메뉴(노드 위에서) — 디렉터리 제외. 바깥/Esc 로 닫힘.
+    if (orb.menu) {
+      const closeMenu = () => { orb.menu = null; render(); };
+      const ov = el('div', { cls: 'orbit__ctx-overlay', on: { click: closeMenu, contextmenu: (e) => { e.preventDefault(); closeMenu(); } } });
+      const menu = el('div', { cls: 'orbit__ctxmenu' });
+      menu.style.left = orb.menu.x + 'px';
+      menu.style.top = orb.menu.y + 'px';
+      menu.addEventListener('click', (e) => e.stopPropagation());
+      menu.appendChild(el('div', { cls: 'orbit__ctxmenu-title', text: orb.menu.name || '프로젝트' }));
+      menu.appendChild(el('div', { cls: 'orbit__ctxmenu-path mono', text: orb.menu.path, title: orb.menu.path }));
+      const p = orb.menu.path;
+      menu.appendChild(el('button', {
+        cls: 'orbit__ctxmenu-btn', text: '이 폴더를 제외에 추가', attrs: { type: 'button' },
+        on: { click: () => { orb.menu = null; render(); orbExcludeDir(p); } },
+      }));
+      stage.appendChild(ov);
+      stage.appendChild(menu);
+    }
+
+    root.appendChild(stage);
+    return root;
   }
 
   /* ---- 헤더 ---- */
@@ -1859,6 +2515,19 @@ function initBrowser() {
       { t: 'path', d: 'M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z' },
     ], { size: 13, sw: 1.8 }));
     actions.appendChild(settingsBtn);
+
+    // 궤도 맵 진입 버튼(UI 템플릿 이식) — 프로젝트를 별/궤도로 보는 실험적 뷰.
+    const orbitBtn = el('button', {
+      cls: 'btn', text: '궤도 맵',
+      attrs: { 'aria-label': '궤도 맵 열기' },
+      on: { click: enterOrbit },
+    });
+    orbitBtn.prepend(svg([
+      { t: 'circle', cx: '12', cy: '12', r: '2.5' },
+      { t: 'ellipse', cx: '12', cy: '12', rx: '10', ry: '4.5' },
+      { t: 'ellipse', cx: '12', cy: '12', rx: '10', ry: '4.5', transform: 'rotate(60 12 12)' },
+    ], { size: 13, sw: 1.6 }));
+    actions.appendChild(orbitBtn);
 
     const rescanning = store.state.rescanning;
     const rescan = el('button', {
@@ -2360,6 +3029,7 @@ function initBrowser() {
   }
   function closeDrawer() {
     store.state.selectedId = null;
+    store._drawerShown = false; // 다음 열림에 진입 슬라이드 재적용
     const opener = store._drawerOpener;
     store._drawerOpener = null;
     render();
@@ -2382,7 +3052,8 @@ function initBrowser() {
 
     const overlay = el('div', { cls: 'drawer-overlay', on: { click: closeDrawer } });
     const titleId = 'drawer-title';
-    const aside = el('aside', { cls: 'drawer spip-scroll', attrs: { role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': titleId } });
+    const enter = !store._drawerShown; store._drawerShown = true; // 진입 슬라이드 1회만(재렌더 깜빡임 방지)
+    const aside = el('aside', { cls: 'drawer spip-scroll' + (enter ? ' is-enter' : ''), attrs: { role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': titleId } });
     aside.addEventListener('click', (e) => e.stopPropagation());
 
     // header
@@ -2830,7 +3501,11 @@ function initBrowser() {
     if (store.stats && typeof store.stats === 'object') {
       store.stats.staleCount = store.viewModels.filter((v) => v && v.isStale).length;
     }
-    if (store.state.view === 'dashboard' && !store._dragging) render();
+    // 대시보드 뷰 + 비드래그 + 오버레이(설정/도움말/드로어) 미개방일 때만 재렌더.
+    //   오버레이가 열려 있으면 데이터만 병합하고 렌더는 보류 — 모달 깜빡임/포커스·스크롤 손실 방지.
+    //   (오버레이가 닫힐 때 자연 렌더로 최신 데이터 반영.)
+    const overlayOpen = store.showSettings || store.showHelp || store.state.selectedId;
+    if (store.state.view === 'dashboard' && !store._dragging && !overlayOpen) render();
   }
   /** onTray 콜백 본체 — action 토큰 디스패치(매핑은 순수 dispatchTrayAction).
    *  [M7 §8.1·R4] 'favorites' 분기 제거 — 트레이 '즐겨찾기'는 main 이 위젯 창을 직접 열고
@@ -2858,6 +3533,7 @@ function initBrowser() {
   }
   function closeHelp() {
     store.showHelp = false;
+    store._helpShown = false; // 다음 열림에 진입 애니메이션 재적용
     const opener = store._helpOpener;
     store._helpOpener = null;
     render();
@@ -2917,12 +3593,14 @@ function initBrowser() {
       ver ? helpRow('버전', ver) : null,
     ]);
 
+    const enter = !store._helpShown; store._helpShown = true; // 진입 애니메이션 1회만
     return buildModal({
       titleId: 'help-title',
       title: '도움말',
       subtitle: '스캔 기준과 각 항목의 의미',
       onClose: closeHelp,
       wide: true,
+      enter,
       bodyChildren: [detect, fields, about],
     });
   }
@@ -3381,7 +4059,9 @@ function initBrowser() {
     if (e.key !== 'Escape') return;
     if (store.showHelp) { closeHelp(); return; }
     if (store.state.selectedId) { closeDrawer(); return; }
-    if (store.showSettings) { closeSettings(); }
+    if (store.showSettings) { closeSettings(); return; }
+    if (store.state.view === 'orbit' && orb.menu) { orb.menu = null; render(); return; }
+    if (store.state.view === 'orbit') { exitOrbit(); }
   });
 
   // P2-1: 네이티브 메뉴 구독(앱 1회). 부재 시 graceful — subscribeMenu 내부 가드.
@@ -3400,6 +4080,7 @@ function initBrowser() {
     unsubscribeTray();
     unsubscribeProjectsUpdated();
     unsubscribeUpdateStatus();
+    stopOrbit(); // 궤도 캔버스 RAF·리스너 정리
   }
   if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
     window.addEventListener('pagehide', teardown);
