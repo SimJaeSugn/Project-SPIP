@@ -1645,7 +1645,7 @@ function initBrowser() {
     return el('div', { text: text, style: 'font-size:15px;font-weight:600;letter-spacing:-0.01em;flex:1 1 0%;' });
   }
   function homeBadge(text, kind) {
-    var c = { amber: 'background:#fef3c7;color:#b45309;border:1px solid #fde68a;', blue: 'background:#dbeafe;color:#1d4ed8;border:1px solid #bfdbfe;' }[kind] || '';
+    var c = { amber: 'background:#fef3c7;color:#b45309;border:1px solid #fde68a;', blue: 'background:#dbeafe;color:#1d4ed8;border:1px solid #bfdbfe;', cyan: 'background:#cffafe;color:#0e7490;border:1px solid #a5f3fc;' }[kind] || '';
     return el('span', { text: text, style: 'font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:6px;' + c });
   }
 
@@ -1680,6 +1680,7 @@ function initBrowser() {
       row.appendChild(nm);
       if (vm.gitStatus === 'dirty') row.appendChild(homeBadge('미커밋' + ((vm.changes || 0) > 0 ? ' ' + vm.changes : ''), 'amber'));
       if ((vm.ahead || 0) > 0) row.appendChild(homeBadge('미푸시 ' + vm.ahead, 'blue'));
+      if ((vm.behind || 0) > 0) row.appendChild(homeBadge('받을 ' + vm.behind, 'cyan')); // pull 필요
       row.appendChild(el('span', { text: vm.isStale ? rel(vm.lastModified) : rel(vm.lastModified), style: HOME_MONO + 'font-size:11px;color:#a8a29e;width:52px;text-align:right;flex:0 0 auto;' }));
       listWrap.appendChild(row);
     });
@@ -1764,7 +1765,8 @@ function initBrowser() {
       top.appendChild(el('span', { text: rel(ev.when), style: HOME_MONO + 'font-size:10.5px;color:#a8a29e;' }));
       body.appendChild(top);
       var sub = (vm.gitStatus === 'dirty' && (vm.changes || 0) > 0) ? ('미커밋 변경 ' + vm.changes + '건')
-        : ((vm.ahead || 0) > 0 ? ('미푸시 커밋 ' + vm.ahead + '개') : '파일 수정');
+        : ((vm.behind || 0) > 0 ? ('받을 커밋 ' + vm.behind + '개')
+          : ((vm.ahead || 0) > 0 ? ('미푸시 커밋 ' + vm.ahead + '개') : '파일 수정'));
       body.appendChild(el('div', { text: (vm.language || '알 수 없음') + ' · ' + sub, style: 'font-size:11.5px;color:#78716c;margin-top:2px;' }));
       row.appendChild(body);
       list.appendChild(row);
@@ -2910,17 +2912,19 @@ function initBrowser() {
       const g = orb.geo[p.id]; const age = orbAgeDays(p);
       const nm = (typeof p.nodeModulesBytes === 'number' && p.nodeModulesBytes > 0) ? p.nodeModulesBytes : 0;
       const stale = p.isStale === true, dirty = p.gitStatus === 'dirty', ahead = (typeof p.ahead === 'number' ? p.ahead : 0);
+      const behind = (typeof p.behind === 'number' ? p.behind : 0);
       const reclaim = stale && nm > 0; if (reclaim) reclaimMB += nm;
       const status = !p.isRepo ? { t: 'Git 아님', c: '#a8a29e' }
         : dirty ? { t: '미커밋', c: '#fbbf24' }
           : ahead > 0 ? { t: '미푸시 ' + ahead, c: '#60a5fa' }
-            : stale ? { t: '방치', c: '#a8a29e' }
-              : { t: '정상', c: '#34d399' };
+            : behind > 0 ? { t: '받을 ' + behind, c: '#22d3ee' }
+              : stale ? { t: '방치', c: '#a8a29e' }
+                : { t: '정상', c: '#34d399' };
       const sz = szOf(p);
       return {
         id: p.id, name: p.name, path: p.path, lang: p.language, color: langColor(p.language),
         mod: age, nm, sizePx: 12 + Math.sqrt(sz / maxSz) * 40,
-        stale, attention: p.isRepo && (dirty || ahead > 0), reclaim, status,
+        stale, attention: p.isRepo && (dirty || ahead > 0 || behind > 0), reclaim, status,
         sizeLabel: sizeLabel(p.totalBytes), nmLabel: nm > 0 ? sizeLabel(nm) : '없음', rel: rel(p.lastModified),
         angleDrive: g.angleDrive, angleLang: g.angleLang, angSpeed: g.angSpeed, phase: g.phase, wob: g.wob,
         match: orbMatch(p, q), // 정규식(/.../) 또는 substring
@@ -3942,7 +3946,8 @@ function initBrowser() {
     if (vm.gitStatus === 'na') { container.appendChild(badge(pfx + 'badge--git-na', 'Git 아님')); return; }
     if (vm.gitStatus === 'dirty') container.appendChild(badge(pfx + 'badge--git-dirty', '미커밋'));
     if (vm.ahead > 0) container.appendChild(badge(pfx + 'badge--git-ahead', '미푸시 ' + vm.ahead));
-    if (vm.gitStatus !== 'dirty' && !(vm.ahead > 0)) container.appendChild(badge(pfx + 'badge--git-clean', '정상'));
+    if (vm.behind > 0) container.appendChild(badge(pfx + 'badge--git-behind', '받을 ' + vm.behind)); // pull 필요
+    if (vm.gitStatus !== 'dirty' && !(vm.ahead > 0) && !(vm.behind > 0)) container.appendChild(badge(pfx + 'badge--git-clean', '정상'));
   }
 
   function renderTable(list) {

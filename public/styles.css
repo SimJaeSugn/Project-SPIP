@@ -61,6 +61,9 @@
   --push: #1d4ed8;
   --push-bg: #dbeafe;
   --push-border: #bfdbfe;
+  --pull: #0e7490;
+  --pull-bg: #cffafe;
+  --pull-border: #a5f3fc;
   --font: 'Pretendard Variable', Pretendard, system-ui, -apple-system, 'Segoe UI', 'Malgun Gothic', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
   --mono: ui-monospace, 'Cascadia Mono', 'Consolas', 'D2Coding', 'Courier New', monospace;
 }
@@ -87,6 +90,7 @@
   --ok: #34d399; --ok-bg: #0f3d2e; --ok-border: #14583f;
   --warn: #fbbf24; --warn-bg: #3a2a0a; --warn-border: #6b4e12;
   --push: #60a5fa; --push-bg: #16263f; --push-border: #1e4273;
+  --pull: #22d3ee; --pull-bg: #0e3a44; --pull-border: #155e6b;
 }
 /* 반전 요소(밝은 배경+흰 글자) — 다크에선 var(--t1)이 밝아져 깨지므로 고정색으로 보정. */
 :root[data-theme="dark"] .btn--dark { background: #e7e5e4; border-color: #e7e5e4; color: #1c1917; }
@@ -170,6 +174,7 @@ input, button, select { font-family: inherit; }
 .badge--git-clean { background: var(--ok-bg); color: var(--ok); border-color: var(--ok-border); }
 .badge--git-dirty { background: var(--warn-bg); color: var(--warn); border-color: var(--warn-border); }
 .badge--git-ahead { background: var(--push-bg); color: var(--push); border-color: var(--push-border); }
+.badge--git-behind { background: var(--pull-bg); color: var(--pull); border-color: var(--pull-border); }
 .badge--git-na { background: var(--panel); color: var(--t4); border-color: var(--border); }
 .badge--stale { background: var(--surface-3); color: var(--t3); border-color: var(--border); }
 
