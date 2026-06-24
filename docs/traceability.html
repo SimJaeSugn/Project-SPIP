@@ -68,7 +68,7 @@
 </head>
 <body>
 <header>
-  <span class="tag">추적성 매트릭스</span><span class="tag">v1.6</span><span class="tag">현재 단계: M8(R-24 상태 주시·라이브 갱신) 구현 완료·검증 통과</span>
+  <span class="tag">추적성 매트릭스</span><span class="tag">v1.7</span><span class="tag">현재 단계: M9(R-25~R-33)까지 구현 완료·검증 통과 · 테스트 705/705</span>
   <h1>Project-SPIP — 추적성 매트릭스</h1>
   <p>요구가 <b>기획 → 설계 결정/모듈 → 구현 위치 → 검증</b>까지 끊기지 않고 이어지는지를 한 표로 관리하는 1급 산출물.
   PRD의 모든 요구(기능 R-01~R-16, 비기능 N-01~N-07) + M6 백로그(R-17~R-21) + M7(R-22·R-23)를 행으로 가지며, 각 요구를 아키텍처 설계서 §14 매핑·본문 §5~§9 모듈/계약/API·§7 디렉터리 트리(구현 위치)와 검증 기록(QA·코드·보안 PASS)에 연결한다.</p>
@@ -85,7 +85,11 @@
   <div class="note" style="background:rgba(167,139,250,.08);border-color:rgba(167,139,250,.3);color:#ddd6fe;">
     <b>M8(R-24) 추가·구현 완료.</b> 사용자 요청 1건을 점진 확장으로 반영했다 — <b>R-24</b> 한 번 스캔한 뒤로는 <b>재스캔 전까지 상태를 계속 주시</b>(라이브 갱신). 신규 <code>StateWatcher</code>(주기 폴링 기본 15초)가 이미 발견된 known project 경로에 <b>git·freshness 수집기만 재적용</b>(무거운 walker/detector/size 미수행·N-01 보존)해 변경분만 <code>spip:projectsUpdated</code> 단방향 push로 대시보드에 라이브 반영한다. 보안 0 약화 — 경로는 매 tick <code>canonicalize</code> 재해석(H-1)·git은 <code>git -C</code> 절대경로(H-2)·페이로드는 §8.1 shape만(L-3)·신규 invoke 채널 0. 스캔과는 phase 게이트로 분리(스캔 중 tick 건너뜀). 영속은 재스캔만(메모리 오버레이). 설계 정본: <code>docs/architecture/m8-design.html</code>(rev.1·ADR-M8-1 폴링 채택 vs fs.watch). 전체 <b>503 테스트 통과</b>(M8 신규 12 포함). GUI 라이브 갱신(실 git 변경 후 ~15초 내 배지/방치 갱신·드래그 중 보류)은 헤드리스 한계로 <b>사용자 PC 1회 수동 확인</b>.
   </div>
-  <div class="meta">문서 유형: 추적성 매트릭스 · 작성: 기술 문서 작성자 · 최종 갱신: 2026-06-21 · 현재 단계: <b>전체(MVP+M4+M6+M7) 구현 완료·검증 통과</b> · 입력: PRD v1.0 / architecture.html rev.2 / m4-design.html / m6-design.html rev.2 / m7-design.html rev.2 / adr.html rev.2 / S0~S7 + M4 후속 6건 + M6 백로그 5건 + M7 2건 구현물 / 검증 PASS(MVP S7 + M4 설계 2회·다면검증 + M6 설계 2회·보안·코드·QA + M7 설계 2회·보안 2회·구현 보안·코드·QA)</div>
+  <div class="note" style="background:rgba(196,181,253,.08);border-color:rgba(196,181,253,.3);color:#ddd6fe;">
+    <b>M9 백로그 배치(R-25~R-33) 구현 완료·검증 통과.</b> 홈 대시보드 8개 백로그를 <b>9개 요구</b>로 재구성했다(감사가 지목한 공통 근원 "전체 재렌더"를 기반 요구 <b>R-25</b>로 분리해 항목 수 +1). 핵심: <b>R-25</b> 부분 갱신/재렌더 가드 기반(<code>RG</code> 네임스페이스 + 순수 <code>lib/common/renderGuard.js</code> 동형 분리·4계약 composition/preserve/widget/coalesce) · <b>R-26</b> 한글 IME 자모분리 버그 수정(검색 input <code>RG.composition.bind</code>+<code>RG.coalesce.request</code>) · <b>R-27</b> 헤더 공통 골격 통일 · <b>R-28</b> 네이티브 메뉴 제거(<code>electron/menu.js</code> <b>삭제</b>)·F5 keydown·정보 설정 이관 · <b>R-29</b> 단축키 단일출처(<code>SHORTCUTS</code>·<code>matchShortcut</code>) · <b>R-30</b> 설정 2-pane 5분류(<code>SETTINGS_CATEGORIES</code>·<code>settingsTab</code>) · <b>R-31</b> 커밋 차트 5분 폴링(<code>shouldPollCommit</code>·홈 이탈 시 git 0) · <b>R-32</b> 홈 섹션 드래그(<code>homeLayout</code> uiState·<code>normalizeHomeLayout</code>·<code>spip:setHomeLayout</code> IPC·SortableJS 재사용) · <b>R-33</b> 주간 생산성 SVG 차트 자작(<code>commitChartModel</code>·<code>chartBars</code>·외부 0). 설계 정본 <code>docs/architecture/m9-design.html</code>(rev.1·ADR-M9-1~4). 검증: 단계별(P1~P8) qa/code/security 다면검증 전부 PASS·최종 검증 <b>CONDITIONAL PASS→충족</b>(<code>docs/reviews/m9_final_review.html</code>, 조건=본 추적성 갱신)·통합 검증 PASS(<code>docs/reviews/qa_m9_integration.html</code> 교차 5종)·전체 <b>705 테스트 통과</b>. 보안 게이트 M-1(normalizeState 키 누락 방지)·M-2(write 라운드트립·chartBars 안전) 충족. 구현 순서 P1(R-25 단독)→P2(R-26)→P3(R-28+29)→P4(R-27)→P5(R-30)→P6(R-31)→P7(R-32)→P8(R-33).
+    <br><b>의도된 후속/비범위(추적 누락 아님).</b> <code>patchRegion</code>(설계 R5에서 1차 명시 제외)·차트 폴링 깜빡임 완화 및 툴팁 막대추적(R-33 Could 후속)·커밋 폴링 deferred 시 무재시도(다음 tick 위임)·macOS 메뉴(<code>globalShortcut</code> 미사용 보안 결정)는 <b>의도된 미구현</b>으로, 아래 별도 "후속/비범위" 표기로 추적한다.
+  </div>
+  <div class="meta">문서 유형: 추적성 매트릭스 · 작성: 기술 문서 작성자 · 최종 갱신: 2026-06-24 · 현재 단계: <b>전체(MVP+M4+M6+M7+M8+M9) 구현 완료·검증 통과(테스트 705/705)</b> · 입력: PRD v1.0 / architecture.html rev.2 / m4-design.html / m6-design.html rev.2 / m7-design.html rev.2 / m8-design.html / m9-design.html rev.1 / adr.html rev.2 / S0~S7 + M4 후속 6건 + M6 백로그 5건 + M7 2건 + M8 1건 + M9 9건 구현물 / 검증 PASS(MVP S7 + M4·M6·M7·M8 다면검증 + M9 단계별 P1~P8 qa/code/security·통합·최종)</div>
 </header>
 
 <main>
@@ -93,14 +97,15 @@
 <section id="summary">
   <h2>요약</h2>
   <div class="grid">
-    <div class="card"><div class="k">전체 요구 수</div><div class="kpi">31</div><div class="v">기능 R 24건(R-01~R-24) + 비기능 N 7건. 추적 누락 0.</div></div>
+    <div class="card"><div class="k">전체 요구 수</div><div class="kpi">40</div><div class="v">기능 R 33건(R-01~R-33) + 비기능 N 7건. 추적 누락 0. (R-25~R-33은 M9 구현 완료·검증 통과)</div></div>
     <div class="card"><div class="k">MVP 집합</div><div class="kpi">16</div><div class="v">기능 11(R-01·02·04·06·07·08·10·11·12·13·14) + 비기능 5(N-02·03·04·05·06)</div></div>
     <div class="card"><div class="k">M4 후속</div><div class="kpi">6</div><div class="v">R-03·R-05·R-09·R-15·R-16 + N-07(접근성) — 전건 <b>구현 완료</b></div></div>
     <div class="card"><div class="k">M6 백로그</div><div class="kpi">5</div><div class="v">R-17·R-18·R-19·R-20·R-21 — 전건 <b>구현 완료·검증 통과</b></div></div>
     <div class="card"><div class="k">M7</div><div class="kpi">2</div><div class="v">R-22(즐겨찾기 독립 토스트 창)·R-23(카드 reorder FLIP) — 전건 <b>구현 완료·검증 통과</b></div></div>
     <div class="card"><div class="k">M8</div><div class="kpi">1</div><div class="v">R-24(상태 주시·라이브 갱신) — <b>구현 완료·검증 통과</b></div></div>
+    <div class="card" style="border-color:rgba(196,181,253,.45)"><div class="k">M9</div><div class="kpi" style="color:#c4b5fd">9</div><div class="v">R-25~R-33(부분갱신 가드·헤더/메뉴/설정 정리·실시간·드래그·SVG 차트) — <b>구현 완료·검증 통과</b></div></div>
     <div class="card"><div class="k">품질 기준</div><div class="kpi">1</div><div class="v">N-01(성능) — 기능 스토리 아닌 산출물 품질 기준으로 적용</div></div>
-    <div class="card"><div class="k">현재 상태</div><div class="kpi" style="font-size:16px;">M8(R-24) 구현 완료·검증 통과</div><div class="v">전송 Electron IPC. QA 통합가능·코드 P1 0·보안 PASS. 테스트 503/503.</div></div>
+    <div class="card"><div class="k">현재 상태</div><div class="kpi" style="font-size:16px;">M9(R-25~R-33) 구현 완료·검증 통과</div><div class="v">전송 Electron IPC. 단계별 QA/코드/보안 PASS·최종 충족·통합 PASS. 테스트 705/705.</div></div>
   </div>
   <div class="note">
     <b>현재 단계 = 전체(MVP+M4+M6+M7) 구현 완료·검증 통과.</b> S0~S7 구현물 + M4 후속 6건 구현물(<code>scan.js</code>·<code>server.js</code>·<code>lib/server/scanController.js</code>·<code>lib/scan/driveEnum.js</code>·<code>lib/scan/collectors/size.js</code>·<code>lib/scan/walker.js</code>(depthLimit)·<code>public/**</code> 진행/접근성·<code>test/**</code>)이 실재한다. 본 매트릭스의 "구현 위치"는 <b>실제 파일 경로</b>이고, "검증" 칸은 다면 검증의 <b>실측 결과</b>를 반영한다. 통과한 검증: <b>QA(통합·동작) GO · 코드 품질 PASS · 보안 게이트 PASS(치명·높음·중간·낮음 0)</b>. 핵심 실측: <code>node --test</code> <b>213/213</b> 통과(MVP 107 → M4 포함 213) · 탐지율 100%(게이트 ≥95%) · 클라이언트 필터/정렬 5000건 0.154ms(게이트 200ms). M4 후속 6건(R-03·05·09·15·16·N-07)은 모두 <b>구현 완료</b>로 전이했다.
@@ -114,7 +119,9 @@
     <span><span class="pill quality">품질</span> 산출물 품질 기준</span>
     <span><span class="pill m4">M4</span> 후속 (구현 완료)</span>
     <span><span class="pill m4" style="background:rgba(167,139,250,.16);color:#c4b5fd;border:1px solid rgba(167,139,250,.45)">M6</span> 백로그 (구현 완료)</span>
+    <span><span class="pill m4" style="background:rgba(196,181,253,.16);color:#c4b5fd;border:1px solid rgba(196,181,253,.45)">M9</span> 백로그 (구현 완료·검증 통과)</span>
     <span><span class="pill st-design">구현 완료</span></span>
+    <span class="planned">예정(사용자 PC 수동 확인 등 헤드리스 잔여)</span>
     <span class="pass">PASS</span>
   </div>
 </section>
@@ -351,6 +358,89 @@
       <td>QA 통합 가능 — 순수 tick(변경분만 onUpdate·무변경 미호출)·H-1 소멸 경로 skip·스캔 중 무동작·_busy 재진입·start/stop 멱등·interval clamp 단위. <code>applyLiveState</code>(in-place·구조 불변·미존재 id null) 단위. 보안 PASS(단방향 push·경로 재해석·절대 git·최소 노출). 코드 P1 0. <b>503/503</b>(M8 신규 12). test/stateWatcher·snapshotStore. <span class="planned">사용자 PC: 실 git 변경 후 ~15초 내 카드 배지/방치 라이브 갱신·드래그 중 보류 시각 확인(헤드리스 한계)</span></td>
       <td><span class="pill st-design">구현 완료</span></td>
     </tr>
+
+    <!-- ===== M9 배치 (R-25 ~ R-33) — 구현 완료·검증 통과 (705 테스트) ===== -->
+    <tr>
+      <td class="rid">R-25</td>
+      <td class="req"><b>(기반)</b> 부분 갱신/재렌더 가드 기반 정립 — 전체 재렌더(<code>render()=app.replaceChildren()</code>)가 IME 조합·드래그·차트 인스턴스를 파괴하는 공통 근원 해소. 4계약(composition 보류·노드 보존·위젯 라이프사이클·push coalesce)</td>
+      <td><span class="pill m4" style="background:rgba(196,181,253,.16);color:#c4b5fd;border:1px solid rgba(196,181,253,.45)">M9</span></td>
+      <td><b>[렌더러 + 순수 로직]</b> m9-design §3 — app.js 내부 <b><code>RG</code> 네임스페이스</b>(부수효과 wiring) + 순수 판정 <code>lib/common/renderGuard.js</code>(<code>shouldDeferRender</code>·<code>createCoalescer</code>) 동형 분리(ADR-M9-1). <code>RG.composition</code>(보류 게이트 <code>deferred()</code> 단일화·R1 전수 매핑)·<code>RG.preserve</code>(capture/restore, patchRegion은 1차 제외·R5)·<code>RG.widget</code>(define/destroyAll/mountAll)·<code>RG.coalesce</code>(request/flushIfPending·R2 동시성 3규칙·ADR-M9-2). 마커 RG-1~RG-4 · §3·§4</td>
+      <td class="mono">lib/common/renderGuard.js(신규·순수 shouldDeferRender 6플래그·createCoalescer)<br>public/app.js(RG 네임스페이스·composition/preserve/widget/coalesce·render() 진입/종료 정리)<br>구현 순서 P1(단독·동작 보존 리팩터링)</td>
+      <td>qa_m9_p1 PASS(<code>qa_m9_p1_1.html</code>)·code_m9_p1 FAIL(F-1 release/flush 배선)→후속 해소(<code>code_review_m9_p1_1.html</code>)·기획/설계/보안 설계리뷰 PASS. 통합: renderGuard↔app.js RG <b>순수 OR식·coalesce 상태기 동형</b> 확인(<code>qa_m9_integration.html</code>). test/renderGuard.test.js(12케이스·6플래그 단독/복합·mark×N→flush 1회·동시성). 705/705.</td>
+      <td><span class="pill st-design">구현 완료</span></td>
+    </tr>
+    <tr>
+      <td class="rid">R-26</td>
+      <td class="req">프로젝트 검색창 한글 자음·모음 분리 입력 버그 수정 — "프로젝트"→"ㅍㅡㄹㅗ…" 분리 현상 제거. composition 방어 0건 → 추가</td>
+      <td><span class="pill m4" style="background:rgba(196,181,253,.16);color:#c4b5fd;border:1px solid rgba(196,181,253,.45)">M9</span></td>
+      <td><b>[렌더러]</b> m9-design §3.8 — 검색 input 핸들러를 <code>RG.composition.bind</code> + <code>RG.coalesce.request()</code> 경유로 <b>대체</b>(자체 debounce(render,120) 제거·공통 120ms 일원화). 조합 중 <code>deferred()=true</code>→mark만, <code>compositionend</code> 시 flush 1회. 검색 input을 보존 노드로 등록. 궤도 검색·할 일 입력 동일 가드. R-25 의존(F-3 단일 진술: R-26 먼저·R-31 이후)</td>
+      <td class="mono">public/app.js(검색 input 핸들러 <code>RG.composition.bind</code>+<code>RG.coalesce.request</code> 경유·자체 debounce 제거·궤도/할일 input 동일 가드)<br>의존: lib/common/renderGuard.js(R-25)<br>구현 순서 P2</td>
+      <td>P2 전용 단계 보고서 없음 — 메커니즘은 qa/code_m9_p4가 "헤더 재구성 후 composition.bind+coalesce.request 경로 회귀 0"으로 직접 확인(<code>qa_m9_p4_1.html</code>·<code>code_review_m9_p4_1.html</code>). test/header.test.js가 두 토큰 정적 가드. 통합 <b>충족(스모크 잔여)</b>(<code>qa_m9_integration.html</code> R-26 주석). 705/705. <span class="planned">한글 자모분리 0건은 IME·DOM 의존 → 사용자 PC 수동 스모크가 최종 게이트(qa_p4 SM-2)</span></td>
+      <td><span class="pill st-design">구현 완료</span></td>
+    </tr>
+    <tr>
+      <td class="rid">R-27</td>
+      <td class="req">홈 ↔ 프로젝트 대시보드 헤더 구성 통일 — 공통 골격(레이아웃·높이·공통 액션) 통일, 검색 입력은 프로젝트 전용(홈 미니멀 유지·R-26 전이 차단)</td>
+      <td><span class="pill m4" style="background:rgba(196,181,253,.16);color:#c4b5fd;border:1px solid rgba(196,181,253,.45)">M9</span></td>
+      <td><b>[렌더러]</b> m9-design §9.1 — <code>renderHeader()</code> home early-return 제거 → 공통 골격(브랜드→탭→[검색(뷰별 유일 차이)]→spacer→공통 액션). R-28 이관 액션(폴더추가·재스캔·새로고침·설정) 수용·동반 설계. <b>[D 확정]</b> 헤더 도움말 버튼 제거→설정 "정보" 카테고리 흡수(Q5 종료)</td>
+      <td class="mono">public/app.js(renderHeader 공통 골격·early-return 제거·뷰별 차이=검색노출 1개·도움말 버튼 제거)<br>public/styles.css(헤더 톤 통일)<br>구현 순서 P4(P3과 동반)</td>
+      <td>qa_m9_p4 PASS / code_m9_p4 PASS(<code>qa_m9_p4_1.html</code>·<code>code_review_m9_p4_1.html</code>) — 홈·프로젝트 공통 골격 공유·홈 검색 미렌더·Q5 도움말→설정 흡수. test/header.test.js. 통합 <b>충족</b>(<code>qa_m9_integration.html</code>). 705/705.</td>
+      <td><span class="pill st-design">구현 완료</span></td>
+    </tr>
+    <tr>
+      <td class="rid">R-28</td>
+      <td class="req">상단 네이티브 메뉴 제거 · 새로고침 F5 매핑 · "정보" 설정 이관 — 메뉴 잃는 기능을 헤더/단축키/설정으로 무손실 이관, 죽은 채널 정리</td>
+      <td><span class="pill m4" style="background:rgba(196,181,253,.16);color:#c4b5fd;border:1px solid rgba(196,181,253,.45)">M9</span></td>
+      <td><b>[Electron + 렌더러]</b> m9-design §9.3 — <code>Menu.setApplicationMenu(null)</code>. F5는 <b>렌더러 keydown</b>(globalShortcut 아님·앱 비포커스 시 미발화)→<code>refreshDashboard()</code>. SW 정보→<code>renderInfoSettings()</code>(버전은 package.json). 죽은 onMenu 채널 정리(SEC-L1: preload onMenu·app subscribeMenu/onMenuCommand 제거). SHORTCUTS 상수 공유(R-29)</td>
+      <td class="mono">electron/menu.js <b>파일 삭제</b>(네이티브 메뉴 제거 결정·기능은 헤더/F5/설정 이관)<br>electron/main.js(Menu.setApplicationMenu(null)·spip:menu:* 발신 제거)<br>electron/preload.js(onMenu 화이트리스트 정리·죽은 채널 제거)<br>public/app.js(F5 keydown·renderInfoSettings·subscribeMenu/onMenuCommand 제거)<br>구현 순서 P3(R-29와 묶음)</td>
+      <td>qa_m9_p3 / code_m9_p3 / sec_m9_p3 PASS(<code>qa_m9_p3_1.html</code>·<code>code_review_m9_p3_1.html</code>·<code>security_review_m9_p3_1.html</code>) — 네이티브 메뉴 비표시·대체 진입점 1+·F5=keydown(globalShortcut 아님)·SW정보 설정 조회(package.json)·죽은 채널 정리. test/shortcuts.test.js·dashboard-menu.test.js·electron-preload-contract.test.js(R-28 채널 제거 검증). 705/705. <span class="planned">메뉴 비표시·SW정보 조회 시각 확인은 사용자 PC 1회</span></td>
+      <td><span class="pill st-design">구현 완료</span></td>
+    </tr>
+    <tr>
+      <td class="rid">R-29</td>
+      <td class="req">단축키 단일 출처(상수) + 설정 단축키 안내 추가 — 매핑 중복 0(메뉴·안내표·keydown 동기), 설정에 단축키/동작 표 표시</td>
+      <td><span class="pill m4" style="background:rgba(196,181,253,.16);color:#c4b5fd;border:1px solid rgba(196,181,253,.45)">M9</span></td>
+      <td><b>[렌더러]</b> m9-design §9.2 — app.js 상단 단일 상수 <code>SHORTCUTS=[{keys,action,label}]</code>(Ctrl+O·Ctrl+R·F5·Esc) → keydown(<code>matchShortcut</code>)·안내표가 동일 참조. <code>renderShortcutSettings()</code> 신규(<code>helpRow</code> 재사용·textContent L-1). R-30 "단축키" 카테고리 편입</td>
+      <td class="mono">public/app.js(SHORTCUTS 단일 상수·matchShortcut·renderShortcutSettings·helpRow 재사용·textContent L-1)<br>구현 순서 P3(R-28과 묶음·SHORTCUTS 공유)</td>
+      <td>qa_m9_p3 / code_m9_p3 / sec_m9_p3 PASS(<code>qa_m9_p3_1.html</code>·<code>code_review_m9_p3_1.html</code>·<code>security_review_m9_p3_1.html</code>) — 단축키 단일 상수 중복 0·안내표가 상수 참조·상수 변경 시 표/동작 동시 반영·textContent(L-1). test/shortcuts.test.js. 705/705.</td>
+      <td><span class="pill st-design">구현 완료</span></td>
+    </tr>
+    <tr>
+      <td class="rid">R-30</td>
+      <td class="req">설정 좌우 분할(좌 카테고리 / 우 항목) — 5분류(스캔/연동/외관/단축키/정보), 기존 8섹션+신설 2개 빠짐없이 매핑, 선택 카테고리 유지</td>
+      <td><span class="pill m4" style="background:rgba(196,181,253,.16);color:#c4b5fd;border:1px solid rgba(196,181,253,.45)">M9</span></td>
+      <td><b>[렌더러]</b> m9-design §8 — <code>renderSettings()</code> 2-pane 재구성 + <code>store.settingsTab</code>(기본 'scan'·전체 재렌더 후 유지). 선택 카테고리의 <code>render*Settings()</code>만 우측 렌더. SCROLL_SEL 우측 패널 갱신·포커스 트랩(<code>getTabbables</code>)에 좌측 버튼 포함(N-07). flex 인라인/CSS(CSP 무난)</td>
+      <td class="mono">public/app.js(renderSettings 2-pane·SETTINGS_CATEGORIES 5분류·store.settingsTab·SCROLL_SEL·getTabbables)<br>public/styles.css(2-pane 레이아웃)<br>구현 순서 P5(P3 신설 카테고리 편입)</td>
+      <td>qa_m9_p5 / code_m9_p5 PASS(<code>qa_m9_p5_1.html</code>·<code>code_review_m9_p5_1.html</code>) — 2-pane 표시·카테고리별 우측 항목만 렌더·settingsTab 유지·포커스 트랩·5분류(스캔/연동/외관/단축키/정보)에 10개 섹션 누락·중복 0 배치. test/settings-categories.test.js. 705/705. <span class="planned">Tab 순환 포커스 트랩 N-07 시각 확인은 사용자 PC 1회</span></td>
+      <td><span class="pill st-design">구현 완료</span></td>
+    </tr>
+    <tr>
+      <td class="rid">R-31</td>
+      <td class="req">모든 홈 섹션 실시간 데이터 반영 — 커밋 차트도 5분 폴링(홈 이탈 시 git 호출 0), 모든 push가 R-25 가드·coalesce 경유</td>
+      <td><span class="pill m4" style="background:rgba(196,181,253,.16);color:#c4b5fd;border:1px solid rgba(196,181,253,.45)">M9</span></td>
+      <td><b>[렌더러 push]</b> m9-design §2·ADR-M9-4 — 커밋 차트 <b>5분 폴링 + 뷰/가시성 가드</b>(메일 60초 폴링 패턴 복제·이탈 시 clearInterval). 메일/커밋 폴링·R-24 projectsUpdated push가 모두 <code>RG.coalesce.request()</code> 단일 종착 경유(직접 render() 금지). R-25 의존·R-26 검증 이후 활성. git 수집기 재사용(새 수집기 0)</td>
+      <td class="mono">public/app.js(커밋 5분 폴링 <code>shouldPollCommit</code>·syncHomePolling start/stop·뷰/가시성 가드·push→RG.coalesce 종착)<br>의존: lib/common/renderGuard.js(R-25)<br>구현 순서 P6</td>
+      <td>qa_m9_p6 / code_m9_p6 PASS(<code>qa_m9_p6_1.html</code>·<code>code_review_m9_p6_1.html</code>) — 5분 폴링·홈 이탈 시 git 호출 0(타이머 정지+콜백 이중가드)·push가 R-25 보류훅 경유·포커스/스크롤 비파손. test/commitPolling.test.js. 통합 R6 실시간×드래그×차트 교차 PASS(<code>qa_m9_integration.html</code>). 705/705. <span class="planned">의도된 후속: deferred 시 무재시도(다음 tick 위임)</span></td>
+      <td><span class="pill st-design">구현 완료</span></td>
+    </tr>
+    <tr>
+      <td class="rid">R-32</td>
+      <td class="req">홈 섹션 드래그 위치 이동 + 프리뷰 + 워터폴 재배치 — 섹션 순서 영속, SortableJS 재사용(추가 의존성 0)</td>
+      <td><span class="pill m4" style="background:rgba(196,181,253,.16);color:#c4b5fd;border:1px solid rgba(196,181,253,.45)">M9</span></td>
+      <td><b>[전송: IPC + 렌더러]</b> m9-design §6·§7·ADR-M9-3 — <code>renderHome()</code> 섹션을 <b>id 배열 데이터-주도</b> 렌더 + masonry 그리드 + SortableJS 부착(<code>RG.widget</code> init/destroy). 신규 uiState 키 <code>homeLayout</code>(<code>HOME_SECTION_IDS</code> enum 화이트리스트·<code>normalizeHomeLayout</code> 정규화). 신규 채널 <code>spip:setHomeLayout</code>(register.js guard·senderFrame 일치). <b>[C-M-1]</b> normalizeState·defaultState·toResponse 동반 수정 필수(키 누락 방지). onEnd→마이크로태스크 flush(R4)</td>
+      <td class="mono">lib/common/uiStateStore.js(homeLayout·normalizeHomeLayout·HOME_SECTION_IDS·normalizeState/defaultState/toResponse)<br>electron/ipc/uiState.js(setHomeLayout)<br>electron/ipc/register.js(guard 등록)·electron/preload.js(setHomeLayout)<br>public/app.js(renderHome 데이터-주도·homeSortable 위젯·onEnd 마이크로태스크 flush)·public/styles.css(masonry·ghost)<br>구현 순서 P7</td>
+      <td>qa_m9_p7 / code_m9_p7 / sec_m9_p7 PASS(<code>qa_m9_p7_1.html</code>·<code>code_review_m9_p7_1.html</code>·<code>security_review_m9_p7_1.html</code>, M-1 해소) — 섹션 드래그·프리뷰·워터폴(겹침/빈칸/애니깨짐 0)·순서 영속·정규화(미지/중복/길이)·guard IPC·드래그 중 보류. test/uiStateStore.test.js(normalizeHomeLayout·write→read 라운드트립 C-M-1)·test/ipc-uistate.test.js·test/homeLayout-front.test.js. 705/705. <span class="planned">실 DnD 시각 확인은 사용자 PC 1회</span></td>
+      <td><span class="pill st-design">구현 완료</span></td>
+    </tr>
+    <tr>
+      <td class="rid">R-33</td>
+      <td class="req"><b>(Could)</b> 주간 생산성 차트 인터랙티브화 — SVG 자작(외부 라이브러리 0), 막대 호버 툴팁/강조</td>
+      <td><span class="pill m4" style="background:rgba(196,181,253,.16);color:#c4b5fd;border:1px solid rgba(196,181,253,.45)">M9</span></td>
+      <td><b>[렌더러]</b> m9-design §10 — <code>renderHomeProductivity()</code>를 인터랙티브 SVG로 교체(<code>chartBars()</code> 헬퍼·createElementNS). <b>[C-M-2]</b> 라벨·툴팁 <code>textContent</code>만(L-1)·수치 <code>Number()</code>/<code>Number.isFinite()</code> 강제·색은 고정 <code>CHART_PALETTE</code> setAttribute(데이터 무주입). <code>RG.widget</code>(id:'commitChart')로 핸들러 destroy/recreate(누적 0). 외부 fetch·CDN·새 script 0(CSP 불변). R-25 의존</td>
+      <td class="mono">public/app.js(<code>commitChartModel</code>·chartBars·CHART_PALETTE·renderHomeProductivity SVG·createElementNS·RG.widget commitChart)<br>public/styles.css(차트/툴팁)<br>구현 순서 P8(Could·최후순위)</td>
+      <td>qa_m9_p8 / code_m9_p8 / sec_m9_p8 PASS(<code>qa_m9_p8_1.html</code>·<code>code_review_m9_p8_1.html</code>·<code>security_review_m9_p8_1.html</code>, M-2 충족) — SVG 자작 인터랙티브·외부 네트워크/차트라이브러리/새 의존성 0·CSP 위반 0·라벨·툴팁 textContent(L-1)·수치 Number 강제·재렌더 시 핸들러 누적 0. test/commitChart.test.js·test/homeLayout-equivalence.test.js. 705/705. <span class="planned">의도된 후속(Could): 폴링 깜빡임 완화·툴팁 막대추적</span></td>
+      <td><span class="pill st-design">구현 완료</span></td>
+    </tr>
   </table>
   </div>
 
@@ -484,10 +574,19 @@
     <tr><td>M7 구현 보안 게이트</td><td class="pass">PASS</td><td><code>docs/reviews/m7_security_review_1.html</code> — 치명·높음 0 → 게이트 통과. 위젯 창이 메인 보안 베이스라인을 0 약화(동일 webPreferences·app:// 로드·per-wc 하드닝·축소 allowlist 6채널·신규 invoke 0·push 1개만). SEC-H1/H2 통제 코드 실재(default session 공유·alwaysOnTop 표시중만·movable:false·blur grace·focus 게이팅·favorites-changed payload {favorites}만)</td></tr>
     <tr><td>M7 코드 품질 검증</td><td class="pass">PASS</td><td><code>docs/reviews/m7_code_review_1.html</code> — P1(정확성 결함) 0. favoritesWidget 단일 인스턴스·dispose 멱등·positionBottomRight workArea 좌표 순수성·FLIP computeFlip 분리·기존 IPC 핸들러 무수정(broadcast 감싸기만). 도메인/전송 분리 유지</td></tr>
     <tr><td>M7 동작·통합 다면 검증</td><td class="pass">통합 가능</td><td><code>docs/reviews/m7_qa_1.html</code> — <b>npm test 474/474</b>(fail 0·M7 신규 58)·신규 5스위트(favorites-widget·preload-favorites-contract·favorites-broadcast·favorites-renderer·favorites-html-csp)·preload↔renderer 6채널/broadcast↔구독/main↔widget 경계면 일치·기존 전 스위트 회귀 0. GUI/OS 상호작용(토스트 등장·blur 닫힘·독립 표시·focus 게이팅·FLIP 시각·양 창 동기화)은 헤드리스 한계로 <b>사용자 PC 1회 수동 확인 8건</b>(차단 아님)</td></tr>
+    <tr><td>M9 기획 검증</td><td class="pass">CONDITIONAL PASS</td><td><code>docs/reviews/m9_planning_review_1.html</code> — 백로그 8→9요구 분해·공통 근원 R-25 분리 타당·ID 충돌 0. P1 0(P2 3·P3 1 권고). 설계 착수 가능</td></tr>
+    <tr><td>M9 설계 검증</td><td class="pass">CONDITIONAL PASS</td><td><code>docs/reviews/m9_design_review_1.html</code> — R1(deferred 전수 매핑)·R2(coalesce 동시성)·R3(R-26 debounce 대체)·R4(onEnd×flush)·R5(patchRegion 1차 제외)·R6(통합 회귀)·R7(동형 테스트)·D(Q5 도움말→설정 흡수) 보완 권고 → <b>설계 정본 rev.1에 전부 반영</b>. 코드 착수 가능</td></tr>
+    <tr><td>M9 설계 보안 검증</td><td class="pass">PASS</td><td><code>docs/reviews/m9_design_security_review_1.html</code> — 치명·높음 0. 섹션 id enum(실행/경로 무관)·setHomeLayout guard·메인 <code>normalizeHomeLayout</code> 단일 신뢰 경계·L-1(차트 textContent/Number/팔레트)·CSP 불변·죽은 채널 정리(SEC-L1). 조건부 중간 M-1(normalizeState 반영)·M-2(write 라운드트립 게이트)·C-M-2(chartBars 안전) → 설계 정본 rev.1 반영</td></tr>
+    <tr><td>M9 구현 단계별 다면 검증 (P1~P8)</td><td class="pass">PASS</td><td>9개 요구를 P1~P8 단계로 구현, 각 단계 qa/code/security 다면검증 통과 — P1 <code>qa_m9_p1_1.html</code>·<code>code_review_m9_p1_1.html</code>(F-1 후속 해소) / P3 <code>qa_m9_p3_1.html</code>·<code>code_review_m9_p3_1.html</code>·<code>security_review_m9_p3_1.html</code> / P4 <code>qa_m9_p4_1.html</code>·<code>code_review_m9_p4_1.html</code> / P5 <code>qa_m9_p5_1.html</code>·<code>code_review_m9_p5_1.html</code> / P6 <code>qa_m9_p6_1.html</code>·<code>code_review_m9_p6_1.html</code> / P7 <code>qa_m9_p7_1.html</code>·<code>code_review_m9_p7_1.html</code>·<code>security_review_m9_p7_1.html</code>(M-1 해소) / P8 <code>qa_m9_p8_1.html</code>·<code>code_review_m9_p8_1.html</code>·<code>security_review_m9_p8_1.html</code>(M-2 충족). P2(R-26)는 전용 보고서 없이 P4가 메커니즘 회귀 0 확인. 보안 게이트 M-1·M-2 통과</td></tr>
+    <tr><td>M9 통합 다면 검증</td><td class="pass">PASS</td><td><code>docs/reviews/qa_m9_integration.html</code> — <b>npm test 705/705</b>(fail 0)·교차 시나리오 5종 PASS·renderGuard↔app.js RG <b>순수 OR식/coalesce 상태기 동형</b> 확인·6플래그 토글 정합·<code>node -c</code> 구문 OK. 기존 전 스위트 회귀 0</td></tr>
+    <tr><td>M9 최종 검증</td><td class="pass">CONDITIONAL PASS → 충족</td><td><code>docs/reviews/m9_final_review.html</code> — 9개 요구 수용 기준 단계별 충족·705 테스트 통과. <b>단 조건=추적성 매트릭스 R-25~R-33 행 구현/검증 칸 갱신.</b> 본 갱신으로 조건 해소 → 무조건 PASS. R-26은 자모분리 헤드리스 한계로 "충족(스모크 잔여)"</td></tr>
     <tr><td>막바지 버그픽스 (스캔 전환·패키징 크래시)</td><td class="pass">PASS</td><td>전환 후 발견된 블로커 2건 해소. ① 스캔 후 무한 로딩 — <code>scanController.start()</code> 터미널 phase(<code>finalizing</code>/<code>done</code>/<code>error</code>) push 누락 → emit 추가(세대 가드 유지), 회귀 <code>test/scanController-onprogress.test.js</code>. ② 패키징 앱 무반응 — <code>EnableEmbeddedAsarIntegrityValidation</code> fuse(Win+electron-builder 24.x) <code>FindResource</code> FATAL → 그 fuse만 off(나머지 보안 fuse 유지), <code>app://</code> 핸들러 fs 직접 읽기·<code>did-fail-load</code> 창 강제 표시. <b>npm test 306/306</b>. <b>실 GUI에서 앱 실행·창 표시·스캔→대시보드 전환 동작 확인됨.</b> 버전 1.0.1</td></tr>
   </table>
   <div class="note">
-    <b>추적 누락 0 확인.</b> 전체 요구 31건(기능 R-01~R-24 24건 + 비기능 N-01~N-07 7건)이 모두 본 매트릭스에 행으로 존재하며, 각 행의 "설계 결정/모듈"·"구현 위치"·"검증"·"상태" 칸이 모두 채워졌다(빈 칸 없음). <b>M8 1(R-24)</b>은 M8 설계(<code>m8-design.html</code>·ADR-M8-1)·구현 보안 PASS·코드 P1 0·QA 통합가능(<code>503/503</code>)으로 <b>구현 완료</b>다. MVP 16(R-01·02·04·06·07·08·10·11·12·13·14 + N-02·03·04·05·06)은 S7 QA·코드·보안 3면 PASS로, M4 후속 6(R-03·05·09·15·16·N-07)은 M4 설계 2회·다면검증 QA(GO)·코드·보안 + 재검증 2회로, M6 백로그 5(R-17·18·19·20·21)는 M6 설계 2회·보안 PASS·코드 P1 0·QA 통합가능으로, M7 2(R-22·23)는 M7 설계 2회·보안 2회 PASS·구현 보안 PASS·코드 P1 0·QA 통합가능으로 모두 <b>구현 완료</b>이며, 품질기준 1(N-01)은 측정 완료다. 즉 전체 30건이 <b>구현 완료·검증 통과</b>로 일관된다.
+    <b>추적 누락 0 확인.</b> 전체 요구 40건(기능 R-01~R-33 33건 + 비기능 N-01~N-07 7건)이 모두 본 매트릭스에 행으로 존재하며, 각 행의 "설계 결정/모듈"·"구현 위치"·"검증"·"상태" 칸이 모두 채워졌다(빈 칸 없음). <b>M9 9(R-25~R-33)</b>은 단계별(P1~P8) qa/code/security 다면검증 PASS·통합 PASS(<code>qa_m9_integration.html</code>)·최종 CONDITIONAL PASS→충족(<code>m9_final_review.html</code>, 조건=본 추적성 갱신·해소)·전체 <b>705/705</b>로 <b>구현 완료</b>다. <b>M8 1(R-24)</b>은 M8 설계(<code>m8-design.html</code>·ADR-M8-1)·구현 보안 PASS·코드 P1 0·QA 통합가능으로 <b>구현 완료</b>다. MVP 16(R-01·02·04·06·07·08·10·11·12·13·14 + N-02·03·04·05·06)은 S7 QA·코드·보안 3면 PASS로, M4 후속 6(R-03·05·09·15·16·N-07)은 M4 설계 2회·다면검증 QA(GO)·코드·보안 + 재검증 2회로, M6 백로그 5(R-17·18·19·20·21)는 M6 설계 2회·보안 PASS·코드 P1 0·QA 통합가능으로, M7 2(R-22·23)는 M7 설계 2회·보안 2회 PASS·구현 보안 PASS·코드 P1 0·QA 통합가능으로 모두 <b>구현 완료</b>이며, 품질기준 1(N-01)은 측정 완료다. 즉 전체 39건이 <b>구현 완료·검증 통과</b>로 일관된다.
+  </div>
+  <div class="note" style="background:rgba(251,191,36,.08);border-color:rgba(251,191,36,.3);color:#fde68a;">
+    <b>M9 의도된 후속/비범위(추적 누락 아님·출시 비차단).</b> 다음은 설계/검증에서 <b>의도적으로 1차 제외</b>되었거나 보안 결정으로 미채택된 항목으로, 미구현이지만 추적된다. ① <code>patchRegion</code>(부분 DOM 패치) — 설계 R5에서 1차 명시 제외(RG.preserve의 capture/restore로 대체). ② R-33(Could) 차트 폴링 깜빡임 완화·툴팁 막대추적 — Could 후속. ③ 커밋 폴링 <code>deferred</code> 시 무재시도(다음 tick에 위임) — 의도된 단순화. ④ macOS 메뉴 — F5를 <code>globalShortcut</code>이 아닌 렌더러 keydown으로 둔 <b>보안 결정</b>(앱 비포커스 시 미발화)으로 네이티브 메뉴 미부활. R-26 한글 자모분리 실측은 IME·DOM 의존이라 사용자 PC 수동 스모크가 최종 게이트(헤드리스 한계).
   </div>
   <div class="note" style="background:rgba(167,139,250,.08);border-color:rgba(167,139,250,.3);color:#ddd6fe;">
     <b>M6·M7 사용자 PC 수동 확인(헤드리스 한계·차단 아님).</b> GUI/OS 상호작용은 헤드리스에서 실증 불가라 분리한다. <b>[M6]</b> U-1 카드 DnD→manual·재시작 후 순서 유지 · U-2 <code>pickToolExecutable</code> 네이티브 파일 다이얼로그·실 <code>code.exe</code> 지정·<code>.bat/.lnk</code> 거부 · U-3 실 클립보드 붙여넣기 · U-4 트레이 아이콘/메뉴(대시보드·즐겨찾기·종료)·더블클릭 복원·풍선 1회 · Q4 스캔 진행 중 종료 확인 다이얼로그 분기. <b>[M7]</b> 트레이 '즐겨찾기' 클릭 시 우측하단 토스트 즉시 등장 · 대시보드를 닫아 트레이에만 있어도 위젯 독립 표시 · 위젯 밖 클릭(blur) 시 100ms grace 후 hide·재포커스 시 취소 · 비포커스 첫 클릭은 포커스만(액션 미실행, focus 게이팅) · 드래그/키보드 reorder 시 카드 FLIP 시각·<code>prefers-reduced-motion</code> 시 즉시 적용 · 메인·위젯 동시 표시 중 한쪽 별 토글이 다른 쪽 즉시 반영(broadcast). 코드·정책 정합은 PASS.
@@ -498,6 +597,6 @@
 </section>
 
 </main>
-<footer>Project-SPIP · 추적성 매트릭스 v1.6 · 요구 31건(R 24 + N 7) · MVP 16 + 품질 1 + M4 6 + M6 5 + M7 2 + M8 1 · 추적 누락 0 · 전송 Electron IPC(과도기 HTTP 보존) · 현재 단계: M8(R-24 상태 주시) 구현 완료·검증 통과(QA 통합가능 · 코드 P1 0 · 보안 PASS · 테스트 503/503) · 자족형 HTML 산출물</footer>
+<footer>Project-SPIP · 추적성 매트릭스 v1.7 · 요구 40건(R 33 + N 7) · MVP 16 + 품질 1 + M4 6 + M6 5 + M7 2 + M8 1 + M9 9 · 추적 누락 0 · 전송 Electron IPC(과도기 HTTP 보존) · 현재 단계: M9(R-25~R-33)까지 구현 완료·검증 통과(테스트 705/705·단계별 qa/code/security PASS·통합 PASS·최종 충족) · 자족형 HTML 산출물</footer>
 </body>
 </html>

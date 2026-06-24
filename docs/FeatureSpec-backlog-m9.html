@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Project-SPIP — M9 백로그 기능명세 (홈 대시보드 8개 항목)</title>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#1e293b; --text:#e2e8f0; --sub:#94a3b8;
+    --accent:#34d399; --ref:#38bdf8; --line:#334155; --warn:#fbbf24; --danger:#f87171;
+    --purple:#c4b5fd;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:"Segoe UI","Malgun Gothic",system-ui,sans-serif;line-height:1.7;font-size:14.5px;}
+  header.page{padding:46px 32px 34px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#13203b,#0f172a);}
+  header.page .kicker{font-size:12px;letter-spacing:0.16em;text-transform:uppercase;color:var(--ref);}
+  header.page h1{margin:10px 0 8px;font-size:29px;font-weight:700;letter-spacing:-0.02em;}
+  header.page p{margin:6px 0 0;color:var(--sub);max-width:980px;}
+  .tag{display:inline-block;background:rgba(52,211,153,.12);color:var(--accent);
+    border:1px solid rgba(52,211,153,.4);border-radius:999px;padding:3px 12px;font-size:12.5px;margin:8px 8px 0 0;}
+  main{max-width:1180px;margin:0 auto;padding:30px 28px 90px;}
+  section{margin:30px 0;}
+  h2{font-size:21px;color:var(--accent);border-left:4px solid var(--accent);padding-left:12px;margin:0 0 16px;}
+  h3{font-size:16px;color:var(--ref);margin:20px 0 8px;}
+  code{background:#0b1220;color:var(--ref);padding:1px 6px;border-radius:5px;font-size:12.5px;font-family:Consolas,monospace;}
+  ul{margin:8px 0;padding-left:22px;} li{margin:5px 0;color:#cbd5e1;}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px 26px;margin:18px 0;}
+  .note{background:rgba(56,189,248,.08);border:1px solid rgba(56,189,248,.3);border-radius:10px;padding:14px 18px;color:#bae6fd;font-size:13.5px;margin:14px 0;}
+  .warnbox{background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.35);border-radius:10px;padding:14px 18px;color:#fde68a;font-size:13.5px;margin:14px 0;}
+  /* 요구 카드 */
+  .req{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:0;margin:20px 0;overflow:hidden;}
+  .req__head{display:flex;align-items:center;gap:12px;padding:16px 24px;border-bottom:1px solid var(--line);background:#172339;flex-wrap:wrap;}
+  .rid{font-family:Consolas,monospace;color:var(--accent);font-weight:800;font-size:16px;white-space:nowrap;}
+  .req__title{font-size:16.5px;font-weight:700;flex:1;min-width:200px;}
+  .pill{font-size:11px;font-weight:700;padding:3px 10px;border-radius:6px;white-space:nowrap;}
+  .p-must{background:rgba(248,113,113,.16);color:#fca5a5;border:1px solid rgba(248,113,113,.5);}
+  .p-should{background:rgba(56,189,248,.16);color:#7dd3fc;border:1px solid rgba(56,189,248,.45);}
+  .p-could{background:rgba(148,163,184,.16);color:#cbd5e1;border:1px solid rgba(148,163,184,.4);}
+  .p-base{background:rgba(196,181,253,.16);color:var(--purple);border:1px solid rgba(196,181,253,.5);}
+  .req__body{padding:18px 24px 22px;}
+  .story{background:rgba(52,211,153,.06);border-left:3px solid var(--accent);padding:10px 16px;border-radius:0 8px 8px 0;margin:0 0 16px;font-size:14px;color:#d1fae5;}
+  .label{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--sub);margin:14px 0 6px;font-weight:700;}
+  .ac{list-style:none;padding-left:0;margin:6px 0;}
+  .ac li{position:relative;padding-left:26px;margin:6px 0;}
+  .ac li::before{content:"\2713";position:absolute;left:0;top:0;color:var(--accent);font-weight:800;}
+  .dep{display:inline-block;font-family:Consolas,monospace;background:#0b1220;border:1px solid var(--line);color:var(--purple);padding:2px 8px;border-radius:6px;font-size:12px;margin:2px 4px 2px 0;}
+  .nodep{color:var(--sub);font-style:italic;}
+  table{width:100%;border-collapse:collapse;margin:12px 0;font-size:13px;}
+  th,td{border:1px solid var(--line);padding:8px 11px;text-align:left;vertical-align:top;}
+  th{background:#142035;color:var(--accent);}
+  .toc{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:10px;}
+  .toc a{display:block;background:#0b1220;border:1px solid var(--line);border-radius:8px;padding:10px 14px;color:var(--text);text-decoration:none;font-size:13px;}
+  .toc a:hover{border-color:var(--accent);}
+  .toc .rid{font-size:13px;}
+  footer{text-align:center;color:var(--sub);font-size:12.5px;padding:28px;border-top:1px solid var(--line);}
+  .svg-wrap{background:#0b1220;border:1px solid var(--line);border-radius:12px;padding:16px;overflow-x:auto;}
+  .legend{display:flex;gap:18px;flex-wrap:wrap;font-size:12.5px;color:var(--sub);margin-top:10px;}
+  .legend span{display:inline-flex;align-items:center;gap:6px;}
+  .sw{width:14px;height:14px;border-radius:3px;display:inline-block;}
+</style>
+</head>
+<body>
+
+<header class="page">
+  <div class="kicker">Project-SPIP · 기능명세 (Feature Spec) · M9 배치</div>
+  <h1>홈 대시보드 8개 백로그 — 개발 착수용 기능명세</h1>
+  <p>입력: <code>docs/ref.md</code>(원본 백로그 8) · <code>docs/pm/codebase-audit.html</code>(코드베이스 감사·핵심 입력) · <code>docs/Design/home-briefing-dashboard.md</code> · <code>docs/traceability.html</code>(요구 ID 체계). 본 문서는 8개 백로그를 <b>9개 검증 가능한 요구(R-25 ~ R-33)</b>로 재구성한 것이다 — 감사가 지목한 <b>공통 근원(전체 재렌더)</b>을 별도 기반 요구로 분리했기 때문에 항목 수가 1 늘었다.</p>
+  <span class="tag">신규 요구 R-25 ~ R-33</span>
+  <span class="tag">기존 체계: R-24 / N-07 까지 사용중</span>
+  <span class="tag">작성 2026-06-24</span>
+</header>
+
+<main>
+
+<!-- 개요 -->
+<section id="overview">
+  <h2>1. 배치 개요 및 목표</h2>
+  <div class="panel">
+    <p>이 8개 백로그(→9개 요구)는 모두 <b>홈/프로젝트 대시보드의 사용 경험</b>을 다듬는 작업으로, 네 갈래의 문제를 함께 해결한다.</p>
+    <ul>
+      <li><b>UX 일관성</b> — 홈·프로젝트 헤더 구성 통일(R-27), 네이티브 메뉴 제거 후 헤더/단축키로 기능 이관(R-28), 설정 좌우 분할 정리(R-30).</li>
+      <li><b>실시간성</b> — 모든 홈 섹션이 라이브 데이터를 반영(R-31). 단, 이를 켜면 재렌더 빈도가 올라가 입력·드래그·차트가 깨진다.</li>
+      <li><b>커스터마이즈</b> — 홈 섹션을 드래그로 재배치(R-32), 주간 생산성 차트를 인터랙티브 라이브러리로(R-33).</li>
+      <li><b>버그 수정</b> — 검색창 한글 자음·모음 분리 입력(R-26).</li>
+    </ul>
+    <div class="warnbox">
+      <b>왜 이 8개를 함께 묶는가 — 공통 근원이 하나다.</b> 감사 결과, 현재 <code>render()</code>가 <code>app.replaceChildren()</code>로 <b>전체 DOM을 매번 통째 교체</b>하는 구조라는 점이 <b>R-26(한글 IME 자모분리)·R-32(드래그 파괴)·R-33(차트 인스턴스 파괴)의 공통 원인</b>이며, <b>R-31(실시간 갱신)은 재렌더 빈도를 높여 이 셋을 모두 악화</b>시킨다. 따라서 "무엇을 만들 것인가"보다 먼저 <b>부분 갱신/재렌더 가드 기반(R-25)</b>을 정립해야 나머지가 안정적으로 얹힌다. R-25를 기반(foundational) 요구로 별도 명시하고, R-26·R-31·R-32·R-33이 여기에 의존하도록 수용 기준·의존성에 박았다.</div>
+    <h3>이 배치에서 반드시 지키는 불변식 (감사 §보안 불변식)</h3>
+    <ul>
+      <li><b>L-1</b>: 모든 렌더는 <code>textContent</code>(<code>el()</code> 헬퍼)만. 스캔/메일/차트 라벨 등 신뢰불가 문자열을 <code>innerHTML</code>에 넣지 않는다.</li>
+      <li><b>CSP</b>(<code>default-src 'none'; script-src 'self'; connect-src 'none'</code>): 외부 CDN·인라인 <code>&lt;script&gt;</code>·런타임 fetch 전부 금지. (만약 신규 라이브러리가 필요하면 반드시 self-host — 단, 이 배치에서는 차트를 SVG 자작으로 확정해 신규 라이브러리 도입 자체가 없다.)</li>
+      <li><b>런타임 의존성 최소</b>: npm 런타임 의존성은 <code>electron-updater</code> 유지. <b>이 배치는 차트를 SVG 자작</b>해 새 라이브러리·self-host 차트 자산을 추가하지 않는다(R-33 확정). 기존 SortableJS(self-host)는 R-32에서 재사용만 한다.</li>
+      <li>새 IPC는 register.js <code>guard</code>(senderFrame 정확 일치)·고정 에러코드(L-3) 경유. uiState 영속은 0600 원자적 쓰기.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- F-1 역추적표 -->
+<section id="trace">
+  <h2>2. 원본 백로그(1~8) → 요구 ID 역추적</h2>
+  <div class="panel">
+    <p>원본 <code>docs/ref.md</code>의 8개 항목이 어느 요구로 이어지는지 역추적한다. <b>R-25는 원본 항목이 아니라</b> 코드베이스 감사의 교차이슈(전체 재렌더 공통 근원)에서 파생된 <b>기반 요구</b>다.</p>
+    <table>
+      <tr><th style="width:64px">ref #</th><th>원본 백로그 항목</th><th style="width:230px">대응 요구 ID</th></tr>
+      <tr><td>1</td><td>프로젝트/홈 대시보드 상단 헤더 구성 통일</td><td><span class="dep">R-27</span> · <span class="dep">R-28</span> 동반</td></tr>
+      <tr><td>2</td><td>모든 섹션(이메일·주의 필요·주간 생산성·타임라인) 실시간 반영</td><td><span class="dep">R-31</span> (기반 <span class="dep">R-25</span> 경유)</td></tr>
+      <tr><td>3</td><td>각 섹션 드래그 위치 이동 + 프리뷰 + 워터폴 재배치</td><td><span class="dep">R-32</span> (기반 <span class="dep">R-25</span> 경유)</td></tr>
+      <tr><td>4</td><td>주간 생산성 차트를 라이브러리로 인터랙티브하게</td><td><span class="dep">R-33</span> (SVG 자작 확정 — 라이브러리 비범위)</td></tr>
+      <tr><td>5</td><td>상단 메뉴 제거 (정보→설정, 새로고침→F5)</td><td><span class="dep">R-28</span> (단축키는 <span class="dep">R-29</span> 단일출처)</td></tr>
+      <tr><td>6</td><td>설정에 단축키 정보 추가</td><td><span class="dep">R-29</span> — <span class="dep">R-30</span> "단축키" 카테고리에 배치</td></tr>
+      <tr><td>7</td><td>설정 좌우 분할(좌 카테고리 / 우 항목)</td><td><span class="dep">R-30</span></td></tr>
+      <tr><td>8</td><td>프로젝트 검색창 한글 자음·모음 분리 입력 버그</td><td><span class="dep">R-26</span> (기반 <span class="dep">R-25</span> 경유)</td></tr>
+      <tr><td style="color:#c4b5fd">—</td><td style="color:#c4b5fd"><b>원본 항목 아님</b> — 감사 교차이슈(전체 재렌더가 8·3·4의 공통 원인, 2가 악화)에서 파생된 기반 요구</td><td><span class="dep" style="color:#c4b5fd;border-color:#c4b5fd">R-25</span> (foundational)</td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- 요구 목록 인덱스 -->
+<section id="index">
+  <h2>3. 요구 인덱스</h2>
+  <div class="toc">
+    <a href="#R-25"><span class="rid">R-25</span> · 부분 갱신/재렌더 가드 기반 정립 <span class="pill p-base">기반</span></a>
+    <a href="#R-26"><span class="rid">R-26</span> · 검색창 한글 자음·모음 분리 입력 버그 수정 <span class="pill p-must">Must</span></a>
+    <a href="#R-27"><span class="rid">R-27</span> · 홈 ↔ 프로젝트 헤더 구성 통일 <span class="pill p-must">Must</span></a>
+    <a href="#R-28"><span class="rid">R-28</span> · 네이티브 메뉴 제거 + F5 매핑 + 정보 이관 <span class="pill p-must">Must</span></a>
+    <a href="#R-29"><span class="rid">R-29</span> · 단축키 단일출처 + 설정 단축키 안내 <span class="pill p-must">Must</span></a>
+    <a href="#R-30"><span class="rid">R-30</span> · 설정 좌우 분할(카테고리/항목) <span class="pill p-should">Should</span></a>
+    <a href="#R-31"><span class="rid">R-31</span> · 모든 홈 섹션 실시간 데이터 반영 <span class="pill p-should">Should</span></a>
+    <a href="#R-32"><span class="rid">R-32</span> · 홈 섹션 드래그 재배치 + 워터폴 <span class="pill p-should">Should</span></a>
+    <a href="#R-33"><span class="rid">R-33</span> · 주간 생산성 차트 인터랙티브화(SVG 자작) <span class="pill p-could">Could</span></a>
+  </div>
+</section>
+
+<!-- 의존성 다이어그램 -->
+<section id="deps">
+  <h2>4. 요구 간 의존성</h2>
+  <div class="svg-wrap">
+  <svg viewBox="0 0 980 470" width="100%" role="img" aria-label="요구 간 의존성 다이어그램">
+    <defs>
+      <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+        <path d="M0,0 L8,3 L0,6 Z" fill="#94a3b8"/>
+      </marker>
+      <marker id="arrowg" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+        <path d="M0,0 L8,3 L0,6 Z" fill="#34d399"/>
+      </marker>
+    </defs>
+
+    <!-- 기반 R-25 -->
+    <rect x="360" y="20" width="260" height="58" rx="12" fill="#1e1b3a" stroke="#c4b5fd" stroke-width="2"/>
+    <text x="490" y="44" text-anchor="middle" fill="#c4b5fd" font-size="15" font-weight="700">R-25 부분 갱신 / 재렌더 가드</text>
+    <text x="490" y="64" text-anchor="middle" fill="#a5b4fc" font-size="11.5">기반 (foundational) — 공통 근원 해소</text>
+
+    <!-- 의존 4개: R-26 R-31 R-32 R-33 -->
+    <rect x="40" y="160" width="190" height="56" rx="10" fill="#172339" stroke="#f87171" stroke-width="1.5"/>
+    <text x="135" y="184" text-anchor="middle" fill="#fca5a5" font-size="13" font-weight="700">R-26 한글 IME 버그</text>
+    <text x="135" y="202" text-anchor="middle" fill="#94a3b8" font-size="11">composition 가드</text>
+
+    <rect x="270" y="160" width="190" height="56" rx="10" fill="#172339" stroke="#38bdf8" stroke-width="1.5"/>
+    <text x="365" y="184" text-anchor="middle" fill="#7dd3fc" font-size="13" font-weight="700">R-31 실시간 반영</text>
+    <text x="365" y="202" text-anchor="middle" fill="#94a3b8" font-size="11">갱신 빈도 ↑ (악화 요인)</text>
+
+    <rect x="520" y="160" width="190" height="56" rx="10" fill="#172339" stroke="#38bdf8" stroke-width="1.5"/>
+    <text x="615" y="184" text-anchor="middle" fill="#7dd3fc" font-size="13" font-weight="700">R-32 섹션 드래그</text>
+    <text x="615" y="202" text-anchor="middle" fill="#94a3b8" font-size="11">+ uiState 스키마</text>
+
+    <rect x="750" y="160" width="190" height="56" rx="10" fill="#172339" stroke="#94a3b8" stroke-width="1.5"/>
+    <text x="845" y="184" text-anchor="middle" fill="#cbd5e1" font-size="13" font-weight="700">R-33 차트 인터랙티브</text>
+    <text x="845" y="202" text-anchor="middle" fill="#94a3b8" font-size="11">SVG 자작 · 외부 0</text>
+
+    <!-- R-25 -> 4개 -->
+    <path d="M430,78 C300,110 180,120 135,158" fill="none" stroke="#34d399" stroke-width="1.8" marker-end="url(#arrowg)"/>
+    <path d="M470,78 C420,110 380,120 365,158" fill="none" stroke="#34d399" stroke-width="1.8" marker-end="url(#arrowg)"/>
+    <path d="M520,78 C580,110 605,120 615,158" fill="none" stroke="#34d399" stroke-width="1.8" marker-end="url(#arrowg)"/>
+    <path d="M560,78 C720,110 810,120 845,158" fill="none" stroke="#34d399" stroke-width="1.8" marker-end="url(#arrowg)"/>
+
+    <!-- R-31 -> R-26 (composition 보류 훅 경유) 점선 -->
+    <path d="M270,196 L232,194" fill="none" stroke="#fbbf24" stroke-width="1.5" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
+    <text x="250" y="232" text-anchor="middle" fill="#fbbf24" font-size="10.5">R-31 push는 R-25 composition 보류 훅을 반드시 경유(한글 조합 중 input 교체 차단)</text>
+
+    <!-- 하단: 메뉴/단축키/설정 클러스터 -->
+    <rect x="120" y="300" width="200" height="56" rx="10" fill="#172339" stroke="#f87171" stroke-width="1.5"/>
+    <text x="220" y="324" text-anchor="middle" fill="#fca5a5" font-size="13" font-weight="700">R-28 메뉴 제거 / F5</text>
+    <text x="220" y="342" text-anchor="middle" fill="#94a3b8" font-size="11">잃는 기능 헤더·키로 이관</text>
+
+    <rect x="390" y="300" width="200" height="56" rx="10" fill="#172339" stroke="#f87171" stroke-width="1.5"/>
+    <text x="490" y="324" text-anchor="middle" fill="#fca5a5" font-size="13" font-weight="700">R-29 단축키 단일출처</text>
+    <text x="490" y="342" text-anchor="middle" fill="#94a3b8" font-size="11">상수 1곳 · 설정 안내표</text>
+
+    <rect x="660" y="300" width="200" height="56" rx="10" fill="#172339" stroke="#f87171" stroke-width="1.5"/>
+    <text x="760" y="324" text-anchor="middle" fill="#fca5a5" font-size="13" font-weight="700">R-27 헤더 통일</text>
+    <text x="760" y="342" text-anchor="middle" fill="#94a3b8" font-size="11">메뉴 이관과 동반 설계</text>
+
+    <!-- R-28 <-> R-29 단일출처 -->
+    <path d="M320,328 L388,328" fill="none" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arrow)"/>
+    <path d="M388,340 L322,340" fill="none" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arrow)"/>
+    <text x="354" y="378" text-anchor="middle" fill="#94a3b8" font-size="10.5">SHORTCUTS 상수 공유</text>
+
+    <!-- R-28 -> R-27 동반 -->
+    <path d="M590,318 C640,312 680,312 700,318" fill="none" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
+
+    <!-- R-30 설정 분할 (R-29 안내 포함) -->
+    <rect x="390" y="400" width="200" height="50" rx="10" fill="#172339" stroke="#38bdf8" stroke-width="1.5"/>
+    <text x="490" y="421" text-anchor="middle" fill="#7dd3fc" font-size="13" font-weight="700">R-30 설정 좌우 분할</text>
+    <text x="490" y="438" text-anchor="middle" fill="#94a3b8" font-size="11">단축키·정보 카테고리 수용</text>
+    <path d="M490,356 L490,398" fill="none" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
+  </svg>
+  </div>
+  <div class="legend">
+    <span><span class="sw" style="background:#34d399"></span> 실선 초록 = 강한 선행 의존(기반 R-25 먼저)</span>
+    <span><span class="sw" style="background:#94a3b8"></span> 실선 회색 = 상호 참조/동반 설계</span>
+    <span><span class="sw" style="background:#fbbf24"></span> 점선 = 악화/주의 관계</span>
+  </div>
+  <div class="note"><b>R-25 ↔ R-26 ↔ R-31 단일 진술(검증 F-3):</b> R-26(IME 버그)은 R-25 기반 위에서 <b>먼저</b> 해소하고, R-31(실시간 push)은 R-25의 <b>composition 보류 훅을 반드시 경유</b>해 한글 조합 중 input 교체를 막는다. 아래 구현 순서·R-26 수용 기준·다이어그램이 모두 이 진술과 일치한다.</div>
+  <div class="note"><b>구현 순서 권고:</b> ① R-25(기반) → ② R-26 / R-27 / R-28 / R-29(Must, 병렬 가능하나 R-26은 R-25 의존, R-28↔R-29는 단일출처 공유) → ③ R-30 / R-31 / R-32(Should) → ④ R-33(Could). R-31은 R-25의 composition 보류 훅을 경유하며, R-26 해소 이후 활성화한다.</div>
+</section>
+
+<!-- ============ R-25 ============ -->
+<section>
+<h2>5. 요구 상세</h2>
+
+<div class="req" id="R-25">
+  <div class="req__head">
+    <span class="rid">R-25</span>
+    <span class="req__title">부분 갱신 / 재렌더 가드 기반 정립 (foundational)</span>
+    <span class="pill p-base">기반</span>
+  </div>
+  <div class="req__body">
+    <div class="story"><b>구현 개발자</b>로서, 후속 요구(R-26·R-31·R-32·R-33)가 의존할 수 있는 <b>안정적인 부분 갱신·재렌더 가드 계약</b>을 원한다. 왜냐하면 현재 <code>render()</code>가 전체 DOM을 통째 교체해 한글 조합·드래그 세션·차트 인스턴스가 매 렌더마다 파괴되며, 이 공통 근원을 먼저 잡지 않으면 후속 요구들이 각자 임시방편을 만들어 충돌하기 때문이다. <span style="color:#94a3b8">(이 요구의 직접 수혜자는 최종 사용자가 아니라 <b>후속 요구를 구현하는 개발자</b>다 — 사용자 가치는 R-26·R-31·R-32·R-33을 통해 간접 실현된다.)</span></div>
+
+    <div class="warnbox"><b>API surface 최종 확정은 chief-architect의 첫 설계 과제로 위임(검증 F-2).</b> 함수명·시그니처·모듈 배치 등 구체 API 표면은 본 명세에서 못 박지 않는다. 아래 코드 식별자(<code>shouldDeferRender</code> 등)는 <b>예시·의도 전달용</b>이며 확정 계약이 아니다. 다만 후속 요구가 의존할 <b>계약의 의도 4가지는 확정</b>이며, 아키텍트는 이 4가지를 충족하는 구체 API를 첫 설계 산출물에서 정의한다.</div>
+
+    <div class="label">상세 기능 명세 — 확정된 계약 의도 (4가지, 아키텍트가 구체 API로 구현)</div>
+    <ul>
+      <li><b>(1) composition(IME) 진행 중 재렌더 보류 훅</b> — <code>compositionstart</code>→<code>compositionend</code> 사이 진행 상태를 단일 진입점에서 추적하고, 그동안 라이브 갱신/재렌더를 보류한다. (R-26·R-31이 이 훅을 경유.)</li>
+      <li><b>(2) 노드 보존 부분 갱신</b> — 특정 DOM(헤더 검색 input 등)을 재렌더 시 파괴하지 않고 보존하여 <b>입력값·포커스·캐럿(selectionStart/End)을 유지</b>한다.</li>
+      <li><b>(3) stateful 위젯의 destroy/recreate 라이프사이클 훅</b> — 차트(R-33)·SortableJS 컨테이너(R-32)처럼 인스턴스를 가진 위젯이 재렌더 시 일관되게 정리·재생성되도록 표준 훅을 제공(중복 인스턴스·메모리 누수 방지).</li>
+      <li><b>(4) 실시간 push 갱신 coalesce</b> — 보류 중 누적된 라이브 갱신을 상태 해제 시 <b>병합·디바운스하여 1회만 반영</b>한다(드래그/조합/오버레이 중 갱신 묶음 처리).</li>
+    </ul>
+    <p style="color:#94a3b8;font-size:13px;margin:8px 0 0;">전면 가상DOM/프레임워크 도입은 비범위 — 기존 가드 인프라(<code>store._dragging</code>·오버레이 체크·FOCUS_SEL/SCROLL_SEL 복원)를 확장하는 방향. 가드 코드는 마커(예 <code>RG-1</code>·<code>RG-2</code>)로 추적.</p>
+
+    <div class="label">수용 기준 — 완료 정의(DoD, 검증 가능 체크리스트)</div>
+    <ul class="ac">
+      <li><b>의도(1)</b>: composition 진행 상태가 true인 동안 라이브 갱신 트리거 시 재렌더가 호출되지 않고 보류 플래그가 설정된다 — 보류 판정 순수함수가 false 반환함을 헤드리스 단위테스트로 검증.</li>
+      <li><b>의도(1)</b>: 드래그 중·오버레이(설정/도움말/드로어) 열림 상태에서도 동일하게 라이브 갱신이 보류된다(단위테스트).</li>
+      <li><b>의도(2)</b>: 보존 대상 노드(헤더 검색 input)가 재렌더를 거쳐도 입력값·포커스·캐럿 위치(selectionStart/End)·주요 스크롤 위치가 유지된다(동작 확인 + 기존 복원 회귀 0).</li>
+      <li><b>의도(3)</b>: stateful 위젯이 재렌더 시 이전 인스턴스가 destroy되고 재생성되어 중복 인스턴스·이벤트 핸들러 누적·메모리 누수가 없다(훅 호출 단위테스트 또는 동작 확인).</li>
+      <li><b>의도(4)</b>: 보류 상태 해제 시 누적된 갱신이 <b>정확히 1회</b> 병합 반영된다(중복 렌더 0) — coalesce 단위테스트.</li>
+      <li>가드/coalesce 판정 로직은 app.js DOM과 분리된 <b>순수 함수</b>로 단위테스트 가능하다.</li>
+      <li>아키텍트가 4가지 의도를 충족하는 <b>구체 API surface(함수명·시그니처·모듈)를 첫 설계 산출물에 문서화</b>했고, R-26·R-31·R-32·R-33 설계가 그 API를 참조한다.</li>
+      <li>기존 dashboard/orbit/home/scan 뷰 회귀 0, 전체 테스트 스위트 그린 유지. 가드 코드에 추적 마커 병기.</li>
+    </ul>
+
+    <div class="label">우선순위 · 의존성</div>
+    <p><span class="pill p-base">기반 / Must 우선 처리</span> &nbsp; 선행 의존: <span class="nodep">없음 (모든 후속의 토대)</span> &nbsp; 피의존: <span class="dep">R-26</span> <span class="dep">R-31</span> <span class="dep">R-32</span> <span class="dep">R-33</span></p>
+    <div class="note">L-1·CSP 영향 없음(렌더 정책 변경 아님). 기존 가드 인프라 재사용이므로 새 IPC·런타임 의존성 0. <b>구체 API surface는 chief-architect 첫 설계 과제로 위임.</b></div>
+  </div>
+</div>
+
+<!-- ============ R-26 ============ -->
+<div class="req" id="R-26">
+  <div class="req__head">
+    <span class="rid">R-26</span>
+    <span class="req__title">프로젝트 대시보드 검색창 한글 자음·모음 분리 입력 버그 수정</span>
+    <span class="pill p-must">Must</span>
+  </div>
+  <div class="req__body">
+    <div class="story">사용자로서 프로젝트 검색창에 <b>한글을 끊김 없이 입력</b>하고 싶다. 왜냐하면 현재 "프로젝트"를 치면 "ㅍㅡㄹㅗㅈㅔㅋㅡㅌㅡ"처럼 자음·모음이 분리돼 검색이 사실상 불가능하기 때문이다.</div>
+
+    <div class="label">상세 기능 명세 (감사: 원인 거의 확정)</div>
+    <ul>
+      <li><b>원인</b>: 검색 <code>input</code> 핸들러가 매 입력마다 <code>debounce(render,120)</code>를 호출 → <code>render()</code>가 input 노드를 <code>replaceChildren</code>로 통째 교체 → IME 조합 세션이 강제 종료되어 자모가 분리됨. 코드베이스에 <code>isComposing/compositionstart/compositionend</code> 방어가 <b>0건</b>.</li>
+      <li><b>해결 방향</b>(R-25 가드 활용): ① 검색 input 핸들러에서 <code>e.isComposing</code> 또는 <code>store._composing</code>이면 <code>store.state.search</code>만 갱신하고 <code>render()</code> 호출(debounced)을 <b>스킵</b>한다. ② <code>compositionend</code> 발생 시 1회 반영한다. ③ 가능하면 R-25의 "보존 영역"으로 검색 결과 영역만 갱신하고 헤더 input 노드는 보존(상위 해법).</li>
+      <li>동일 위험의 다른 input(궤도 검색 <code>.orbit__search</code>, 할 일 입력 등)도 동일 가드를 적용해 회귀를 막는다.</li>
+    </ul>
+
+    <div class="label">수용 기준 (검증 가능 체크리스트)</div>
+    <ul class="ac">
+      <li>검색창에 "프로젝트", "스카이림", "한글테스트" 등 받침 포함 단어를 빠르게 입력해도 자모가 분리되지 않고 완성형으로 입력된다(사용자 PC 1회 수동 확인 — 헤드리스 한계).</li>
+      <li>조합 중(<code>isComposing===true</code> 또는 <code>_composing</code>) 입력 핸들러는 <code>render()</code>/debounced 재렌더를 호출하지 않는다 — 핸들러 분기 순수함수 단위테스트.</li>
+      <li><code>compositionend</code> 후 검색 결과가 1회 반영되어 최종 검색어로 필터링된다.</li>
+      <li>영문/숫자 입력 시 기존 debounce 검색 동작은 변함없이 유지된다(회귀 없음).</li>
+      <li>R-31(실시간 push)은 R-25의 composition 보류 훅을 경유하므로, 한글 조합 중 라이브 push가 발생해도 input 교체가 일어나지 않아 입력이 깨지지 않는다(R-26은 R-25 기반 위에서 먼저 해소·검증 F-3 단일 진술).</li>
+    </ul>
+
+    <div class="label">우선순위 · 의존성</div>
+    <p><span class="pill p-must">Must (사용자 영향 큰 버그)</span> &nbsp; <span class="dep">depends: R-25</span> (composition 추적·갱신 보류 가드 사용)</p>
+  </div>
+</div>
+
+<!-- ============ R-27 ============ -->
+<div class="req" id="R-27">
+  <div class="req__head">
+    <span class="rid">R-27</span>
+    <span class="req__title">홈 ↔ 프로젝트 대시보드 헤더 구성 통일</span>
+    <span class="pill p-must">Must</span>
+  </div>
+  <div class="req__body">
+    <div class="story">사용자로서 홈과 프로젝트 화면을 오갈 때 <b>상단 헤더가 일관된 구성</b>이기를 원한다. 왜냐하면 지금은 두 화면의 헤더 액션 영역이 달라(홈=미니멀·텍스트만 / 프로젝트=검색+버튼 4종) 어디서 무엇을 할 수 있는지 헷갈리기 때문이다.</div>
+
+    <div class="label">상세 기능 명세</div>
+    <ul>
+      <li>두 헤더는 이미 동일 함수 <code>renderHeader()</code>를 공유하나 <code>store.state.view</code> 분기로 구성이 갈린다(홈 early return 존재). <b>공통 골격</b>(브랜드 + 탭 + 공통 액션 영역)을 정의하고, 뷰별 차이는 <b>명시적 규칙</b>으로만 둔다.</li>
+      <li><b>통일 범위(사용자 확정):</b> "완전 동일"이 아니라 <b>공통 골격(레이아웃·높이·공통 액션 영역)만 통일</b>한다. 브랜드/탭/공통 액션(설정·재스캔 등)은 양 뷰 공통이되, <b>검색 입력은 프로젝트 대시보드 전용</b>이고 <b>홈은 미니멀 유지</b>다(홈에 검색을 두면 R-26 IME 버그가 홈으로 전이되고, 디자인 문서 §3도 "검색은 프로젝트 뷰 전용"으로 규정).</li>
+      <li>R-28(메뉴 제거)에서 헤더로 이관되는 액션(폴더 추가·재스캔·새로고침·정보 진입)을 이 공통 액션 영역에 배치한다 — <b>R-28과 동반 설계</b>.</li>
+      <li>홈의 화이트 카드 톤과 프로젝트 톤 차이를 고려해 헤더 자체는 동일 톤으로 통일.</li>
+    </ul>
+
+    <div class="label">수용 기준 (검증 가능 체크리스트)</div>
+    <ul class="ac">
+      <li>홈·프로젝트 두 뷰의 헤더가 동일한 <b>공통 골격</b>(레이아웃·높이·브랜드 → 탭 → 공통 액션 영역)을 공유한다. 단 "완전 동일"은 아니며, <b>허용되는 뷰별 차이는 "검색 입력 노출 여부(프로젝트 전용)" 1가지로 한정</b>된다 — 홈은 미니멀 유지.</li>
+      <li>홈 헤더에도 설정·재스캔 등 공통 액션 진입점이 존재한다(현재 홈엔 "마지막 스캔" 텍스트만).</li>
+      <li>탭(홈/프로젝트/궤도) 클릭으로 뷰 전환이 양 헤더에서 동일하게 동작한다(회귀 없음).</li>
+      <li>홈 헤더에는 검색 input이 렌더되지 않는다(R-26 IME 버그 전이 차단 확인).</li>
+      <li><code>renderHeader()</code>의 view early-return 분기가 정리되어 공통 액션이 단일 경로로 구성된다.</li>
+    </ul>
+
+    <div class="label">우선순위 · 의존성</div>
+    <p><span class="pill p-must">Must</span> &nbsp; <span class="dep">co-design: R-28</span> (메뉴 기능 헤더 이관과 함께 헤더 액션 영역을 한 번에 정리)</p>
+  </div>
+</div>
+
+<!-- ============ R-28 ============ -->
+<div class="req" id="R-28">
+  <div class="req__head">
+    <span class="rid">R-28</span>
+    <span class="req__title">상단 네이티브 메뉴 제거 · 새로고침 F5 매핑 · "정보" 설정 이관</span>
+    <span class="pill p-must">Must</span>
+  </div>
+  <div class="req__body">
+    <div class="story">사용자로서 잘 쓰지 않는 <b>네이티브 상단 메뉴(파일·스캔·보기·도움말)를 없애</b> 화면을 깔끔하게 쓰고 싶다. 왜냐하면 모든 동작은 이미 헤더 버튼·단축키로 접근 가능하거나 그렇게 이관할 수 있고, 메뉴는 시각적 잡음이기 때문이다.</div>
+
+    <div class="label">상세 기능 명세</div>
+    <ul>
+      <li><b>네이티브 메뉴 제거</b>: <code>Menu.setApplicationMenu(null)</code>(또는 accelerator-only 축소). 메뉴가 제공하던 기능을 잃지 않도록 대체 경로 보장(접근성 보조 N-07 목적 승계).</li>
+      <li><b>잃는 기능 이관</b>: 폴더 추가(Ctrl+O)·재스캔(Ctrl+R)은 <b>헤더 버튼/단축키</b>로(R-27 공통 액션 영역). "도움말 &gt; Project-SPIP 정보(SW 정보)"는 <b>설정 모달의 "정보/버전" 카테고리</b>로 이관(R-30 카테고리). 도움말 메뉴 자체 진입점은 제거하되 헤더 도움말 버튼 유지 여부는 R-27 통일 규칙과 함께 결정.</li>
+      <li><b>새로고침 F5 매핑</b>: 현재 F5 핸들러 없음. <b>전역 <code>globalShortcut</code> 대신 렌더러 keydown</b>(기존 ESC 핸들러 패턴)으로 F5 → <code>refreshDashboard()</code> 매핑(앱 비포커스 시 미동작이 안전). 단축키 정의는 R-29의 단일 상수에서 가져온다.</li>
+      <li><b>죽은 배선 정리(SEC-L1)</b>: 메뉴 제거 후 preload <code>onMenu</code> 화이트리스트(<code>pickFolders|rescan|refresh|about</code>)와 app <code>subscribeMenu</code>/<code>onMenuCommand</code>에서 더 이상 발신되지 않는 채널을 정리해 죽은 수신 채널을 남기지 않는다.</li>
+    </ul>
+
+    <div class="label">수용 기준 (검증 가능 체크리스트)</div>
+    <ul class="ac">
+      <li>앱 실행 시 상단 네이티브 메뉴바(파일/스캔/보기/도움말)가 표시되지 않는다(사용자 PC 확인).</li>
+      <li>폴더 추가·재스캔·새로고침·SW 정보 각각에 대해 <b>대체 진입점이 정확히 1곳 이상</b> 존재하고 동작한다(헤더 버튼 또는 단축키 또는 설정 카테고리).</li>
+      <li>F5 입력 시 <code>refreshDashboard()</code>가 호출되어 갱신된다 — keydown 디스패치 단위테스트 + 사용자 PC 확인.</li>
+      <li>F5 매핑은 <code>globalShortcut</code>이 아닌 렌더러 keydown으로 구현된다(앱 비포커스 시 미발화).</li>
+      <li>"SW 정보(버전 등)"가 설정 모달 내에서 조회 가능하며 버전 문자열은 <code>package.json</code>에서 읽는다(하드코딩 금지).</li>
+      <li>제거된 메뉴 채널에 대한 preload 화이트리스트·app 수신 핸들러가 정리되어 죽은 채널이 남지 않는다(코드 리뷰 + 화이트리스트 단위테스트).</li>
+    </ul>
+
+    <div class="label">우선순위 · 의존성</div>
+    <p><span class="pill p-must">Must</span> &nbsp; <span class="dep">co-design: R-27</span> <span class="dep">shares const: R-29</span> <span class="dep">target: R-30</span> (정보 이관 대상 카테고리)</p>
+  </div>
+</div>
+
+<!-- ============ R-29 ============ -->
+<div class="req" id="R-29">
+  <div class="req__head">
+    <span class="rid">R-29</span>
+    <span class="req__title">단축키 단일 출처(상수) + 설정 단축키 안내 추가</span>
+    <span class="pill p-must">Must</span>
+  </div>
+  <div class="req__body">
+    <div class="story">사용자로서 <b>사용 가능한 단축키를 설정에서 한눈에</b> 확인하고 싶다. 그리고 개발자로서 단축키 매핑이 <b>메뉴·안내표·keydown 핸들러에서 어긋나지 않기를</b> 원한다. 왜냐하면 R-28에서 F5를 추가하는 등 매핑이 바뀔 때 표가 따로 놀면 사용자에게 거짓 정보가 노출되기 때문이다.</div>
+
+    <div class="label">상세 기능 명세</div>
+    <ul>
+      <li><b>단일 출처 상수</b>: 단축키 정의를 <b>한 곳의 상수</b>(예 <code>SHORTCUTS = [{ keys, action, label }]</code>)에 두고, ⓐ 단축키 안내표(설정) ⓑ keydown 핸들러(F5 등) ⓒ (남는다면) accelerator가 <b>모두 같은 상수를 참조</b>한다. 한 곳을 바꾸면 모두 동기화된다.</li>
+      <li><b>설정 단축키 안내 섹션</b>: 설정 모달에 "단축키 / 동작" 표를 추가(<code>renderShortcutSettings()</code>). 현재 정의: Ctrl+O(폴더 추가)·Ctrl+R(재스캔)·ESC(닫기)·<b>F5(새로고침, R-28 신설)</b>. 표시 전용(편집은 비범위).</li>
+      <li>표 렌더는 <code>helpRow</code>/kvRow 헬퍼 재사용, 모든 텍스트 <code>textContent</code>(L-1). R-30 적용 시 "단축키" 카테고리로 편입.</li>
+    </ul>
+
+    <div class="label">수용 기준 (검증 가능 체크리스트)</div>
+    <ul class="ac">
+      <li>단축키 정의가 단일 상수에 존재하고, 안내표·keydown 핸들러가 그 상수를 참조한다(소스에 중복 정의 0) — 상수 참조 단위테스트.</li>
+      <li>설정 모달에 단축키 안내 섹션이 표시되고, 정의된 모든 단축키(Ctrl+O·Ctrl+R·ESC·F5)가 동작과 함께 나열된다.</li>
+      <li>상수에 단축키를 추가/변경하면 안내표와 keydown 동작이 함께 바뀐다(추가 항목이 표에 자동 반영됨을 단위테스트로 확인).</li>
+      <li>안내표 텍스트는 전부 <code>textContent</code>로 렌더(L-1).</li>
+    </ul>
+
+    <div class="label">우선순위 · 의존성</div>
+    <p><span class="pill p-must">Must</span> &nbsp; <span class="dep">shares const: R-28</span> (F5 등 keydown 매핑이 같은 상수 사용) <span class="dep">placed in: R-30</span> (단축키 카테고리)</p>
+  </div>
+</div>
+
+<!-- ============ R-30 ============ -->
+<div class="req" id="R-30">
+  <div class="req__head">
+    <span class="rid">R-30</span>
+    <span class="req__title">설정 좌우 분할 (좌 카테고리 / 우 항목)</span>
+    <span class="pill p-should">Should</span>
+  </div>
+  <div class="req__body">
+    <div class="story">사용자로서 설정 항목이 많아진 만큼 <b>카테고리로 분류된 좌우 분할 화면</b>에서 원하는 설정을 빠르게 찾고 싶다. 왜냐하면 지금은 8개+ 블록이 단일 세로 스크롤로 나열돼 원하는 항목을 찾기 번거롭기 때문이다.</div>
+
+    <div class="label">상세 기능 명세</div>
+    <ul>
+      <li>설정 모달을 <b>2-pane</b>(좌: 카테고리 리스트 / 우: 선택 카테고리의 항목)로 재구성. 선택된 카테고리의 <code>render*Settings()</code>만 우측에 렌더.</li>
+      <li><b>카테고리 분류(사용자 확정 — 5분류)</b>: <b>스캔 / 연동 / 외관 / 단축키 / 정보</b>. 현재 8개 설정 섹션 + 2개 신설을 아래 매핑표대로 배치한다.</li>
+      <li>활성 카테고리는 <code>store</code>에 보관(<code>store.settingsTab</code>)해 전체 재렌더 후에도 유지. 스크롤 복원 셀렉터(<code>SCROLL_SEL</code>)를 우측 패널 셀렉터로 갱신.</li>
+      <li>포커스 트랩(<code>getTabbables</code>)에 좌측 카테고리 버튼 포함, Tab 순환 정상 동작. 레이아웃은 flex/인라인 style 속성(CSP 무난).</li>
+    </ul>
+    <table>
+      <tr><th style="width:120px">좌측 카테고리</th><th>우측 항목 — 현재 8개 설정 섹션 + 2개 신설의 매핑</th></tr>
+      <tr><td><b>스캔</b></td><td>스캔 폴더 · 제외 항목 · 프로젝트 인식 기준 · 스캔 옵션 (4)</td></tr>
+      <tr><td><b>연동</b></td><td>외부 툴 경로 · 메일 알림 계정 (2)</td></tr>
+      <tr><td><b>외관</b></td><td>테마 (1)</td></tr>
+      <tr><td><b>단축키</b></td><td>단축키 안내표 (신설 — R-29)</td></tr>
+      <tr><td><b>정보</b></td><td>SW 정보/버전 (신설 — R-28) · 소프트웨어 업데이트 (1)</td></tr>
+    </table>
+    <p style="color:#94a3b8;font-size:13px;margin:6px 0 0;">기존 8개 섹션(폴더·제외·인식·옵션·툴·메일·테마·업데이트)이 빠짐없이 매핑됨 + 신설 2개(단축키·정보).</p>
+
+    <div class="label">수용 기준 (검증 가능 체크리스트)</div>
+    <ul class="ac">
+      <li>설정 모달이 좌측 카테고리 리스트 + 우측 항목 패널의 2-pane로 표시된다.</li>
+      <li>좌측 카테고리 클릭 시 우측에 해당 카테고리 항목만 렌더되고, 다른 카테고리 항목은 보이지 않는다.</li>
+      <li>설정을 닫았다 다시 열거나 전체 재렌더가 일어나도 마지막 선택 카테고리가 유지된다(<code>store.settingsTab</code> 단위테스트 또는 동작 확인).</li>
+      <li>Tab 키로 좌측 카테고리 ↔ 우측 항목 사이 포커스가 트랩 안에서 순환한다(키보드 접근성 N-07 유지).</li>
+      <li>좌측 카테고리가 정확히 <b>스캔/연동/외관/단축키/정보 5개</b>이며, 위 매핑표대로 기존 8개 설정 항목(폴더·제외·인식·옵션·툴·메일·테마·업데이트) + 신설 2개(단축키·정보)가 어느 한 카테고리에 빠짐없이 배치된다.</li>
+    </ul>
+
+    <div class="label">우선순위 · 의존성</div>
+    <p><span class="pill p-should">Should</span> &nbsp; <span class="dep">hosts: R-29</span> (단축키 안내) <span class="dep">hosts: R-28</span> (정보/버전) — 두 신설 카테고리를 수용</p>
+  </div>
+</div>
+
+<!-- ============ R-31 ============ -->
+<div class="req" id="R-31">
+  <div class="req__head">
+    <span class="rid">R-31</span>
+    <span class="req__title">모든 홈 섹션 실시간 데이터 반영</span>
+    <span class="pill p-should">Should</span>
+  </div>
+  <div class="req__body">
+    <div class="story">사용자로서 홈의 <b>모든 섹션(이메일·주의 필요 프로젝트·주간 생산성·타임라인 등)이 최신 상태를 자동 반영</b>하기를 원한다. 왜냐하면 어떤 섹션은 라이브이고 어떤 섹션은 진입 시 1회만 로드돼 일부 정보가 오래된 채로 보이기 때문이다.</div>
+
+    <div class="label">상세 기능 명세 (감사: 섹션별 갱신 메커니즘 제각각)</div>
+    <ul>
+      <li><b>현황</b>: 주의 필요/타임라인/언어 추세 → 라이브 push(<code>onProjectsUpdated</code>, R-24) 반영됨. 이메일 → 60초 폴링 + 새 메일 push 반영됨. <b>주간 생산성(커밋 차트) → 진입 1회 로드 후 자동 갱신 없음</b>(git 비용 때문).</li>
+      <li><b>목표(사용자 확정)</b>: 커밋 차트도 주기 갱신하되 <b>5분 폴링 + 홈 화면 이탈 시 폴링 정지</b>(가시성/뷰 기반)로 git 비용을 억제한다. 이메일 폴링 패턴 복제(별도 타이머 + 뷰 가드 + 비편집 가드). 갱신 메커니즘을 섹션별로 흩지 않고 공통 폴링/가드로 정리.</li>
+      <li><b>R-25 보류 훅 경유(필수)</b>: 라이브 push 갱신은 R-25의 composition 보류 훅·드래그/오버레이 가드를 반드시 경유한다 — 한글 조합 중에는 input 교체가 일어나지 않는다(R-26은 R-25 기반 위에서 먼저 해소). 실시간 빈도가 높아질수록 R-26/R-32/R-33 파손 위험이 커지므로 R-25 없이는 활성화하지 않는다.</li>
+    </ul>
+
+    <div class="label">수용 기준 (검증 가능 체크리스트)</div>
+    <ul class="ac">
+      <li>홈 체류 중 주간 생산성(커밋) 섹션이 <b>5분 주기</b>로 자동 갱신된다 — 타이머 시작/정지·뷰 가드 단위테스트.</li>
+      <li><b>홈 화면 비활성(이탈) 시 git 호출 0</b> — 홈을 벗어나면(<code>view!=='home'</code> 또는 가시성 비활성) 폴링 타이머가 정지되어 커밋 활동 git 호출이 더 이상 발생하지 않는다(타이머 정지 단위테스트 + 호출 횟수 검증).</li>
+      <li>라이브 push 갱신이 R-25 composition 보류 훅·드래그·오버레이 가드를 경유해, 해당 상태에서 보류된다(R-25 가드 동작 확인).</li>
+      <li>모든 홈 섹션(이메일·주의 필요·주간 생산성·타임라인)이 데이터 변경 후 사용자 액션 없이 화면에 반영된다(사용자 PC 확인).</li>
+      <li>실시간 갱신 중에도 검색 포커스/스크롤이 흔들리지 않는다(R-25 복원 + 가드).</li>
+    </ul>
+
+    <div class="label">우선순위 · 의존성</div>
+    <p><span class="pill p-should">Should</span> &nbsp; <span class="dep">depends: R-25</span> (composition 보류 훅·갱신 coalesce 경유) &nbsp; R-26 해소 이후 활성화(검증 F-3 단일 진술).</p>
+  </div>
+</div>
+
+<!-- ============ R-32 ============ -->
+<div class="req" id="R-32">
+  <div class="req__head">
+    <span class="rid">R-32</span>
+    <span class="req__title">홈 섹션 드래그 위치 이동 + 프리뷰 + 워터폴 재배치</span>
+    <span class="pill p-should">Should</span>
+  </div>
+  <div class="req__body">
+    <div class="story">사용자로서 홈의 <b>각 섹션을 드래그로 원하는 위치에 재배치</b>하고, 드래그 중 어디에 놓일지 <b>프리뷰</b>로 보고 싶다. 왜냐하면 사람마다 자주 보는 섹션(메일/주의 필요 등)이 달라 자기 우선순위대로 배치하고 싶기 때문이다.</div>
+
+    <div class="label">상세 기능 명세 (감사: 카드 드래그 인프라 재사용 가능)</div>
+    <ul>
+      <li><b>현황</b>: 홈은 고정 2-컬럼 flex에 섹션을 하드코딩 순서로 append. 드래그 코드(SortableJS·placeholder 프리뷰·<code>commitReorder</code> 영속)는 "프로젝트 카드"에만 존재. SortableJS는 이미 self-host(vendor)라 추가 의존성 부담 0.</li>
+      <li><b>렌더 데이터화</b>: <code>renderHome()</code>의 컬럼 구성을 <b>섹션 id 배열 순회 기반(데이터-주도)</b>으로 변경하고, 섹션 컨테이너에 SortableJS 부착(<code>initCardSortable</code> 패턴 복제). 드래그 중 placeholder 라이브 프리뷰(ghostClass) 제공.</li>
+      <li><b>워터폴 재배치</b>: "적절한 워터폴(masonry) 재배치"를 위해 2-컬럼 flex를 <b>단일 그리드/컬럼 모델</b>로 레이아웃 재설계(섹션 높이가 달라도 빈틈 없이 채움). (구현 방식은 아키텍트 결정 — masonry CSS vs JS 재배치.)</li>
+      <li><b>순서 영속(백엔드 신설)</b>: 현 <code>uiState.order</code>는 프로젝트 id 해시 전용(<code>ID_RE</code>). 홈 섹션 순서는 <b>새 스키마 키</b>(예 <code>homeLayout</code>) + 정규화/검증 + IPC(<code>spip:setHomeLayout</code>) + preload 노출을 신설한다. 0600 원자적 영속.</li>
+      <li><b>R-25 가드</b>: 드래그 중(<code>_dragging</code>) 라이브 재렌더 보류. 전체 재렌더 시 SortableJS init/destroy 표준 훅 사용.</li>
+    </ul>
+
+    <div class="label">수용 기준 (검증 가능 체크리스트)</div>
+    <ul class="ac">
+      <li>홈 섹션을 드래그로 이동할 수 있고, 드래그 중 놓일 위치 프리뷰(placeholder)가 표시된다(사용자 PC 확인).</li>
+      <li>드래그 종료 후 섹션들이 워터폴/그리드 방식으로 재배치되며, 정량 기준을 만족한다: <b>(a) 섹션 간 시각적 겹침 0</b>(서로 다른 섹션 박스의 경계 영역 중첩 없음), <b>(b) 규정된 간격(gap) 외 의도치 않은 빈 칸 없음</b>(컬럼 내 섹션은 위에서부터 gap만큼만 띄워 연속 배치), <b>(c) 워터폴 재배치 애니메이션이 완료될 때까지 중간 프레임에서도 레이아웃 깨짐(요소 사라짐·튐·중첩) 없음</b>(사용자 PC 시각 확인).</li>
+      <li>재배치한 섹션 순서가 앱 재시작 후에도 유지된다(<code>homeLayout</code> 영속) — 정규화/검증 순수함수 단위테스트 + 사용자 PC 재시작 확인.</li>
+      <li><code>homeLayout</code> 스키마가 알 수 없는 섹션 id·중복·길이 초과를 정규화로 거부/정리한다(단위테스트).</li>
+      <li>섹션 순서 IPC는 register.js guard·고정 에러코드 경유, 실행/경로 의미 없는 식별자만 다룬다(보안).</li>
+      <li>드래그 중 라이브 갱신이 발생해도 드래그 세션이 파괴되지 않는다(R-25 <code>_dragging</code> 가드).</li>
+    </ul>
+
+    <div class="label">우선순위 · 의존성</div>
+    <p><span class="pill p-should">Should</span> &nbsp; <span class="dep">depends: R-25</span> (드래그 중 재렌더 보류) &nbsp; 백엔드 신설 동반(uiStateStore 스키마·IPC·preload).</p>
+  </div>
+</div>
+
+<!-- ============ R-33 ============ -->
+<div class="req" id="R-33">
+  <div class="req__head">
+    <span class="rid">R-33</span>
+    <span class="req__title">주간 생산성 차트를 인터랙티브하게 구현 (SVG 자작 · 외부 라이브러리 없음)</span>
+    <span class="pill p-could">Could</span>
+  </div>
+  <div class="req__body">
+    <div class="story">사용자로서 주간 생산성(일 커밋 빈도)을 <b>툴팁·호버 등 인터랙션이 있는 차트</b>로 보고 싶다. 왜냐하면 현재는 div 막대를 인라인 높이로 수작업 렌더해 막대에 마우스를 올려도 정확한 수치를 알 수 없기 때문이다.</div>
+
+    <div class="label">상세 기능 명세 (사용자 확정: SVG 자작)</div>
+    <ul>
+      <li><b>현황</b>: <code>renderHomeProductivity()</code>가 순수 div의 인라인 <code>height/background</code>로 7일 막대를 수작업 생성. 호버 툴팁·강조 없음.</li>
+      <li><b>구현 수단(확정): 외부 차트 라이브러리 없이 <code>svg()</code> 헬퍼로 인터랙티브 SVG 자작</b> — 새 런타임 의존성 0, self-host 자산도 불필요(자작이므로). Chart.js 등 라이브러리 도입은 <b>비범위</b>(디자인 문서 §7 "차트도 SVG/canvas 자작" 원칙 일치).</li>
+      <li><b>인터랙션</b>: 막대(또는 스파크라인) 호버 시 정확한 수치 툴팁 + 해당 막대 강조(hover 하이라이트). 툴팁은 DOM/SVG로 구성, 텍스트는 <code>textContent</code>.</li>
+      <li><b>L-1·CSP</b>: 차트에 숫자만 전달(안전). 라벨에 프로젝트명 등 신뢰불가 문자열은 <code>textContent</code> 경로로만. 외부 네트워크 요청 0(자작이므로 vendor 자산·CDN 모두 불필요).</li>
+      <li><b>R-25 라이프사이클 훅</b>: 전체 재렌더 시 SVG 차트의 이벤트 핸들러·DOM 노드를 R-25의 destroy/recreate 훅으로 일관 정리해 핸들러 누적·중복 노드를 방지한다.</li>
+    </ul>
+
+    <div class="label">수용 기준 (검증 가능 체크리스트)</div>
+    <ul class="ac">
+      <li>주간 생산성 차트의 막대(또는 동등 시각화)에 호버 시 <b>정확한 수치 툴팁이 뜨고 해당 막대가 강조</b>된다(사용자 PC 확인).</li>
+      <li><b>외부 네트워크 요청 0</b> — 차트는 SVG 자작이라 외부 라이브러리·CDN·vendor 자산을 일절 추가하지 않으며, 앱 실행 중 외부 도메인 fetch가 발생하지 않는다(개발자도구 네트워크 탭 확인).</li>
+      <li><b>새 런타임 의존성·차트 라이브러리 도입 0</b> — package.json 의존성 변경 없음, <code>public/vendor/</code>에 차트 자산 추가 없음(코드 리뷰).</li>
+      <li>CSP 위반(콘솔 CSP 에러) 0건 — 인라인 <code>&lt;style&gt;</code>·인라인 script 없음, 색·스타일은 CSSOM/속성으로 설정.</li>
+      <li>차트 텍스트(라벨·툴팁)는 전부 <code>textContent</code>/안전 DOM 경로로 렌더(L-1).</li>
+      <li>전체 재렌더 시 이전 차트의 이벤트 핸들러·노드가 정리되어 핸들러 누적·중복 노드·메모리 누수가 없다(R-25 라이프사이클 훅 — 동작 확인).</li>
+    </ul>
+
+    <div class="label">우선순위 · 의존성</div>
+    <p><span class="pill p-could">Could</span> &nbsp; <span class="dep">depends: R-25</span> (차트 노드/핸들러 destroy/recreate 훅) &nbsp; 구현 수단은 <b>SVG 자작으로 확정</b>(라이브러리 비범위).</p>
+  </div>
+</div>
+</section>
+
+<!-- 비범위 -->
+<section id="oos">
+  <h2>6. 비범위 (Out of scope)</h2>
+  <div class="panel">
+    <ul>
+      <li><b>전면 가상 DOM/프레임워크 도입</b> — R-25는 기존 <code>render()</code> 구조 위에 갱신 가드·보존 영역을 얹는 것까지다. React/Vue·diff 엔진 전환은 비범위(순수 HTML/CSS/JS·번들러 없음 규약 유지).</li>
+      <li><b>단축키 사용자 편집(리매핑) UI</b> — R-29는 단축키 <b>표시 전용</b>. 사용자가 단축키를 바꾸는 기능은 비범위.</li>
+      <li><b>설정 카테고리의 검색/필터</b> — R-30은 2-pane 분할까지. 설정 항목 검색창은 비범위.</li>
+      <li><b>홈 섹션 추가/삭제·표시 토글</b> — R-32는 기존 섹션의 <b>순서 재배치</b>까지. 섹션 자체를 끄거나 새 섹션을 추가하는 커스터마이즈는 비범위.</li>
+      <li><b>커밋 차트 외 신규 데이터 수집</b> — R-31/R-33은 보유/기존 수집 데이터(<code>commitActivity</code> 등) 활용까지. 새 git 메트릭 수집기 신설은 비범위(필요 시 별도 요구).</li>
+      <li><b>프로젝트 카드(대시보드)의 워터폴/그리드 재배치</b> — R-32는 <b>홈 섹션</b> 한정. 기존 카드 reorder(R-19/R-23)는 그대로 유지.</li>
+      <li><b>차트 라이브러리 도입(Chart.js 등)</b> — R-33은 <b>SVG 자작으로 확정</b>되어 외부 차트 라이브러리·self-host 차트 자산은 비범위다. 새 npm 런타임 의존성 추가 금지(전 요구 공통).</li>
+    </ul>
+  </div>
+</section>
+
+<!-- 미결정 -->
+<section id="open">
+  <h2>7. 결정된 사항 / 잔여 위임</h2>
+  <div class="panel">
+    <h3>7.1 사용자 확정 결정 (반영 완료)</h3>
+    <table>
+      <tr><th style="width:70px">요구</th><th>확정 내용</th></tr>
+      <tr><td>R-27</td><td><b>공통 골격(레이아웃·높이·공통 액션)만 통일</b>("완전 동일" 아님). 검색창은 프로젝트 대시보드 전용, 홈은 미니멀 유지.</td></tr>
+      <tr><td>R-30</td><td>좌측 카테고리 <b>스캔 / 연동 / 외관 / 단축키 / 정보 5분류</b> 확정. 8개 설정 섹션 매핑표는 §5 R-30 본문 참조.</td></tr>
+      <tr><td>R-31</td><td><b>5분 폴링 + 홈 화면 이탈 시 폴링 정지</b>(가시성/뷰 기반). 홈 비활성 시 git 호출 0.</td></tr>
+      <tr><td>R-33</td><td><b>SVG 자작</b>(외부 라이브러리 없음·런타임 의존성 0·self-host 불필요). Chart.js 등 라이브러리 도입은 비범위.</td></tr>
+    </table>
+
+    <h3>7.2 아키텍트 위임 (검증 F-2)</h3>
+    <div class="warnbox"><b>R-25의 구체 API surface 최종 확정은 chief-architect의 첫 설계 과제로 위임한다.</b> 본 명세는 후속 요구가 의존할 <b>계약의 의도 4가지만 확정</b>한다 — (1) composition(IME) 진행 중 재렌더 보류 훅, (2) 노드 보존 부분 갱신(입력/포커스/캐럿 유지), (3) stateful 위젯의 destroy/recreate 라이프사이클 훅, (4) 실시간 push 갱신 coalesce. 함수명·시그니처·모듈 배치는 아키텍트가 첫 설계 산출물에서 정의하고, R-26·R-31·R-32·R-33 설계가 그 API를 참조한다.</div>
+
+    <h3>7.3 잔여 사용자 확인 필요 (P2/P3)</h3>
+    <table>
+      <tr><th style="width:60px">번호</th><th>질문</th><th style="width:300px">기획자 기본 제안(미응답 시 진행값)</th></tr>
+      <tr><td>Q5</td><td>R-28에서 헤더의 <b>"도움말" 버튼 존치 여부</b> — 도움말 모달을 헤더 버튼으로 남길지, 설정 "정보" 카테고리로 흡수할지?</td><td>도움말 진입을 설정 "정보" 카테고리로 흡수하고 헤더 도움말 버튼은 제거(헤더 액션 간소화). 사용자 확인 권장.</td></tr>
+    </table>
+  </div>
+</section>
+
+<footer>
+  Project-SPIP · M9 백로그 기능명세 · 신규 요구 R-25 ~ R-33 · 작성 2026-06-24 · 입력: ref.md / codebase-audit.html / home-briefing-dashboard.md / traceability.html
+</footer>
+
+</main>
+</body>
+</html>

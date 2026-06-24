@@ -139,3 +139,40 @@ test('normalizeLangTrend — generatedAt/prev/cur 정규화', () => {
   assert.deepStrictEqual(store.normalizeLangTrend(null), { generatedAt: null, prev: {}, cur: {} });
   assert.deepStrictEqual(store.defaultState().langTrend, { generatedAt: null, prev: {}, cur: {} });
 });
+
+// ── 홈 섹션 순서(homeLayout) 정규화 (R-32) ──
+test('normalizeHomeLayout — 비배열/손상 → 기본 순서 전체 복원', () => {
+  assert.deepStrictEqual(store.normalizeHomeLayout(null), store.HOME_SECTION_IDS);
+  assert.deepStrictEqual(store.normalizeHomeLayout('nope'), store.HOME_SECTION_IDS);
+  assert.deepStrictEqual(store.normalizeHomeLayout({}), store.HOME_SECTION_IDS);
+  assert.deepStrictEqual(store.normalizeHomeLayout([]), store.HOME_SECTION_IDS);
+});
+
+test('normalizeHomeLayout — 화이트리스트 외/중복 제거 + 누락 보충(끝)', () => {
+  const r = store.normalizeHomeLayout(['mail', 'attention', 'mail', 'bogus', 42, 'mail']);
+  // 유효 순서 보존(mail, attention) → 중복·미지·비문자열 제거 → 누락 섹션 기본 순서로 끝에 보충
+  assert.deepStrictEqual(r, ['mail', 'attention', 'productivity', 'activity', 'todos', 'disk', 'featureAdd']);
+  // 항상 화이트리스트 전체(7개)의 순열
+  assert.strictEqual(r.length, store.HOME_SECTION_IDS.length);
+  assert.deepStrictEqual(r.slice().sort(), store.HOME_SECTION_IDS.slice().sort());
+});
+
+test('normalizeHomeLayout — 완전 재정렬 입력 보존', () => {
+  const reordered = store.HOME_SECTION_IDS.slice().reverse();
+  assert.deepStrictEqual(store.normalizeHomeLayout(reordered), reordered);
+});
+
+test('normalizeState/defaultState — homeLayout 기본 순서 포함', () => {
+  assert.deepStrictEqual(store.defaultState().homeLayout, store.HOME_SECTION_IDS);
+  assert.deepStrictEqual(store.normalizeState({}).homeLayout, store.HOME_SECTION_IDS);
+});
+
+// [C-M-1 게이트] write→read 라운드트립 보존 — homeLayout 키가 normalizeState에서 조용히 버려지지 않음.
+test('write/read — homeLayout 라운드트립 보존 (C-M-1)', () => {
+  const file = tmpFile();
+  const custom = ['mail', 'attention', 'productivity', 'activity', 'todos', 'disk', 'featureAdd'];
+  const written = store.write({ homeLayout: custom }, { uiStatePath: file });
+  assert.deepStrictEqual(written.homeLayout, custom, 'write 반환에 정규화된 homeLayout 보존');
+  const back = store.read({ uiStatePath: file });
+  assert.deepStrictEqual(back.homeLayout, custom, 'read 후에도 동일 순서(키가 버려지지 않음)');
+});

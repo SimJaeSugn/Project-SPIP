@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Project-SPIP — 코드베이스 감사 보고서 (홈 대시보드 8개 백로그)</title>
+</head>
+<body style="margin:0;background:#0f172a;color:#e2e8f0;font-family:'Segoe UI','Malgun Gothic',system-ui,sans-serif;line-height:1.6;font-size:14.5px;">
+<div style="max-width:1080px;margin:0 auto;padding:40px 28px 80px;">
+
+<header style="border-bottom:1px solid #334155;padding-bottom:20px;margin-bottom:30px;">
+  <div style="font-size:12px;letter-spacing:0.14em;text-transform:uppercase;color:#38bdf8;">Project-SPIP · 감사 보고서</div>
+  <h1 style="margin:8px 0 6px;font-size:27px;font-weight:700;letter-spacing:-0.02em;">홈 대시보드 8개 백로그 — 코드베이스 감사</h1>
+  <p style="margin:0;color:#94a3b8;font-size:13px;">대상: <code style="color:#34d399;">public/app.js</code>(5404줄) 중심 · Electron 메인/preload/menu · uiStateStore · index.html(CSP). 직접 수정 없음(읽기 전용 감사).</p>
+  <p style="margin:8px 0 0;color:#94a3b8;font-size:13px;">작성일 2026-06-24 · 기획·설계 에이전트 착수용 매핑 문서</p>
+</header>
+
+<!-- 보안 불변식 -->
+<section style="background:#1e293b;border:1px solid #334155;border-radius:12px;padding:20px 24px;margin-bottom:30px;">
+  <h2 style="margin:0 0 12px;font-size:16px;color:#34d399;">⚠ 전 항목 공통 보안 불변식 (위반 시 게이트 실패)</h2>
+  <ul style="margin:0;padding-left:20px;color:#cbd5e1;font-size:13.5px;">
+    <li><b>L-1</b> 렌더링은 <code style="color:#38bdf8;">textContent</code>만. 스캔/메일 데이터를 <code>innerHTML</code>에 절대 넣지 않는다. 모든 노드는 <code>el()</code> 헬퍼로 생성.</li>
+    <li><b>CSP</b>(index.html:13-14 + main의 onHeadersReceived 이중 주입): <code style="color:#38bdf8;">default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'none'</code>. <b>외부 CDN·인라인 스크립트·네트워크 fetch 전부 금지.</b> 인라인 <code>&lt;script&gt;</code> 0, 인라인 이벤트 핸들러 0.</li>
+    <li><b>style-src 'self'</b> → 인라인 <code>style</code> <em>속성</em>은 허용되나(현재 코드가 대량 사용), 인라인 <code>&lt;style&gt;</code> 블록·동적 스타일시트 주입은 불가. 색은 JS에서 <code>el.style.color=</code> CSSOM으로 설정(app.js:3279 참조).</li>
+    <li><b>H-1/H-2</b> 경로는 pathGuard 검증, 외부 프로세스는 safeExec(절대경로·shell:false). 프런트엔드 항목엔 직접 영향 적으나 새 IPC 추가 시 준수.</li>
+    <li><b>런타임 의존성 최소</b>: 유일 런타임 의존성 <code>electron-updater</code>. 단 <b>SortableJS는 이미 vendor 로컬 번들로 도입</b>되어 있음(index.html:29, <code>./vendor/Sortable.min.js</code>) — npm 런타임 의존성이 아닌 self-host 자산.</li>
+  </ul>
+</section>
+
+<!-- 아키텍처 요약 -->
+<section style="margin-bottom:34px;">
+  <h2 style="font-size:18px;border-left:3px solid #34d399;padding-left:10px;">아키텍처 한눈에</h2>
+  <ul style="color:#cbd5e1;font-size:13.5px;">
+    <li><b>단일 store + 전체 재렌더</b> 패턴: <code style="color:#38bdf8;">render()</code>(app.js:1147)가 <code>app.replaceChildren()</code>로 전체 DOM을 매번 새로 그린다. 가상 DOM·diff 없음.</li>
+    <li>뷰: <code>loading | home | dashboard | firstRun | scanning | orbit | error</code>. <b>홈·프로젝트(대시보드) 헤더는 동일 함수 <code style="color:#38bdf8;">renderHeader()</code></b>(app.js:3498)가 그린다(분기 존재).</li>
+    <li>데이터: 최초 <code>load()</code>(app.js:5226)에서 <code>getProjects/getStats</code> 1회 fetch → <code>store.viewModels</code>(메모리 단일 출처). 필터/검색/정렬은 메모리에서만.</li>
+    <li>실시간 push 3종: <code>onProjectsUpdated</code>(git/freshness), <code>onMailUpdated</code>(새 메일), <code>onUpdateStatus</code>(자동 업데이트). main의 StateWatcher/MailWatcher가 발신.</li>
+  </ul>
+</section>
+
+<h2 style="font-size:18px;border-left:3px solid #38bdf8;padding-left:10px;margin-bottom:18px;">8개 백로그 항목 감사</h2>
+
+<!-- 1 -->
+<div style="background:#1e293b;border:1px solid #334155;border-radius:12px;padding:22px 24px;margin-bottom:20px;">
+  <h3 style="margin:0 0 4px;font-size:16.5px;"><span style="color:#34d399;">1.</span> 프로젝트 대시보드 헤더 ↔ 홈 대시보드 헤더 구성 통일</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:13.5px;">
+    <tr><td style="vertical-align:top;width:120px;color:#38bdf8;padding:6px 10px 6px 0;"><b>현재 상태</b></td><td style="padding:6px 0;">두 헤더는 <b>이미 동일한 <code>renderHeader()</code> 함수</b>를 공유하나, 내부에서 <code>store.state.view</code>로 분기해 구성이 갈린다. <b>홈</b>: 브랜드 + 탭(홈/프로젝트) + <em>우측에 "마지막 스캔" 텍스트만</em>(app.js:3541-3548, early return). <b>프로젝트</b>: 브랜드 + 탭 + <b>검색창</b> + 액션 버튼 4종(도움말·설정·궤도 맵·재스캔, app.js:3550-3601).</td></tr>
+    <tr><td style="vertical-align:top;color:#38bdf8;padding:6px 10px 6px 0;"><b>관련 위치</b></td><td style="padding:6px 0;"><code>renderHeader()</code> app.js:3498-3603 · 홈 early return 3541-3548 · 검색창 3521-3536 · 액션 영역 3550-3601 · 호출처: <code>renderHome()</code>:1527, <code>renderDashboard()</code>:2043~</td></tr>
+    <tr><td style="vertical-align:top;color:#38bdf8;padding:6px 10px 6px 0;"><b>제약·리스크</b></td><td style="padding:6px 0;">홈은 의도적으로 "미니멀 헤더"로 설계됨(주석: "홈은 템플릿처럼 미니멀"). 통일 시 어느 쪽으로 맞출지 결정 필요. 홈에 검색을 노출하면 항목 8번 IME 버그가 홈에도 전이됨. 액션 버튼을 홈에 추가 시 홈의 화이트 카드 톤(#f6f6f5)과 프로젝트 톤 차이 고려.</td></tr>
+    <tr><td style="vertical-align:top;color:#34d399;padding:6px 10px 6px 0;"><b>건드릴 곳</b></td><td style="padding:6px 0;"><code>renderHeader()</code>의 view 분기 정리(3541 early return 제거 또는 공통 액션 추출). 통일 후 5번(메뉴 제거→헤더로 기능 이관)과 합쳐 설계하면 일관됨. styles.css의 <code>.topbar</code> 계열.</td></tr>
+  </table>
+</div>
+
+<!-- 2 -->
+<div style="background:#1e293b;border:1px solid #334155;border-radius:12px;padding:22px 24px;margin-bottom:20px;">
+  <h3 style="margin:0 0 4px;font-size:16.5px;"><span style="color:#34d399;">2.</span> 모든 섹션 실시간 데이터 반영</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:13.5px;">
+    <tr><td style="vertical-align:top;width:120px;color:#38bdf8;padding:6px 10px 6px 0;"><b>현재 상태</b></td><td style="padding:6px 0;">섹션별로 갱신 메커니즘이 <b>제각각</b>:<br>
+      • <b>주의 필요 프로젝트 / 타임라인 / 언어 추세</b> → <code>store.viewModels</code> 파생. 최초 1회 fetch + <b>git/freshness 라이브 push</b>(<code>onProjectsUpdated</code> → <code>applyProjectsUpdate</code> app.js:4610) 반영. <b>실시간 됨.</b><br>
+      • <b>이메일</b> → 홈 진입 시 1회 <code>maybeLoadMailSummary</code>(1517) + 새 메일 push <code>onMailUpdated</code>(4584) + <b>홈 체류 중 60초 폴링</b>(<code>startMailAutoRefresh</code> setInterval, 4596). <b>실시간 됨.</b><br>
+      • <b>주간 생산성(커밋 차트)</b> → 홈 진입 1회 <code>maybeLoadCommitActivity</code>(1518). <b>이후 자동 갱신 없음(수동 새로고침)</b> — git 호출 비용 때문에 폴링 제외(주석 app.js:1039).<br>
+      • <b>할 일 / 디스크 회수</b> → store 로컬·viewModels 파생, 액션 시 즉시 반영.</td></tr>
+    <tr><td style="vertical-align:top;color:#38bdf8;padding:6px 10px 6px 0;"><b>관련 위치</b></td><td style="padding:6px 0;">push 구독: <code>subscribeProjectsUpdated</code>:4564, <code>subscribeMailUpdated</code>:4584, 메일 폴링 <code>startMailAutoRefresh</code>:4596(60000ms). 커밋 활동 로드 <code>refreshCommitActivity</code>:1993. main 발신: StateWatcher main.js:234-246, MailWatcher main.js:170.</td></tr>
+    <tr><td style="vertical-align:top;color:#38bdf8;padding:6px 10px 6px 0;"><b>제약·리스크</b></td><td style="padding:6px 0;">① <b>재렌더 가드</b>: 라이브 갱신은 오버레이(설정/도움말/드로어) 열림·드래그 중이면 렌더 보류(4632-4637, 4912). 실시간을 강화해도 이 가드 유지 필수(모달 깜빡임·DnD 파손 방지). ② <b>커밋 차트 자동 폴링</b> 추가는 git 비용↑ — 신중. ③ <b>전체 재렌더</b> 구조라 실시간 갱신이 잦으면 입력 포커스/스크롤이 매번 흔들림(현재 검색 포커스·스크롤 복원으로 일부 방어, 1153-1207).</td></tr>
+    <tr><td style="vertical-align:top;color:#34d399;padding:6px 10px 6px 0;"><b>건드릴 곳</b></td><td style="padding:6px 0;">커밋 차트 주기 갱신을 원하면 <code>startMailAutoRefresh</code> 패턴 복제(별도 타이머 + 뷰=home·비편집 가드). 모든 섹션 통일 폴링을 도입하면 <code>applyProjectsUpdate</code>의 보류 가드를 공통화. 교차이슈: 항목 8(IME)·3(드래그)과 충돌 — 아래 교차 이슈 참조.</td></tr>
+  </table>
+</div>
+
+<!-- 3 -->
+<div style="background:#1e293b;border:1px solid #334155;border-radius:12px;padding:22px 24px;margin-bottom:20px;">
+  <h3 style="margin:0 0 4px;font-size:16.5px;"><span style="color:#34d399;">3.</span> 각 섹션 드래그로 위치 이동 (프리뷰·워터폴 재배치)</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:13.5px;">
+    <tr><td style="vertical-align:top;width:120px;color:#38bdf8;padding:6px 10px 6px 0;"><b>현재 상태</b></td><td style="padding:6px 0;"><b>홈 섹션에는 드래그 없음.</b> 홈 레이아웃은 고정 <b>2-컬럼 flex</b>(좌 1.65 / 우 1, app.js:1572-1584)에 섹션을 하드코딩 순서로 <code>appendChild</code>: 좌=주의필요·생산성·타임라인, 우=할일·메일·디스크·기능추가. 순서 저장 메커니즘 없음.<br>
+      <b>드래그 코드는 존재하나 "프로젝트 카드"에만</b> 적용: SortableJS가 <code>.cards</code> 컨테이너에 부착(<code>initCardSortable</code> app.js:4894), placeholder 라이브 프리뷰(ghostClass) + onEnd에서 <code>commitReorder</code>→<code>setOrder</code> 영속(app.js:4914-4924).</td></tr>
+    <tr><td style="vertical-align:top;color:#38bdf8;padding:6px 10px 6px 0;"><b>관련 위치</b></td><td style="padding:6px 0;">SortableJS init/destroy app.js:4887-4926 · <code>render()</code>의 dashboard 분기에서만 <code>initCardSortable()</code> 호출(1185) · 영속 <code>commitReorder</code>:~4860 / <code>setOrder</code> IPC(preload:104) → <code>uiStateStore.order</code>(uiStateStore.js:26, MAX_ORDER 4096). vendor: index.html:29.</td></tr>
+    <tr><td style="vertical-align:top;color:#38bdf8;padding:6px 10px 6px 0;"><b>제약·리스크</b></td><td style="padding:6px 0;">① <b>uiState.order는 "프로젝트 id 해시" 전용</b>(<code>ID_RE=/^[0-9a-f]{1,64}$/</code>, uiStateStore.js:33). 홈 섹션 순서를 저장하려면 <b>새 스키마 키</b>(예 <code>homeLayout</code>)와 검증·정규화·IPC를 신설해야 함(uiStateStore.js normalize 계열 + preload + ipc/uiState.js). ② <b>전체 재렌더</b>가 드래그를 파괴 → 드래그 중 <code>store._dragging</code> 가드로 라이브 렌더 보류(이미 패턴 존재, 재사용 가능). ③ 2-컬럼 flex라 "워터폴 재배치"를 진짜로 하려면 단일 그리드/컬럼 모델로 레이아웃 재설계 필요. ④ <b>L-1·CSP</b>: SortableJS는 이미 self-host라 추가 의존성 부담 없음(재사용 권장).</td></tr>
+    <tr><td style="vertical-align:top;color:#34d399;padding:6px 10px 6px 0;"><b>건드릴 곳</b></td><td style="padding:6px 0;"><code>renderHome()</code>(1516)의 컬럼 구성을 데이터-주도(섹션 id 배열 순회)로 변경 → 섹션 컨테이너에 SortableJS 부착(initCardSortable 패턴 복제). uiStateStore에 홈 섹션 순서 스키마 추가 + 정규화 + ipc/uiState.js + preload 노출. <code>render()</code>의 home 분기에 init 추가.</td></tr>
+  </table>
+</div>
+
+<!-- 4 -->
+<div style="background:#1e293b;border:1px solid #334155;border-radius:12px;padding:22px 24px;margin-bottom:20px;">
+  <h3 style="margin:0 0 4px;font-size:16.5px;"><span style="color:#34d399;">4.</span> 주간 생산성 차트를 라이브러리로 인터랙티브 구현</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:13.5px;">
+    <tr><td style="vertical-align:top;width:120px;color:#38bdf8;padding:6px 10px 6px 0;"><b>현재 상태</b></td><td style="padding:6px 0;"><b>차트 라이브러리 미사용.</b> 막대그래프는 <code>renderHomeProductivity()</code>(app.js:1694-1748)에서 <b>순수 div의 인라인 <code>height/background</code> 스타일로 수작업</b>: 7일 데이터를 순회하며 <code>height:&lt;count/max*80&gt;px</code> div 생성(1711-1718). 우측 "언어 추세"도 div 스택바(1728-1745). canvas/SVG 아님(궤도 뷰만 canvas 사용).</td></tr>
+    <tr><td style="vertical-align:top;color:#38bdf8;padding:6px 10px 6px 0;"><b>관련 위치</b></td><td style="padding:6px 0;"><code>renderHomeProductivity</code> app.js:1694-1748 · 데이터 출처 <code>store.commitActivity.days</code>(getCommitActivity IPC, preload:92) · SVG 헬퍼 <code>svg()</code>:1105(차트엔 미사용, 아이콘용).</td></tr>
+    <tr><td style="vertical-align:top;color:#38bdf8;padding:6px 10px 6px 0;"><b>제약·리스크 (★보안 충돌 핵심)</b></td><td style="padding:6px 0;">① <b>CSP가 강력한 제약</b>: <code>script-src 'self'</code> → <b>CDN 불가</b>, <code>connect-src 'none'</code> → 런타임 다운로드 불가. ⇒ 라이브러리는 <b>반드시 self-host(vendor/ 로컬 번들)</b>여야 함(SortableJS 선례 그대로). ② <b>Chart.js는 canvas 기반</b>이라 CSP 무난(인라인 스타일 미생성). <b>D3/대다수 SVG 라이브러리는 동적 <code>&lt;style&gt;</code> 주입·<code>style-src 'unsafe-inline'</code>를 요구할 수 있어 위험</b> — 도입 전 CSP 적합성 검증 필수. ③ "런타임 의존성 최소" 규약과 충돌하나, SortableJS 선례로 <b>self-host 자산은 npm 런타임 의존성과 별개</b>로 취급 가능(근거 문서화 필요). ④ <b>L-1</b>: 라이브러리가 사용자/스캔 데이터를 innerHTML로 그리면 위반 — 숫자만 넘기는 차트(Chart.js)는 안전, 라벨에 프로젝트명 등 넣을 때 주의.</td></tr>
+    <tr><td style="vertical-align:top;color:#34d399;padding:6px 10px 6px 0;"><b>건드릴 곳</b></td><td style="padding:6px 0;">권장 후보: <b>Chart.js UMD를 <code>public/vendor/</code>에 self-host</b> + index.html에 <code>&lt;script src="./vendor/chart.min.js" defer&gt;</code> 추가(Sortable과 동형). <code>renderHomeProductivity</code>를 canvas + <code>new Chart()</code>로 교체. <b>전체 재렌더 구조</b> 때문에 차트 인스턴스도 render마다 destroy/recreate 필요(SortableJS의 destroy/init 패턴 복제). 대안: 라이브러리 없이 <code>svg()</code> 헬퍼로 인터랙티브 SVG 자작(의존성 0, CSP 무난, 툴팁은 hover로).</td></tr>
+  </table>
+</div>
+
+<!-- 5 -->
+<div style="background:#1e293b;border:1px solid #334155;border-radius:12px;padding:22px 24px;margin-bottom:20px;">
+  <h3 style="margin:0 0 4px;font-size:16.5px;"><span style="color:#34d399;">5.</span> 상단 파일·스캔·보기·도움말 네이티브 메뉴 제거</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:13.5px;">
+    <tr><td style="vertical-align:top;width:120px;color:#38bdf8;padding:6px 10px 6px 0;"><b>현재 상태</b></td><td style="padding:6px 0;">네이티브 메뉴는 <code>buildMenuTemplate</code>(electron/menu.js)에 4개 그룹: <b>파일</b>(폴더 추가 Ctrl+O·종료) / <b>스캔</b>(재스캔 Ctrl+R) / <b>보기</b>(새로고침 + dev면 toggleDevTools) / <b>도움말</b>(Project-SPIP 정보). 메뉴 클릭 → <code>spip:menu:&lt;action&gt;</code> send → preload <code>onMenu</code>(preload.js:160, 화이트리스트 <code>pickFolders|rescan|refresh|about</code>) → app.js <code>onMenuCommand</code>(4505) 디스패치.</td></tr>
+    <tr><td style="vertical-align:top;color:#38bdf8;padding:6px 10px 6px 0;"><b>관련 위치</b></td><td style="padding:6px 0;">메뉴 정의 electron/menu.js:25-53 · 설치 main.js:254-263(<code>Menu.setApplicationMenu</code>) · 수신 preload.js:157-170 / app.js <code>subscribeMenu</code>:4492, <code>onMenuCommand</code>:4505. 액션 핸들러: <code>onPickFolders</code>·<code>triggerRescan</code>·<code>refreshDashboard</code>(4537)·<code>showAbout</code>→<code>openHelp</code>(4656).</td></tr>
+    <tr><td style="vertical-align:top;color:#38bdf8;padding:6px 10px 6px 0;"><b>제약·리스크</b></td><td style="padding:6px 0;">① 메뉴 제거 = <code>Menu.setApplicationMenu(null)</code>. 단 <b>접근성 보조(N-07)</b> 목적이 있었으므로(menu.js 주석) 대체 경로 보장 필요. ② <b>"새로고침"을 F5로 맵핑</b>: 현재 F5 핸들러 없음. 전역 키는 <code>globalShortcut</code>(앱 비포커스에도 동작·위험)보다 <b>renderer keydown</b>(app.js ESC 핸들러 5286 패턴) 또는 메뉴 제거 대신 <b>보이지 않는 accelerator-only 메뉴 항목</b> 권장. ③ "도움말>정보"를 설정으로 이관: 현재 about=help 동일 진입점(<code>showAbout→openHelp</code> 4656), 헤더에도 "도움말" 버튼 별도 존재(renderHeader:3555). ④ <b>dead-wiring 주의</b>: 메뉴 제거 후 preload <code>onMenu</code> 화이트리스트·app <code>subscribeMenu</code>도 정리해야 죽은 수신 채널이 안 남음(SEC-L1 정책, preload 주석 참조).</td></tr>
+    <tr><td style="vertical-align:top;color:#34d399;padding:6px 10px 6px 0;"><b>건드릴 곳</b></td><td style="padding:6px 0;">main.js:254 <code>setApplicationMenu(null)</code> 또는 accelerator-only 축소. F5→refresh는 app.js 전역 keydown 추가(<code>refreshDashboard</code> 호출). "정보"는 renderSettings(2142)에 "정보/버전" 섹션 추가하고 메뉴 about 제거. 정리 대상: menu.js, preload onMenu 화이트리스트, app.js subscribeMenu/onMenuCommand.</td></tr>
+  </table>
+</div>
+
+<!-- 6 -->
+<div style="background:#1e293b;border:1px solid #334155;border-radius:12px;padding:22px 24px;margin-bottom:20px;">
+  <h3 style="margin:0 0 4px;font-size:16.5px;"><span style="color:#34d399;">6.</span> 설정에 단축키 정보 추가</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:13.5px;">
+    <tr><td style="vertical-align:top;width:120px;color:#38bdf8;padding:6px 10px 6px 0;"><b>현재 상태</b></td><td style="padding:6px 0;">설정은 <b>중앙 모달</b>(<code>buildModal</code> app.js:2098)을 쓰는 <code>renderSettings()</code>(app.js:2142). bodyChildren 배열에 섹션 블록을 순서대로 나열(폴더·제외·인식기준·스캔옵션·외부툴·메일·테마·업데이트). <b>단축키 안내 섹션은 없음.</b> 현재 정의된 단축키: Ctrl+O(폴더추가), Ctrl+R(재스캔), 전역 ESC(드로어/설정 닫기 app.js:5286). F5는 미구현.</td></tr>
+    <tr><td style="vertical-align:top;color:#38bdf8;padding:6px 10px 6px 0;"><b>관련 위치</b></td><td style="padding:6px 0;"><code>renderSettings</code> app.js:2142-2173(bodyChildren 배열) · 섹션 헬퍼 패턴: <code>el('div',{cls:'insight'...})</code> + <code>insight__title</code> · 도움말 모달 <code>renderHelp</code>:4689(helpRow 헬퍼 재사용 가능) · 단축키 정의처 menu.js:29/37, ESC 5286.</td></tr>
+    <tr><td style="vertical-align:top;color:#38bdf8;padding:6px 10px 6px 0;"><b>제약·리스크</b></td><td style="padding:6px 0;">정적 텍스트라 보안 리스크 낮음(L-1만 — textContent로 표기). 단축키를 <b>표시만 할지 편집 가능하게 할지</b>가 분기점(편집은 큰 작업). 5번과 묶임: 단축키 매핑을 바꾸면(F5 추가 등) 이 표도 동기화돼야 함 — 단일 출처(상수)로 두는 게 안전.</td></tr>
+    <tr><td style="vertical-align:top;color:#34d399;padding:6px 10px 6px 0;"><b>건드릴 곳</b></td><td style="padding:6px 0;">새 <code>renderShortcutSettings()</code>를 만들어 renderSettings bodyChildren에 추가. <code>helpRow</code> 또는 kvRow 헬퍼 재사용해 "단축키 / 동작" 표. 7번(좌우 분할)과 함께 설계하면 "단축키" 카테고리로 들어감.</td></tr>
+  </table>
+</div>
+
+<!-- 7 -->
+<div style="background:#1e293b;border:1px solid #334155;border-radius:12px;padding:22px 24px;margin-bottom:20px;">
+  <h3 style="margin:0 0 4px;font-size:16.5px;"><span style="color:#34d399;">7.</span> 설정 좌우 분할 (좌 카테고리 / 우 항목)</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:13.5px;">
+    <tr><td style="vertical-align:top;width:120px;color:#38bdf8;padding:6px 10px 6px 0;"><b>현재 상태</b></td><td style="padding:6px 0;">현재는 <b>단일 세로 스크롤 리스트</b>(buildModal의 <code>.modal__body</code>에 8개 블록을 위→아래 나열). 좌우 분할/탭/네비 없음. 분류 가능한 후보 섹션(현재 bodyChildren 순서): ① 스캔 폴더 ② 제외 항목 ③ 프로젝트 인식 기준 ④ 스캔 옵션 ⑤ 외부 툴 경로 ⑥ 메일 알림 계정 ⑦ 테마 ⑧ 소프트웨어 업데이트 (+ 신설 예정: 단축키[6], 정보/버전[5]).</td></tr>
+    <tr><td style="vertical-align:top;color:#38bdf8;padding:6px 10px 6px 0;"><b>관련 위치</b></td><td style="padding:6px 0;">모달 골격 <code>buildModal</code>:2098(<code>.modal__head</code>/<code>.modal__body</code>, 포커스 트랩·Esc) · 섹션 함수들: <code>renderRootManager</code>:1405, <code>renderExcludeSettings</code>:2498, <code>renderDetectSettings</code>:2767, <code>renderScanOptions</code>:2192, <code>renderToolSettings</code>:2260, <code>renderMailSettings</code>:2598, <code>renderThemeSettings</code>:2177, <code>renderUpdateSettings</code>:2358. CSS <code>.modal</code>/<code>.modal--wide</code>(buildModal opts.wide=true).</td></tr>
+    <tr><td style="vertical-align:top;color:#38bdf8;padding:6px 10px 6px 0;"><b>제약·리스크</b></td><td style="padding:6px 0;">① <b>포커스 트랩</b>(<code>getTabbables(dialog)</code> 2127)은 좌측 카테고리 버튼도 트랩에 포함됨 — 좌우 분할 후에도 Tab 순환 정상 동작 확인 필요. ② <b>스크롤 복원</b>(render의 SCROLL_SEL에 <code>.modal__body</code> 포함, 1155) — 우측 패널 셀렉터가 바뀌면 복원 셀렉터도 갱신. ③ <b>전체 재렌더</b>라 카테고리 선택 상태는 <code>store</code>에 보관해야 유지(예 <code>store.settingsTab</code>). ④ CSP: 레이아웃은 인라인 style 속성/CSS 클래스로 — flex 2분할은 무난.</td></tr>
+    <tr><td style="vertical-align:top;color:#34d399;padding:6px 10px 6px 0;"><b>건드릴 곳</b></td><td style="padding:6px 0;"><code>renderSettings</code>(2142)를 좌(카테고리 리스트) + 우(선택 섹션) 2-pane로 재구성. <code>store</code>에 활성 카테고리 상태 추가, 카테고리 클릭 시 해당 render*Settings()만 우측에 그림. buildModal에 옵션 추가 또는 별도 레이아웃. styles.css의 .modal 계열 확장.</td></tr>
+  </table>
+</div>
+
+<!-- 8 -->
+<div style="background:#1e293b;border:1px solid #f59e0b;border-radius:12px;padding:22px 24px;margin-bottom:20px;">
+  <h3 style="margin:0 0 4px;font-size:16.5px;"><span style="color:#f59e0b;">8.</span> 프로젝트 대시보드 검색창 한글 자음·모음 분리 입력 버그 <span style="font-size:12px;color:#f59e0b;">(원인 확정)</span></h3>
+  <table style="width:100%;border-collapse:collapse;font-size:13.5px;">
+    <tr><td style="vertical-align:top;width:120px;color:#38bdf8;padding:6px 10px 6px 0;"><b>현재 상태</b></td><td style="padding:6px 0;">대시보드 검색 input(<code>renderHeader</code>:3528-3535)이 <code>input</code> 이벤트마다 <code>debounce(render, 120)</code>를 호출(app.js:3533-3534). <code>render()</code>는 <code>app.replaceChildren()</code>로 <b>input 노드를 통째 교체</b>한다(1171). IME 조합 중(자음·모음 입력 중)에 노드가 교체되면 <b>composition이 깨져 자모가 분리되어 입력됨</b>.</td></tr>
+    <tr><td style="vertical-align:top;color:#38bdf8;padding:6px 10px 6px 0;"><b>원인 가설(거의 확정)</b></td><td style="padding:6px 0;"><b>현재 코드에 IME 방어가 전혀 없음</b> — 코드베이스 전체에서 <code>isComposing / compositionstart / compositionend</code> 검색 결과 <b>0건</b>. 부분 완화책으로 render()가 "포커스/캐럿 복원"을 함(FOCUS_SEL=<code>.topbar__search-input</code>·<code>.orbit__search</code>, app.js:1160-1168, 1196-1207). 그러나 이는 <b>노드 교체 후 포커스·selectionRange만 복원</b>할 뿐, <b>진행 중이던 IME composition 세션은 복원 불가</b> → 조합 도중 노드가 사라지면 브라우저가 조합을 강제 종료하고 자모가 깨진다. 120ms debounce가 빠른 타이핑에서 조합 중 발화할 수 있음.</td></tr>
+    <tr><td style="vertical-align:top;color:#38bdf8;padding:6px 10px 6px 0;"><b>관련 위치</b></td><td style="padding:6px 0;">버그 input 핸들러 app.js:3534 (<code>searchInput.addEventListener('input', (e) =&gt; { store.state.search = ...; debounced(); })</code>) · debounce 정의 5218 · render 노드교체 1171 · 불완전 포커스 복원 1160-1207. <b>동일 위험의 다른 input</b>: 궤도 검색 <code>.orbit__search</code>(3355), 할 일 입력(1822), 각종 설정 input(2313/2516/2619/2782/4129) — 이들은 대부분 render를 즉시 부르지 않거나 복원 셀렉터에 없어 증상이 다를 수 있음.</td></tr>
+    <tr><td style="vertical-align:top;color:#34d399;padding:6px 10px 6px 0;"><b>건드릴 곳 / 해결 방향</b></td><td style="padding:6px 0;">① <b>composition 가드</b>: input 핸들러에서 <code>e.isComposing</code>(또는 compositionstart/end 플래그)이면 render 보류, compositionend 후 1회 반영. ② 또는 <b>검색 재렌더 시 input 노드를 교체하지 않도록</b> — 검색은 결과 영역만 갱신하고 헤더 input은 보존(전체 replaceChildren 구조와 상충 → 부분 갱신 도입 필요). ③ 최소수정안: input 핸들러에서 조합 중이면 store만 갱신하고 debounced() 호출 스킵. <b>전체 재렌더 아키텍처가 근본 원인</b>이라 항목 2(실시간 재렌더 강화)와 직접 충돌.</td></tr>
+  </table>
+</div>
+
+<!-- 교차 이슈 -->
+<section style="background:#1e293b;border:1px solid #38bdf8;border-radius:12px;padding:22px 24px;margin-top:34px;">
+  <h2 style="margin:0 0 12px;font-size:17px;color:#38bdf8;">PM 주의 — 교차 이슈(항목 간 충돌·동반 설계 필요)</h2>
+  <ul style="margin:0;padding-left:20px;color:#cbd5e1;font-size:13.5px;">
+    <li><b>전체 재렌더 vs 입력/드래그/차트</b> — 근본 구조가 <code>render()=replaceChildren()</code>(전체 교체)다. 이것이 8번(IME 깨짐)·3번(드래그 파괴)·4번(차트 인스턴스 파괴)의 공통 원인. 항목 2(실시간 갱신 강화)는 재렌더 빈도를 높여 이 세 문제를 모두 악화. <b>설계 우선순위: 부분 갱신(또는 갱신 가드)을 먼저 정립</b>해야 나머지가 안정적으로 얹힌다. 이미 가드 인프라(<code>store._dragging</code>, 오버레이 체크, 포커스/스크롤 복원)가 있으니 확장하는 방향 권장.</li>
+    <li><b>실시간 갱신(2) × 한글 IME(8)</b> — 라이브 push로 재렌더가 발생하면 사용자가 검색어를 한글 조합 중일 때도 input 노드가 교체돼 조합이 깨진다. 8번 수정 없이 2번을 강화하면 입력 중 깨짐이 더 잦아짐. <b>composition 중에는 라이브 렌더도 보류</b>하는 가드를 8번 수정에 포함시킬 것.</li>
+    <li><b>차트 라이브러리(4) × CSP</b> — <code>script-src 'self'</code> + <code>connect-src 'none'</code> 때문에 CDN·런타임 다운로드 전부 불가. <b>반드시 self-host(vendor/)</b>. canvas 기반(Chart.js)이 안전, SVG 라이브러리는 동적 <code>&lt;style&gt;</code> 주입으로 <code>style-src</code> 위반 위험 → 도입 전 CSP 적합성 검증. "런타임 의존성 최소" 규약은 SortableJS 선례로 self-host 자산은 예외 취급 가능하나 근거 문서화 필요.</li>
+    <li><b>드래그(3) × uiState 스키마</b> — 현재 <code>order</code>는 프로젝트 id 해시 전용(<code>ID_RE</code>). 홈 섹션 순서 저장은 <b>uiStateStore에 새 키·정규화·IPC·preload 노출 신설</b>이 필요(백엔드 작업 포함). SortableJS·드래그 가드 인프라는 재사용 가능.</li>
+    <li><b>메뉴 제거(5) × 단축키(6) × 설정(7)</b> — 한 묶음으로 설계하면 일관됨: 메뉴 제거 → 잃는 기능(폴더추가·재스캔·새로고침·정보)을 헤더 버튼/단축키로 이관(F5=새로고침 신설), "정보"를 설정 모달로, 단축키 안내를 설정 카테고리로. <b>단축키 매핑은 단일 상수로 두고</b> 메뉴/안내표/keydown 핸들러가 같은 출처를 참조해야 동기화 깨짐을 막음. 메뉴 제거 시 preload <code>onMenu</code> 화이트리스트·app <code>subscribeMenu</code> 죽은 채널 정리(SEC-L1).</li>
+    <li><b>헤더 통일(1) × 메뉴 제거(5)</b> — 메뉴 기능을 헤더로 옮기면 홈/프로젝트 헤더 구성이 자연히 영향받음. 1번과 5번을 함께 설계해 두 헤더의 액션 영역을 한 번에 정리할 것.</li>
+  </ul>
+</section>
+
+<footer style="margin-top:36px;padding-top:18px;border-top:1px solid #334155;color:#94a3b8;font-size:12px;">
+  감사 범위: public/app.js · electron/{main,menu,preload}.js · lib/common/uiStateStore.js · public/index.html(CSP). 라인 번호는 감사 시점 스냅샷 기준(코드 변경 시 이동 가능). 직접 수정 없음.
+</footer>
+
+</div>
+</body>
+</html>

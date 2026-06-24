@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QA 검증 — M9 P7 (R-32 홈 섹션 드래그·프리뷰·워터폴)</title>
+<style>
+  :root{
+    --bg:#0b1220; --panel:#111a2e; --panel2:#0f1626; --bd:#1e2b45;
+    --fg:#e6edf7; --muted:#93a4c2; --accent:#34d399; --ref:#38bdf8;
+    --warn:#fbbf24; --bad:#f87171; --ok:#34d399;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+    font:14.5px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Malgun Gothic",sans-serif;}
+  .wrap{max-width:1040px;margin:0 auto;padding:38px 26px 80px}
+  h1{font-size:25px;margin:0 0 6px;letter-spacing:-.3px}
+  h2{font-size:18px;margin:36px 0 12px;padding-bottom:7px;border-bottom:1px solid var(--bd);color:#cfe0fb}
+  h3{font-size:15px;margin:22px 0 8px;color:#cfe0fb}
+  .sub{color:var(--muted);font-size:13px;margin:0 0 4px}
+  code{background:#0a1322;border:1px solid var(--bd);border-radius:5px;padding:.5px 6px;
+    font-family:ui-monospace,"Cascadia Code",Consolas,monospace;font-size:12.6px;color:#cbd6ec}
+  .verdict{display:inline-block;font-weight:700;font-size:15px;padding:7px 18px;border-radius:999px;
+    border:1px solid var(--ok);color:#06291d;background:var(--ok)}
+  .panel{background:var(--panel);border:1px solid var(--bd);border-radius:12px;padding:18px 20px;margin:14px 0}
+  .grid{display:flex;gap:14px;flex-wrap:wrap;margin:14px 0}
+  .stat{flex:1;min-width:140px;background:var(--panel2);border:1px solid var(--bd);border-radius:10px;padding:13px 16px}
+  .stat .n{font-size:26px;font-weight:700}
+  .stat .l{color:var(--muted);font-size:12.5px}
+  table{width:100%;border-collapse:collapse;margin:10px 0;font-size:13.4px}
+  th,td{text-align:left;padding:9px 11px;border-bottom:1px solid var(--bd);vertical-align:top}
+  th{color:#aebfdd;font-weight:600;background:#0d1525}
+  td.loc{white-space:nowrap;color:var(--ref);font-family:ui-monospace,Consolas,monospace;font-size:12.4px}
+  .pf{font-weight:700;font-size:11.5px;padding:2px 10px;border-radius:999px;white-space:nowrap;display:inline-block}
+  .pf.pass{background:#0c2a1e;color:var(--ok);border:1px solid #155}
+  .pf.fail{background:#3a1414;color:var(--bad);border:1px solid #5b1d1d}
+  .pf.manual{background:#0e2436;color:var(--ref);border:1px solid #1d3a52}
+  .ref{color:var(--ref)}
+  .muted{color:var(--muted)}
+  ul{margin:8px 0 8px 2px;padding-left:20px}
+  li{margin:4px 0}
+  .tag{display:inline-block;font-size:11px;color:#9fb2d6;border:1px solid var(--bd);border-radius:5px;padding:1px 7px;margin-right:5px}
+  .ok{color:var(--ok)} .warn{color:var(--warn)} .bad{color:var(--bad)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <p class="sub">SPIP · QA 동작·통합·회귀 검증 (1회차) · 2026-06-24</p>
+  <h1>M9 P7 — R-32 홈 섹션 드래그·프리뷰·워터폴</h1>
+  <p class="sub">대상: <code>public/app.js</code> · <code>public/styles.css</code> · <code>test/homeLayout-front.test.js</code> · 경계면: <code>lib/common/uiStateStore.js</code> / <code>electron/ipc/uiState.js</code> / <code>electron/preload.js</code> / <code>electron/ipc/register.js</code></p>
+  <p class="sub">기준: 설계 <code>docs/architecture/m9-design.html</code> R-32, R-25 보류 게이트(deferred), F-4 정량(겹침0·빈칸0·애니중 레이아웃깨짐0). <code>docs/Development/</code> 부재 → 수용 기준·설계 계약으로 검증.</p>
+
+  <p style="margin:16px 0"><span class="verdict">종합 판정 · PASS (자동 검증 범위)</span></p>
+
+  <div class="grid">
+    <div class="stat"><div class="n ok">678</div><div class="l">npm test 통과 (fail 0)</div></div>
+    <div class="stat"><div class="n ok">10</div><div class="l">P7 프런트 신규 테스트 통과</div></div>
+    <div class="stat"><div class="n ok">0</div><div class="l">발견 결함(블로커/높음)</div></div>
+    <div class="stat"><div class="n ref">3</div><div class="l">수동 스모크 필요 항목</div></div>
+  </div>
+
+  <div class="panel">
+    <b>요약 —</b> 프런트 <code>applyHomeLayout</code>와 백엔드 <code>normalizeHomeLayout</code>은 <b>동일 규칙·동일 출력</b>(화이트리스트 필터 → 중복 제거 → 누락 보충, 항상 7-순열)으로 <span class="ok">동형 확인</span>. IPC 인자 shape(<code>{ids}</code>)과 응답(<code>{ok,homeLayout}</code>) 소비가 정확하고, getUiState.homeLayout 적재도 정확. R-25 보류 게이트(<code>_dragging</code>)가 폴링·라이브 push 양쪽 렌더 경로를 모두 막고, <code>onEnd</code> 마이크로태스크(R4)로 destroyAll 충돌을 회피한다. F-4 정량 기준은 CSS(<code>column-count</code>·<code>break-inside:avoid</code>·reduced-motion)·노드 이동 방식으로 정적 충족. 자동 검증 가능 범위는 전부 PASS이며, 실제 포인터 드래그·재진입 영속은 헤드리스 환경 한계로 <span class="ref">수동 스모크</span>에 위임한다.
+  </div>
+
+  <h2>검증 항목별 결과</h2>
+  <table>
+    <thead><tr><th style="width:42px">#</th><th>항목</th><th style="width:64px">판정</th><th>근거</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>1</td><td><b>경계면 정합</b><br><span class="muted">프런트↔백엔드 동형</span></td>
+        <td><span class="pf pass">PASS</span></td>
+        <td>
+          <code>applyHomeLayout</code>(<span class="ref">app.js:653-661</span>)과 <code>normalizeHomeLayout</code>(<span class="ref">uiStateStore.js:54-66</span>)이 알고리즘 동일: 배열만 순회·문자열·화이트리스트·미중복 필터 후 누락 섹션을 <code>HOME_SECTION_IDS</code> 순서로 끝에 보충 → 항상 7개. 양측 enum 7섹션 순서 동일(<span class="ref">app.js:646 / uiStateStore.js:43</span>), 테스트가 소스 정규식 교차로 드리프트 0 강제(<span class="ref">homeLayout-front.test.js:22-27</span>). IPC 호출 <code>ipc('setHomeLayout', next)</code>의 인자가 preload에서 <code>{ids:[...].map(String)}</code>로 래핑(<span class="ref">preload.js:107</span>) → 백엔드 <code>args.ids</code> 기대와 일치(<span class="ref">uiState.js:116</span>). 응답 <code>{ok,homeLayout}</code>을 <code>res.ok && Array.isArray(res.homeLayout)</code> 가드 후 <code>applyHomeLayout(res.homeLayout)</code>로 확정(<span class="ref">app.js:5122-5126</span>). getUiState.homeLayout 노출(<span class="ref">uiState.js:30</span>) → <code>loadUiState</code> 적재(<span class="ref">app.js:5151</span>) 정확.
+        </td>
+      </tr>
+      <tr>
+        <td>2</td><td><b>회귀 0</b><br><span class="muted">7섹션 내용·동작·필터</span></td>
+        <td><span class="pf pass">PASS</span></td>
+        <td>
+          <code>renderHomeSection</code> 디스패처가 기존 <code>renderHome*</code> 7함수를 그대로 호출(<span class="ref">app.js:1663-1674</span>) — 섹션 내용·할일추가·메일클릭 등 로직 미변경(래핑만). 모든 enum이 case로 커버됨을 테스트가 정적 검증(<span class="ref">homeLayout-front.test.js:59-65</span>). 드래그 <code>filter: 'button, a, input, select, textarea, .btn'</code>(<span class="ref">app.js:5088</span>)로 섹션 내부 인터랙티브 컨트롤의 포인터다운을 드래그로 잡지 않아 클릭/입력 보존. 기본 순서는 default state <code>homeLayout:HOME_SECTION_IDS.slice()</code>(<span class="ref">uiStateStore.js:69</span>)로 정상 표시. 검색 IME(<code>_composing</code>)·메일/커밋 폴링·설정은 <code>deferred()</code> 6종 게이트에 그대로 포함되어 불변(<span class="ref">app.js:5450-5457</span>).
+        </td>
+      </tr>
+      <tr>
+        <td>3</td><td><b>R-25 정합</b><br><span class="muted">보류·마이크로태스크·누수</span></td>
+        <td><span class="pf pass">PASS</span></td>
+        <td>
+          <code>onStart</code>에서 <code>_dragging=true</code>(<span class="ref">app.js:5097</span>) → <code>deferred()</code>의 <code>dragging</code> 플래그(<span class="ref">app.js:5452</span>)가 true가 되어 커밋 폴링(<code>maybeAutoRefreshCommit</code> <span class="ref">app.js:4717</span> 조기 return)과 라이브 push 렌더(<code>applyProjectsUpdate</code>는 <code>RG.coalesce.request</code>로 위임, deferred 시 pending만 유지 <span class="ref">app.js:4769,5561</span>) 모두 보류. <code>onEnd</code>에서 <code>_dragging=false</code> 즉시 해제 후 <code>Promise.resolve().then</code>으로 commit/flush 지연(<span class="ref">app.js:5099-5111</span>) → SortableJS onEnd 동기 프레임 안에서 <code>render()</code>의 <code>RG.widget.destroyAll()</code>이 자기 Sortable을 파괴하지 않게 회피. <code>homeSections</code> 위젯이 render 1회당 destroy/recreate(<span class="ref">app.js:5594-5598, 5072-5114</span>)로 중복 인스턴스·핸들러 누적 0. 종료 후 단 1회 반영(commit 경로 또는 flushIfPending).
+        </td>
+      </tr>
+      <tr>
+        <td>4</td><td><b>영속·낙관적 반영</b></td>
+        <td><span class="pf pass">PASS</span></td>
+        <td>
+          <code>commitHomeLayout</code>: 낙관적으로 <code>store.homeLayout=next</code> + 즉시 <code>render()</code>(드롭 후 즉시 순서 반영) → IPC 영속 → 응답으로 최종 확정(<span class="ref">app.js:5117-5128</span>). 영속은 <code>store.write</code>로 0600 파일에 기록되고(<span class="ref">uiState.js:120</span>) 재진입 시 <code>loadUiState</code>가 다시 읽어 순서 유지. IPC 실패 시 토스트 없이 낙관적 순서 유지하고 다음 getUiState에서 정합(<span class="ref">app.js:5127</span>) — graceful. <code>bridgeHas('setHomeLayout')</code> 부재(웹/테스트) 시 IPC 생략하고 로컬 순서만 반영(<span class="ref">app.js:5121</span>). 백엔드 라운드트립 보존은 <code>write/read — homeLayout 라운드트립 보존 (C-M-1)</code> 테스트가 보증.
+        </td>
+      </tr>
+      <tr>
+        <td>5</td><td><b>F-4 정량</b><br><span class="muted">겹침0·빈칸0·애니깨짐0</span></td>
+        <td><span class="pf pass">PASS</span><br><span class="pf manual" style="margin-top:4px">시각 스모크</span></td>
+        <td>
+          워터폴은 CSS <code>column-count:2</code> + <code>column-gap</code>(<span class="ref">styles.css:367</span>), 각 섹션 <code>break-inside:avoid</code> + <code>-webkit-column-break-inside:avoid</code>(<span class="ref">styles.css:369-370</span>)로 컬럼 경계 분할 방지 → 정의상 섹션 쪼개짐(겹침/빈칸)이 발생하지 않음. ≤980px 1컬럼 폴백(<span class="ref">styles.css:378</span>). 드래그는 노드를 DOM에서 이동(absolute 좌표 조작 아님)하고, 애니메이션 <code>prefersReducedMotion() ? 0 : 160</code>(<span class="ref">app.js:5090</span>)로 reduced-motion 시 애니 0. 고스트/chosen/drag 프리뷰 클래스 정의 존재(<span class="ref">styles.css:375-377</span>). <span class="ref">실제 픽셀 단위 겹침·애니 중 레이아웃 안정성</span>은 헤드리스에서 측정 불가 → 수동 시각 확인 권장.
+        </td>
+      </tr>
+      <tr>
+        <td>6</td><td><b>빌드/테스트</b></td>
+        <td><span class="pf pass">PASS</span></td>
+        <td>
+          <code>npm test</code> 실제 실행: <b>tests 678 / pass 678 / fail 0</b> (duration ~1.78s). P7 신규 <code>test/homeLayout-front.test.js</code> 단독 실행 시 <b>10/10 통과</b>. 백엔드 normalizeHomeLayout 3건 + defaultState/라운드트립 2건 + 프런트 동형/정적배선 10건 = R-32 커버리지 일관.
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>발견 버그</h2>
+  <div class="panel">
+    <b class="ok">자동 검증 범위 내 결함 0건.</b> 블로커·높음·보통·낮음 모두 해당 없음. 경계면 양쪽을 함께 읽어 shape·계약 불일치를 확인했으며 드리프트 위험 지점(enum·정규화 규칙)은 테스트가 소스 교차로 고정하고 있다.
+  </div>
+
+  <h2>수동 스모크 항목 (헤드리스 한계 — 실행 검증 위임)</h2>
+  <table>
+    <thead><tr><th style="width:64px">유형</th><th>절차 / 기대</th></tr></thead>
+    <tbody>
+      <tr><td><span class="pf manual">드래그 실동작</span></td><td><code>npm start</code> → 홈 진입 → 섹션 헤더를 잡고 다른 위치로 끌어 드롭. <b>기대:</b> 고스트(점선 outline) 프리뷰 표시, 드롭 시 즉시 순서 반영, 컬럼 경계에서 섹션이 쪼개지지 않음(겹침/빈칸 0).</td></tr>
+      <tr><td><span class="pf manual">영속·재진입</span></td><td>순서 변경 후 다른 뷰 이동 → 홈 복귀, 그리고 앱 재시작. <b>기대:</b> 변경한 순서가 그대로 유지(파일 영속 라운드트립).</td></tr>
+      <tr><td><span class="pf manual">클릭/입력 보존</span></td><td>섹션 내부 버튼(할일 추가)·메일 항목·입력 필드를 클릭/입력. <b>기대:</b> 드래그가 가로채지 않고 정상 동작(<code>filter</code> 적용 확인). 검색창 한글 IME 조합 중 폴링/드래그 무간섭.</td></tr>
+    </tbody>
+  </table>
+
+  <p class="sub" style="margin-top:30px">QA 엔지니어 · 동작·통합·회귀 검증. 코드 품질은 code-reviewer, 보안은 security-reviewer(데이터 계층 PASS 기수신) 소관.</p>
+
+</div>
+</body>
+</html>

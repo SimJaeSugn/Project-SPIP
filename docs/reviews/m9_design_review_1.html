@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>M9 설계 정본 — 독립 검증 보고서 #1</title>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#1e293b; --text:#e2e8f0; --sub:#94a3b8;
+    --accent:#34d399; --ref:#38bdf8; --line:#334155; --warn:#fbbf24; --danger:#f87171; --purple:#c4b5fd;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:"Segoe UI","Malgun Gothic",system-ui,sans-serif;line-height:1.7;font-size:14.5px;}
+  header.page{padding:42px 32px 30px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#13203b,#0f172a);}
+  header.page .kicker{font-size:12px;letter-spacing:0.16em;text-transform:uppercase;color:var(--ref);}
+  header.page h1{margin:10px 0 8px;font-size:26px;font-weight:700;letter-spacing:-0.02em;}
+  header.page p{margin:6px 0 0;color:var(--sub);max-width:1000px;}
+  main{max-width:1160px;margin:0 auto;padding:28px 26px 90px;}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px 26px;margin:20px 0;}
+  h2{margin:0 0 14px;font-size:20px;color:var(--accent);border-left:4px solid var(--accent);padding-left:12px;}
+  h3{font-size:15.5px;color:var(--ref);margin:20px 0 8px;}
+  p{margin:8px 0;} ul,ol{margin:8px 0;padding-left:22px;} li{margin:6px 0;color:#cbd5e1;}
+  code{background:#0b1220;color:var(--ref);padding:1px 6px;border-radius:5px;font-size:12.5px;font-family:Consolas,monospace;}
+  table{width:100%;border-collapse:collapse;margin:12px 0;font-size:13px;}
+  th,td{border:1px solid var(--line);padding:8px 11px;text-align:left;vertical-align:top;}
+  th{background:#142035;color:var(--accent);}
+  tr:nth-child(even) td{background:rgba(255,255,255,.02);}
+  .note{background:rgba(56,189,248,.08);border:1px solid rgba(56,189,248,.3);border-radius:10px;padding:14px 18px;color:#bae6fd;font-size:13.5px;margin:14px 0;}
+  .warnbox{background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.35);border-radius:10px;padding:14px 18px;color:#fde68a;font-size:13.5px;margin:14px 0;}
+  .secbox{background:rgba(248,113,113,.07);border:1px solid rgba(248,113,113,.32);border-radius:10px;padding:14px 18px;color:#fecaca;font-size:13.5px;margin:14px 0;}
+  .verdict{font-size:22px;font-weight:800;}
+  .pass{color:var(--accent);} .fail{color:var(--danger);} .cond{color:var(--warn);}
+  .rid{font-family:Consolas,monospace;color:var(--accent);font-weight:700;white-space:nowrap;}
+  .b-pass{display:inline-block;background:rgba(52,211,153,.14);color:var(--accent);border:1px solid rgba(52,211,153,.5);border-radius:6px;padding:2px 9px;font-size:12px;font-weight:700;}
+  .b-fail{display:inline-block;background:rgba(248,113,113,.14);color:#fca5a5;border:1px solid rgba(248,113,113,.5);border-radius:6px;padding:2px 9px;font-size:12px;font-weight:700;}
+  .b-cond{display:inline-block;background:rgba(251,191,36,.14);color:#fde68a;border:1px solid rgba(251,191,36,.5);border-radius:6px;padding:2px 9px;font-size:12px;font-weight:700;}
+  .p1{color:#fca5a5;font-weight:800;} .p2{color:#fde68a;font-weight:800;} .p3{color:#a5b4fc;font-weight:800;}
+  .pri{font-family:Consolas,monospace;white-space:nowrap;}
+  .field{margin:4px 0;} .field b{color:var(--ref);}
+  .item{border:1px solid var(--line);border-left:4px solid var(--warn);border-radius:0 10px 10px 0;padding:14px 18px;margin:14px 0;background:rgba(255,255,255,.02);}
+  .item.crit{border-left-color:var(--danger);}
+  .item h4{margin:0 0 8px;font-size:14.5px;color:var(--text);}
+  footer{text-align:center;color:var(--sub);font-size:12.5px;padding:28px;border-top:1px solid var(--line);}
+  .ok{color:#6ee7b7;} .bad{color:#fca5a5;}
+</style>
+</head>
+<body>
+
+<header class="page">
+  <div class="kicker">Project-SPIP · 독립 검증(Reviewer) · 설계 검증 · 회차 1</div>
+  <h1>M9 설계 정본 검증 보고서 — 부분 갱신 가드(R-25) + 헤더/메뉴/설정/실시간/드래그/SVG차트</h1>
+  <p>대상: <code>docs/architecture/m9-design.html</code> · 기준: <code>docs/FeatureSpec-backlog-m9.html</code>(R-25~R-33) · <code>docs/pm/codebase-audit.html</code> · 기존 <code>architecture.html</code>/<code>adr.html</code>/<code>m8-design.html</code> · 코드 실측: <code>public/app.js</code>·<code>lib/common/uiStateStore.js</code>·<code>electron/preload.js</code>. 제3자 회의적 관점, 산출물 직접 수정 없음.</p>
+</header>
+
+<main>
+
+<!-- 종합 판정 -->
+<section>
+  <h2>종합 판정</h2>
+  <p class="verdict cond">CONDITIONAL PASS (조건부 통과)</p>
+  <p>설계는 추적성·기존 코드 정합·ADR 품질에서 견고하다. 감사가 인용한 코드 사실(전체 <code>replaceChildren</code> 재렌더, <code>FOCUS_SEL</code>/<code>SCROLL_SEL</code> 복원, <code>store._dragging</code> 가드, <code>destroyCardSortable</code>/<code>initCardSortable</code>, 메일 60초 폴링, <code>order</code> 해시 전용 정규식, preload <code>onMenu</code>, <code>todoAdding</code> 플래그)을 실제 코드에서 모두 확인했고 설계 주장과 일치한다. 다만 <b>R-25 게이트의 보류 조건 누락, coalesce 단일 디바운스 타이머의 다중 트리거 정확성, onEnd flush 타이밍, 영문 입력 회귀 가능성</b> 등 P1~P2 반영 항목이 존재한다. 이들을 반영하면 PASS. 미반영 시 R-25 기반 위에 얹는 모든 후속 요구가 미묘한 회귀를 안고 출발한다.</p>
+</section>
+
+<!-- 체크리스트 결과 -->
+<section>
+  <h2>1. 체크리스트별 판정</h2>
+  <table>
+    <tr><th style="width:50px">#</th><th style="width:230px">검증 항목</th><th style="width:90px">판정</th><th>핵심 근거</th></tr>
+    <tr>
+      <td>1</td><td>추적성 (R-25~R-33 9개 → 설계 결정)</td>
+      <td><span class="b-pass">PASS</span></td>
+      <td>§2 추적성 표가 9개 요구를 모두 설계 결정·수용기준으로 연결. 누락 요구 없음. 단, 일부 수용기준(R-26 "다른 input 회귀 방지", R-31 "검색 포커스/스크롤 흔들림 0")이 표 수준에서만 언급되고 구현 매핑이 얕음 → 항목 R3/R5.</td>
+    </tr>
+    <tr>
+      <td>2</td><td>R-25 API surface 타당성 (4계약·시그니처·동형 분리)</td>
+      <td><span class="b-cond">CONDITIONAL</span></td>
+      <td>4계약 구조는 명세 의도와 정합하고 후속 의존을 충족(§3.7). 그러나 <b>(a) <code>deferred()</code>가 기존 <code>busyMailSummary</code> 보류 조건을 누락</b>(코드 4581), <b>(b) coalesce가 단일 전역 디바운스/플래그라 "정확히 1회"의 다중 트리거·다중 보류 사유 동시 발생 시 정합성 미정의</b>, <b>(c) <code>patchRegion</code>이 시그니처만 있고 보존 노드 DOM 이동 시 SortableJS·차트 위젯 라이프사이클과의 상호작용 미정의</b>. 동형 분리(안 B)는 번들러 없는 제약에서 실현 가능·기존 F-3 관례와 일치(타당).</td>
+    </tr>
+    <tr>
+      <td>3</td><td>점진 도입 안전성 (빅뱅 금지·P1 회귀 0·patchRegion 옵트인)</td>
+      <td><span class="b-cond">CONDITIONAL</span></td>
+      <td>"P1 동작 보존 리팩터링" 원칙은 옳고 §11·리스크 표에 게이트 명시. 그러나 P1에서 흩어진 보류 조건 5개(applyProjectsUpdate의 overlay·dragging, maybeAutoRefreshMail의 busy·settings·help·todoAdding)를 단일 <code>deferred()</code>로 통합할 때 <b>조건 집합이 1:1로 보존되는지 설계가 보장하지 않음</b> — busy 누락이 그 증거. 1:1 이관이 게이트 조건임을 명문화 필요.</td>
+    </tr>
+    <tr>
+      <td>4</td><td>기존 코드 정합 (명명·모듈·IPC·uiStateStore·정규화)</td>
+      <td><span class="b-pass">PASS</span></td>
+      <td><code>setHomeLayout</code>이 기존 <code>setOrder</code>(preload:104)와 동형, <code>homeLayout</code> 키·<code>normalizeHomeLayout</code>·<code>HOME_SECTION_IDS</code> 추가가 <code>defaultState</code>/<code>normalizeState</code> 구조(uiStateStore.js:40-41)와 일치. <code>store.settingsTab</code>·<code>store._composing</code>은 현재 코드에 부재(신설 일치). 정규화의 "누락 보충" 정책은 마이그레이션-프리로 견고. 경미: schemaVersion bump 불요 판단의 근거가 graceful 폴백에 의존하나 그 자체는 타당.</td>
+    </tr>
+    <tr>
+      <td>5</td><td>디렉토리/구조·ADR (파일 변경 지도·M9-1~4 대안 비교)</td>
+      <td><span class="b-pass">PASS</span></td>
+      <td>§5 파일 변경 지도가 신규/수정 13개 파일·관련 요구·테스트 파일까지 구체적. ADR-M9-1~4 모두 맥락·대안 3안·결정·결과(좋은점/감수) 구조를 갖춤. 과설계 아님(전면 VDOM 명시적 배제). 경미: ADR-M9-1의 "2곳 동형 구현 드리프트"를 테스트가 막는다 하나, 두 구현이 같은 테스트 케이스를 공유하는 강제 메커니즘(공통 fixture)이 설계에 없음 → 항목 R7.</td>
+    </tr>
+    <tr>
+      <td>6</td><td>구현 순서 의존성 (P1~P8·R-26 후 R-31)</td>
+      <td><span class="b-cond">CONDITIONAL</span></td>
+      <td>P1(R-25)→P2(R-26)→…→P6(R-31) 순서가 의존성과 정합하고 "R-26 검증 후 R-31 활성" 단일 진술 일관. 그러나 <b>R-31의 커밋 5분 폴링이 P6인데 R-25 coalesce(P1)·R-26 composition 보류(P2)에만 의존</b>한다고 보면서, <b>R-32 드래그(P7)·R-33 차트(P8)가 R-31보다 뒤</b>라 "5분 폴링 중 드래그/차트 파손"은 P7/P8 시점에야 통합 검증됨 → 통합 회귀 창구가 늦음(항목 R6). P3/P4 묶음·P2 선행 게이트는 타당.</td>
+    </tr>
+  </table>
+</section>
+
+<!-- 반영 항목 -->
+<section>
+  <h2>2. 반영 항목 (우선순위순)</h2>
+  <p>우선순위: <span class="p1">P1 치명</span>(미반영 시 회귀·정확성 결함) · <span class="p2">P2</span>(설계 빈틈, 구현 전 확정 필요) · <span class="p3">P3</span>(개선·명확화).</p>
+
+  <div class="item crit">
+    <h4><span class="pri p1">[P1]</span> R1 — <code>RG.deferred()</code> 게이트가 기존 보류 조건 <code>busyMailSummary</code>를 누락</h4>
+    <div class="field"><b>무엇:</b> §3.2의 <code>deferred()</code>는 <code>composing|dragging|overlayOpen|editing</code> 4조건만 검사. <code>editing=store.todoAdding</code>으로만 매핑.</div>
+    <div class="field"><b>위치:</b> m9-design.html §3.2 (162~167행), 대조 코드 <code>public/app.js:4581</code> <code>maybeAutoRefreshMail</code>.</div>
+    <div class="field"><b>문제:</b> 현재 메일 라이브 갱신은 <code>busyMailSummary || showSettings || showHelp || todoAdding</code>일 때 보류한다. 설계의 <code>deferred()</code>로 통합하면 <code>busyMailSummary</code>(메일 요약 fetch 진행 중) 보류가 사라져, P6(R-31)에서 폴링이 in-flight 요청과 겹쳐 재렌더가 일어날 수 있다. "P1은 기존 동작 100% 보존"이라는 게이트(§11)를 정의상 위반.</div>
+    <div class="field"><b>권고:</b> <code>shouldDeferRender(flags)</code>의 flags에 <code>busy</code>(또는 in-flight 일반화) 조건을 명시 추가하고, P1 이관 시 "기존 보류 조건 5종(overlay×3, dragging, busy, todoAdding) → deferred 입력으로의 1:1 매핑표"를 설계에 박을 것. 누락 조건이 없음을 단위테스트(각 플래그 true→defer true)로 못 박는다.</div>
+  </div>
+
+  <div class="item crit">
+    <h4><span class="pri p1">[P1]</span> R2 — coalesce "정확히 1회"가 단일 전역 큐·단일 디바운스 타이머라 다중 트리거 정합성 미정의</h4>
+    <div class="field"><b>무엇:</b> §3.5 <code>createCoalescer()</code>는 <code>pending</code> boolean 하나, <code>RG.coalesce.request()</code>는 비보류 시 단일 <code>debouncedRender()</code> 호출.</div>
+    <div class="field"><b>위치:</b> m9-design.html §3.5 (201~219행), §4 흐름도.</div>
+    <div class="field"><b>문제:</b> ① 비보류 상태에서 메일 push·커밋 폴링·projectsUpdated가 디바운스 창(120ms) 안에 연달아 오면 <code>debouncedRender()</code>가 합쳐지는 것은 맞으나, <b>그 사이 보류 상태로 전환되면(예: 사용자가 조합 시작) 이미 예약된 debouncedRender 타이머가 보류를 무시하고 발화</b>할 수 있다 — 설계에 debounce 타이머가 <code>deferred()</code>를 재검사한다는 명시가 없다. ② 보류 해제 지점이 여러 개(compositionend·onEnd·closeSettings)인데 <b>둘 이상이 거의 동시에 풀리면</b> 각각 <code>flushIfPending()</code>을 호출 → 첫 flush가 pending을 소비하므로 1회는 보장되나, "어느 해제 지점이 flush 책임을 지는가"가 미정의라 누락(아무도 안 부름) 위험도 존재한다(예: 드래그+모달 동시).</div>
+    <div class="field"><b>권고:</b> (a) <code>debouncedRender</code> 실제 실행 시점에 <code>deferred()</code>를 재검사해 보류면 <code>mark()</code>로 되돌리는 로직을 계약에 명시. (b) flush 책임 모델을 단일화 — 예: 모든 보류 사유가 해제될 때(deferred()가 false로 전이) 단 한 경로에서 flush하도록 정의하고, 다중 사유 동시 보류/해제 케이스를 단위테스트로 명세.</div>
+  </div>
+
+  <div class="item">
+    <h4><span class="pri p2">[P2]</span> R3 — R-26 "영문/숫자 입력 회귀 0"의 검증 경로가 설계에 비어 있음</h4>
+    <div class="field"><b>무엇:</b> R-26 수용기준에 "영문/숫자 입력 시 기존 debounce 검색 동작 유지(회귀 없음)"가 있으나, 설계 §3.2/§3.7은 조합 보류 경로만 기술.</div>
+    <div class="field"><b>위치:</b> FeatureSpec R-26 수용기준 4번 · m9-design.html §3.2, §3.7(R-26 행).</div>
+    <div class="field"><b>문제:</b> 검색 핸들러를 <code>RG.coalesce.request()</code> 경유로 바꾸면, 비조합 영문 입력의 디바운스 동작이 기존 <code>debounce(render,120)</code>(코드 3533)와 <b>동일 체감인지가 게이트의 핵심인데 설계가 이를 다루지 않음</b>. coalesce의 디바운스 창이 검색 전용 debounce를 대체하면서 미묘한 지연/이중 디바운스가 생길 수 있다.</div>
+    <div class="field"><b>권고:</b> 검색 input 경로에서 기존 debounce와 coalesce 디바운스의 관계(대체/중첩 여부)를 §3.2에 명시하고, "영문 빠른 타이핑 시 렌더 횟수·최종 검색어"를 검증하는 경로를 수용기준 매핑에 추가.</div>
+  </div>
+
+  <div class="item">
+    <h4><span class="pri p2">[P2]</span> R4 — onEnd의 <code>_dragging=false</code> 즉시 설정 + commitReorder 마이크로태스크 지연과 flush 타이밍 충돌</h4>
+    <div class="field"><b>무엇:</b> 기존 <code>initCardSortable</code> onEnd(코드 4914~4923)는 <code>store._dragging=false</code>를 동기로 설정한 뒤 <code>commitReorder</code>를 <code>Promise.resolve().then(...)</code>로 지연(render가 Sortable 인스턴스를 destroy하지 못하도록).</div>
+    <div class="field"><b>위치:</b> m9-design.html §3.5/§4(해제 지점 "Sortable onEnd → flushIfPending") · 코드 <code>public/app.js:4914-4923</code>.</div>
+    <div class="field"><b>문제:</b> 설계는 "onEnd에서 flushIfPending 호출"이라 하지만, onEnd 시점에 이미 <code>_dragging=false</code>이고 commitReorder는 마이크로태스크 뒤에 render를 유발한다. <b>flushIfPending이 onEnd 동기 본문에서 호출되면 commitReorder render와 이중 렌더</b>가 되거나, 반대로 <b>commitReorder가 부르는 render가 RG.widget.destroyAll로 진행 중인 Sortable을 파괴</b>하는 기존에 회피했던 문제가 R-32(홈 섹션 Sortable)로 재현될 수 있다. R-32 위젯 라이프사이클과 onEnd flush의 순서가 미정의.</div>
+    <div class="field"><b>권고:</b> onEnd → (마이크로태스크) commitReorder → 영속 후 단일 render, 그리고 flushIfPending이 그 render에 흡수되도록 순서를 §3.4/§3.5에 명시. 홈 섹션 Sortable에도 기존 "마이크로태스크 지연으로 destroy 회피" 패턴이 적용됨을 R-32 설계에 박을 것.</div>
+  </div>
+
+  <div class="item">
+    <h4><span class="pri p2">[P2]</span> R5 — <code>patchRegion</code> 옵트인이 위젯 라이프사이클·보존과 상호작용 미정의(반쪽 계약)</h4>
+    <div class="field"><b>무엇:</b> §3.3 <code>patchRegion(containerEl, buildFn, keepSelectors)</code>는 "keepSelectors 노드를 adoptNode로 이동 후 재배치"로만 서술, 본문 없음.</div>
+    <div class="field"><b>위치:</b> m9-design.html §3.3 (179행), §10 차트 깜빡임 완화에서 patchRegion 재언급.</div>
+    <div class="field"><b>문제:</b> patchRegion이 컨테이너만 부분 교체하면 그 컨테이너 안의 stateful 위젯(차트·Sortable)을 <code>RG.widget.destroyAll/mountAll</code>이 전역 render 기준으로 관리하던 전제가 깨진다 — 부분 갱신 영역의 위젯은 누가 destroy/mount하는가가 미정의. R-26 "상위 해법"·R-33 차트 깜빡임 완화가 모두 이 미정의 함수에 의존한다.</div>
+    <div class="field"><b>권고:</b> 1차 범위에서 patchRegion을 <b>명시적으로 제외</b>(R-26은 capture/restore + 조합 보류만으로 충족 가능)하거나, 채택한다면 부분 갱신 영역 내 위젯의 destroy/mount 책임·보존 노드 adopt 순서를 계약으로 확정. 현재처럼 "필요 시 옵트인"으로 두면 R-33 깜빡임 리스크의 완화책이 공허해진다.</div>
+  </div>
+
+  <div class="item">
+    <h4><span class="pri p3">[P3]</span> R6 — 5분 폴링(R-31, P6) × 드래그/차트(R-32/R-33, P7/P8) 통합 회귀가 순서상 늦게 검증됨</h4>
+    <div class="field"><b>무엇:</b> §11 구현 순서가 R-31(P6) 다음에 R-32(P7)·R-33(P8).</div>
+    <div class="field"><b>위치:</b> m9-design.html §11.</div>
+    <div class="field"><b>문제:</b> 명세가 명시한 핵심 위험("실시간이 드래그·차트를 악화")의 통합 검증이 P7/P8에 가서야 가능하다. P6에서 R-31을 켠 채 P7/P8을 진행하므로, 그 사이 단계는 폴링이 활성인 환경에서 작업하게 되어 디버깅 노이즈가 크다.</div>
+    <div class="field"><b>권고:</b> P6 완료 게이트에 "R-32/R-33 미구현 상태에서도 5분 폴링이 기존 차트(div 막대)·기존 카드 드래그를 파손하지 않음"을 회귀 항목으로 추가하거나, R-31 폴링을 P8 직전(P7.5)으로 늦추는 대안 검토.</div>
+  </div>
+
+  <div class="item">
+    <h4><span class="pri p3">[P3]</span> R7 — 동형 구현(ADR-M9-1) 2곳의 드리프트 방지 메커니즘이 "주의"에 그침</h4>
+    <div class="field"><b>무엇:</b> ADR-M9-1·§3.6은 순수 로직을 <code>lib/common/renderGuard.js</code>와 app.js <code>RG</code>에 동형 구현하고 "테스트가 계약"이라 함.</div>
+    <div class="field"><b>위치:</b> m9-design.html §3.6, ADR-M9-1, 리스크 표.</div>
+    <div class="field"><b>문제:</b> 두 구현이 같은 입력→출력을 보장하려면 동일 케이스를 양쪽에 적용해야 하나, app.js는 자동 테스트 비대상(F-3). 즉 lib 쪽만 테스트되고 app.js <code>RG</code>의 동형성은 사람 눈에 의존 → 드리프트가 실제로 발생할 수 있는 구조.</div>
+    <div class="field"><b>권고:</b> 순수 판정 로직(shouldDeferRender/coalescer)을 app.js에 <b>복제하지 말고</b>, preload 노출(안 A)을 재검토하거나, 최소한 동형성을 보장하는 케이스 테이블(JSON fixture)을 단일 출처로 두고 양쪽이 참조하도록 권고. 드리프트 위험을 "낮음"으로만 적지 말 것.</div>
+  </div>
+
+  <div class="item">
+    <h4><span class="pri p3">[P3]</span> R8 — Q5(도움말 버튼) 미해결 질문이 P4(R-27) 진행을 블로킹</h4>
+    <div class="field"><b>무엇:</b> §14 Q5(헤더 도움말 버튼 존치/흡수)가 미해결, 기본값은 "흡수+버튼 제거".</div>
+    <div class="field"><b>위치:</b> m9-design.html §9.1·§14, FeatureSpec §7.3 Q5.</div>
+    <div class="field"><b>문제:</b> R-27 공통 액션 영역 구성이 Q5에 따라 달라지는데, P4 착수 전 확정되지 않으면 헤더 골격 재작업 가능. Q-A(featureAdd 드래그 포함)·Q-B(masonry 방식)는 화이트리스트/CSS 토글로 흡수 가능해 영향이 작으나 Q5는 구조에 닿는다.</div>
+    <div class="field"><b>권고:</b> P4 착수 게이트로 Q5를 사용자 확정시킬 것(아래 "확인 필요" 참조). 기본값 진행도 허용되나 명시적 결정을 권고.</div>
+  </div>
+</section>
+
+<!-- 확인 필요 -->
+<section>
+  <h2>3. 사용자 확인 필요</h2>
+  <table>
+    <tr><th style="width:60px">번호</th><th>쟁점</th><th style="width:280px">권고</th></tr>
+    <tr><td>Q5</td><td>R-28 헤더 "도움말" 버튼 존치 vs 설정 "정보" 흡수 — R-27 헤더 골격(P4)에 직접 영향.</td><td>P4 착수 전 확정. 기본값(흡수+제거)으로 진행 가능하나 구조 영향이 있어 명시 결정 권장.</td></tr>
+  </table>
+  <div class="note">Q-A(featureAdd 드래그 포함)·Q-B(masonry CSS vs JS)는 설계가 화이트리스트/CSS 토글로 흡수 가능하게 두어 블로킹이 아니다. 중대 쟁점은 Q5뿐이며, 나머지 반영 항목(R1~R7)은 설계 정합성 문제로 reviewer가 생산자에 돌려보내는 항목이다.</div>
+</section>
+
+<!-- 가장 위험한 약점 -->
+<section>
+  <h2>4. 가장 위험한 약점 (요약)</h2>
+  <div class="secbox">
+    <p><b>약점 1 — "동작 보존 리팩터링" 전제가 보류 조건 누락으로 이미 깨질 수 있음 (R1).</b> P1의 전체 성패는 "기존 동작 100% 보존"이라는 단일 게이트에 달려 있는데, 설계가 통합하는 <code>deferred()</code> 게이트가 기존 5개 보류 조건 중 <code>busyMailSummary</code>를 빠뜨렸다. 이는 후속 모든 요구가 의존하는 기반이므로, 토대에 누락이 있으면 회귀가 위로 전파된다. 보류 조건 1:1 매핑표 + 전수 단위테스트가 필수다.</p>
+    <p><b>약점 2 — coalesce "정확히 1회"가 단일 전역 boolean·단일 디바운스 타이머에 의존해 다중 트리거/다중 보류 사유의 동시성에서 정합성이 미정의 (R2·R4).</b> 명세의 핵심 수용기준("중복 렌더 0")이 가장 자주 깨지는 지점은 정확히 이 동시성(폴링+조합+드래그가 겹치는 순간)인데, 설계는 단순 happy-path 흐름만 그렸다. debounce 발화 시점의 deferred 재검사와 flush 책임 단일화를 계약으로 못 박지 않으면, 실시간(R-31)을 켜는 순간 간헐적·재현 어려운 렌더 버그가 생긴다.</p>
+  </div>
+</section>
+
+<footer>
+  Project-SPIP · M9 설계 검증 보고서 #1 · 작성 2026-06-24 · 독립 검증(Reviewer) · 판정 CONDITIONAL PASS · 코드 실측 대조 완료(app.js·uiStateStore.js·preload.js)
+</footer>
+
+</main>
+</body>
+</html>

@@ -19,7 +19,7 @@ const path = require('node:path');
 const ROOT = path.join(__dirname, '..');
 const PRELOAD_SRC = fs.readFileSync(path.join(ROOT, 'electron', 'preload.js'), 'utf8');
 const APP_SRC = fs.readFileSync(path.join(ROOT, 'public', 'app.js'), 'utf8');
-const MENU_SRC = fs.readFileSync(path.join(ROOT, 'electron', 'menu.js'), 'utf8');
+const MAIN_SRC = fs.readFileSync(path.join(ROOT, 'electron', 'main.js'), 'utf8');
 
 /**
  * preload가 contextBridge.exposeInMainWorld('spip', { ... })에 노출하는 최상위 키를 추출.
@@ -105,51 +105,21 @@ test('정합 — open이 preload에 노출되고 채널 spip:openInVsCode로 inv
   );
 });
 
-test('정합 — onMenu 계약: action 화이트리스트·채널·unsubscribe (P2-1)', () => {
+test('정합 — [R-28] onMenu/spip:menu 채널 양방향 제거(SEC-L1 죽은 채널 정리)', () => {
+  // 수신부: preload가 더 이상 onMenu를 노출하지 않는다.
   const exposed = extractPreloadKeys(PRELOAD_SRC);
-  assert.ok(exposed.has('onMenu'), 'preload가 onMenu를 노출해야 한다(P2-1)');
-
-  // onMenu가 4개 action 화이트리스트를 모두 구독하는지.
-  for (const action of ['pickFolders', 'rescan', 'refresh', 'about']) {
-    assert.ok(
-      PRELOAD_SRC.includes("'" + action + "'") || PRELOAD_SRC.includes('spip:menu:'),
-      'onMenu가 action을 다뤄야 함: ' + action,
-    );
-  }
-  // 채널 접두 'spip:menu:' 사용 + unsubscribe 함수 반환 형태 확인.
-  assert.ok(/spip:menu:/.test(PRELOAD_SRC), "onMenu는 'spip:menu:<action>' 채널을 구독해야 한다");
-  assert.ok(/removeListener/.test(PRELOAD_SRC), 'onMenu는 unsubscribe(removeListener) 경로가 있어야 한다');
+  assert.ok(!exposed.has('onMenu'), 'preload는 onMenu를 노출하지 않아야 한다(R-28 제거)');
+  // 발신·수신 채널 리터럴이 어디에도 남지 않는다(고아 채널 0).
+  assert.ok(!/spip:menu:/.test(PRELOAD_SRC), "preload에 'spip:menu:*' 잔존 금지");
+  assert.ok(!/spip:menu:/.test(MAIN_SRC), "main.js에 'spip:menu:*' 잔존 금지");
+  // app.js도 onMenu 구독·onMenuCommand 호출이 사라져야 한다(죽은 수신 핸들러 정리).
+  assert.ok(!/spip\.onMenu\b/.test(APP_SRC), 'app.js는 spip.onMenu를 구독하지 않아야 한다');
+  // menu.js 파일 자체가 삭제됐다(buildMenuTemplate 죽은 코드 제거).
+  assert.ok(!fs.existsSync(path.join(ROOT, 'electron', 'menu.js')), 'electron/menu.js는 삭제돼야 한다');
 });
 
-test('정합 — menu.js가 onMenu와 동일 action 집합을 send (dead wiring 해소)', () => {
-  // menu.js가 보내는 spip:menu:<action> 채널 집합.
-  const sent = new Set();
-  const re = /spip:menu:([A-Za-z0-9_$]+)/g;
-  let m;
-  while ((m = re.exec(MENU_SRC)) !== null) sent.add(m[1]);
-
-  // preload onMenu가 구독하는 action 집합(소스에서 추출).
-  const subscribed = new Set();
-  const re2 = /spip:menu:([A-Za-z0-9_$]+)/g;
-  let m2;
-  while ((m2 = re2.exec(PRELOAD_SRC)) !== null) subscribed.add(m2[1]);
-  // preload는 배열로 action을 정의하므로 'spip:menu:' + action 형태 — 직접 채널 리터럴이 없을 수 있다.
-  // 이 경우 actions 배열 리터럴에서 추출.
-  if (subscribed.size === 0) {
-    const arrMatch = PRELOAD_SRC.match(/\[\s*('pickFolders'[^\]]*)\]/);
-    if (arrMatch) {
-      const ids = arrMatch[1].match(/'([A-Za-z0-9_$]+)'/g) || [];
-      for (const id of ids) subscribed.add(id.replace(/'/g, ''));
-    }
-  }
-
-  // menu.js가 보내는 모든 action을 renderer(onMenu)가 구독해야 한다(고아 채널 금지).
-  const orphan = [...sent].filter((a) => !subscribed.has(a)).sort();
-  assert.deepStrictEqual(
-    orphan,
-    [],
-    'menu.js가 보내지만 onMenu가 구독하지 않는 고아 채널: ' + JSON.stringify(orphan)
-      + ' | send=' + JSON.stringify([...sent].sort())
-      + ' | onMenu=' + JSON.stringify([...subscribed].sort()),
-  );
+test('정합 — [R-28] main.js는 네이티브 메뉴를 설치하지 않는다(setApplicationMenu(null))', () => {
+  assert.ok(/setApplicationMenu\(\s*null\s*\)/.test(MAIN_SRC),
+    "main.js는 Menu.setApplicationMenu(null)로 메뉴를 미설치해야 한다");
+  assert.ok(!/buildMenuTemplate/.test(MAIN_SRC), 'main.js는 buildMenuTemplate를 더 이상 참조하지 않아야 한다');
 });

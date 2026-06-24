@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>M9 설계 보안 검증 보고서 — Project-SPIP (R-25~R-33)</title>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#1e293b; --text:#e2e8f0; --sub:#94a3b8;
+    --accent:#34d399; --ref:#38bdf8; --line:#334155; --warn:#fbbf24; --danger:#f87171; --purple:#c4b5fd;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:"Segoe UI","Malgun Gothic",system-ui,sans-serif;line-height:1.7;font-size:14.5px;}
+  header.page{padding:46px 32px 34px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#13203b,#0f172a);}
+  header.page .kicker{font-size:12px;letter-spacing:0.16em;text-transform:uppercase;color:var(--ref);}
+  header.page h1{margin:10px 0 8px;font-size:27px;font-weight:700;letter-spacing:-0.02em;}
+  header.page p{margin:8px 0 0;color:var(--sub);max-width:1000px;}
+  .verdict{display:inline-block;font-size:15px;font-weight:700;padding:8px 20px;border-radius:999px;margin-top:14px;}
+  .verdict.pass{background:rgba(52,211,153,.14);color:var(--accent);border:1px solid rgba(52,211,153,.5);}
+  .verdict.fail{background:rgba(248,113,113,.14);color:var(--danger);border:1px solid rgba(248,113,113,.5);}
+  main{max-width:1160px;margin:0 auto;padding:30px 28px 90px;}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:24px 28px;margin:22px 0;}
+  h2{margin:0 0 16px;font-size:21px;color:var(--accent);border-left:4px solid var(--accent);padding-left:12px;}
+  h3{font-size:16px;color:var(--ref);margin:24px 0 10px;}
+  p{margin:8px 0;} ul,ol{margin:8px 0;padding-left:22px;} li{margin:6px 0;color:#cbd5e1;}
+  code{background:#0b1220;color:var(--ref);padding:1px 6px;border-radius:5px;font-size:12.5px;font-family:Consolas,monospace;}
+  table{width:100%;border-collapse:collapse;margin:12px 0;font-size:13px;}
+  th,td{border:1px solid var(--line);padding:9px 11px;text-align:left;vertical-align:top;}
+  th{background:#142035;color:var(--accent);}
+  tr:nth-child(even) td{background:rgba(255,255,255,.02);}
+  .sev{font-weight:700;white-space:nowrap;padding:2px 9px;border-radius:6px;font-size:12px;display:inline-block;}
+  .crit{background:rgba(248,113,113,.18);color:#fca5a5;border:1px solid rgba(248,113,113,.5);}
+  .high{background:rgba(251,146,60,.16);color:#fdba74;border:1px solid rgba(251,146,60,.5);}
+  .med{background:rgba(251,191,36,.14);color:#fde68a;border:1px solid rgba(251,191,36,.45);}
+  .low{background:rgba(56,189,248,.14);color:#7dd3fc;border:1px solid rgba(56,189,248,.45);}
+  .info{background:rgba(148,163,184,.14);color:#cbd5e1;border:1px solid rgba(148,163,184,.4);}
+  .note{background:rgba(56,189,248,.08);border:1px solid rgba(56,189,248,.3);border-radius:10px;padding:14px 18px;color:#bae6fd;font-size:13.5px;margin:14px 0;}
+  .warnbox{background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.35);border-radius:10px;padding:14px 18px;color:#fde68a;font-size:13.5px;margin:14px 0;}
+  .secbox{background:rgba(248,113,113,.07);border:1px solid rgba(248,113,113,.32);border-radius:10px;padding:14px 18px;color:#fecaca;font-size:13.5px;margin:14px 0;}
+  .okbox{background:rgba(52,211,153,.07);border:1px solid rgba(52,211,153,.32);border-radius:10px;padding:14px 18px;color:#bbf7d0;font-size:13.5px;margin:14px 0;}
+  .fid{font-family:Consolas,monospace;color:var(--accent);font-weight:700;white-space:nowrap;}
+  .svg-wrap{background:#0b1220;border:1px solid var(--line);border-radius:12px;padding:16px;overflow-x:auto;margin:14px 0;}
+  .legend{display:flex;gap:18px;flex-wrap:wrap;font-size:12.5px;color:var(--sub);margin-top:10px;}
+  .legend span{display:inline-flex;align-items:center;gap:6px;}
+  .sw{width:14px;height:14px;border-radius:3px;display:inline-block;}
+  .finding{border:1px solid var(--line);border-radius:10px;padding:16px 20px;margin:14px 0;background:#172339;}
+  .finding h4{margin:0 0 8px;font-size:15px;color:var(--text);}
+  .kv{display:grid;grid-template-columns:120px 1fr;gap:4px 14px;font-size:13px;margin-top:8px;}
+  .kv dt{color:var(--sub);} .kv dd{margin:0;color:#cbd5e1;}
+  footer{text-align:center;color:var(--sub);font-size:12.5px;padding:30px;border-top:1px solid var(--line);}
+  .good{color:#6ee7b7;} .bad{color:#fca5a5;}
+</style>
+</head>
+<body>
+
+<header class="page">
+  <div class="kicker">Project-SPIP · 보안 전담 검증 · M9 설계 (R-25 ~ R-33) · 1회차</div>
+  <h1>M9 설계 보안 검증 보고서 — 부분 갱신 가드 · 신규 IPC · 드래그 · SVG 차트</h1>
+  <p>검증 대상: <code>docs/architecture/m9-design.html</code> · 기준: 보안 불변식(L-1·H-1·H-2·CSP·0600·guard), <code>codebase-audit.html</code>, 실제 코드(<code>register.js</code>·<code>preload.js</code>·<code>uiState.js</code>·<code>uiStateStore.js</code>·<code>index.html</code>·<code>security.js</code>) 대조. 적대적 관점 · 코드 미수정(시정 항목만 산출).</p>
+  <div class="verdict pass">종합 판정: PASS — 치명·높음 위협 0건 (조건부: 아래 중간 항목 M-1·M-2 시정 권고)</div>
+</header>
+
+<main>
+
+<!-- 요약 -->
+<section>
+  <h2>1. 요약</h2>
+  <p>M9 설계는 신뢰 경계를 <b>확장하지 않는다</b>. 새 공격 표면은 IPC 채널 <code>spip:setHomeLayout</code> 1개뿐이며, 이 채널은 경로·실행 인자·해시가 아닌 <b>고정 enum(섹션 id) 배열</b>만 받는다. 설계는 기존 검증 패턴(guard senderFrame 정확 일치 · normalize 화이트리스트 · 0600 원자적 write)을 일관되게 재사용하며, L-1(textContent)·CSP(자작 SVG·외부 0)·죽은 채널 정리(SEC-L1)를 명시적으로 다룬다.</p>
+  <p>치명·높음 위협은 발견되지 않았다. 다만 <b>설계 문서가 안전을 단언했으나 구현 시 회귀 위험이 있는 두 지점</b>(① <code>normalizeState</code>/<code>toResponse</code>/<code>write</code>에 <code>homeLayout</code>이 일관 반영되지 않으면 데이터 소실·우회, ② <code>chartBars</code>의 SVG <code>text</code>·속성 인젝션 차단을 textContent로 강제)을 중간 등급으로 시정 권고한다. 구현 PR(P7·P8) 게이트에서 테스트로 못 박을 것.</p>
+  <table>
+    <tr><th>심각도</th><th>건수</th><th>항목</th></tr>
+    <tr><td><span class="sev crit">치명</span></td><td>0</td><td>—</td></tr>
+    <tr><td><span class="sev high">높음</span></td><td>0</td><td>—</td></tr>
+    <tr><td><span class="sev med">중간</span></td><td>2</td><td>M-1(homeLayout 영속 일관성), M-2(SVG text/속성 인젝션)</td></tr>
+    <tr><td><span class="sev low">낮음</span></td><td>3</td><td>L-1(setHomeLayout 응답코드), L-2(masonry/patchRegion DOM API), L-3(드래그 data-id 재검증)</td></tr>
+    <tr><td><span class="sev info">정보</span></td><td>2</td><td>I-1(죽은 채널 정리 검증), I-2(F5 키 globalShortcut 회피)</td></tr>
+  </table>
+</section>
+
+<!-- 신뢰 경계 -->
+<section>
+  <h2>2. 신뢰 경계 · 데이터 흐름 (M9 신규 표면)</h2>
+  <div class="svg-wrap">
+  <svg viewBox="0 0 960 360" width="100%" role="img" aria-label="M9 신뢰 경계 데이터 흐름">
+    <defs>
+      <marker id="a" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#94a3b8"/></marker>
+      <marker id="ad" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#f87171"/></marker>
+    </defs>
+    <!-- 신뢰 경계 박스 -->
+    <rect x="14" y="20" width="430" height="320" rx="12" fill="none" stroke="#f87171" stroke-dasharray="6,5"/>
+    <text x="30" y="42" fill="#fca5a5" font-size="12">신뢰 불가 영역 — 렌더러(스캔/클론 리포 데이터 혼입)</text>
+    <rect x="500" y="20" width="446" height="320" rx="12" fill="none" stroke="#34d399" stroke-dasharray="6,5"/>
+    <text x="516" y="42" fill="#6ee7b7" font-size="12">신뢰 영역 — 메인(검증·영속·실행 권한)</text>
+
+    <!-- 렌더러 노드 -->
+    <rect x="34" y="64" width="180" height="46" rx="8" fill="#172339" stroke="#38bdf8"/><text x="124" y="92" text-anchor="middle" fill="#7dd3fc" font-size="12">SortableJS 섹션 onEnd</text>
+    <rect x="34" y="130" width="180" height="46" rx="8" fill="#172339" stroke="#38bdf8"/><text x="124" y="158" text-anchor="middle" fill="#7dd3fc" font-size="12">DOM data-id 수집(enum)</text>
+    <rect x="34" y="210" width="180" height="60" rx="8" fill="#3a1f1f" stroke="#f87171"/><text x="124" y="234" text-anchor="middle" fill="#fca5a5" font-size="11.5">스캔/메일 데이터</text><text x="124" y="252" text-anchor="middle" fill="#fca5a5" font-size="11.5">(차트 수치·라벨)</text>
+
+    <!-- preload -->
+    <rect x="248" y="120" width="170" height="66" rx="10" fill="#1e1b3a" stroke="#c4b5fd"/><text x="333" y="146" text-anchor="middle" fill="#c4b5fd" font-size="12" font-weight="700">preload allowlist</text><text x="333" y="166" text-anchor="middle" fill="#a5b4fc" font-size="10.5">setHomeLayout(ids.map(String))</text>
+
+    <!-- 메인 측 -->
+    <rect x="520" y="64" width="190" height="50" rx="10" fill="#172339" stroke="#34d399"/><text x="615" y="84" text-anchor="middle" fill="#6ee7b7" font-size="12" font-weight="700">register.js guard</text><text x="615" y="102" text-anchor="middle" fill="#94a3b8" font-size="10.5">senderFrame 정확 일치</text>
+    <rect x="520" y="132" width="190" height="56" rx="10" fill="#172339" stroke="#34d399"/><text x="615" y="156" text-anchor="middle" fill="#6ee7b7" font-size="12" font-weight="700">normalizeHomeLayout</text><text x="615" y="174" text-anchor="middle" fill="#94a3b8" font-size="10.5">화이트리스트·중복·미지 제거</text>
+    <rect x="520" y="206" width="190" height="56" rx="10" fill="#172339" stroke="#34d399"/><text x="615" y="230" text-anchor="middle" fill="#6ee7b7" font-size="12" font-weight="700">uiStateStore.write</text><text x="615" y="248" text-anchor="middle" fill="#94a3b8" font-size="10.5">0600 원자적 · normalizeState</text>
+    <rect x="744" y="206" width="178" height="56" rx="10" fill="#0b1a14" stroke="#475569"/><text x="833" y="230" text-anchor="middle" fill="#94a3b8" font-size="11">ui-state.json</text><text x="833" y="248" text-anchor="middle" fill="#64748b" font-size="10.5">앱데이터 폴더(비오염)</text>
+
+    <!-- 화살표 -->
+    <path d="M214,87 C230,100 232,120 246,138" fill="none" stroke="#94a3b8" stroke-width="1.4" marker-end="url(#a)"/>
+    <path d="M214,153 L246,153" fill="none" stroke="#94a3b8" stroke-width="1.4" marker-end="url(#a)"/>
+    <path d="M418,150 C460,140 480,110 518,92" fill="none" stroke="#94a3b8" stroke-width="1.4" marker-end="url(#a)"/>
+    <path d="M615,114 L615,130" fill="none" stroke="#34d399" stroke-width="1.4" marker-end="url(#a)"/>
+    <path d="M615,188 L615,204" fill="none" stroke="#34d399" stroke-width="1.4" marker-end="url(#a)"/>
+    <path d="M710,234 L742,234" fill="none" stroke="#34d399" stroke-width="1.4" marker-end="url(#a)"/>
+    <!-- 스캔 데이터 → 차트(렌더러 내부, 메인 미경유) -->
+    <path d="M124,270 C124,300 200,300 200,280" fill="none" stroke="#f87171" stroke-width="1.4" stroke-dasharray="4,4" marker-end="url(#ad)"/>
+    <text x="230" y="300" fill="#fca5a5" font-size="10.5">스캔 데이터는 메인 미경유 — 렌더러 내부 SVG로만 표시(L-1 적용 지점)</text>
+  </svg>
+  </div>
+  <div class="legend">
+    <span><span class="sw" style="background:#f87171"></span> 신뢰 불가 입력</span>
+    <span><span class="sw" style="background:#34d399"></span> 메인 검증·영속</span>
+    <span><span class="sw" style="background:#c4b5fd"></span> preload 경계</span>
+  </div>
+  <p><b>STRIDE 요약:</b> 신규 표면에서 의미 있는 위협은 ① <i>변조(Tampering)</i> — 악의적/손상 상태 파일·임의 IPC 페이로드, ② <i>정보노출(Info)</i> — 스캔 데이터의 SVG/DOM 표시 시 XSS, ③ <i>권한상승(EoP)</i> — IPC를 통한 경로/실행 우회. 설계상 ③은 <b>구조적으로 차단</b>(섹션 id는 경로·실행 의미 없음)되고, ①·②는 검증·정규화·textContent로 방어되나 구현 정합성 의존(M-1·M-2).</p>
+</section>
+
+<!-- 발견 항목 -->
+<section>
+  <h2>3. 발견 항목 (등급별)</h2>
+
+  <div class="finding">
+    <h4><span class="sev med">중간</span> M-1 — <code>homeLayout</code> 영속 경로(normalizeState/toResponse/write) 일관성 미확정 시 데이터 소실·우회</h4>
+    <dl class="kv">
+      <dt>위치</dt><dd>설계 §6(uiState 스키마), §7(IPC), 파일맵 <code>lib/common/uiStateStore.js</code>·<code>electron/ipc/uiState.js</code></dd>
+      <dt>위협(STRIDE)</dt><dd>변조(Tampering) / 무결성</dd>
+      <dt>악용 시나리오</dt><dd>현재 <code>write()</code>는 저장 직전 <code>normalizeState()</code>를 <b>무조건 재적용</b>하고, <code>normalizeState()</code>는 <b>고정 키 집합만</b> 반환한다(현재 <code>homeLayout</code> 없음). 또 <code>toResponse()</code>도 고정 키만 추린다. 설계는 세 곳(<code>defaultState</code>·<code>normalizeState</code>·<code>toResponse</code>)에 <code>homeLayout</code> 추가를 명시했으나, 만약 구현이 <code>setHomeLayout</code> 핸들러에서 <code>write({...state, homeLayout})</code>만 하고 <code>normalizeState</code>에 키를 누락하면, <code>write</code> 내부 <code>normalizeState</code>가 <code>homeLayout</code>을 <b>조용히 버린다</b> → 저장은 ok 반환하나 영속 실패(무결성 깨짐, 디버깅 난해). 반대로 <code>normalizeState</code>에는 넣고 <code>toResponse</code>에 누락하면 렌더러가 항상 기본 순서로 보임.</dd>
+      <dt>심각도 근거</dt><dd>보안 직접 악용은 아니나 <b>검증 우회의 전형(부분 적용)</b>이며, 데이터 무결성 불변식에 해당. 화이트리스트가 한 경로에만 적용되면 다른 경로가 신뢰 못 할 값을 통과시킬 여지.</dd>
+      <dt>권고 조치</dt><dd>① <code>normalizeState()</code> 반환 객체에 <code>homeLayout: normalizeHomeLayout(obj.homeLayout)</code>를 <b>반드시</b> 포함(write가 단일 정규화 게이트이므로 여기 누락 시 모든 쓰기가 키를 버림). ② <code>toResponse()</code>에 <code>homeLayout</code> 추가. ③ <code>defaultState()</code>에 <code>homeLayout:[...HOME_SECTION_IDS]</code>. ④ <code>test/uiStateStore.test.js</code>에 "write→read 라운드트립 시 homeLayout 보존" + "미지/중복/길이초과/비배열 입력 정규화" 케이스를 게이트로 추가(설계 §5에 이미 예정 — 라운드트립 보존 케이스를 명시 추가). ⑤ <code>reconcileState()</code>가 <code>homeLayout</code>을 보존하는지 확인(현재 <code>normalizeState</code> 거친 뒤 favorites/order만 손대므로 키만 추가되면 자동 보존되나 테스트로 확인).</dd>
+    </dl>
+  </div>
+
+  <div class="finding">
+    <h4><span class="sev med">중간</span> M-2 — R-33 SVG <code>chartBars</code>의 <code>&lt;text&gt;</code> 콘텐츠·속성 인젝션을 textContent/숫자형으로 강제(설계 단언의 구현 게이트)</h4>
+    <dl class="kv">
+      <dt>위치</dt><dd>설계 §10(SVG 차트), <code>renderHomeProductivity()</code> → <code>chartBars(days, opts)</code></dd>
+      <dt>위협(STRIDE)</dt><dd>정보노출/스크립트 실행(XSS) — 변조된 클론 리포의 커밋 데이터·언어명이 차트 라벨로 유입</dd>
+      <dt>악용 시나리오</dt><dd>차트 데이터(<code>store.commitActivity.days</code>의 <code>label</code>/<code>iso</code>, 언어 추세의 언어명)는 <b>스캔 유래</b>로 신뢰 불가다. 설계는 "라벨은 <code>createElementNS('text')</code> + <code>textContent</code>, 색은 <code>setAttribute</code>/CSSOM, 숫자만 받음"이라 명시해 L-1을 지킨다. 다만 SVG에는 두 가지 추가 인젝션 벡터가 있다: ① <code>&lt;text&gt;</code>에 <code>innerHTML</code>/<code>insertAdjacentHTML</code>로 라벨을 넣으면 <code>&lt;text&gt;&lt;a&gt;&lt;animate onbegin=...&gt;</code> 등 SVG 내 스크립트·이벤트가 가능(다만 CSP <code>script-src 'self'</code>가 인라인 이벤트 핸들러를 차단하므로 1차 방어 존재). ② 라벨/툴팁 텍스트를 <code>setAttribute</code>로 <b>속성 값</b>에 직접 넣을 때(예: 동적 <code>aria-label</code>, <code>title</code>, 또는 색을 데이터에서 받아 <code>fill</code>에 주입) — 색을 데이터-주도로 받으면 속성 인젝션 표면.</dd>
+      <dt>심각도 근거</dt><dd>CSP가 인라인 스크립트·이벤트를 막아 실제 코드실행 가능성은 낮으나, 설계가 "안전"을 단언만 했고 <b>구현 가드(텍스트는 textContent, 수치는 Number 강제, 색은 데이터-주도 아닌 고정 팔레트)</b>가 명세에 못 박히지 않았다. 회귀 시 L-1 위반.</dd>
+      <dt>권고 조치</dt><dd>① <code>chartBars</code>는 라벨/툴팁을 <b>오직 <code>el.textContent</code>(또는 text 노드 생성)</b>로만 설정 — <code>innerHTML</code>/<code>insertAdjacentHTML</code>/<code>outerHTML</code> 사용 금지(코드 마커 L-1 병기). ② 수치는 <code>Number()</code>로 강제 변환 후 <code>Number.isFinite</code> 검사하고 막대 높이 계산(비유한·음수 클램프). ③ 색·치수는 <b>데이터에서 받지 말고</b> 고정 팔레트/상수에서 <code>setAttribute</code>. 데이터가 속성 값으로 흐르지 않도록. ④ 툴팁 div(설계상 SVG 외부 div)도 <code>textContent</code>. ⑤ 차트 영역에 <code>foreignObject</code> 미사용 확정(설계가 이미 회피 — 유지). ⑥ 가능하면 신뢰 못 할 라벨(커밋 메시지 등)은 차트에 넣지 않고 날짜(메인 생성 ISO)·수치만 표시.</dd>
+    </dl>
+  </div>
+
+  <div class="finding">
+    <h4><span class="sev low">낮음</span> L-1 — <code>setHomeLayout</code> graceful 정규화의 침묵 흡수(에러코드 부재) — 모니터링/감사 공백</h4>
+    <dl class="kv">
+      <dt>위치</dt><dd>설계 §7 "잘못된 형태도 정규화가 흡수하므로 에러코드 불필요(graceful)"</dd>
+      <dt>위협(STRIDE)</dt><dd>부인(Repudiation)/탐지 공백 — 비정상 페이로드가 로그 없이 흡수</dd>
+      <dt>악용 시나리오</dt><dd>설계는 기존 <code>setSortMode</code>/<code>setTheme</code>의 graceful 폴백 패턴과 동형이라 일관적이고, 보안상 위험은 낮다(enum 화이트리스트라 정규화 결과는 항상 안전). 다만 렌더러가 손상되어 대량/비정상 페이로드를 반복 전송해도 <b>탐지 신호가 전혀 없다</b>. guard의 senderFrame 검증이 1차 방어이므로 외부 위협 표면은 거의 없으나, 비정상 입력이 정규화로 흡수되는 사실 자체가 로그에 남지 않으면 침해 분석이 어렵다.</dd>
+      <dt>권고 조치</dt><dd>graceful 유지(기존 패턴 일치)하되, <code>normalizeHomeLayout</code> 결과가 입력과 달라진 경우(미지/중복 항목 제거 발생) <code>logger.warn</code>으로 1회 기록 권고(선택). 응답은 정규화된 <code>homeLayout</code> 반환 유지. 페이로드 크기는 preload에서 enum 길이(<code>MAX_HOME_SECTIONS</code>) 이상이면 잘라 전달하는 것도 고려(DoS 표면 0화).</dd>
+    </dl>
+  </div>
+
+  <div class="finding">
+    <h4><span class="sev low">낮음</span> L-2 — R-32 masonry 재배치 · <code>RG.preserve.patchRegion(adoptNode)</code>가 위험 DOM API를 도입하지 않도록 명시</h4>
+    <dl class="kv">
+      <dt>위치</dt><dd>설계 §3.3(<code>patchRegion ... adoptNode로 이동</code>), §14 리스크(masonry CSS columns/JS 재배치)</dd>
+      <dt>위협(STRIDE)</dt><dd>정보노출(XSS) — DOM 재구성 과정에서 신뢰 못 할 데이터의 innerHTML 경유 가능성</dd>
+      <dt>악용 시나리오</dt><dd><code>patchRegion</code>은 "노드를 <code>adoptNode</code>로 이동 후 재배치"라 명시 — <code>adoptNode</code>/<code>appendChild</code>/<code>insertBefore</code> 같은 <b>노드 이동 API</b>는 기존 노드를 옮길 뿐 직렬화/재파싱하지 않으므로 L-1 안전하다(올바른 선택). 위험은 "buildFn"이 새 노드를 만들 때 기존 <code>el()</code> 헬퍼(textContent)가 아닌 <code>innerHTML</code> 기반 템플릿을 쓰는 경우. masonry를 "JS 재배치"로 승격(§14 Q-B)할 때 라이브러리/직접 구현이 <code>innerHTML</code>로 컬럼을 재구성하면 위반.</dd>
+      <dt>권고 조치</dt><dd>① <code>patchRegion(containerEl, buildFn, keepSelectors)</code>의 <code>buildFn</code>은 <b>반드시 기존 <code>el()</code> 경로</b>로만 노드 생성(설계 §12에 이미 언급 — 코드 마커로 못 박을 것). ② JS masonry 재배치는 <code>appendChild</code>/<code>insertBefore</code>/<code>adoptNode</code>(노드 이동)만 사용, <code>innerHTML</code>/<code>insertAdjacentHTML</code> 금지. ③ 1차 CSS columns 구현은 DOM 직렬화 없으므로 안전 — 권장 경로 유지. ④ <code>test</code>에는 어렵지만, 코드 리뷰 체크리스트에 "patchRegion 경로 innerHTML 0" 항목 추가.</dd>
+    </dl>
+  </div>
+
+  <div class="finding">
+    <h4><span class="sev low">낮음</span> L-3 — 드래그 onEnd가 DOM <code>data-id</code>를 읽어 영속할 때 enum 재검증을 렌더러·메인 양쪽에서</h4>
+    <dl class="kv">
+      <dt>위치</dt><dd>설계 §12 "onEnd는 DOM의 data-id를 읽어 enum 검증 후 영속", §7 preload <code>ids.map(String)</code></dd>
+      <dt>위협(STRIDE)</dt><dd>변조(Tampering) — DOM 변조로 화이트리스트 외 섹션 id 주입 시도</dd>
+      <dt>악용 시나리오</dt><dd>드래그 후 <code>onEnd</code>가 DOM 노드의 <code>data-id</code> 속성을 순회해 순서 배열을 만든다. 신뢰 못 할 스캔 데이터가 DOM에 들어와 있을 수 있으므로, 렌더러가 모은 배열에 화이트리스트 외 값이 섞일 가능성이 있다. <b>메인의 <code>normalizeHomeLayout</code>이 최종 방어선</b>(미지 id 제거)이므로 실제 영속은 안전하다 — 신뢰 경계를 올바르게 메인에 둠. preload의 <code>ids.map(String)</code>도 타입 1차 고정으로 적절.</dd>
+      <dt>심각도 근거</dt><dd>메인 정규화가 최종 차단하므로 실질 위험 낮음. 다만 렌더러가 비정상 id를 보내도 무시되는 것을 <b>테스트로 보장</b>해야 회귀 방지.</dd>
+      <dt>권고 조치</dt><dd>① 메인 정규화(<code>normalizeHomeLayout</code>)를 <b>유일한 신뢰 경계</b>로 명시 — 렌더러 검증은 UX 편의일 뿐 보안 의존 금지. ② <code>test/uiStateIpc.test.js</code>에 "화이트리스트 외 id·과다 길이·비문자열 혼입 → 정규화로 제거" 케이스 추가(설계 §5에 예정 — 적대적 페이로드 케이스 명시). ③ <code>data-id</code> 출처는 섹션 컨테이너의 고정 enum이지 스캔 데이터가 아님을 코드 주석으로.</dd>
+    </dl>
+  </div>
+
+  <div class="finding">
+    <h4><span class="sev info">정보</span> I-1 — R-28 죽은 IPC 채널 정리(SEC-L1)는 공격 표면 축소 — 양방향 누락 없이 제거 확인</h4>
+    <dl class="kv">
+      <dt>위치</dt><dd>설계 §7·§9.3, 실제 <code>preload.js:160-170</code>(<code>onMenu</code> 화이트리스트 <code>pickFolders|rescan|refresh|about</code>), <code>main.js</code> <code>spip:menu:*</code> 발신</dd>
+      <dt>위협(STRIDE)</dt><dd>(축소) — 죽은 수신 채널 잔존은 미래 발신 오용 시 수동 트리거 표면</dd>
+      <dt>평가</dt><dd>긍정적: 메뉴 제거와 함께 preload <code>onMenu</code> 4개 채널(<code>spip:menu:pickFolders/rescan/refresh/about</code>)과 app <code>subscribeMenu</code>/<code>onMenuCommand</code>를 제거 → <b>렌더러 수신 채널 4개 축소</b>. 이는 M7에서 <code>onTray</code>를 <code>['dashboard']</code>로 줄인 선례(SEC-L1)와 동형이며 공격 표면 감소. 새 노출(<code>setHomeLayout</code>) 1개 추가 대비 4개 제거로 순감소.</dd>
+      <dt>권고 조치</dt><dd>① main 발신 경로(<code>spip:menu:*</code>)와 preload 수신, app 구독을 <b>동시</b> 제거(한쪽만 남으면 죽은 채널/죽은 핸들러). ② 잃는 기능(폴더추가·재스캔·새로고침·정보)이 헤더 버튼·F5·설정 정보로 모두 이관됐는지 기능 회귀 확인(보안 무손실, 접근성 N-07 대체 경로 유지). ③ <code>menu.js</code>의 <code>buildMenuTemplate</code>이 완전 미사용이면 export 제거.</dd>
+    </dl>
+  </div>
+
+  <div class="finding">
+    <h4><span class="sev info">정보</span> I-2 — F5 새로고침을 렌더러 keydown으로(globalShortcut 회피) — 올바른 선택</h4>
+    <dl class="kv">
+      <dt>위치</dt><dd>설계 §9.2·§9.3, ADR 부재(F5는 SHORTCUTS 상수)</dd>
+      <dt>위협(STRIDE)</dt><dd>(회피) — globalShortcut은 앱 비포커스 시에도 발화 → 의도치 않은 트리거 표면</dd>
+      <dt>평가</dt><dd>설계가 F5를 <code>globalShortcut</code>이 아닌 <b>렌더러 keydown</b>(기존 ESC 핸들러 패턴)으로 둔다고 명시 — 앱 비포커스 시 미발화로 안전. <code>matchShortcut(ev)</code> 순수 매핑은 단위테스트 대상(F-3 관례 일치). 새로고침 동작(<code>refreshDashboard</code>)은 기존 핸들러 재사용으로 새 IPC·권한 0.</dd>
+      <dt>권고 조치</dt><dd>유지. F5가 브라우저 기본 새로고침(전체 reload)을 호출하지 않고 앱 내 <code>refreshDashboard()</code>만 부르는지 확인(<code>preventDefault</code>) — Electron에서 F5 기본 동작이 전체 페이지 reload면 상태 소실 가능(보안 아닌 UX, 그러나 reload 시 IME/드래그 가드 우회 가능성 점검).</dd>
+    </dl>
+  </div>
+</section>
+
+<!-- 불변식 점검 -->
+<section>
+  <h2>4. 보안 불변식 준수 점검</h2>
+  <table>
+    <tr><th style="width:130px">불변식</th><th>설계의 준수</th><th>판정</th></tr>
+    <tr><td>L-1 textContent</td><td>차트 라벨·툴팁·단축키 표·정보/버전·홈 섹션 모두 <code>el({text})</code>. innerHTML 0 단언. patchRegion도 기존 <code>el()</code> 경로만.</td><td><span class="sev low">조건부 OK</span> — M-2·L-2 구현 게이트 필요</td></tr>
+    <tr><td>CSP(script/connect)</td><td>새 script·외부 fetch·CDN 0(차트 자작). 인라인 <code>&lt;style&gt;</code> 미사용(색은 setAttribute/CSSOM). <code>index.html</code> 불변(SortableJS 이미 self-host).</td><td><span class="sev info">OK</span></td></tr>
+    <tr><td>H-1/H-2 경로·실행</td><td>새 IPC(setHomeLayout)는 경로·실행 인자 0(섹션 enum만). git 커밋 수집은 기존 <code>commitActivity</code>(safeExec·pathGuard) 재사용, R-31은 호출 빈도만 5분 조정 — 새 수집기 0.</td><td><span class="sev info">OK</span></td></tr>
+    <tr><td>guard senderFrame</td><td><code>spip:setHomeLayout</code>를 <code>register.js</code> guard 경유 등록. 실제 guard는 senderFrame 정확 일치(EI-L-1)·예외 시 고정 <code>{ok:false,code:'INTERNAL'}</code>로 스택 미노출 — 일관.</td><td><span class="sev info">OK</span></td></tr>
+    <tr><td>0600 영속</td><td>모든 쓰기 <code>uiStateStore.write</code>(임시→fsync→rename→0600). 응답 민감정보 0. 앱데이터 폴더(프로젝트 비오염).</td><td><span class="sev info">OK</span> — M-1 라운드트립 보존 단서</td></tr>
+    <tr><td>입력 검증/정규화</td><td><code>normalizeHomeLayout</code> 화이트리스트(Set)·중복 제거·미지 제거·고정 enum 상한. 비배열·비문자열 graceful. read()의 1MB·깊이32·_safeParse 가드가 손상 파일 흡수.</td><td><span class="sev low">조건부 OK</span> — M-1(normalizeState 반영) 필수</td></tr>
+    <tr><td>손상/악의 상태 파일</td><td><code>read()</code>: 크기 상한·길이 재확인·깊이 가드·정규화 4중 → graceful 기본값. <code>homeLayout</code> 미지값/비배열도 <code>normalizeHomeLayout</code>가 기본 순서로 복원(마이그레이션 프리).</td><td><span class="sev info">OK</span></td></tr>
+  </table>
+</section>
+
+<!-- 확인 필요 -->
+<section>
+  <h2>5. 확인 필요 · 위험 수용 결정</h2>
+  <ul>
+    <li><b>중대 위험 수용 결정 없음.</b> 미해결 질문(Q5 도움말 버튼, Q-A featureAdd 드래그 포함, Q-B masonry 방식)은 모두 <b>보안 무관한 UX 결정</b>이다. 단 Q-B에서 JS masonry로 승격 시 L-2(innerHTML 금지)를 게이트로 둘 것.</li>
+    <li><b>구현 게이트(보안 책임자가 P7·P8 머지 전 확인):</b> M-1(homeLayout 라운드트립 보존 테스트 그린), M-2(chartBars textContent/숫자강제·innerHTML 0 코드 리뷰), L-3(적대적 IPC 페이로드 정규화 테스트 그린).</li>
+  </ul>
+</section>
+
+<footer>
+  Project-SPIP · M9 설계 보안 검증 1회차 · 작성 2026-06-24 · 보안 전담 검증자 · 코드 미수정(시정 항목만) · 대조: m9-design.html / codebase-audit.html / register.js / preload.js / uiState.js / uiStateStore.js / index.html / security.js
+</footer>
+
+</main>
+</body>
+</html>

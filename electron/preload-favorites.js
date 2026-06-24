@@ -12,8 +12,8 @@
  *   ③ 채널명 하드코딩(메인 preload.js와 동일 패턴).
  *
  * 강력 채널(setToolPath·pickToolExecutable·setOrder·setSortMode·rescan·addRoots·removeRoot·
- *   pickFolders·getStats·getHealth·getConfig·getScanStatus·getTools·onScanProgress·onMenu·onTray)은
- *   단 하나도 노출하지 않는다(표면 축소·체크리스트 §11.1).
+ *   pickFolders·getStats·getHealth·getConfig·getScanStatus·getTools·onScanProgress·onTray)은
+ *   단 하나도 노출하지 않는다(표면 축소·체크리스트 §11.1). [R-28] onMenu 채널은 폐기됨.
  *
  * focus 게이팅(SEC-H2): 부수효과 액션(open·copyText·setFavorite) 실행을 위젯 focus 시에만 활성화
  *   하는 책임은 위젯 renderer(public/favorites.js)에 있다(여기서는 채널만 고정).

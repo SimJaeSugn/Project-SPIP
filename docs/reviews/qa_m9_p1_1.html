@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QA 검증 — R-25 부분 갱신/재렌더 가드 (P1, 1차)</title>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#1e293b; --fg:#e2e8f0; --muted:#94a3b8;
+    --ok:#34d399; --ref:#38bdf8; --warn:#fbbf24; --bad:#f87171;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--fg);
+    font-family:"Segoe UI","Malgun Gothic",system-ui,sans-serif;line-height:1.65;
+    padding:40px 18px;}
+  main{max-width:1040px;margin:0 auto;}
+  h1{font-size:25px;margin:0 0 6px;}
+  h2{font-size:19px;margin:34px 0 12px;border-bottom:1px solid #334155;padding-bottom:7px;}
+  h3{font-size:15.5px;margin:20px 0 8px;color:#cbd5e1;}
+  p,li{font-size:14px;}
+  code{background:#0b1220;border:1px solid #334155;border-radius:5px;padding:1px 6px;
+    font-family:"Cascadia Code",Consolas,monospace;font-size:12.5px;color:#bae6fd;}
+  .sub{color:var(--muted);font-size:13px;}
+  .panel{background:var(--panel);border:1px solid #334155;border-radius:12px;
+    padding:18px 22px;margin:14px 0;}
+  .verdict{display:flex;align-items:center;gap:14px;background:var(--panel);
+    border:1px solid #334155;border-left:5px solid var(--ok);border-radius:12px;
+    padding:18px 22px;margin:18px 0;}
+  .verdict .big{font-size:22px;font-weight:700;color:var(--ok);}
+  table{border-collapse:collapse;width:100%;margin:12px 0;font-size:13.5px;}
+  th,td{border:1px solid #334155;padding:9px 11px;text-align:left;vertical-align:top;}
+  th{background:#172033;color:#cbd5e1;}
+  .pass{color:var(--ok);font-weight:700;}
+  .fail{color:var(--bad);font-weight:700;}
+  .partial{color:var(--warn);font-weight:700;}
+  .ref{color:var(--ref);}
+  .badge{display:inline-block;border-radius:6px;padding:1px 9px;font-size:11.5px;font-weight:700;}
+  .b-pass{background:rgba(52,211,153,.12);color:var(--ok);border:1px solid rgba(52,211,153,.4);}
+  .b-low{background:rgba(56,189,248,.12);color:var(--ref);border:1px solid rgba(56,189,248,.4);}
+  .b-warn{background:rgba(251,191,36,.12);color:var(--warn);border:1px solid rgba(251,191,36,.4);}
+  .note{background:rgba(56,189,248,.07);border:1px solid rgba(56,189,248,.3);
+    border-radius:9px;padding:12px 16px;color:#bae6fd;font-size:13px;margin:12px 0;}
+  .warn{background:rgba(251,191,36,.07);border:1px solid rgba(251,191,36,.32);
+    border-radius:9px;padding:12px 16px;color:#fde68a;font-size:13px;margin:12px 0;}
+  pre{background:#0b1220;border:1px solid #334155;border-radius:9px;padding:12px 14px;
+    overflow:auto;font-size:12px;color:#9fb3c8;}
+  ul{margin:8px 0;padding-left:22px;}
+  .kpi{display:flex;gap:14px;flex-wrap:wrap;margin:12px 0;}
+  .kpi div{background:#0b1220;border:1px solid #334155;border-radius:9px;padding:12px 18px;flex:1;min-width:140px;}
+  .kpi b{display:block;font-size:24px;color:var(--ok);}
+  .kpi span{font-size:12px;color:var(--muted);}
+</style>
+</head>
+<body>
+<main>
+  <h1>QA 검증 보고 — R-25 부분 갱신/재렌더 가드 (P1 · 1차)</h1>
+  <p class="sub">대상: <code>lib/common/renderGuard.js</code> · <code>test/renderGuard.test.js</code> ·
+    <code>public/app.js</code> RG 네임스페이스 / render() / searchInput / applyProjectsUpdate ·
+    기준: <code>docs/architecture/m9-design.html</code> §3.2/§3.3/§3.5 · <code>docs/FeatureSpec-backlog-m9.html</code> R-25.
+    검증일 2026-06-24. <code>docs/Development/</code> 폴더 부재 — 기획 수용 기준·설계 계약으로 검증.</p>
+
+  <div class="verdict">
+    <span class="big">종합: PASS</span>
+    <span class="sub">회귀 0 — 기존 render-보류 조건 전수 보존 + 흡수. 블로커·높음 버그 없음.
+      보통 1건(직접 render 경로의 coalescer pending 잔류), 헤드리스 검증 불가 항목은 사용자 수동 스모크 필요.</span>
+  </div>
+
+  <div class="kpi">
+    <div><b>626</b><span>npm test 전체 통과 (fail 0)</span></div>
+    <div><b>12</b><span>renderGuard.test.js 통과</span></div>
+    <div><b>OK</b><span>app.js 파싱 (node require)</span></div>
+    <div><b>0</b><span>블로커·높음 버그</span></div>
+  </div>
+
+  <h2>검증 항목별 판정</h2>
+  <table>
+    <tr><th>항목</th><th>판정</th><th>요지</th></tr>
+    <tr><td>1. 회귀 0 (보류 조건 전수 흡수)</td><td class="pass">PASS</td>
+      <td>기존 render-보류 집합(overlay 3종+dragging)을 <code>deferred()</code>가 완전 포함. busyMail/busyCommit/editing/composing 추가는 의도된 상위집합. <code>maybeAutoRefreshMail</code> 본체 유지 판단 타당.</td></tr>
+    <tr><td>2. coalesce 동시성 4규칙</td><td class="pass">PASS</td>
+      <td>request 발화 재검사·보류 중 비flush·해제 후 1회·다중보류 단일발화 모두 코드로 보장. app.js <code>_coalescer</code> ↔ renderGuard.js 동형(드리프트 없음).</td></tr>
+    <tr><td>3. 테스트 충분성 (12케이스)</td><td class="partial">PASS (보강 권고)</td>
+      <td>6플래그 전수 + 동시성 4규칙 + 단일타이머 + 빈 flush 커버. 경계 케이스 일부 미커버(아래).</td></tr>
+    <tr><td>4. patchRegion 1차 제외</td><td class="pass">PASS</td>
+      <td>preserve는 capture/restore만, <code>patchRegion</code> 주석 처리(미구현). widget destroy/recreate + capture/restore로만 부분 갱신.</td></tr>
+    <tr><td>5. 빌드/테스트 재현</td><td class="pass">PASS</td>
+      <td><code>npm test</code> 626/626 통과, <code>node -e require('./public/app.js')</code> 파싱 OK.</td></tr>
+  </table>
+
+  <!-- ===================== 1 ===================== -->
+  <h2>1. 회귀 0 검증 (최우선) <span class="badge b-pass">PASS</span></h2>
+
+  <h3>1-1. 기존 render-보류 집합의 완전 흡수 — 경계면 교차 비교</h3>
+  <p><code>applyProjectsUpdate</code>의 변경 전/후를 직접 대조했다(<code>git diff HEAD</code>).</p>
+  <pre>// 변경 전 (HEAD): render 직접 호출 조건
+const overlayOpen = store.showSettings || store.showHelp || store.state.selectedId;
+if (liveView &amp;&amp; !store._dragging &amp;&amp; !overlayOpen) render();
+
+// 변경 후: RG.coalesce 단일 게이트 위임 — deferred() 가 보류 판정 일괄
+if (liveView) RG.coalesce.request();
+//   deferred() = composing | dragging | overlayOpen(showSettings|showHelp|selectedId)
+//                | busyMail(busyMailSummary) | busyCommit(busyCommitActivity) | editing(todoAdding)</pre>
+  <p>변경 전 render 억제 집합 = <code>{dragging, showSettings, showHelp, selectedId}</code>.
+     <code>deferred()</code>의 <code>dragging + overlayOpen(showSettings|showHelp|selectedId)</code>이
+     이를 <b>1:1 포함</b>한다 → <span class="pass">기존 억제 동작 손실 없음(누락 0)</span>.
+     설계 §3.2 매핑표(라인 180-187)와 코드 라인 5224-5229가 완전히 일치함을 확인.</p>
+
+  <table>
+    <tr><th>설계 §3.2 매핑 (store 조건)</th><th>deferred() 입력</th><th>코드 위치</th><th>흡수</th></tr>
+    <tr><td>showSettings / showHelp / selectedId</td><td>overlayOpen</td><td>app.js:5226</td><td class="pass">✓ (기존 보존)</td></tr>
+    <tr><td>_dragging</td><td>dragging</td><td>app.js:5225</td><td class="pass">✓ (기존 보존)</td></tr>
+    <tr><td>_composing (신규)</td><td>composing</td><td>app.js:5224</td><td class="pass">✓ (신규)</td></tr>
+    <tr><td>busyMailSummary</td><td>busyMail</td><td>app.js:5227</td><td class="pass">✓ ([R1] 누락 보완)</td></tr>
+    <tr><td>busyCommitActivity</td><td>busyCommit</td><td>app.js:5228</td><td class="pass">✓ (R-31 대비)</td></tr>
+    <tr><td>todoAdding</td><td>editing</td><td>app.js:5229</td><td class="pass">✓</td></tr>
+  </table>
+
+  <h3>1-2. <code>maybeAutoRefreshMail</code> 본체 유지 판단 — fetch 억제 vs render 보류 구분</h3>
+  <p>구현자는 <code>maybeAutoRefreshMail</code>(app.js:4558)을 <code>deferred()</code>로 치환하지 않고
+     기존 본체 <code>if (busyMailSummary||showSettings||showHelp||todoAdding) return;</code>를 유지했다.
+     이 판단은 <b>타당하다</b>:</p>
+  <ul>
+    <li><code>maybeAutoRefreshMail</code>의 가드는 <b>네트워크 fetch(getMailSummary) 시작 억제</b>다 —
+      모달/입력 중 불필요한 IPC·갱신 churn을 막는 목적. <code>deferred()</code>는 <b>render() 보류</b>(DOM 교체로 인한 포커스/조합 파손 방지)로 의도가 다르다.</li>
+    <li>두 가드를 합치면 의미가 섞인다: 만약 <code>maybeAutoRefreshMail</code>을 <code>deferred()</code>로 바꾸면
+      <code>_dragging</code> 같은 render 전용 조건이 fetch 억제로 전이돼 동작이 달라진다(드래그 중 메일 fetch도 막힘 — 불필요).</li>
+    <li>겹치는 조건(showSettings/showHelp/todoAdding)은 양쪽에 동일하게 존재 — 관측 동작 동일.</li>
+  </ul>
+  <div class="note"><b>경계면 정합 확인:</b> <code>refreshMailSummary</code>(1949·1954)와 <code>refreshCommitActivity</code>(1972·1977)는
+    fetch 시작/완료 시 <b>직접 <code>render()</code></b>를 호출한다(coalesce 비경유). 이는 home 뷰 자체의 KPI 렌더로 의도된 경로이며,
+    busyMail/busyCommit 보류 윈도우가 닫히는 지점에서 데이터가 화면에 반영됨을 보장한다(아래 BUG-1의 잔류 pending 분석 참조).</div>
+
+  <h3>1-3. preserve 흡수의 동작 동일성</h3>
+  <p>render() 인라인 SCROLL_SEL/FOCUS_SEL 캡처·복원 로직이 <code>RG.preserve.capture/restore</code>로
+     이동됐다. 셀렉터 배열·복원 순서·<code>setSelectionRange</code> try/catch·<code>preventScroll</code> 모두 동일.
+     diff상 로직 변형 없이 위치만 이동 → <span class="pass">회귀 0</span>.</p>
+
+  <h3>1-4. widget(카드 Sortable) 라이프사이클 흡수</h3>
+  <p>기존 <code>destroyCardSortable()</code>(render 진입)·<code>initCardSortable()</code>(대시보드 분기 말미)가
+     <code>RG.widget.destroyAll()</code>(render 최상단)·<code>RG.widget.mountAll(app)</code>(render 말미)로 일반화됐다.
+     <code>RG.widget.define</code>(5352)이 기존 init/destroy를 그대로 래핑.
+     단 <b>호출 시점이 변경</b>됨에 주목:</p>
+  <ul>
+    <li>기존: <code>initCardSortable()</code>는 대시보드 분기에서만 호출(다른 뷰는 미호출).</li>
+    <li>변경: <code>mountAll</code>은 모든 뷰에서 호출되나, <code>initCardSortable</code>이 <code>.cards</code> grid 부재 시 early-return(<code>cardSortable=null</code>)이라 표/홈/궤도에서는 no-op. 동작 동일.</li>
+    <li><code>mountAll</code>의 중복방지(<code>_instances[id]!=null skip</code>)와 render마다 선행 <code>destroyAll</code>로 인스턴스/핸들러 누적 0 보장 — 수용기준 의도(3) 충족.</li>
+  </ul>
+  <p class="sub">TDZ 확인: <code>const RG</code>(5213)는 <code>initBrowser</code> 본문 안에 있고, 최초 <code>render()</code>를 유발하는 <code>load()</code> 호출은 initBrowser 말미(~5462)에 있어 RG 정의 이후 실행 — TDZ 없음. 핸들러 내 <code>render()</code>는 지연 호출이라 무관.</p>
+
+  <!-- ===================== 2 ===================== -->
+  <h2>2. coalesce 동시성 정합 <span class="badge b-pass">PASS</span></h2>
+  <p>설계 §3.5 3규칙 + DoD 게이트 4케이스를 코드(app.js <code>_coalescer</code> 5321-5342)와 정본(renderGuard.js <code>createCoalescer</code>)에서 교차 검증.</p>
+  <table>
+    <tr><th>규칙</th><th>renderGuard.js</th><th>app.js _coalescer</th><th>판정</th></tr>
+    <tr><td>① 디바운스 발화 시 deferred 재검사</td><td><code>onFire: if(isDeferred()) return;</code> (L69)</td><td><code>onFire: if(deferred()) return;</code> (L5325)</td><td class="pass">동형</td></tr>
+    <tr><td>② 보류 중 flush 안 함 (큐만)</td><td><code>request: if(isDeferred()){cancelTimer;return}</code> (L79)</td><td><code>if(deferred()){clear timer;return}</code> (L5332)</td><td class="pass">동형</td></tr>
+    <tr><td>③ 해제 후 정확히 1회</td><td><code>flushIfPending: pending=false; doFlush()</code> (L87-88)</td><td><code>pending=false; render()</code> (L5339)</td><td class="pass">동형</td></tr>
+    <tr><td>④ 다중 보류 동시 → 마지막 해제자만 1회</td><td><code>flushIfPending: if(isDeferred()) return</code> (L85)</td><td><code>if(deferred()) return</code> (L5337)</td><td class="pass">동형</td></tr>
+    <tr><td>단조 boolean(누적 횟수 무관)</td><td><code>let pending=false</code> 단일 (L59)</td><td><code>let pending=false</code> 단일 (L5322)</td><td class="pass">동형</td></tr>
+    <tr><td>단일 타이머(중복 예약 방지)</td><td><code>if(timer==null) setTimer</code> (L80)</td><td><code>if(timer==null) setTimeout</code> (L5333)</td><td class="pass">동형</td></tr>
+  </table>
+  <div class="note"><b>드리프트 위험(R7) 평가:</b> app.js <code>_coalescer</code>는 renderGuard.js와 <b>제어흐름·분기가 1:1 동형</b>이다(차이는 주입 vs 하드코딩된 setTimeout/render·delay 120 인라인뿐). OR식(<code>shouldDeferRender</code>)도 양쪽 동일 6항 OR. 설계가 요구한 "얇은 어댑터" 원칙 준수. 단, app.js는 자동테스트 비대상이므로 향후 플래그 집합 변경 시 양쪽+테스트 동반 수정 규율이 유일한 방어선임을 재확인(주석 5214에 명시됨 — 양호).</div>
+  <p class="sub">설계 §3.5 의사코드는 <code>request()</code>가 비보류 시 <code>debouncedRender()</code>를 무조건 호출(debounce가 중복 예약 흡수)하나, 구현은 <code>if(timer==null)</code>로 명시 단일화 — 관측 동작 동일(둘 다 120ms 내 1회 발화). 정합.</p>
+
+  <!-- ===================== 3 ===================== -->
+  <h2>3. 테스트 충분성 <span class="badge b-warn">PASS (보강 권고)</span></h2>
+  <p>12케이스가 6플래그 전수(단독·전체false·빈객체·복합·truthy)와 동시성 4규칙(발화1회·보류큐적재·N후1회·발화재검사·다중보류단일발화·단일타이머·빈flush)을 실제 커버함을 확인. assertion이 발화 횟수/pending 상태/타이머 예약 횟수를 정밀 검사 — 단순 "throw 안 함"이 아닌 실제 동작 검증.</p>
+  <h3>미커버 경계 케이스 (블로커 아님 — 보강 권고)</h3>
+  <table>
+    <tr><th>케이스</th><th>심각도</th><th>설명</th></tr>
+    <tr><td>비보류 request → 발화 전 재-request → 1회 flush</td><td><span class="badge b-low">낮음</span></td>
+      <td>"단일 타이머" 케이스는 setTimer 호출 횟수만 검사. 실제 발화 시 flush가 1회인지(pending 단조 + 단일타이머의 결합)는 명시 케이스 없음. ②와 조합으로 추론 가능하나 직접 케이스 부재.</td></tr>
+    <tr><td>flush 후 재-request → 새 사이클 정상 동작</td><td><span class="badge b-low">낮음</span></td>
+      <td>flush로 pending 소비 후 다시 request→발화가 정상 사이클을 도는지(상태기 재사용) 미검증.</td></tr>
+    <tr><td>cancel() 호출 시 pending 보존 + 타이머만 정리</td><td><span class="badge b-low">낮음</span></td>
+      <td>renderGuard.js의 <code>cancel()</code>(L93, teardown용)은 테스트 전무. app.js RG는 cancel 미노출이라 실사용 영향 없음.</td></tr>
+    <tr><td>delay 음수/비숫자 기본값 폴백</td><td><span class="badge b-low">낮음</span></td>
+      <td><code>delay=120</code> 폴백(L49) 미검증. 순수 방어로직.</td></tr>
+  </table>
+  <p>위는 모두 <b>낮음</b> — 핵심 계약(DoD R2 ①~④)은 전부 커버됐다. 후속 보강 권고 수준.</p>
+
+  <!-- ===================== 4 ===================== -->
+  <h2>4. patchRegion 1차 제외 확인 <span class="badge b-pass">PASS</span></h2>
+  <ul>
+    <li><code>RG.preserve</code>는 <code>capture</code>/<code>restore</code>만 노출. <code>patchRegion</code>은 주석으로만 존재(app.js:5284, renderGuard 미존재) — 미구현 확인.</li>
+    <li>부분 갱신 경로는 전부 <code>render() = app.replaceChildren()</code> 전체 재렌더 + <code>RG.widget.destroyAll/mountAll</code> + <code>RG.preserve.capture/restore</code>로만 처리. destroy/recreate 모델 준수.</li>
+    <li>코드베이스 전체에서 <code>patchRegion</code> 호출부 0건(grep 확인).</li>
+  </ul>
+
+  <!-- ===================== 5 ===================== -->
+  <h2>5. 빌드/테스트 재현 (직접 실행) <span class="badge b-pass">PASS</span></h2>
+  <pre>$ npm test
+ℹ tests 626
+ℹ pass 626
+ℹ fail 0
+ℹ duration_ms 1617.69
+
+$ node --test test/renderGuard.test.js
+ℹ tests 12  ℹ pass 12  ℹ fail 0
+
+$ node -e "require('./public/app.js')"
+PARSE_OK: app.js loaded</pre>
+  <p>전체 626 통과, renderGuard 12 통과, app.js 파싱 OK. 회귀 0(기존 테스트 영향 없음).</p>
+
+  <!-- ===================== BUGS ===================== -->
+  <h2>발견 버그 / 관찰</h2>
+
+  <h3>BUG-1 <span class="badge b-low">보통</span> — 직접 render() 경로가 coalescer pending을 소비하지 않아 1회 잉여 렌더 가능</h3>
+  <table>
+    <tr><th>무엇이</th><td>home 뷰에서 mail/commit fetch 진행 중(<code>busyMailSummary</code>/<code>busyCommitActivity</code>=true) <code>projectsUpdated</code> push가 오면 <code>RG.coalesce.request()</code>가 보류로 <code>pending=true</code> 적재. fetch 완료 시 <code>refreshMailSummary</code>/<code>refreshCommitActivity</code>는 <b>직접 <code>render()</code></b>를 부르고 <code>flushIfPending()</code>은 부르지 않음 → <code>pending=true</code>가 잔류. 이후 다음 보류해제(compositionend/drag end) 또는 다음 request 시 잉여 render 1회 발생 가능.</td></tr>
+    <tr><th>어디서</th><td><code>public/app.js</code> <code>refreshMailSummary</code>(1949·1954)·<code>refreshCommitActivity</code>(1972·1977) ↔ <code>_coalescer.pending</code>(5322). 경계면: 직접 render 경로 vs coalesce 게이트.</td></tr>
+    <tr><th>기대 vs 실제</th><td><b>기대</b>: 보류 윈도우 종료 시 누적 갱신이 정확히 1회 반영, 잔류 큐 0("중복 렌더 0"). <b>실제</b>: 데이터는 직접 render로 올바르게 반영되나(merge는 request 전에 store에 완료), coalescer pending 비트가 남아 후속 1회 잉여 render 유발 가능.</td></tr>
+    <tr><th>재현</th><td>헤드리스 단정 불가(타이밍/IPC 의존). 시나리오: home 체류 → 60초 폴링 또는 onMailUpdated로 busyMailSummary=true 윈도우 → 그 사이 projectsUpdated push 도착 → fetch 완료 후 검색창 한글 조합 1회 → compositionend의 flushIfPending이 잔류 pending을 소비해 1회 추가 render. 사용자 PC 수동 스모크 필요.</td></tr>
+    <tr><th>심각도</th><td><b>보통</b> — 정합성/데이터 손실 아님(데이터는 직접 render로 반영). 영향은 "잉여 render 1회"로 수용기준 "중복 렌더 0"의 엄밀 위반 소지. 단 변경 전 동작과 비교하면 회귀 아님(전에는 busyMail을 보류조건으로 안 봐서 push 즉시 render했음). 권고: fetch 완료 직후의 <code>render()</code>를 <code>RG.coalesce.flushIfPending()</code> 호출로 보강하거나, busy 클리어 지점을 보류해제 지점으로 명시 처리.</td></tr>
+  </table>
+
+  <h3>OBS-1 <span class="badge b-low">관찰(비버그)</span> — busyMail/busyCommit 추가로 home의 라이브 push 렌더 타이밍이 이동</h3>
+  <p>변경 전 <code>applyProjectsUpdate</code>는 home에서 mail/commit fetch 중에도 push를 즉시 render했다.
+     변경 후엔 <code>busyMailSummary/busyCommitActivity</code>가 <code>deferred()</code>에 들어가 그 윈도우 동안 보류된다.
+     <b>설계 §3.2가 명시적으로 의도한 변경</b>이며(매핑표 라인 185·187), fetch 완료 시 직접 render로 데이터가 반영되므로
+     관측상 손실은 없다. 다만 "기존 동작 100% 보존"의 문자적 해석에선 home 뷰의 push 렌더 타이밍이 미세 이동한 것이라
+     사용자 수동 스모크(home 체류 중 프로젝트 변경 watcher 반영 지연 체감 여부)로 확인 권고.</p>
+
+  <h2>헤드리스로 검증 못 한 항목 — 사용자 수동 스모크 필요</h2>
+  <ul>
+    <li><b>한글 IME 조합:</b> 검색창에 "프로젝트" 입력 시 자모 분리 0건 / compositionend 후 1회 정상 반영 (DOM·IME 의존, 헤드리스 불가).</li>
+    <li><b>영문/숫자 빠른 타이핑:</b> 120ms 디바운스 후 1회 render — 변경 전과 체감 동일한지.</li>
+    <li><b>포커스/캐럿/스크롤 복원:</b> 타이핑 중 라이브 push 발생 시 검색 input 포커스·캐럿 유지, 모달 스크롤 위치 유지(RG.preserve).</li>
+    <li><b>카드 드래그 × 라이브 push:</b> 드래그 중 projectsUpdated 도착 시 DnD 세션 파괴 0, drag end 후 1회 반영.</li>
+    <li><b>BUG-1 잉여 render:</b> home에서 mail fetch 윈도우와 push가 겹친 뒤의 1회 잉여 render 체감(깜빡임) 여부.</li>
+    <li><b>OBS-1:</b> home 체류 중 watcher 프로젝트 변경 반영이 mail fetch 윈도우만큼 지연 체감되는지.</li>
+  </ul>
+
+  <h2>결론</h2>
+  <p><b>PASS.</b> 핵심 요구인 "기존 동작 100% 보존(회귀 0)"은 render-보류 조건의 완전 흡수(누락 0)와
+     preserve/widget 로직의 무변형 이동으로 충족된다. coalesce 동시성 4규칙은 코드와 정본이 동형으로 보장하며
+     12개 헤드리스 테스트로 검증된다. patchRegion은 1차 범위에서 제외됨을 확인했다.
+     블로커·높음 버그 없음. 보통 1건(BUG-1, 직접 render 경로의 coalescer pending 잔류 — 정합성 손실 아님, 잉여 render 소지)은
+     후속 보강 권고. IME/드래그/포커스 보존은 헤드리스 검증 불가이므로 사용자 PC 수동 스모크가 통합 회귀의 최종 게이트다.</p>
+</main>
+</body>
+</html>

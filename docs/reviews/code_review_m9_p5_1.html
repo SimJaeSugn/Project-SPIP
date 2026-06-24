@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>코드 리뷰 — M9 P5 (R-30 설정 2-pane)</title>
+<style>
+  :root{
+    --bg:#0b0f14; --surface:#11161d; --surface-2:#161c25; --border:#222c38;
+    --t1:#e6edf3; --t2:#b9c4d0; --t3:#8b97a6; --accent:#34d399; --ref:#38bdf8;
+    --warn:#fbbf24; --bad:#f87171; --mono:ui-monospace,"SFMono-Regular",Consolas,monospace;
+    --font:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--t1);font-family:var(--font);line-height:1.6;font-size:14px}
+  .wrap{max-width:1040px;margin:0 auto;padding:38px 26px 80px}
+  h1{font-size:24px;margin:0 0 4px;letter-spacing:-.02em}
+  h2{font-size:17px;margin:34px 0 12px;padding-bottom:7px;border-bottom:1px solid var(--border);color:var(--t1)}
+  .sub{color:var(--t3);font-size:13px;margin:0 0 22px}
+  .verdict{display:inline-block;font-weight:700;font-size:15px;padding:6px 16px;border-radius:8px}
+  .pass{background:rgba(52,211,153,.14);color:var(--accent);border:1px solid rgba(52,211,153,.4)}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:18px 20px;margin:14px 0}
+  .summary-grid{display:flex;gap:12px;flex-wrap:wrap;margin:16px 0}
+  .pill{background:var(--surface-2);border:1px solid var(--border);border-radius:9px;padding:9px 15px;font-size:13px}
+  .pill b{color:var(--t1);font-size:16px;margin-right:5px;font-family:var(--mono)}
+  code{font-family:var(--mono);background:var(--surface-2);padding:1px 6px;border-radius:5px;font-size:12.5px;color:var(--ref)}
+  table{width:100%;border-collapse:collapse;margin:8px 0;font-size:13px}
+  th,td{text-align:left;padding:9px 11px;border-bottom:1px solid var(--border);vertical-align:top}
+  th{color:var(--t3);font-weight:600;font-size:11.5px;text-transform:uppercase;letter-spacing:.06em}
+  td.loc{font-family:var(--mono);font-size:12px;color:var(--ref);white-space:nowrap}
+  .sev{font-weight:700;font-size:11px;padding:2px 9px;border-radius:6px;white-space:nowrap}
+  .sev-defect{background:rgba(248,113,113,.16);color:var(--bad)}
+  .sev-improve{background:rgba(251,191,36,.16);color:var(--warn)}
+  .sev-minor{background:rgba(139,151,166,.16);color:var(--t3)}
+  .sev-good{background:rgba(52,211,153,.16);color:var(--accent)}
+  .lead{color:var(--t2)}
+  ul{margin:8px 0;padding-left:20px}li{margin:4px 0;color:var(--t2)}
+  .ok{color:var(--accent)}
+  svg{max-width:100%;height:auto;margin:10px 0;background:var(--surface);border:1px solid var(--border);border-radius:12px}
+  .legend{font-size:12px;color:var(--t3);margin-top:4px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>코드 리뷰 — M9 P5 · R-30 설정 2-pane</h1>
+  <p class="sub">대상: <code>public/app.js</code>(renderSettings · SETTINGS_CATEGORIES · buildSettingsSection · resolveSettingsTab) · <code>public/styles.css</code>(.settings-2pane 외) · <code>test/settings-categories.test.js</code> · 참조 <code>docs/architecture/m9-design.html</code> R-30 §8 · 일자 2026-06-24</p>
+
+  <p><span class="verdict pass">판정: PASS</span></p>
+
+  <div class="card">
+    <p class="lead"><b>요약.</b> 정확성 결함 0. 디스패치·정규화·클릭→render 경로 모두 견고하다. <code>SETTINGS_CATEGORIES</code>는 진짜 단일 출처이며 섹션 매핑이 한 곳에 모여 있다. 코드베이스 첫 <code>:has()</code> 사용은 설정 모달에만 스코프되어 다른 모달 오염이 없고, 미지원 환경에서도 2-pane flex 골격이 깨지지 않는다(미지원 시 너비만 기본값으로 폴백). 신규 테스트 7건 전부 통과, <code>node -c</code> 통과. 지적은 전부 개선/사소 등급이다.</p>
+    <div class="summary-grid">
+      <div class="pill"><b>0</b>결함</div>
+      <div class="pill"><b>3</b>개선</div>
+      <div class="pill"><b>2</b>사소</div>
+      <div class="pill"><b>7/7</b>테스트 통과</div>
+    </div>
+  </div>
+
+  <h2>1. 정확성 검증 (결함 0)</h2>
+
+  <svg viewBox="0 0 880 220" role="img" aria-label="클릭→render→재렌더 흐름">
+    <rect x="24"  y="40" width="170" height="56" rx="9" fill="#161c25" stroke="#34d399"/>
+    <text x="109" y="64" text-anchor="middle" fill="#e6edf3" font-size="12">nav__item click</text>
+    <text x="109" y="82" text-anchor="middle" fill="#8b97a6" font-size="10.5">settingsTab≠id 일 때만</text>
+
+    <rect x="246" y="40" width="170" height="56" rx="9" fill="#161c25" stroke="#38bdf8"/>
+    <text x="331" y="64" text-anchor="middle" fill="#e6edf3" font-size="12">render()</text>
+    <text x="331" y="82" text-anchor="middle" fill="#8b97a6" font-size="10.5">replaceChildren 전체 재생성</text>
+
+    <rect x="468" y="40" width="180" height="56" rx="9" fill="#161c25" stroke="#38bdf8"/>
+    <text x="558" y="60" text-anchor="middle" fill="#e6edf3" font-size="12">renderSettings()</text>
+    <text x="558" y="77" text-anchor="middle" fill="#8b97a6" font-size="10.5">resolveSettingsTab 보정</text>
+    <text x="558" y="91" text-anchor="middle" fill="#8b97a6" font-size="10.5">활성 sections만 디스패치</text>
+
+    <rect x="700" y="40" width="156" height="56" rx="9" fill="#161c25" stroke="#34d399"/>
+    <text x="778" y="64" text-anchor="middle" fill="#e6edf3" font-size="12">새 DOM 노드</text>
+    <text x="778" y="82" text-anchor="middle" fill="#8b97a6" font-size="10.5">핸들러 1회 바인딩</text>
+
+    <line x1="194" y1="68" x2="244" y2="68" stroke="#475569" stroke-width="1.5" marker-end="url(#a)"/>
+    <line x1="416" y1="68" x2="466" y2="68" stroke="#475569" stroke-width="1.5" marker-end="url(#a)"/>
+    <line x1="648" y1="68" x2="698" y2="68" stroke="#475569" stroke-width="1.5" marker-end="url(#a)"/>
+
+    <text x="440" y="150" text-anchor="middle" fill="#8b97a6" font-size="11">옛 노드는 replaceChildren 로 폐기 → 이중 바인딩 없음 · 가드로 무한루프 없음 · enter 1회 게이트</text>
+    <defs><marker id="a" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#475569"/></marker></defs>
+  </svg>
+
+  <table>
+    <tr><th style="width:200px">검증 항목</th><th>결과 · 근거</th></tr>
+    <tr>
+      <td>디스패치 완전성<br>(키→함수 매핑)</td>
+      <td><span class="ok">정확.</span> <code>buildSettingsSection</code>(app.js:2182)의 <code>switch</code>가 <code>SETTINGS_CATEGORIES</code>에 등장하는 10개 키(roots/exclude/detect/scanOptions/tools/mail/theme/shortcuts/info/update)를 모두 case로 가진다. 미지 키는 <code>default: return null</code> 이고 호출측(app.js:2223)이 <code>if (node)</code>로 가드 → graceful. 누락·오타 시 빈 패널만 나올 뿐 throw 없음.</td>
+    </tr>
+    <tr>
+      <td>resolveSettingsTab 보정</td>
+      <td><span class="ok">정확.</span> <code>SETTINGS_CATEGORIES.some(c.id===stored)</code>로 멤버십 검사 후 미지값은 <code>'scan'</code> 반환(app.js:627). undefined/null/''/'bogus' 전부 'scan'으로 수렴(테스트 56~61행 통과). 순수 함수라 부수효과 없음.</td>
+    </tr>
+    <tr>
+      <td>클릭→render 경로<br>(무한루프·이중바인딩)</td>
+      <td><span class="ok">정확.</span> 클릭 핸들러는 <code>if (store.settingsTab !== cat.id)</code> 가드로 활성 탭 재클릭 시 render 미발생(app.js:2216). <code>render()</code>는 <code>replaceChildren</code>(app.js:1216)로 옛 노드를 통째 폐기하고 새 노드에 핸들러를 1회만 단다 → 이중 바인딩 불가. <code>enter</code>는 <code>_settingsShown</code> 게이트(app.js:2202)로 1회만 → 재렌더 깜빡임 없음.</td>
+    </tr>
+    <tr>
+      <td>탭 유지(재렌더 복원)</td>
+      <td><span class="ok">정확.</span> 활성 탭이 <code>store.settingsTab</code>에 보관되고 매 render마다 resolve로 복원. 스크롤은 SCROLL_SEL에 <code>.settings-pane</code>이 <code>.modal__body</code>보다 앞에 등록되어(app.js:5331) 우측 패널 스크롤이 우선 복원된다.</td>
+    </tr>
+    <tr>
+      <td>모달 너비 충돌</td>
+      <td><span class="ok">실효 정상(아래 개선 #2 참조).</span> <code>wide:true</code>의 <code>.modal--wide{660px}</code>(css:697)와 <code>.modal:has(.settings-2pane){820px}</code>(css:715)가 동시 적용. <code>:has()</code> 셀렉터 특이도(0,2,0) &gt; <code>.modal--wide</code>(0,1,0)라 820px가 항상 이긴다 → 의도대로 동작하나 의도가 코드에 드러나지 않음.</td>
+    </tr>
+  </table>
+
+  <h2>2. 단일 출처 · 중복</h2>
+  <table>
+    <tr><th style="width:200px">관점</th><th>평가</th></tr>
+    <tr><td>SETTINGS_CATEGORIES 단일 출처</td><td><span class="ok">충족.</span> 좌측 nav·우측 pane·정규화·테스트가 모두 이 한 배열을 참조(app.js:615). 섹션→카테고리 소속이 한 곳에만 선언되고, 테스트 37~48행이 "섹션 중복 배치 0 / 누락 0"을 강제해 드리프트를 막는다.</td></tr>
+    <tr><td>디스패치 ↔ 데이터 분리</td><td><span class="ok">양호.</span> 데이터(섹션 키 목록)와 디스패치(키→DOM 빌더)가 의도적으로 분리. 기존 render*Settings를 그대로 호출해 동작·저장 로직 변경 0(회귀 0). 데이터-디스패치 간 키 일치는 아래 개선 #1로 테스트 보강 권고.</td></tr>
+  </table>
+
+  <h2>3. :has() 셀렉터 견고성 평가</h2>
+  <div class="card">
+    <p class="lead">코드베이스 첫 <code>:has()</code> 사용(<code>grep</code>로 다른 사용처 없음 확인). Electron 번들 Chromium은 105+ 이상이라 <code>:has()</code> 지원이 보장되는 단일 런타임 — 미지원 우려는 사실상 없고, 사용 자체가 적절하다.</p>
+    <ul>
+      <li><b>스코프 안전.</b> 두 규칙 모두 <code>.settings-2pane</code>를 가진 모달에만 매칭(css:715~716). 메일 본문 모달·업데이트 모달 등 다른 <code>buildModal</code> 산출물은 영향 없음 — 오염 없음.</li>
+      <li><b>폴백 기능 안전.</b> 가령 <code>:has()</code> 미지원이라 가정해도 <code>.settings-2pane{display:flex}</code> 골격(css:717)·nav·pane 스타일은 클래스 셀렉터라 그대로 적용 → 2-pane 레이아웃·스크롤 정상. 잃는 것은 "설정 모달만 820px·body 패딩 제거" 두 가지 시각 보정뿐(기능 무손상). <span class="ok">progressive enhancement로 올바르게 설계됨.</span></li>
+      <li><b>특이도 함정(개선 #2).</b> 같은 효과를 <code>.modal--wide-settings</code> 같은 명시 클래스로도 낼 수 있는데 <code>:has()</code>를 택해 <code>wide:true</code>가 무의미해졌다. 의도는 맞으나 두 너비 규칙의 승패가 특이도에 암묵 의존 — 주석으로 명시 권고.</li>
+    </ul>
+  </div>
+
+  <h2>4. 개선 항목</h2>
+  <table>
+    <tr><th>무엇</th><th class="loc" style="width:170px">위치</th><th>왜 / 권고</th><th style="width:64px">심각도</th></tr>
+    <tr>
+      <td>디스패치–데이터 키 일치 테스트 부재</td>
+      <td class="loc">test/settings-<br>categories.test.js</td>
+      <td>현재 7건은 <code>SETTINGS_CATEGORIES</code> 데이터 무결성만 검증하고, <code>buildSettingsSection</code>이 그 키들을 실제로 처리하는지는 미검증. 데이터에 새 섹션 키 추가 후 <code>switch</code> case를 빠뜨려도 테스트는 통과(런타임에 빈 패널). <b>권고:</b> 모든 sections 키에 대해 <code>buildSettingsSection</code>이 비-null 노드를 반환하는지 확인하는 테스트 추가. 다만 이 함수는 IIFE 내부 클로저라 export되어 있지 않아, 노출 없이 검증하려면 키 화이트리스트를 별도 export하거나 디스패치를 모듈 스코프로 끌어올리는 소규모 리팩터가 필요.</td>
+      <td><span class="sev sev-improve">개선</span></td>
+    </tr>
+    <tr>
+      <td>모달 너비 규칙의 암묵적 특이도 의존</td>
+      <td class="loc">styles.css:697,<br>715 · app.js:2232</td>
+      <td><code>wide:true</code> → <code>.modal--wide{660px}</code>와 <code>:has(.settings-2pane){820px}</code>이 공존하며 후자가 특이도로 이긴다. 동작은 맞지만 "왜 wide인데 660이 안 먹나"가 코드에 드러나지 않아 향후 <code>.modal--wide</code> 수정 시 회귀 위험. <b>권고:</b> (a) <code>:has()</code> 규칙에 "wide(660)보다 우선 — 설정만 820" 주석을 달거나, (b) renderSettings에서 <code>wide:true</code>를 떼고 <code>:has()</code> 규칙 하나로 너비를 단일화. (b)가 의도를 더 명확히 한다.</td>
+      <td><span class="sev sev-improve">개선</span></td>
+    </tr>
+    <tr>
+      <td>renderSettings 내 cat 재조회 중복</td>
+      <td class="loc">app.js:2204,<br>2222</td>
+      <td>이미 <code>resolveSettingsTab</code>이 활성 id를 보장했는데, 2222행에서 <code>find(...) || [0]</code>로 카테고리를 다시 찾으면서 <code>|| SETTINGS_CATEGORIES[0]</code> 폴백을 또 둔다. resolve가 항상 유효 id를 반환하므로 <code>find</code>는 절대 undefined가 아니다 → 폴백은 도달 불가(죽은 가드). <b>권고:</b> 폴백 제거하거나, 방어적 의도면 주석으로 "이론상 도달 불가, 안전망" 명시. 기능 영향 없음.</td>
+      <td><span class="sev sev-improve">개선</span></td>
+    </tr>
+    <tr>
+      <td>store.settingsTab 재대입의 부수효과 위치</td>
+      <td class="loc">app.js:2205</td>
+      <td>렌더 함수(<code>renderSettings</code>)가 <code>store.settingsTab = activeTab</code>로 상태를 정규화-쓰기한다. 렌더는 통상 읽기 전용이 바람직하나, 여기선 미지값 1회 보정 목적이고 멱등(같은 값 재대입)이라 실해는 없음. <b>권고:</b> 현 주석으로 의도가 충분히 설명됨 — 유지 가능. 표기만.</td>
+      <td><span class="sev sev-minor">사소</span></td>
+    </tr>
+    <tr>
+      <td>roots 섹션만 인라인 래핑</td>
+      <td class="loc">app.js:2184~2187</td>
+      <td>다른 9개 case는 render*Settings를 그대로 반환하는데 <code>roots</code>만 <code>.insight</code>+제목으로 인라인 래핑. 일관성상 <code>renderRootManager</code>가 제목 래핑까지 책임지면 디스패치가 균일해지나, 기존 함수 시그니처 변경을 수반하므로 회귀 0 우선이면 현 상태도 수용 가능. <b>권고:</b> 차회 정리 후보로만.</td>
+      <td><span class="sev sev-minor">사소</span></td>
+    </tr>
+  </table>
+
+  <h2>5. 가독성 · 일관성 · CSS 관례</h2>
+  <table>
+    <tr><th style="width:220px">항목</th><th>평가</th></tr>
+    <tr><td>클래스 네이밍</td><td><span class="ok">일치.</span> <code>settings-nav__item</code>·<code>is-active</code>는 기존 BEM 변형(<code>orbit__seg-btn.is-on</code> 등)과 동일 컨벤션. 다크 변수(<code>--surface-2/3</code>·<code>--border</code>·<code>--accent-bg/text</code>·<code>--t1~t4</code>) 그대로 사용, 하드코딩 색 없음.</td></tr>
+    <tr><td>접근성</td><td><span class="ok">양호.</span> <code>role=tablist/tab/tabpanel</code>·<code>aria-selected</code>·<code>aria-label</code> 부여, 버튼은 실제 <code>&lt;button type=button&gt;</code>이라 포커스 트랩(buildModal)에 자연 포함. (탭 키보드 화살표 이동은 R-30 범위 밖.)</td></tr>
+    <tr><td>렌더 안전(L-1)</td><td><span class="ok">유지.</span> 라벨·텍스트는 <code>el({text})</code> = textContent 경로, <code>innerHTML</code> 미사용. 스캔 데이터 주입 지점 아님.</td></tr>
+    <tr><td>반응형</td><td><span class="ok">일관.</span> 640px 미디어쿼리에서 nav를 가로 wrap·pane 세로 스택으로 전환, 기존 640px 블록 내에 함께 둠(브레이크포인트 분산 없음).</td></tr>
+    <tr><td>주석</td><td><span class="ok">충실.</span> R-30 마커·단일 출처·디스패치·preserve 연계가 주석으로 추적 가능. 프로젝트 한국어 주석 컨벤션 준수.</td></tr>
+  </table>
+
+  <h2>6. 확인 필요</h2>
+  <ul>
+    <li><b>설계 의도(개선 #2):</b> 설정 모달 너비를 <code>:has()</code> 단일화(wide 제거)할지, 현행 특이도 의존을 주석으로만 남길지 — 팀 선호 확인. 기능엔 영향 없음.</li>
+  </ul>
+
+</div>
+</body>
+</html>

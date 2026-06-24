@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>코드 리뷰 — M9 P6 (R-31 커밋 차트 폴링)</title>
+<style>
+  :root{
+    --bg:#0b1220; --panel:#111a2e; --panel2:#0f1626; --bd:#1e2b45;
+    --fg:#e6edf7; --muted:#93a4c2; --accent:#34d399; --ref:#38bdf8;
+    --warn:#fbbf24; --bad:#f87171; --ok:#34d399;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+    font:14.5px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Malgun Gothic",sans-serif;}
+  .wrap{max-width:1040px;margin:0 auto;padding:38px 26px 80px}
+  h1{font-size:25px;margin:0 0 6px;letter-spacing:-.3px}
+  h2{font-size:18px;margin:36px 0 12px;padding-bottom:7px;border-bottom:1px solid var(--bd);color:#cfe0fb}
+  h3{font-size:15px;margin:22px 0 8px;color:#cfe0fb}
+  .sub{color:var(--muted);font-size:13px;margin:0 0 4px}
+  code{background:#0a1322;border:1px solid var(--bd);border-radius:5px;padding:.5px 6px;
+    font-family:ui-monospace,"Cascadia Code",Consolas,monospace;font-size:12.6px;color:#cbd6ec}
+  .verdict{display:inline-block;font-weight:700;font-size:15px;padding:7px 18px;border-radius:999px;
+    border:1px solid var(--ok);color:#06291d;background:var(--ok)}
+  .panel{background:var(--panel);border:1px solid var(--bd);border-radius:12px;padding:18px 20px;margin:14px 0}
+  .grid{display:flex;gap:14px;flex-wrap:wrap;margin:14px 0}
+  .stat{flex:1;min-width:150px;background:var(--panel2);border:1px solid var(--bd);border-radius:10px;padding:13px 16px}
+  .stat .n{font-size:26px;font-weight:700}
+  .stat .l{color:var(--muted);font-size:12.5px}
+  table{width:100%;border-collapse:collapse;margin:10px 0;font-size:13.4px}
+  th,td{text-align:left;padding:9px 11px;border-bottom:1px solid var(--bd);vertical-align:top}
+  th{color:#aebfdd;font-weight:600;background:#0d1525}
+  td.loc{white-space:nowrap;color:var(--ref);font-family:ui-monospace,Consolas,monospace;font-size:12.4px}
+  .sev{font-weight:700;font-size:11.5px;padding:2px 9px;border-radius:999px;white-space:nowrap;display:inline-block}
+  .sev.defect{background:#3a1414;color:var(--bad);border:1px solid #5b1d1d}
+  .sev.improve{background:#2b2410;color:var(--warn);border:1px solid #4a3c14}
+  .sev.minor{background:#0e2436;color:var(--ref);border:1px solid #1d3a52}
+  .sev.good{background:#0c2a1e;color:var(--ok);border:1px solid #155}
+  .ref{color:var(--ref)}
+  .muted{color:var(--muted)}
+  ul{margin:8px 0 8px 2px;padding-left:20px}
+  li{margin:4px 0}
+  .tag{display:inline-block;font-size:11px;color:#9fb2d6;border:1px solid var(--bd);border-radius:5px;padding:1px 7px;margin-right:5px}
+  .svgwrap{background:var(--panel2);border:1px solid var(--bd);border-radius:12px;padding:16px;margin:14px 0;overflow:auto}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <p class="sub">SPIP · 코드 품질 리뷰 (1회차) · 2026-06-24</p>
+  <h1>M9 P6 — R-31 커밋 차트 5분 폴링</h1>
+  <p class="sub">대상: <code>public/app.js</code> 폴링 게이트 / <code>test/commitPolling.test.js</code> / <code>test/settings-categories.test.js</code> · 기준: ADR-M9-4(<code>docs/architecture/m9-design.html</code>), 메일 폴링 패턴 일관성</p>
+
+  <p style="margin:16px 0"><span class="verdict">판정 · PASS</span></p>
+
+  <div class="panel">
+    <b>요약 —</b> 정확성 결함 0건. 타이머 start/stop은 멱등(중복 <code>setInterval</code>·미clear 누수 없음), <code>shouldPollCommit</code> 판정 정확,
+    <code>_lastView</code> 추적이 모든 뷰 전환을 빠짐없이 커버한다(모든 <code>state.view=</code> 대입 직후 <code>render()</code> 호출 확인).
+    visibilitychange·teardown 정리 정확. ADR-M9-4 계약(5분 타이머 + 뷰/가시성 가드, 이탈 시 clearInterval, 콜백 내 재검사 1줄)과
+    구현이 정확히 일치한다. 헤드리스 테스트 7건 + 설정 키일치 8건 전부 통과.
+    품질 권고는 <b>개선 2 / 사소 2</b>로 모두 동작에 영향 없는 정합·가독 항목이다.
+  </div>
+
+  <div class="grid">
+    <div class="stat"><div class="n" style="color:var(--bad)">0</div><div class="l">정확성 결함</div></div>
+    <div class="stat"><div class="n" style="color:var(--warn)">2</div><div class="l">개선</div></div>
+    <div class="stat"><div class="n" style="color:var(--ref)">2</div><div class="l">사소</div></div>
+    <div class="stat"><div class="n" style="color:var(--ok)">15/15</div><div class="l">테스트 통과</div></div>
+  </div>
+
+  <h2>1. 정확성 검증 — 결함 없음</h2>
+  <p class="muted">중점 항목별로 코드 근거를 들어 결함 부재를 확인한다.</p>
+  <table>
+    <thead><tr><th>점검 항목</th><th>위치</th><th>판정 · 근거</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>타이머 start 멱등성</td>
+        <td class="loc">app.js:4683</td>
+        <td><span class="sev good">OK</span> <code>if (store.commitRefreshTimer || !bridgeHas(...)) return;</code> — 활성 타이머가 있으면 조기 반환. 중복 <code>setInterval</code> 불가. 메일 <code>startMailAutoRefresh</code>(4666)과 동일 가드.</td>
+      </tr>
+      <tr>
+        <td>타이머 stop 누수</td>
+        <td class="loc">app.js:4687</td>
+        <td><span class="sev good">OK</span> <code>clearInterval</code> 후 <code>commitRefreshTimer = null</code> 로 참조 해제 — 재호출 시 no-op. <code>try/catch</code> 로 환경 예외 흡수.</td>
+      </tr>
+      <tr>
+        <td><code>shouldPollCommit</code> 판정</td>
+        <td class="loc">app.js:637</td>
+        <td><span class="sev good">OK</span> <code>view==='home' &amp;&amp; visible!==false</code> — undefined는 가시로 간주(미지원 graceful). 순수 함수, 테스트 4건이 home/이탈/비가시/undefined 경계를 모두 커버.</td>
+      </tr>
+      <tr>
+        <td><code>_lastView</code> 전환 커버리지</td>
+        <td class="loc">app.js:1254</td>
+        <td><span class="sev good">OK</span> 코드 전역의 모든 <code>store.state.view = …</code> 대입(13곳)이 직후 <code>render()</code> 를 호출함을 확인(orbit 3350/3356, scan 4459/4572, load 5530/5540, 탭 3623 등). render 말미 <code>_lastView!==v</code> 게이트가 전환을 빠짐없이 포착. 같은 뷰 반복 렌더는 게이트 통과 안 함(멱등).</td>
+      </tr>
+      <tr>
+        <td>초기 부팅 시 시작</td>
+        <td class="loc">app.js:5530→1254</td>
+        <td><span class="sev good">OK</span> <code>_lastView</code> 초기값 undefined → 첫 render에서 view='home'이면 <code>undefined!=='home'</code> 참 → <code>syncHomePolling()</code> → 시작. 별도 init 호출 없이도 누락 없음.</td>
+      </tr>
+      <tr>
+        <td>visibilitychange 정리</td>
+        <td class="loc">app.js:5588</td>
+        <td><span class="sev good">OK</span> 비가시 전환 시 <code>syncHomePolling</code> → <code>shouldPollCommit</code> false → <code>stopCommitAutoRefresh</code>. 재가시 시 home이면 재시작. addEventListener 존재 가드 + try/catch graceful.</td>
+      </tr>
+      <tr>
+        <td>teardown 정리</td>
+        <td class="loc">app.js:5603</td>
+        <td><span class="sev good">OK</span> <code>stopCommitAutoRefresh()</code> 가 teardown에 포함(pagehide/beforeunload). 메일 타이머와 나란히 정리 — unload 누수 없음.</td>
+      </tr>
+      <tr>
+        <td>재진입 / 동시성</td>
+        <td class="loc">app.js:4679, 2042</td>
+        <td><span class="sev good">OK</span> 콜백 <code>busyCommitActivity</code> in-flight 가드 + <code>refreshCommitActivity</code> 진입부 동일 가드(이중). <code>RG.deferred()</code> 로 조합·드래그·오버레이·busy 중 보류. 완료 시 <code>RG.coalesce.release()</code>(2050)로 1회 반영 — ADR-M9-3 계약 정합.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="svgwrap">
+  <svg width="980" height="218" viewBox="0 0 980 218" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="폴링 게이트 흐름">
+    <defs><marker id="ar" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#5b6f95"/></marker></defs>
+    <text x="14" y="20" fill="#93a4c2" font-size="12">전환 트리거 → 단일 게이트 → 타이머 → 콜백 가드</text>
+
+    <rect x="14" y="40" width="170" height="36" rx="8" fill="#172339" stroke="#38bdf8"/>
+    <text x="99" y="62" text-anchor="middle" fill="#7dd3fc" font-size="12">render() 말미 _lastView≠v</text>
+    <rect x="14" y="86" width="170" height="36" rx="8" fill="#172339" stroke="#38bdf8"/>
+    <text x="99" y="108" text-anchor="middle" fill="#7dd3fc" font-size="12">visibilitychange</text>
+    <rect x="14" y="132" width="170" height="36" rx="8" fill="#172339" stroke="#38bdf8"/>
+    <text x="99" y="154" text-anchor="middle" fill="#7dd3fc" font-size="12">teardown (stop만)</text>
+
+    <line x1="184" y1="58" x2="248" y2="100" stroke="#5b6f95" marker-end="url(#ar)"/>
+    <line x1="184" y1="104" x2="248" y2="104" stroke="#5b6f95" marker-end="url(#ar)"/>
+    <line x1="184" y1="150" x2="248" y2="110" stroke="#5b6f95" marker-end="url(#ar)"/>
+
+    <rect x="250" y="84" width="186" height="44" rx="9" fill="#10261b" stroke="#34d399"/>
+    <text x="343" y="103" text-anchor="middle" fill="#6ee7b7" font-size="12.5">syncHomePolling()</text>
+    <text x="343" y="119" text-anchor="middle" fill="#9fe6c6" font-size="11">shouldPollCommit 게이트</text>
+
+    <line x1="436" y1="96" x2="510" y2="72" stroke="#5b6f95" marker-end="url(#ar)"/>
+    <line x1="436" y1="116" x2="510" y2="140" stroke="#5b6f95" marker-end="url(#ar)"/>
+
+    <rect x="512" y="52" width="150" height="38" rx="8" fill="#0d1d2e" stroke="#1d3a52"/>
+    <text x="587" y="75" text-anchor="middle" fill="#9fc4e8" font-size="12">start (멱등 가드)</text>
+    <rect x="512" y="122" width="150" height="38" rx="8" fill="#0d1d2e" stroke="#1d3a52"/>
+    <text x="587" y="145" text-anchor="middle" fill="#9fc4e8" font-size="12">stop (clear+null)</text>
+
+    <line x1="662" y1="71" x2="730" y2="71" stroke="#5b6f95" marker-end="url(#ar)"/>
+    <rect x="732" y="52" width="232" height="38" rx="8" fill="#172339" stroke="#38bdf8"/>
+    <text x="848" y="75" text-anchor="middle" fill="#7dd3fc" font-size="12">setInterval 300000ms → maybeAutoRefreshCommit</text>
+
+    <rect x="732" y="110" width="232" height="64" rx="8" fill="#0f1626" stroke="#1e2b45"/>
+    <text x="848" y="130" text-anchor="middle" fill="#aebfdd" font-size="11.5">콜백 이중 가드:</text>
+    <text x="848" y="147" text-anchor="middle" fill="#93a4c2" font-size="10.6">view!=='home' · busyCommitActivity · RG.deferred()</text>
+    <text x="848" y="164" text-anchor="middle" fill="#93a4c2" font-size="10.6">통과 → refreshCommitActivity → release</text>
+    <line x1="848" y1="90" x2="848" y2="110" stroke="#5b6f95" marker-end="url(#ar)"/>
+  </svg>
+  </div>
+
+  <h2>2. 품질 권고</h2>
+  <table>
+    <thead><tr><th style="width:13%">심각도</th><th style="width:30%">무엇 / 위치</th><th>왜 / 권고</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><span class="sev improve">개선</span></td>
+        <td>
+          <b>colaesce.request 경유 계약과 콜백 구현의 표현 차이</b><br>
+          <span class="loc">app.js:4681, 2044~2050</span>
+        </td>
+        <td>
+          설계 §6.1·매핑표(m9-design.html:175,272)는 R-31 폴링이 <code>RG.coalesce.request()</code> 를 "종착"으로 한다고 명시한다.
+          실제 구현은 <code>maybeAutoRefreshCommit</code>이 <code>refreshCommitActivity()</code> 를 직접 호출하고, 그 내부에서 <code>render()</code> 후 <code>RG.coalesce.release()</code> 를 부른다(메일과 동일 패턴이며 동작상 정합 — busy 가드 + release로 "정확히 1회" 보장).
+          <b>결함 아님</b>이나, 설계 문구의 "request 경유"와 구현의 "직접 render + release" 사이에 표현 괴리가 있다.<br>
+          <b>권고:</b> <code>refreshCommitActivity</code> 주석에 "coalesce 계약 충족 방식(busy+release)"을 한 줄 남겨 설계-코드 추적을 명확히. 동작 변경 불필요.
+        </td>
+      </tr>
+      <tr>
+        <td><span class="sev improve">개선</span></td>
+        <td>
+          <b>deferred 보류 시 무재시도 — 다음 5분 틱까지 갱신 지연</b><br>
+          <span class="loc">app.js:4680</span>
+        </td>
+        <td>
+          폴링 틱에 <code>RG.deferred()</code>(조합·드래그·오버레이·busy)면 그 틱을 통째로 건너뛴다. 메일도 동일 구조라 패턴 일관성은 충족하나,
+          메일은 60초·커밋은 300초라 커밋은 한 번 건너뛰면 최대 ~10분(직전 틱 보류 + 다음 틱)까지 차트가 늦을 수 있다.
+          push 채널이 없는 폴링 전용 데이터라 누락이 즉시 보정되지 않는다.<br>
+          <b>권고:</b> 우려 수준은 낮음(데이터가 5분 단위 git 통계라 지연 체감 적음). 차후 R-26 deferred 해제 시점(IME/드래그 종료 flush)에 커밋도 1회 따라가게 묶을지 검토. 현 PR 범위에선 현상 유지 가능 — <span class="muted">확인 필요</span>로 분류.
+        </td>
+      </tr>
+      <tr>
+        <td><span class="sev minor">사소</span></td>
+        <td>
+          <b>메일/커밋 폴링 정지 정책 비대칭(의도된 분기지만 가독 부담)</b><br>
+          <span class="loc">app.js:4666~4672 vs 4683~4698</span>
+        </td>
+        <td>
+          메일은 init에서 <code>startMailAutoRefresh()</code> 1회 후 <b>항상 켜진 타이머</b> + 콜백 내 view 가드만 둔다. 커밋은 <code>syncHomePolling</code>으로 <b>타이머 자체를 start/stop</b>한다.
+          이 비대칭은 ADR-M9-4(git 비용 → 이탈 시 clearInterval)로 정당하다 — <b>결함 아님</b>.
+          다만 두 폴링이 나란히 있어 독자가 "왜 한쪽만 stop하나" 혼동할 수 있다.<br>
+          <b>권고:</b> 4674의 R-31 주석에 "메일과 달리 타이머를 정지하는 이유=git 비용(ADR-M9-4)" 한 줄을 명시(이미 일부 언급됨 — 메일 대비 차이를 한 곳에 못박으면 충분).
+        </td>
+      </tr>
+      <tr>
+        <td><span class="sev minor">사소</span></td>
+        <td>
+          <b><code>syncHomePolling</code> visible 산출 vs <code>maybeAutoRefreshMail</code>의 보류 조건 중복 표현</b><br>
+          <span class="loc">app.js:4693~4695</span>
+        </td>
+        <td>
+          <code>document.visibilityState !== 'hidden'</code> 계산이 <code>shouldPollCommit</code>의 <code>visible!==false</code> 의미와 인라인으로 결합돼 있다. 동작은 정확하나, visibilityState→boolean 변환이 init/콜백 어디서도 재사용되지 않는 일회성 표현이다.<br>
+          <b>권고:</b> 현 규모에선 추출 불필요(과한 추상화 회피). 그대로 두는 것을 권고 — 기록 차원의 사소 항목.
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>3. 테스트 품질</h2>
+  <div class="panel">
+    <ul>
+      <li><span class="tag">commitPolling.test.js</span> 순수 게이트 4건은 home/이탈 4뷰/비가시/undefined 경계를 직접 단언 — <b>의미 검증</b>이라 견고.</li>
+      <li>나머지 3건은 <code>APP_SRC</code> 정규식 정적 스캔(상수 300000, start/stop·teardown·visibilitychange 배선, 콜백 본문 가드)이다. 구조 회귀 방지엔 유효하나, 정규식이 소스 표현에 결합돼 <b>리팩터링 취약</b>(예: <code>shouldPollCommit(store.state.view, visible)</code> 인자 순서·공백을 그대로 매칭). 정확성 결함은 아니며 의도된 헤드리스(F-3) 전략 — 참고로만 기록.</li>
+      <li><span class="tag">settings-categories.test.js</span> 키 일치 테스트(73~94행)는 <code>SETTINGS_CATEGORIES</code> 섹션 키 ↔ <code>buildSettingsSection</code> case 양방향 일치(누락·고아 0)를 검증 — 데이터/디스패치 정합을 정적으로 보장하는 좋은 가드. P6 범위 외이나 회차 동반 통과 확인.</li>
+      <li>전체 <b>15/15 통과</b>(<code>node --test</code> 실행 확인).</li>
+    </ul>
+  </div>
+
+  <h2>4. 확인 필요</h2>
+  <div class="panel">
+    <ul>
+      <li><b>개선 ②(deferred 무재시도)</b> — 커밋은 폴링 전용(push 없음) + 5분 주기라, 보류 틱 1회 누락이 최대 ~10분 지연이 될 수 있음을 설계 의도로 수용하는지 PM/아키텍트 확인. 수용이면 현상 유지로 종결.</li>
+    </ul>
+  </div>
+
+  <p class="sub" style="margin-top:34px">결론 — 정확성 결함 0건으로 <b>PASS</b>. 멱등성·전환 커버리지·정리 경로 모두 정확하며 ADR-M9-4 및 메일 패턴과 정합한다. 위 개선·사소 4건은 모두 동작 무영향(주석·정합·확인)으로 후속 처리 가능.</p>
+
+</div>
+</body>
+</html>

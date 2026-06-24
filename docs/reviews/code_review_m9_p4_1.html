@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>코드 리뷰 — M9 P4 (R-27 헤더 통일) + P3 잔여 정리</title>
+<style>
+  :root { --bg:#0f1115; --panel:#171a21; --panel2:#1d2129; --bd:#2a2f3a; --tx:#d7dbe2; --mut:#8b93a3;
+          --ok:#34d399; --ref:#38bdf8; --warn:#fbbf24; --bad:#f87171; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--tx); font:14px/1.65 -apple-system,Segoe UI,Pretendard,system-ui,sans-serif; }
+  .wrap { max-width:1080px; margin:0 auto; padding:36px 28px 80px; }
+  h1 { font-size:23px; margin:0 0 6px; letter-spacing:-.3px; }
+  h2 { font-size:16px; margin:34px 0 12px; padding-bottom:7px; border-bottom:1px solid var(--bd); color:#fff; }
+  .sub { color:var(--mut); font-size:13px; margin:0 0 22px; }
+  .verdict { display:inline-block; padding:6px 16px; border-radius:8px; font-weight:700; font-size:15px; letter-spacing:.5px; }
+  .pass { background:rgba(52,211,153,.13); color:var(--ok); border:1px solid rgba(52,211,153,.35); }
+  .card { background:var(--panel); border:1px solid var(--bd); border-radius:12px; padding:18px 20px; margin:14px 0; }
+  .grid { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin:18px 0; }
+  .stat { background:var(--panel2); border:1px solid var(--bd); border-radius:10px; padding:13px 14px; text-align:center; }
+  .stat b { display:block; font-size:24px; line-height:1.1; }
+  .stat span { font-size:11px; color:var(--mut); text-transform:uppercase; letter-spacing:.6px; }
+  table { width:100%; border-collapse:collapse; margin:10px 0; font-size:13px; }
+  th,td { text-align:left; padding:9px 11px; border-bottom:1px solid var(--bd); vertical-align:top; }
+  th { color:var(--mut); font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:.5px; }
+  code { background:#11141a; border:1px solid var(--bd); border-radius:5px; padding:1px 6px; color:var(--ref); font-size:12px; }
+  .sev { font-weight:700; font-size:11px; padding:2px 8px; border-radius:20px; white-space:nowrap; }
+  .s-def { background:rgba(248,113,113,.14); color:var(--bad); }
+  .s-imp { background:rgba(56,189,248,.14); color:var(--ref); }
+  .s-nit { background:rgba(139,147,163,.16); color:var(--mut); }
+  .s-ok  { background:rgba(52,211,153,.14); color:var(--ok); }
+  .loc { color:var(--mut); font-size:12px; }
+  ul { margin:6px 0; padding-left:20px; } li { margin:3px 0; }
+  .legend { font-size:12px; color:var(--mut); margin-top:6px; }
+  .flow { background:var(--panel2); border:1px solid var(--bd); border-radius:10px; padding:14px; margin:12px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>코드 리뷰 — M9 P4 (R-27 헤더 통일) + P3 잔여 정리</h1>
+  <p class="sub">대상: <code>public/app.js</code> · <code>test/header.test.js</code> · <code>test/shortcuts.test.js</code> · <code>test/dashboard-menu.test.js</code> &nbsp;|&nbsp; 기준 설계: <code>docs/architecture/m9-design.html</code> R-27 &nbsp;|&nbsp; 리뷰일 2026-06-24</p>
+
+  <p><span class="verdict pass">판정 — PASS</span></p>
+
+  <div class="card">
+    <strong>요약.</strong> R-27 헤더 통일(early-return 제거·공통 골격 공유·순수 <code>headerViewConfig</code>)과
+    P3 잔여 정리(<code>dispatchMenuAction</code> 제거, <code>isEditableTarget</code> 가드 신설)는
+    정확성 결함 없이 깔끔하게 완료됐다. 죽은 코드 잔존 참조 0, 검색 input의 IME 바인딩(<code>RG.composition.bind</code>)·
+    coalesce 경로 보존 확인. 테스트 <b>645건 전부 통과</b>(신규/슬림 포함). 권고는 모두 사소(2건)로,
+    동작·안전성에 영향 없다.
+  </div>
+
+  <div class="grid">
+    <div class="stat"><b style="color:var(--bad)">0</b><span>결함</span></div>
+    <div class="stat"><b style="color:var(--ref)">0</b><span>개선</span></div>
+    <div class="stat"><b style="color:var(--mut)">2</b><span>사소</span></div>
+    <div class="stat"><b style="color:var(--ok)">645/645</b><span>테스트</span></div>
+  </div>
+
+  <h2>1. 정확성 검증 (결함 0)</h2>
+  <table>
+    <tr><th>항목</th><th>검증 내용</th><th>판정</th></tr>
+    <tr>
+      <td><code>isEditableTarget(el)</code><br><span class="loc">app.js:594–599</span></td>
+      <td>가드 순서가 안전하다: <code>!el || typeof el!=='object'</code>로 null·비객체·문자열을 먼저 차단 →
+        <code>isContentEditable===true</code> → <code>tagName</code> 문자열일 때만 대문자화 후 INPUT/TEXTAREA/SELECT 매칭.
+        <code>tagName</code>이 없거나 비문자열이면 빈 문자열로 처리돼 false. 테스트 8케이스(대소문자·null·undefined·문자열·빈객체) 모두 부합.</td>
+      <td><span class="sev s-ok">정확</span></td>
+    </tr>
+    <tr>
+      <td>keydown 가드<br><span class="loc">app.js:5485</span></td>
+      <td><code>if (action !== 'refresh' &amp;&amp; isEditableTarget(e.target)) return;</code> — F5(refresh)는 텍스트 충돌 없어 허용,
+        Ctrl+O/Ctrl+R은 편집요소 포커스 중 차단. 의도(B-1)와 일치, off-by-one·역논리 없음.</td>
+      <td><span class="sev s-ok">정확</span></td>
+    </tr>
+    <tr>
+      <td>renderHeader 분기<br><span class="loc">app.js:3547–3638</span></td>
+      <td>early-return 제거 후 <code>return header;</code> 단 1개(말미). 호출 경로는 <code>renderHome()</code>(1538)·
+        <code>renderDashboard()</code>(2059) 둘뿐이며, <code>render()</code>의 라우팅상 <code>else</code> 분기는 dashboard만 도달(1205–1207).
+        공통 액션(설정·궤도맵·재스캔)은 무조건 1회 생성 — 이중 생성·누락 없음.</td>
+      <td><span class="sev s-ok">정확</span></td>
+    </tr>
+    <tr>
+      <td><code>headerViewConfig(view)</code><br><span class="loc">app.js:606–608</span></td>
+      <td>순수 함수. <code>{ showSearch: view==='dashboard' }</code> — home·orbit·scanning·undefined 모두 false.
+        검색은 <code>if (showSearch)</code>로만 DOM 생성(3572). 홈에서 검색 미노출 의도(Q5)와 정확히 일치.</td>
+      <td><span class="sev s-ok">정확</span></td>
+    </tr>
+    <tr>
+      <td>검색 input 이동 후 이벤트 바인딩<br><span class="loc">app.js:3586–3587</span></td>
+      <td><code>RG.composition.bind(searchInput)</code>(IME compositionstart/end)와
+        <code>input</code>→<code>RG.coalesce.request()</code> 핸들러가 블록 안에 함께 이동 — 바인딩 분리·누락 없음.
+        <code>RG</code> 정의(5251)는 클로저 내부이고 호출은 런타임이라 호이스팅 문제 없음.
+        <code>preserve.FOCUS_SEL</code>(5288)에 <code>.topbar__search-input</code> 포함돼 재렌더 시 포커스/캐럿 복원 유지.</td>
+      <td><span class="sev s-ok">정확</span></td>
+    </tr>
+    <tr>
+      <td>죽은 코드 제거 완전성<br><span class="loc">app.js:610</span></td>
+      <td><code>dispatchMenuAction</code> 실제 참조 0(소스 전역 grep) — 제거 마커 주석만 잔존(의도된 추적 마커).
+        <code>subscribeMenu/onMenuCommand</code>도 폐기(4522). export 목록(5530–)에 고아 참조 없음.</td>
+      <td><span class="sev s-ok">정확</span></td>
+    </tr>
+  </table>
+
+  <div class="flow">
+    <strong>renderHeader 도달·검색 노출 흐름(검증)</strong>
+    <svg width="100%" height="150" viewBox="0 0 720 150" font-family="system-ui" font-size="12">
+      <defs><marker id="a" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto">
+        <path d="M0,0 L7,3 L0,6 Z" fill="#8b93a3"/></marker></defs>
+      <rect x="10" y="58" width="120" height="34" rx="7" fill="#1d2129" stroke="#2a2f3a"/>
+      <text x="70" y="79" fill="#d7dbe2" text-anchor="middle">render() 라우팅</text>
+      <line x1="130" y1="62" x2="210" y2="40" stroke="#8b93a3" marker-end="url(#a)"/>
+      <line x1="130" y1="88" x2="210" y2="110" stroke="#8b93a3" marker-end="url(#a)"/>
+      <rect x="212" y="22" width="160" height="34" rx="7" fill="#1d2129" stroke="#2a2f3a"/>
+      <text x="292" y="43" fill="#d7dbe2" text-anchor="middle">view==='home' → renderHome</text>
+      <rect x="212" y="94" width="190" height="34" rx="7" fill="#1d2129" stroke="#2a2f3a"/>
+      <text x="307" y="115" fill="#d7dbe2" text-anchor="middle">else → renderDashboard (dashboard)</text>
+      <line x1="372" y1="39" x2="470" y2="62" stroke="#8b93a3" marker-end="url(#a)"/>
+      <line x1="402" y1="111" x2="470" y2="82" stroke="#8b93a3" marker-end="url(#a)"/>
+      <rect x="472" y="58" width="130" height="34" rx="7" fill="#171a21" stroke="#34d399"/>
+      <text x="537" y="79" fill="#34d399" text-anchor="middle">renderHeader()</text>
+      <line x1="602" y1="75" x2="660" y2="75" stroke="#8b93a3" marker-end="url(#a)"/>
+      <text x="690" y="71" fill="#38bdf8" text-anchor="middle">show</text>
+      <text x="690" y="86" fill="#38bdf8" text-anchor="middle">Search?</text>
+    </svg>
+    <p class="legend">검색은 <code>headerViewConfig(view).showSearch</code>가 true(=dashboard)일 때만 생성 — home은 미니멀. 두 경로 외 진입점 없음.</p>
+  </div>
+
+  <h2>2. 단순화·중복</h2>
+  <table>
+    <tr><th>관점</th><th>평가</th></tr>
+    <tr><td>headerViewConfig 분리</td>
+      <td>뷰별 차이를 boolean 하나(<code>showSearch</code>)로 축약 — 과도 일반화 아님. 순수 함수라 헤드리스 테스트 가능.
+        분기가 단일 조건뿐이라 객체 반환이 다소 무겁다는 의견은 가능하나, 추후 뷰별 확장 여지·테스트 단일 진입점 측면에서 적절.</td></tr>
+    <tr><td>공통 골격 공유</td>
+      <td>브랜드·탭·spacer·공통 액션이 분기 밖 단일 경로로 생성돼 실제로 공유됨. home/dashboard 중복 분기 없음 — 의도 충족.</td></tr>
+    <tr><td>중복 로직</td><td>없음. 검색 블록만 조건부, 나머지 무조건 — 깔끔.</td></tr>
+  </table>
+
+  <h2>3. 개선 항목 (사소 2건 — 동작 무영향)</h2>
+  <table>
+    <tr><th>심각도</th><th>무엇 / 위치</th><th>왜 / 권고</th></tr>
+    <tr>
+      <td><span class="sev s-nit">사소</span></td>
+      <td><b>SELECT를 편집요소로 분류</b><br><span class="loc">app.js:598</span></td>
+      <td>주석은 "input·textarea·contenteditable"(591)이라 적었으나 코드는 <code>SELECT</code>도 true로 본다.
+        select는 텍스트 입력은 아니지만 화살표/문자 키로 옵션 탐색 중 Ctrl+O/R 오발화를 막는 의미는 있어 동작상 무해.
+        다만 <b>주석과 구현 불일치</b>이므로 주석에 select 포함을 명시하거나 의도를 한 줄 보강 권고.
+        (테스트는 select=true를 이미 명시적으로 검증하므로 의도가 맞다면 주석만 갱신.)</td>
+    </tr>
+    <tr>
+      <td><span class="sev s-nit">사소</span></td>
+      <td><b>'도움말' 진입점 이중성 — 헤더 제거/설정 잔존</b><br><span class="loc">app.js:2214–2220</span></td>
+      <td>헤더 도움말 버튼은 제거(Q5)됐고 설정 '정보' 섹션의 <code>도움말 보기</code> 버튼(<code>openHelp</code>)으로 이관 — 의도된 동작이라 결함 아님.
+        다만 <code>showAbout</code> 등 과거 제거분과 달리 <code>openHelp</code>/<code>renderHelp</code>/<code>store.showHelp</code> 모달 경로는 그대로 유지된다.
+        의도(모달 유지·진입점만 이관)가 설계와 일치하는지 한 번 확인 권고. 코드 자체는 일관(설정 내 진입은 정상 바인딩).</td>
+    </tr>
+  </table>
+
+  <h2>4. 가독성·일관성·테스트</h2>
+  <ul>
+    <li><b>네이밍·스타일</b> — 주변 코드(순수 헬퍼 + 마커 주석 R-27/R-28/B-1)와 일관. <code>headerViewConfig</code>·<code>isEditableTarget</code> 명명 명료.</li>
+    <li><b>죽은 코드 정리</b> — 제거 마커 주석(610) 방식이 기존 컨벤션(<code>[R-28] … 제거</code>)과 동일. 고아 주석·미사용 import 없음.</li>
+    <li><b>테스트</b> — <code>header.test.js</code> 6건(순수 + 정적 소스 회귀)으로 early-return 제거·도움말 제거·composition.bind 유지를 모두 가드.
+      <code>dashboard-menu.test.js</code>는 dispatchMenuAction 케이스 삭제하고 사유를 주석화 — 슬림화 적절.
+      <code>isEditableTarget</code> 경계(8케이스) 충실.</li>
+    <li><b>전체 스위트</b> — <code>npm test</code> 645/645 통과. 신규/슬림 변경에 따른 회귀 0.</li>
+  </ul>
+
+  <h2>5. 확인 필요</h2>
+  <ul>
+    <li>위 사소-2: 도움말 모달(<code>renderHelp</code>/<code>showHelp</code>) 유지가 설계 의도인지(진입점만 설정으로 이관) PM/설계 확인.</li>
+  </ul>
+
+  <p class="sub" style="margin-top:30px">정확성 결함 0 — PASS. 권고 2건은 모두 사소(주석 정합·설계 의도 확인)로 머지 차단 사유 아님.</p>
+</div>
+</body>
+</html>

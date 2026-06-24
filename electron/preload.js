@@ -103,6 +103,8 @@ contextBridge.exposeInMainWorld('spip', {
   setFavorite: (id, on) => ipcRenderer.invoke('spip:setFavorite', { id: String(id), on: !!on }),
   setOrder: (ids) => ipcRenderer.invoke('spip:setOrder', { ids: Array.isArray(ids) ? ids.map(String) : [] }),
   setSortMode: (m) => ipcRenderer.invoke('spip:setSortMode', { mode: String(m) }),
+  // [R-32] 홈 섹션 순서 — 섹션 id 배열만. 읽기는 getUiState 응답의 homeLayout. 검증은 main normalizeHomeLayout.
+  setHomeLayout: (ids) => ipcRenderer.invoke('spip:setHomeLayout', { ids: Array.isArray(ids) ? ids.map(String) : [] }),
 
   // 프로젝트 표시 별칭(빈 문자열이면 해제) + 테마(light|dark|system).
   setProjectName: (id, name) => ipcRenderer.invoke('spip:setProjectName', { id: String(id), name: name == null ? '' : String(name) }),
@@ -154,20 +156,9 @@ contextBridge.exposeInMainWorld('spip', {
     return () => ipcRenderer.removeListener('spip:update:status', h);
   },
 
-  // 메뉴 명령 구독(P2-1) — main이 보내는 'spip:menu:<action>'를 renderer 콜백으로 중계.
-  //   action ∈ pickFolders|rescan|refresh|about (화이트리스트). 채널명 하드코딩(MUST).
-  //   콜백 shape: cb({ action }). unsubscribe 함수 반환.
-  onMenu: (cb) => {
-    if (typeof cb !== 'function') return () => {};
-    const actions = ['pickFolders', 'rescan', 'refresh', 'about'];
-    const handlers = actions.map((action) => {
-      const channel = 'spip:menu:' + action;
-      const h = () => cb({ action });
-      ipcRenderer.on(channel, h);
-      return () => ipcRenderer.removeListener(channel, h);
-    });
-    return () => { for (const off of handlers) off(); }; // unsubscribe 함수 반환
-  },
+  // [R-28] onMenu 제거 — 네이티브 메뉴(폴더추가·재스캔·새로고침·정보) 폐기에 따른
+  //   죽은 수신 채널 정리(SEC-L1 양방향). 해당 기능은 헤더 버튼·렌더러 단축키(F5/Ctrl+O/Ctrl+R)·
+  //   설정 '정보' 섹션으로 이관됨. main(menu.js) 발신 경로도 함께 제거됨.
 
   // [M6 R-21 / M7 R4·§8.1] 트레이 명령 구독 — main이 보내는 'spip:tray:<action>'를 renderer 콜백으로 중계.
   //   ★M7: 트레이 '즐겨찾기'가 메인창 push가 아닌 favoritesWidget.show()로 바뀌어 'spip:tray:favorites'

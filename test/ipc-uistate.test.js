@@ -72,6 +72,34 @@ test('setSortMode — 화이트리스트 외 → auto', () => {
   assert.strictEqual(uiState.setSortMode({ mode: 'manual' }, ctx).sortMode, 'manual');
 });
 
+// ── 홈 섹션 순서(homeLayout) 핸들러 (R-32) ──
+test('setHomeLayout — 정규화·영속·응답(중복/미지/비배열 흡수)', () => {
+  const s = memStore();
+  const ctx = ctxWith(s);
+  // 유효 재정렬 + 중복 + 미지 id + 비문자열 → 정규화가 흡수, 누락 섹션 기본 순서 보충.
+  const r = uiState.setHomeLayout({ ids: ['mail', 'attention', 'mail', 'bogus', 7] }, ctx);
+  assert.strictEqual(r.ok, true);
+  assert.deepStrictEqual(r.homeLayout, ['mail', 'attention', 'productivity', 'activity', 'todos', 'disk', 'featureAdd']);
+  // 영속 반영 확인(write를 거친 store 상태와 일치).
+  assert.deepStrictEqual(s._get().homeLayout, r.homeLayout);
+});
+
+test('setHomeLayout — 비배열/누락 args도 graceful(기본 순서)', () => {
+  const ctx = ctxWith(memStore());
+  assert.deepStrictEqual(uiState.setHomeLayout({ ids: 'nope' }, ctx).homeLayout, realStore.HOME_SECTION_IDS);
+  assert.deepStrictEqual(uiState.setHomeLayout({}, ctx).homeLayout, realStore.HOME_SECTION_IDS);
+  assert.deepStrictEqual(uiState.setHomeLayout(undefined, ctx).homeLayout, realStore.HOME_SECTION_IDS);
+});
+
+test('getUiState — homeLayout 포함(toResponse 노출)', () => {
+  const ctx = ctxWith(memStore({ homeLayout: ['disk', 'mail'] }));
+  const r = uiState.getUiState(ctx);
+  assert.ok(Array.isArray(r.homeLayout));
+  assert.strictEqual(r.homeLayout[0], 'disk');
+  assert.strictEqual(r.homeLayout[1], 'mail');
+  assert.strictEqual(r.homeLayout.length, realStore.HOME_SECTION_IDS.length); // 누락 보충
+});
+
 // ── 할 일(todos) 핸들러 ──
 function todoCtx(store) {
   let n = 0;

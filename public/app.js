@@ -556,24 +556,163 @@ function classifyRescan(data) {
 }
 
 /**
- * P2-1: 네이티브 메뉴 명령(onMenu cb 가 받는 {action}) → renderer 핸들러 토큰(순수).
- * preload `window.spip.onMenu(cb)` 가 main/menu 의 `spip:menu:*` send 를 받아 cb({action}) 로
- * 전달한다(공유 계약). 여기서는 action 문자열을 핸들러 식별 토큰으로 결정론적으로 매핑한다 —
- * 디스패치 부수효과는 호출부(initBrowser)가 담당하고, 매핑 자체만 헤드리스로 단위테스트한다.
- *   action ∈ pickFolders | rescan | refresh | about
- *   반환 { handler:'pickFolders'|'rescan'|'refresh'|'about'|null }
- *     null = 알 수 없는/누락 action(graceful 무시). cb 가 객체가 아니거나 action 비문자열이어도 null.
+ * [R-29] 단축키 단일 출처(single source). 렌더러 keydown 디스패치·설정 안내표가 모두 이 상수를 참조한다.
+ *   네이티브 메뉴 제거(R-28)로 메뉴 accelerator 가 사라지므로 단축키는 전부 렌더러 keydown 으로 처리.
+ *   각 항목: { keys(표시·매칭), action(핸들러 토큰), label(한국어 설명) }.
+ *   - Ctrl+O(폴더추가)·Ctrl+R(재스캔): 기존 메뉴 accelerator 를 keydown 으로 이관(동작 보존).
+ *   - F5(새로고침): R-28 신설(메뉴 '보기>새로고침' 대체).
+ *   - Esc(닫기): 기존 전역 ESC 동작을 안내표에 명문화(디스패치는 기존 ESC 핸들러가 담당).
  */
-function dispatchMenuAction(msg) {
-  const action = (msg && typeof msg === 'object' && typeof msg.action === 'string') ? msg.action : '';
-  switch (action) {
-    case 'pickFolders': return { handler: 'pickFolders' };
-    case 'rescan':      return { handler: 'rescan' };
-    case 'refresh':     return { handler: 'refresh' };
-    case 'about':       return { handler: 'about' };
-    default:            return { handler: null };
-  }
+const SHORTCUTS = [
+  { keys: 'Ctrl+O', action: 'pickFolders', label: '폴더 추가' },
+  { keys: 'Ctrl+R', action: 'rescan',      label: '재스캔' },
+  { keys: 'F5',     action: 'refresh',     label: '새로고침' },
+  { keys: 'Esc',    action: 'close',       label: '닫기(드로어·모달·궤도)' },
+];
+
+/**
+ * [R-29] keydown 이벤트 → SHORTCUTS action 토큰(순수, 헤드리스 테스트 대상).
+ *   ev = { key, ctrlKey, metaKey } 형태(브라우저 KeyboardEvent 호환). Esc 는 별도 전역 핸들러가
+ *   처리하므로 여기선 null(중복 디스패치 방지) — 안내표 표기 전용. 매칭 실패 시 null.
+ *   Ctrl/Cmd(metaKey) 동등 취급(macOS CmdOrCtrl 관례). F5 는 수식키 없을 때만.
+ */
+function matchShortcut(ev) {
+  if (!ev || typeof ev.key !== 'string') return null;
+  const ctrl = !!(ev.ctrlKey || ev.metaKey);
+  const key = ev.key;
+  if (key === 'F5' && !ctrl && !ev.shiftKey && !ev.altKey) return 'refresh';
+  if (ctrl && (key === 'o' || key === 'O')) return 'pickFolders';
+  if (ctrl && (key === 'r' || key === 'R')) return 'rescan';
+  return null; // Esc 등은 매칭 대상 아님(전역 ESC 핸들러 소관)
 }
+
+/**
+ * [R-29/B-1] keydown 대상이 편집 가능 요소(input·textarea·select·contenteditable)인지 판정(순수).
+ *   텍스트 입력 중 Ctrl+O/Ctrl+R 같은 단축키가 의도치 않게 발화하는 것을 막는 가드.
+ *   el 은 { tagName, isContentEditable } 형태(DOM Element 호환). 비정상 입력은 false.
+ */
+function isEditableTarget(el) {
+  if (!el || typeof el !== 'object') return false;
+  if (el.isContentEditable === true) return true;
+  const tag = (typeof el.tagName === 'string') ? el.tagName.toUpperCase() : '';
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+}
+
+/**
+ * [R-27] 헤더 뷰별 구성 판정(순수). 공통 골격(브랜드·탭·공통 액션)은 모든 뷰가 공유하고,
+ *   뷰별 차이는 검색창 노출 하나로 최소화한다(Q5 확정: 검색은 프로젝트 대시보드 전용, 홈 미니멀).
+ *   반환 { showSearch }  — showSearch=true 면 헤더에 검색창을 포함(view==='dashboard'에서만).
+ */
+function headerViewConfig(view) {
+  return { showSearch: view === 'dashboard' };
+}
+
+/**
+ * [R-30] 설정 2-pane 카테고리 단일 출처(순수 데이터). 좌측 목록·우측 패널 매핑이 이 배열을 참조한다.
+ *   사용자 확정 5분류 — 스캔/연동/외관/단축키/정보. 각 카테고리의 sections 는 우측에 그릴
+ *   render*Settings 함수의 식별 키(렌더러가 키→함수로 디스패치). 설계 §8 매핑표 그대로.
+ */
+const SETTINGS_CATEGORIES = [
+  { id: 'scan',       label: '스캔',   sections: ['roots', 'exclude', 'detect', 'scanOptions'] },
+  { id: 'integration', label: '연동',   sections: ['tools', 'mail'] },
+  { id: 'appearance', label: '외관',   sections: ['theme'] },
+  { id: 'shortcuts',  label: '단축키', sections: ['shortcuts'] },
+  { id: 'info',       label: '정보',   sections: ['info', 'update'] },
+];
+
+/**
+ * [R-30] 저장된 settingsTab 값을 유효 카테고리 id 로 정규화(순수). 미지정/미지값은 기본 'scan'.
+ *   전체 재렌더 후에도 동일 카테고리를 복원하기 위해 호출측이 store.settingsTab 를 이 함수로 보정.
+ */
+function resolveSettingsTab(stored) {
+  const ok = SETTINGS_CATEGORIES.some((c) => c.id === stored);
+  return ok ? stored : 'scan';
+}
+
+/**
+ * [R-31] 커밋 차트 5분 폴링 게이트(순수). 홈 뷰 + 창 가시 상태일 때만 폴링한다.
+ *   홈 이탈/비가시(visible===false)면 false → 호출측이 타이머를 정지(홈 비활성 시 git 호출 0).
+ *   visible 미지정(undefined)은 가시로 간주(visibilityState 미지원 환경 graceful).
+ */
+function shouldPollCommit(view, visible) {
+  return view === 'home' && visible !== false;
+}
+
+/**
+ * [R-32] 홈 섹션 화이트리스트(렌더러측). 메인 uiStateStore.HOME_SECTION_IDS 와 동형(고정 enum).
+ *   배열 순서 = 기본 순서. renderHome 7섹션과 1:1. 보안 단일 신뢰 경계는 메인 normalizeHomeLayout —
+ *   여기 검증은 UX 편의(드래그 DOM에서 읽은 data-id 필터링)일 뿐, 보안 의존 금지.
+ */
+const HOME_SECTION_IDS = ['attention', 'productivity', 'activity', 'todos', 'mail', 'disk', 'featureAdd'];
+
+/**
+ * [R-32] 저장된 homeLayout → 렌더 순서로 정규화(순수). 메인 normalizeHomeLayout 과 동일 규칙:
+ *   화이트리스트 외 제거·중복 제거·누락 섹션은 기본 순서로 끝에 보충 → 항상 7개 순열.
+ *   메인이 단일 신뢰 경계지만, 렌더러도 동형 정규화로 부재/손상 응답에 graceful 대응.
+ */
+function applyHomeLayout(layout) {
+  const out = [], seen = new Set();
+  if (Array.isArray(layout)) for (const id of layout) {
+    if (typeof id !== 'string' || !HOME_SECTION_IDS.includes(id) || seen.has(id)) continue;
+    seen.add(id); out.push(id);
+  }
+  for (const id of HOME_SECTION_IDS) if (!seen.has(id)) out.push(id);
+  return out;
+}
+
+/**
+ * [R-33] 커밋 막대 차트 기하 모델(순수, 헤드리스 테스트 대상). days → 막대 좌표/치수 배열.
+ *   [M-2 보안] 수치는 Number()+isFinite 강제, 음수·NaN·Infinity·비수치는 0으로 클램프(높이 계산 안전).
+ *   라벨 문자열은 모델에 그대로 담되(렌더 시 textContent 로만 사용), 좌표/치수는 데이터가 아닌
+ *   상수(W/H/pad)와 sanitize 된 count 로만 계산 → 속성 인젝션 불가.
+ * @param {Array} days [{ count, label? }]
+ * @param {object} [opts] { width, height, pad, gap, maxBars }
+ * @returns {{ bars:Array, maxCount:number, viewW:number, viewH:number, baseline:number }}
+ */
+function commitChartModel(days, opts) {
+  opts = opts || {};
+  const viewW = (typeof opts.width === 'number' && opts.width > 0) ? opts.width : 240;
+  const viewH = (typeof opts.height === 'number' && opts.height > 0) ? opts.height : 96;
+  const pad = (typeof opts.pad === 'number' && opts.pad >= 0) ? opts.pad : 4;
+  const gap = (typeof opts.gap === 'number' && opts.gap >= 0) ? opts.gap : 6;
+  const labelH = 16;              // 하단 요일 라벨 공간
+  const maxBars = (typeof opts.maxBars === 'number' && opts.maxBars > 0) ? opts.maxBars : 7;
+
+  // 입력 sanitize: 배열이 아니면 빈 7칸. 각 count 는 안전 수치(음수/NaN/Infinity → 0).
+  const src = Array.isArray(days) ? days.slice(-maxBars) : [];
+  const safe = src.map((d) => {
+    const n = Number(d && d.count);
+    const count = (Number.isFinite(n) && n >= 0) ? n : 0;
+    const label = (d && typeof d.label === 'string') ? d.label : '';
+    return { count, label };
+  });
+  while (safe.length < maxBars) safe.unshift({ count: 0, label: '' }); // 항상 maxBars 칸(기간 동일)
+
+  const maxCount = safe.reduce((m, b) => (b.count > m ? b.count : m), 0);
+  const baseline = viewH - labelH;            // 막대 바닥 y
+  const usableH = baseline - pad;             // 막대 최대 높이 영역
+  const n = safe.length;
+  const colW = (viewW - gap * (n - 1)) / n;   // 막대 폭(균등 분할)
+
+  const bars = safe.map((b, i) => {
+    // 높이: count>0 이면 maxCount 기준 비례(최소 가시 높이 보장), 0 이면 바닥 스텁.
+    const h = (b.count > 0 && maxCount > 0)
+      ? Math.max(3, (b.count / maxCount) * usableH)
+      : 2;
+    const x = i * (colW + gap);
+    const y = baseline - h;
+    return {
+      label: b.label, count: b.count,
+      x: round1(x), y: round1(y), w: round1(colW), h: round1(h),
+      isLast: i === n - 1,
+    };
+  });
+  return { bars, maxCount, viewW, viewH, baseline };
+}
+function round1(v) { return Math.round(v * 10) / 10; }
+
+// [R-28 정리] dispatchMenuAction 제거 — 네이티브 메뉴 폐기로 도달 불가한 죽은 코드.
+//   단축키 디스패치는 matchShortcut(keydown→action)이 담당한다(SHORTCUTS 단일 출처).
 
 /**
  * P2-6: 스캔 done→대시보드 전환 뷰 결정(순수, 결정론적).
@@ -962,6 +1101,7 @@ function uiStateView(res) {
 function initBrowser() {
   const SVG_NS = 'http://www.w3.org/2000/svg';
   const STALE_DAYS = 90; // 계약상 isStale은 서버 판정. 안내 문구용 기본값.
+  const COMMIT_POLL_MS = 300000; // [R-31] 커밋 차트 폴링 주기 5분(git 조회 비용 — 메일 60초보다 길게).
 
   /** store: 단일 출처 메모리(/api 1회 fetch). 필터/정렬/검색은 메모리에서만. */
   const store = {
@@ -1007,12 +1147,12 @@ function initBrowser() {
     lastRejected: [],            // 직전 addRoots/pickFolders 거부 항목(표시)
     busyFolders: false,          // 폴더 추가/선택/삭제 in-flight(버튼 비활성)
     showSettings: false,         // 설정 팝업(모달) 열림 여부
+    settingsTab: 'scan',         // [R-30] 설정 2-pane 활성 카테고리(scan|integration|appearance|shortcuts|info)
     showHelp: false,             // #6 도움말 팝업(모달) 열림 여부
     showFirstRun: false,         // 최초 스캔 팝업(모달) — 스냅샷 없을 때 홈 위에 표시(닫기 가능)
     // 궤도 맵(Orbit Map) 컨트롤 상태 — 캔버스 루프가 live로 읽는다.
     orbit: { layout: 'drive', speed: 1, paused: false, scrub: 0, triage: false, hi: null, search: '', kpi: null },
     opts: { withSize: false, allDrives: false }, // 재스캔 옵션 UI 상태
-    menuUnsubscribe: null,       // P2-1: spip.onMenu 구독 해제 함수(teardown 시 호출)
     // M6 (R-18) 외부 툴 설정 상태
     tools: [],                   // getTools 응답(toolViews 입력)
     toolPathInput: {},           // 툴별 경로 직접 입력 컨트롤드 값 { id: text }
@@ -1030,6 +1170,7 @@ function initBrowser() {
     todos: [],                   // [{id,text,done,createdAt}]
     todoInput: '',               // 추가 입력(컨트롤드)
     todoAdding: false,           // '+ 할 일 추가' 인라인 입력 표시
+    _composing: false,           // [R-25 RG-1] IME 조합 중 — 조합 중 재렌더 보류(자모 분리 방지)
     busyTodos: false,            // 추가/토글/삭제 in-flight
     // 메일 다이제스트(홈 브리핑) — getMailSummary 응답(계정별 unseen + 제목/발신자 미리보기)
     mailSummary: [],             // [{id,label,host,user,unseen,items:[{subject,from,date}],ok,code}]
@@ -1050,6 +1191,8 @@ function initBrowser() {
     projectsUpdatedUnsubscribe: null, // R-24: spip.onProjectsUpdated 구독 해제 함수
     mailUpdatedUnsubscribe: null, // 메일 갱신 push(spip.onMailUpdated) 구독 해제 함수
     mailRefreshTimer: null,       // 홈에서 메일 주기 갱신 타이머
+    commitRefreshTimer: null,     // [R-31] 홈에서 커밋 차트 5분 주기 갱신 타이머(홈 이탈/비가시 시 정지)
+    homeLayout: HOME_SECTION_IDS.slice(), // [R-32] 홈 섹션 표시 순서(getUiState.homeLayout 적재, 기본=enum 순서)
     // 자동 업데이트(사용자 주도) 상태 — 설정 드로어의 "소프트웨어 업데이트" 섹션이 표시.
     update: {
       packaged: null,          // null=미조회, true/false (false면 개발 모드 안내)
@@ -1122,6 +1265,89 @@ function initBrowser() {
     }
     return s;
   }
+
+  /* [R-33] SVG 자작 커밋 막대 차트(외부 라이브러리·CDN 0). 호버 툴팁·강조 인터랙티브.
+   *   [M-2] 라벨·툴팁은 textContent 만(innerHTML 금지). 색·치수는 고정 팔레트/모델값으로 setAttribute
+   *   (데이터 문자열을 속성에 직접 인터폴레이션 안 함). 수치는 commitChartModel 이 sanitize. */
+  const CHART_PALETTE = { bar: '#c7d2fe', barLast: '#4f46e5', barHover: '#312e81', stub: '#e7e5e4' };
+  /**
+   * @param {Array} days [{ count, label, iso? }] (이미 label 계산됨)
+   * @param {object} [opts] commitChartModel 옵션 + { ariaLabel }
+   * @returns {{ node:SVGElement, destroy:Function }}
+   */
+  function chartBars(days, opts) {
+    opts = opts || {};
+    const model = commitChartModel(days, opts);
+    const svgEl = document.createElementNS(SVG_NS, 'svg');
+    svgEl.setAttribute('viewBox', '0 0 ' + model.viewW + ' ' + model.viewH);
+    svgEl.setAttribute('width', '100%');
+    svgEl.setAttribute('height', String(model.viewH));
+    svgEl.setAttribute('preserveAspectRatio', 'none');
+    svgEl.setAttribute('class', 'commit-chart__svg');
+    svgEl.setAttribute('role', 'img');
+    if (typeof opts.ariaLabel === 'string') svgEl.setAttribute('aria-label', opts.ariaLabel);
+
+    // 외부 툴팁 div(SVG 외부, textContent 만). foreignObject 회피(CSP/렌더 단순).
+    const tip = el('div', { cls: 'commit-chart__tip' });
+    tip.style.display = 'none';
+
+    const handlers = []; // { el, type, fn } — destroy 에서 detach
+    function on(eln, type, fn) { eln.addEventListener(type, fn); handlers.push({ el: eln, type, fn }); }
+
+    model.bars.forEach((b) => {
+      const rect = document.createElementNS(SVG_NS, 'rect');
+      // 치수는 모델(sanitize 된 수치)에서만 — 데이터 문자열 직접 인터폴레이션 없음.
+      rect.setAttribute('x', String(b.x));
+      rect.setAttribute('y', String(b.y));
+      rect.setAttribute('width', String(b.w));
+      rect.setAttribute('height', String(b.h));
+      rect.setAttribute('rx', '2');
+      const baseFill = (b.count <= 0) ? CHART_PALETTE.stub : (b.isLast ? CHART_PALETTE.barLast : CHART_PALETTE.bar);
+      rect.setAttribute('fill', baseFill); // 고정 팔레트
+      rect.setAttribute('tabindex', '0');   // 키보드 포커스 가능(접근성)
+      rect.setAttribute('role', 'listitem');
+      // 접근성 라벨(스크린리더): textContent 기반 title 요소.
+      const titleEl = document.createElementNS(SVG_NS, 'title');
+      titleEl.textContent = (b.label || '·') + ': ' + b.count + ' 커밋'; // L-1 textContent
+      rect.appendChild(titleEl);
+
+      const showTip = () => {
+        rect.setAttribute('fill', CHART_PALETTE.barHover);    // 강조
+        tip.textContent = (b.label || '·') + ' · ' + b.count + ' 커밋'; // [M-2] textContent 만
+        tip.style.display = 'block';
+      };
+      const hideTip = () => {
+        rect.setAttribute('fill', baseFill);
+        tip.style.display = 'none';
+      };
+      on(rect, 'mouseenter', showTip);
+      on(rect, 'mouseleave', hideTip);
+      on(rect, 'focus', showTip);
+      on(rect, 'blur', hideTip);
+      svgEl.appendChild(rect);
+    });
+
+    const wrap = el('div', { cls: 'commit-chart__wrap' });
+    wrap.appendChild(svgEl);
+    wrap.appendChild(tip);
+
+    // 하단 요일 라벨(textContent 만). 막대와 동일 분할로 가로 배치.
+    const labelRow = el('div', { cls: 'commit-chart__labels' });
+    model.bars.forEach((b) => {
+      labelRow.appendChild(el('span', { cls: 'commit-chart__label', text: b.label || '·' }));
+    });
+
+    const node = el('div', { cls: 'commit-chart' });
+    node.appendChild(wrap);
+    node.appendChild(labelRow);
+
+    function destroy() {
+      for (const h of handlers) { try { h.el.removeEventListener(h.type, h.fn); } catch (_) { /* ignore */ } }
+      handlers.length = 0;
+    }
+    return { node, destroy };
+  }
+
   function dot(lang, size) {
     const s = el('span', { cls: 'lang-dot' });
     s.style.background = langColor(lang);
@@ -1145,27 +1371,14 @@ function initBrowser() {
    * 메인 렌더 디스패치
    * ===================================================================== */
   function render() {
-    destroyCardSortable();   // [M8] 이전 .cards 의 Sortable 인스턴스 정리(노드 교체 전).
+    // [R-25 RG-3] 노드 교체 전 모든 stateful 위젯(카드 Sortable 등) 정리. 기존 destroyCardSortable 일반화.
+    RG.widget.destroyAll();
     const v = store.state.view;
     // 뷰가 막 바뀐 경우에만 진입 애니메이션(is-enter)을 1회 부여 — 재렌더(스캔 진행 250ms 등)마다
     //   재생되면 깜빡인다. 같은 뷰의 반복 렌더는 entering=false라 애니메이션 없이 즉시 갱신.
     const entering = store._lastView !== v;
-    // 재렌더로 노드가 교체되면 스크롤 컨테이너가 새로 생겨 위치가 0으로 초기화된다(설정 모달에서
-    //   버튼 클릭 시 스크롤 튐). 교체 전 위치를 저장해 동일 셀렉터에 복원한다.
-    const SCROLL_SEL = ['.modal__body', '.drawer', '.orbit__panel', '.dash__main'];
-    const savedScroll = {};
-    SCROLL_SEL.forEach((sel) => { const e = app.querySelector(sel); if (e) savedScroll[sel] = e.scrollTop; });
-    // 검색창은 키 입력마다 debounce(render)로 노드가 교체돼 포커스/캐럿이 사라진다(타이핑이 끊김).
-    //   교체 전 활성 검색 입력과 선택 위치를 기억했다가 새 노드에 복원한다(스크롤 복원과 동형).
-    const FOCUS_SEL = ['.topbar__search-input', '.orbit__search'];
-    const ae = (typeof document !== 'undefined') ? document.activeElement : null;
-    let savedFocus = null;
-    for (const sel of FOCUS_SEL) {
-      if (ae && app.contains(ae) && typeof ae.matches === 'function' && ae.matches(sel)) {
-        savedFocus = { sel, start: ae.selectionStart, end: ae.selectionEnd, dir: ae.selectionDirection };
-        break;
-      }
-    }
+    // [R-25 RG-2] 재렌더 전 포커스/캐럿/스크롤 스냅샷(기존 인라인 복원 로직을 RG.preserve 로 흡수, 동작 동일).
+    const snap = RG.preserve.capture(app);
     // 궤도 뷰를 벗어나면 캔버스 RAF·리스너 정리(누수 방지). 궤도 안의 재렌더에선 유지.
     if (v !== 'orbit' && orb.canvasEl) stopOrbit();
     app.replaceChildren();
@@ -1182,7 +1395,6 @@ function initBrowser() {
     }
     else {
       app.appendChild(renderDashboard());
-      initCardSortable();    // [M8] 카드뷰면 .cards 에 드래그 재정렬 부착(표/무결과면 no-op).
     }
     // 설정·도움말 모달은 모든 뷰 위에 표시(대시보드·궤도 등 어디서든 열림).
     if (store.showSettings) app.appendChild(renderSettings());
@@ -1191,20 +1403,12 @@ function initBrowser() {
     if (store.showFirstRun && store.state.view === 'home') app.appendChild(renderFirstRunModal());
     // 메일 본문 팝업(항목 클릭).
     if (store.mailView && store.mailView.open) app.appendChild(renderMailMessageModal());
-    // 저장한 스크롤 위치를 새 컨테이너에 복원(버튼 클릭 등 재렌더 후에도 위치 유지).
-    SCROLL_SEL.forEach((sel) => { if (savedScroll[sel] != null) { const e = app.querySelector(sel); if (e) e.scrollTop = savedScroll[sel]; } });
-    // 검색 입력 포커스/캐럿 복원(타이핑 중 재렌더로 포커스가 풀리는 문제 해결).
-    if (savedFocus) {
-      const e = app.querySelector(savedFocus.sel);
-      if (e && typeof e.focus === 'function') {
-        try {
-          e.focus({ preventScroll: true });
-          if (savedFocus.start != null && typeof e.setSelectionRange === 'function') {
-            e.setSelectionRange(savedFocus.start, savedFocus.end, savedFocus.dir || 'none');
-          }
-        } catch (_) { /* setSelectionRange 미지원 입력은 포커스만 */ }
-      }
-    }
+    // [R-25 RG-2] 저장한 스크롤 위치 + 검색 입력 포커스/캐럿 복원(타이핑 중 재렌더로 포커스가 풀리는 문제 해결).
+    RG.preserve.restore(app, snap);
+    // [R-25 RG-3] 새 DOM 에 매칭되는 위젯만 1회 부착(카드뷰면 .cards 에 Sortable, 표/무결과/홈이면 no-op).
+    RG.widget.mountAll(app);
+    // [R-31] 뷰가 바뀌면 커밋 폴링 게이트 동기화(홈 진입=시작 / 홈 이탈=정지). 같은 뷰 반복 렌더는 idempotent.
+    if (store._lastView !== v) { try { syncHomePolling(); } catch (_) { /* graceful */ } }
     store._lastView = v;
   }
 
@@ -1568,25 +1772,39 @@ function initBrowser() {
     heroPad.appendChild(hero);
     wrap.appendChild(heroPad);
 
-    // ── 2-컬럼 ──
-    var cols = el('div', { style: 'display:flex;gap:20px;padding:20px 30px 36px;align-items:flex-start;' });
-    var left = el('div', { style: 'flex:1.65 1 0%;min-width:0;display:flex;flex-direction:column;gap:20px;' });
-    left.appendChild(renderHomeAttention());
-    left.appendChild(renderHomeProductivity());
-    left.appendChild(renderHomeActivity());
-    cols.appendChild(left);
-    var right = el('div', { style: 'flex:1 1 0%;min-width:0;display:flex;flex-direction:column;gap:20px;' });
-    right.appendChild(renderHomeTodos());
-    right.appendChild(renderHomeMail());
-    right.appendChild(renderHomeDisk(reclaim));
-    right.appendChild(renderHomeFeatureAdd());
-    cols.appendChild(right);
-    wrap.appendChild(cols);
+    // ── [R-32] 워터폴(masonry) 섹션 — homeLayout 순서로 데이터-주도 배치 + 드래그 재정렬 ──
+    //   각 섹션은 .home-section(data-home-section=enum id) 래퍼로 감싸 SortableJS 가 이동 단위로 잡는다.
+    //   레이아웃은 CSS columns(.home-masonry) — 높이가 제각각인 카드를 빈틈 없이 채운다.
+    var grid = el('div', { cls: 'home-masonry', style: 'padding:20px 30px 36px;' });
+    applyHomeLayout(store.homeLayout).forEach(function (id) {
+      var node = renderHomeSection(id, reclaim);
+      if (!node) return;
+      // data-home-section 은 고정 enum 값만(L-2/L-3: 스캔 유래 신뢰 못 할 데이터 아님). 드래그 이동 단위.
+      var cell = el('div', { cls: 'home-section', attrs: { 'data-home-section': id } });
+      cell.appendChild(node);
+      grid.appendChild(cell);
+    });
+    wrap.appendChild(grid);
 
     main.appendChild(wrap);
     root.appendChild(main);
     if (store.state.selectedId) root.appendChild(renderDrawer());
     return root;
+  }
+
+  /** [R-32] 홈 섹션 id(enum) → 섹션 DOM 빌더. 기존 render*Home* 함수를 그대로 호출(내용·동작 불변).
+   *   reclaim 은 디스크 섹션 입력(renderHome 에서 1회 계산해 전달). 미지 id 는 null(graceful). */
+  function renderHomeSection(id, reclaim) {
+    switch (id) {
+      case 'attention':    return renderHomeAttention();
+      case 'productivity': return renderHomeProductivity();
+      case 'activity':     return renderHomeActivity();
+      case 'todos':        return renderHomeTodos();
+      case 'mail':         return renderHomeMail();
+      case 'disk':         return renderHomeDisk(reclaim);
+      case 'featureAdd':   return renderHomeFeatureAdd();
+      default:             return null;
+    }
   }
 
   /** 메일 안 읽은 합계(요약 로드 전이면 0). */
@@ -1703,20 +1921,10 @@ function initBrowser() {
     hd.appendChild(el('span', { text: total7 + ' 커밋', style: HOME_MONO + 'font-size:12.5px;font-weight:600;color:#1c1917;' }));
     leftCol.appendChild(hd);
     leftCol.appendChild(el('div', { text: store.commitActivityLoaded ? '최근 7일 커밋 빈도' : '집계하려면 새로고침…', style: 'font-size:11.5px;color:#a8a29e;margin-bottom:18px;' }));
-    var bars = el('div', { style: 'display:flex;align-items:flex-end;justify-content:space-between;gap:9px;min-height:80px;' });
-    var max = 1; days.forEach(function (d) { if (d.count > max) max = d.count; });
-    if (days.length === 0) {
-      for (var k = 0; k < 7; k++) days.push({ date: '', count: 0 });
-    }
-    days.forEach(function (d, i) {
-      var col = el('div', { style: 'display:flex;flex-direction:column;align-items:center;gap:7px;flex:1 1 0%;' });
-      var hgt = d.count > 0 ? Math.max(6, (d.count / max) * 80) : 4;
-      var isToday = i === days.length - 1;
-      col.appendChild(el('div', { style: 'width:100%;max-width:26px;height:' + hgt + 'px;border-radius:4px 4px 2px 2px;background:' + (isToday ? '#4f46e5' : '#c7d2fe') + ';' }));
-      col.appendChild(el('span', { text: d.date ? homeWeekday(d.date) : '·', style: 'font-size:10.5px;color:#a8a29e;' }));
-      bars.appendChild(col);
-    });
-    leftCol.appendChild(bars);
+    // [R-33] SVG 자작 차트 호스트(.commit-chart-host). 실제 차트는 RG.widget('commitChart')가 mount 시
+    //   chartBars()로 생성(호버 툴팁·강조·핸들러 정리). 데이터 무변경 등 재렌더 시 destroy/recreate.
+    //   기간/데이터는 기존과 동일(최근 7일 days) — 표현만 div→SVG.
+    leftCol.appendChild(el('div', { cls: 'commit-chart-host', attrs: { 'aria-label': '최근 7일 커밋 빈도 차트' } }));
     card.appendChild(leftCol);
     card.appendChild(el('div', { style: 'width:1px;background:#f0efed;flex:0 0 auto;' }));
     // 우: 언어 · 스택 추세
@@ -1852,7 +2060,8 @@ function initBrowser() {
     store.busyTodos = false;
     if (applyTodoResult(res)) { store.todoInput = ''; store.todoAdding = false; }
     else toast(res && res.code === 'LIMIT' ? '할 일이 너무 많습니다.' : '할 일 추가에 실패했습니다.', true);
-    render();
+    // [F-1] todoAdding(editing) 해제 가능 지점 — release()로 즉시 1회 반영 + 잔류 pending 소비.
+    RG.coalesce.release();
   }
   async function onToggleTodo(id, done) {
     if (store.busyTodos || !bridgeHas('toggleTodo')) return;
@@ -1974,7 +2183,8 @@ function initBrowser() {
     store.busyMailSummary = false;
     store.mailSummaryLoaded = true;
     store.mailSummary = (res && res.ok && Array.isArray(res.accounts)) ? res.accounts : [];
-    if (store.state.view === 'home') render();
+    // [F-1] busyMail 해제 지점 — 직접 render() 대신 coalesce.release()로 즉시 1회 반영 + 잔류 pending 소비.
+    if (store.state.view === 'home') RG.coalesce.release();
   }
   function maybeLoadCommitActivity() {
     if (bridgeHas('getCommitActivity') && !store.commitActivityLoaded && !store.busyCommitActivity) refreshCommitActivity();
@@ -1997,7 +2207,8 @@ function initBrowser() {
     store.busyCommitActivity = false;
     store.commitActivityLoaded = true;
     store.commitActivity = (res && res.ok) ? res : { days: [], total: 0, repos: 0 };
-    if (store.state.view === 'home') render();
+    // [F-1] busyCommit 해제 지점 — release()로 즉시 1회 반영 + 잔류 pending 소비.
+    if (store.state.view === 'home') RG.coalesce.release();
   }
 
   function renderHomeDisk(reclaim) {
@@ -2085,7 +2296,8 @@ function initBrowser() {
     store._settingsShown = false; // 다음 열림에 진입 애니메이션 재적용
     const opener = store._settingsOpener;
     store._settingsOpener = null;
-    render();
+    // [F-1] 오버레이 닫힘(overlayOpen 해제) 지점 — release()로 즉시 1회 반영 + 보류 중이던 push 누적분 소비.
+    RG.coalesce.release();
     if (opener && typeof opener.focus === 'function' && document.contains(opener)) {
       try { opener.focus(); } catch (_) { /* ignore */ }
     }
@@ -2139,37 +2351,93 @@ function initBrowser() {
     return overlay;
   }
 
+  /** [R-30] 설정 섹션 키 → DOM 노드 빌더. 우측 패널이 활성 카테고리의 sections 키로 디스패치한다.
+   *   기존 render*Settings 함수를 그대로 호출 — 항목 동작·저장 로직은 변경 없음(회귀 0). */
+  function buildSettingsSection(key) {
+    switch (key) {
+      case 'roots': return el('div', { cls: 'insight', children: [
+        el('div', { cls: 'insight__title', text: '스캔 폴더' }),
+        renderRootManager(),
+      ]});
+      case 'exclude':     return renderExcludeSettings();
+      case 'detect':      return renderDetectSettings();
+      case 'scanOptions': return renderScanOptions();
+      case 'tools':       return renderToolSettings();
+      case 'mail':        return renderMailSettings();
+      case 'theme':       return renderThemeSettings();
+      case 'shortcuts':   return renderShortcutSettings();
+      case 'info':        return renderInfoSettings();
+      case 'update':      return renderUpdateSettings();
+      default:            return null;
+    }
+  }
+
   function renderSettings() {
     const enter = !store._settingsShown; store._settingsShown = true; // 진입 애니메이션 1회만
+    // [R-30] 활성 카테고리 — 전체 재렌더 후에도 store.settingsTab 보존(미지값은 기본 'scan'으로 보정).
+    const activeTab = resolveSettingsTab(store.settingsTab);
+    store.settingsTab = activeTab;
+
+    // 좌측: 카테고리 목록(SETTINGS_CATEGORIES 단일 출처). 클릭 시 settingsTab 전환 + render()
+    //   (showSettings 는 유지되므로 모달은 닫히지 않고 우측만 교체된다 — RG.preserve 가 스크롤/포커스 복원).
+    const nav = el('div', { cls: 'settings-nav', attrs: { role: 'tablist', 'aria-label': '설정 카테고리' } });
+    SETTINGS_CATEGORIES.forEach((cat) => {
+      const active = cat.id === activeTab;
+      nav.appendChild(el('button', {
+        cls: 'settings-nav__item' + (active ? ' is-active' : ''),
+        text: cat.label,
+        attrs: { type: 'button', role: 'tab', 'aria-selected': active ? 'true' : 'false' },
+        on: { click: () => { if (store.settingsTab !== cat.id) { store.settingsTab = cat.id; render(); } } },
+      }));
+    });
+
+    // 우측: 활성 카테고리에 매핑된 섹션만 렌더(나머지 미렌더). .settings-pane 은 스크롤 컨테이너.
+    //   activeTab 은 resolveSettingsTab 으로 항상 유효 id → find 는 항상 성공(폴백 가드 불요).
+    const pane = el('div', { cls: 'settings-pane spip-scroll', attrs: { role: 'tabpanel' } });
+    const cat = SETTINGS_CATEGORIES.find((c) => c.id === activeTab);
+    cat.sections.forEach((key) => { const node = buildSettingsSection(key); if (node) pane.appendChild(node); });
+
+    const layout = el('div', { cls: 'settings-2pane', children: [nav, pane] });
+
     return buildModal({
       titleId: 'settings-title',
       title: '설정',
-      subtitle: '스캔 폴더·제외·드라이브·옵션을 관리합니다',
+      subtitle: '스캔·연동·외관·단축키·정보를 관리합니다',
       onClose: closeSettings,
       wide: true,
       enter,
-      bodyChildren: [
-        // 1) 폴더 관리 (드라이브 루트 C:\ 도 폴더 선택에서 그대로 추가 가능 — #5)
-        el('div', { cls: 'insight', children: [
-          el('div', { cls: 'insight__title', text: '스캔 폴더' }),
-          renderRootManager(),
-        ]}),
-        // 2) 제외 항목(#4)
-        renderExcludeSettings(),
-        // 3) 프로젝트 인식 기준(detectSignals)
-        renderDetectSettings(),
-        // 4) 재스캔 옵션 (getConfig 기반)
-        renderScanOptions(),
-        // 4) 외부 툴 경로(R-18)
-        renderToolSettings(),
-        // 4-1) 메일 알림 계정(복수 IMAP)
-        renderMailSettings(),
-        // 5) 테마(라이트/다크/시스템)
-        renderThemeSettings(),
-        // 6) 소프트웨어 업데이트(자동 업데이트 클라이언트)
-        renderUpdateSettings(),
-      ],
+      bodyChildren: [layout],
     });
+  }
+
+  /** [R-29] 단축키 안내 — SHORTCUTS 단일 출처를 순회해 키+설명 표 렌더(textContent, L-1).
+   *   keydown 디스패치(matchShortcut)·이 표가 동일 SHORTCUTS 를 참조 → 상수 변경 시 양쪽 동시 반영. */
+  function renderShortcutSettings() {
+    const block = el('div', { cls: 'insight', children: [el('div', { cls: 'insight__title', text: '단축키' })] });
+    block.appendChild(el('p', { cls: 'settings__opt-sub', text: '아래 단축키로 자주 쓰는 동작을 빠르게 실행합니다.' }));
+    const list = el('div', { cls: 'help__list' });
+    SHORTCUTS.forEach((sc) => { list.appendChild(helpRow(sc.keys, sc.label)); });
+    block.appendChild(list);
+    return block;
+  }
+
+  /** [R-28] 정보 — 메뉴 'Project-SPIP 정보' 이관. 버전(하드코딩 금지 — store.update.currentVersion)
+   *   + 도움말(스캔 기준·항목 설명) 진입. L-1 textContent. */
+  function renderInfoSettings() {
+    const block = el('div', { cls: 'insight', children: [el('div', { cls: 'insight__title', text: '정보' })] });
+    block.appendChild(el('p', { cls: 'settings__opt-sub', text: 'PC에 흩어진 프로젝트를 스캔해 한눈에 보여주는 로컬 전용 도구입니다.' }));
+    const ver = (store.update && store.update.currentVersion) ? ('v' + store.update.currentVersion) : '—';
+    const list = el('div', { cls: 'help__list' });
+    list.appendChild(helpRow('Project-SPIP', ver));
+    block.appendChild(list);
+    // 도움말(스캔 기준·항목 설명) 진입 — 모달은 유지하되 진입점을 설정으로 이관(Q5 방향).
+    const helpBtn = el('button', {
+      cls: 'btn', text: '도움말 보기',
+      attrs: { type: 'button', 'aria-label': '스캔 기준·항목 설명 도움말 열기' },
+      on: { click: openHelp },
+    });
+    block.appendChild(helpBtn);
+    return block;
   }
 
   /** 재스캔 옵션 UI: withSize · allDrives(allowAllDrives 게이트) · 정책 표시(getConfig). */
@@ -3518,51 +3786,37 @@ function initBrowser() {
     });
     header.appendChild(nav);
 
-    // 검색은 프로젝트(대시보드) 화면에서만 노출 — 홈에는 검색 없음.
-    const showSearch = store.state.view === 'dashboard';
-    const searchWrap = el('div', { cls: 'topbar__search' });
-    searchWrap.appendChild(svg(
-      [{ t: 'circle', cx: '11', cy: '11', r: '7' }, { t: 'line', x1: '21', y1: '21', x2: '16.5', y2: '16.5' }],
-      { size: 15, stroke: '#a8a29e', cls: 'topbar__search-icon' }
-    ));
-    const searchInput = el('input', {
-      cls: 'topbar__search-input',
-      attrs: { type: 'search', placeholder: '이름 · 경로 검색', 'aria-label': '프로젝트 검색', autocomplete: 'off', spellcheck: 'false' },
-    });
-    searchInput.value = store.state.search;
-    const debounced = debounce(() => render(), 120);
-    searchInput.addEventListener('input', (e) => { store.state.search = e.target.value || ''; debounced(); });
-    searchWrap.appendChild(searchInput);
-    if (showSearch) header.appendChild(searchWrap);
+    // [R-27] 검색은 프로젝트(대시보드) 화면에서만 노출 — 홈은 미니멀(검색 없음). 뷰별 차이는 이것 하나뿐.
+    const { showSearch } = headerViewConfig(store.state.view);
+    if (showSearch) {
+      const searchWrap = el('div', { cls: 'topbar__search' });
+      searchWrap.appendChild(svg(
+        [{ t: 'circle', cx: '11', cy: '11', r: '7' }, { t: 'line', x1: '21', y1: '21', x2: '16.5', y2: '16.5' }],
+        { size: 15, stroke: '#a8a29e', cls: 'topbar__search-icon' }
+      ));
+      const searchInput = el('input', {
+        cls: 'topbar__search-input',
+        attrs: { type: 'search', placeholder: '이름 · 경로 검색', 'aria-label': '프로젝트 검색', autocomplete: 'off', spellcheck: 'false' },
+      });
+      searchInput.value = store.state.search;
+      // [R-25/R-26 RG-4] 검색 갱신은 RG.coalesce 단일 게이트로 일원화(debounce(render,120) 대체 — 동일 120ms).
+      //   조합 중(_composing)이면 deferred()=true 라 render 보류(자모 분리 방지), compositionend 시 1회 반영.
+      //   헤더 공통 골격으로 재구성 후에도 검색 input 에는 반드시 RG.composition.bind 가 유지된다(IME 회귀 0).
+      RG.composition.bind(searchInput);
+      searchInput.addEventListener('input', (e) => { store.state.search = e.target.value || ''; RG.coalesce.request(); });
+      searchWrap.appendChild(searchInput);
+      header.appendChild(searchWrap);
+    }
 
     header.appendChild(el('div', { cls: 'spacer' }));
 
-    // 홈은 템플릿처럼 미니멀 헤더 — 우측에 "마지막 스캔" 표기만(설정·도구는 프로젝트 화면/홈 카드에서).
-    if (store.state.view === 'home') {
-      const label = store._snapshotLabel ? String(store._snapshotLabel).replace(/^스냅샷\s*/, '') : '';
-      const ls = el('div', { style: 'font-family:"Geist Mono",monospace;font-size:11.5px;color:#a8a29e;' });
-      ls.appendChild(el('span', { text: '마지막 스캔 ' }));
-      ls.appendChild(el('span', { text: label || '—' }));
-      header.appendChild(ls);
-      return header;
-    }
-
+    // [R-27] 공통 액션 영역 — 홈·프로젝트 두 뷰가 동일 위치·동일 동작으로 공유(early-return 제거).
+    //   '마지막 스캔' 보조 텍스트도 두 뷰 공통(홈 미니멀 유지하되 공통 액션 진입점은 노출).
+    //   [Q5] 헤더 '도움말' 버튼은 제거 — 도움말/정보 진입은 설정 '정보' 섹션으로 이관됨(P3).
     const actions = el('div', { cls: 'topbar__actions' });
     if (store._snapshotLabel) {
       actions.appendChild(el('span', { cls: 'muted snapshot-label', text: store._snapshotLabel }));
     }
-    // 도움말 버튼(#6) — 스캔 기준·항목 설명 팝업
-    const helpBtn = el('button', {
-      cls: 'btn', text: '도움말',
-      attrs: { 'aria-label': '도움말 열기' },
-      on: { click: openHelp },
-    });
-    helpBtn.prepend(svg([
-      { t: 'circle', cx: '12', cy: '12', r: '9' },
-      { t: 'path', d: 'M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .8-1 1.7' },
-      { t: 'line', x1: '12', y1: '17', x2: '12', y2: '17' },
-    ], { size: 13, sw: 1.8 }));
-    actions.appendChild(helpBtn);
 
     // 설정(폴더 관리 + 옵션) 버튼
     const settingsBtn = el('button', {
@@ -4094,7 +4348,8 @@ function initBrowser() {
     store.editingName = null; store.nameInput = ''; // 이름 편집 상태 정리
     const opener = store._drawerOpener;
     store._drawerOpener = null;
-    render();
+    // [F-1] 드로어 닫힘(overlayOpen 해제) 지점 — release()로 즉시 1회 반영 + 보류 중이던 push 누적분 소비.
+    RG.coalesce.release();
     // 닫은 뒤 여는 버튼으로 포커스 복귀(요소가 재렌더로 사라졌으면 무시)
     if (opener && typeof opener.focus === 'function' && document.contains(opener)) {
       try { opener.focus(); } catch (_) { /* ignore */ }
@@ -4483,35 +4738,11 @@ function initBrowser() {
     }
   }
 
-  /* =====================================================================
-   * P2-1: 네이티브 메뉴 구독 (spip.onMenu → 액션 디스패치)
-   *   menu.js/main.js 가 보내는 spip:menu:* 가 preload 에서 onMenu(cb) 로 합쳐져
-   *   cb({action}) 로 도착한다. dispatchMenuAction 으로 핸들러를 결정해 실행한다.
-   *   onMenu 부재(웹/테스트) 시 graceful — 구독 생략.
-   * ===================================================================== */
-  function subscribeMenu() {
-    unsubscribeMenu();
-    if (!hasBridge() || typeof spip.onMenu !== 'function') return; // graceful
-    const unsub = spip.onMenu((msg) => onMenuCommand(msg));
-    store.menuUnsubscribe = (typeof unsub === 'function') ? unsub : null;
-  }
-  function unsubscribeMenu() {
-    if (typeof store.menuUnsubscribe === 'function') {
-      try { store.menuUnsubscribe(); } catch (_) { /* ignore */ }
-    }
-    store.menuUnsubscribe = null;
-  }
-  /** onMenu 콜백 본체 — action 토큰을 핸들러로 디스패치(매핑은 순수 dispatchMenuAction). */
-  function onMenuCommand(msg) {
-    const { handler } = dispatchMenuAction(msg);
-    switch (handler) {
-      case 'pickFolders': onPickFolders(); break;          // 폴더 선택 흐름
-      case 'rescan':      triggerRescan('dashboard'); break;
-      case 'refresh':     refreshDashboard(); break;        // getProjects/getStats 재조회
-      case 'about':       showAbout(); break;
-      default: /* 알 수 없는 action — graceful 무시 */ break;
-    }
-  }
+  // [R-28] 네이티브 메뉴(spip:menu:*) 제거 — subscribeMenu/unsubscribeMenu/onMenuCommand 폐기.
+  //   메뉴가 제공하던 기능은 모두 대체 경로로 이관됨:
+  //     폴더추가 → 설정 '스캔 폴더' + 단축키 Ctrl+O / 재스캔 → 헤더 '재스캔' 버튼 + 단축키 Ctrl+R
+  //     새로고침 → 단축키 F5(refreshDashboard) / 정보(About) → 설정 '정보' 섹션(renderInfoSettings)
+  //   preload onMenu 화이트리스트(spip:menu:pickFolders·rescan·refresh·about)도 함께 제거(SEC-L1 양방향).
 
   /* =====================================================================
    * 자동 업데이트 진행 구독 (spip.onUpdateStatus → store.update 반영 → 설정 열려있으면 재렌더)
@@ -4600,6 +4831,32 @@ function initBrowser() {
   function stopMailAutoRefresh() {
     if (store.mailRefreshTimer) { try { clearInterval(store.mailRefreshTimer); } catch (_) { /* ignore */ } store.mailRefreshTimer = null; }
   }
+
+  /* [R-31] 커밋 차트 5분 폴링 — 홈 체류 + 창 가시 상태에서만 git 조회. 홈 이탈/비가시 시 타이머 정지(git 호출 0).
+   *   메일 60초 폴링 패턴 복제(주기만 300초). 갱신은 refreshCommitActivity(완료 시 RG.coalesce.release 경유).
+   *   조합/드래그/오버레이/재진입 중에는 RG.deferred()로 폴링 1회 건너뜀(다음 틱에 반영) — R-25/R-26 정합. */
+  function maybeAutoRefreshCommit() {
+    if (store.state.view !== 'home' || !bridgeHas('getCommitActivity')) return;
+    if (store.busyCommitActivity) return;            // 재진입 방지(in-flight)
+    if (RG.deferred()) return;                       // 조합·드래그·오버레이·busy 중엔 보류(깜빡임/입력 방해 방지)
+    refreshCommitActivity();
+  }
+  function startCommitAutoRefresh() {
+    if (store.commitRefreshTimer || !bridgeHas('getCommitActivity')) return;
+    store.commitRefreshTimer = setInterval(maybeAutoRefreshCommit, COMMIT_POLL_MS);
+  }
+  function stopCommitAutoRefresh() {
+    if (store.commitRefreshTimer) { try { clearInterval(store.commitRefreshTimer); } catch (_) { /* ignore */ } store.commitRefreshTimer = null; }
+  }
+  /** [R-31] 홈 뷰/가시성 상태에 따라 커밋 폴링 타이머를 시작/정지하는 단일 게이트.
+   *   뷰 전환·visibilitychange 에서 호출 → shouldPollCommit 이 false 면 정지(홈 비활성 시 git 0). */
+  function syncHomePolling() {
+    const visible = (typeof document !== 'undefined' && typeof document.visibilityState === 'string')
+      ? document.visibilityState !== 'hidden'
+      : true; // visibilityState 미지원 환경 graceful(가시로 간주)
+    if (shouldPollCommit(store.state.view, visible)) startCommitAutoRefresh();
+    else stopCommitAutoRefresh();
+  }
   /**
    * 라이브 갱신 병합. 변경된 project(들)를 store.raw/viewModels 에 id 로 교체하고 재렌더한다.
    *   - 식별/구조 필드는 watcher 가 건드리지 않으므로 toViewModel 로 전체 재매핑해도 안전.
@@ -4629,12 +4886,11 @@ function initBrowser() {
     if (store.stats && typeof store.stats === 'object') {
       store.stats.staleCount = store.viewModels.filter((v) => v && v.isStale).length;
     }
-    // 대시보드 뷰 + 비드래그 + 오버레이(설정/도움말/드로어) 미개방일 때만 재렌더.
-    //   오버레이가 열려 있으면 데이터만 병합하고 렌더는 보류 — 모달 깜빡임/포커스·스크롤 손실 방지.
-    //   (오버레이가 닫힐 때 자연 렌더로 최신 데이터 반영.)
-    const overlayOpen = store.showSettings || store.showHelp || store.state.selectedId;
+    // [R-25 RG-4] 라이브 뷰면 RG.coalesce 단일 게이트로 위임 — 보류 판정(드래그/오버레이/조합/busyMail 등)은
+    //   deferred() 가 일괄 담당(§3.2 매핑표). 보류 중엔 데이터만 병합하고 렌더 보류(모달 깜빡임/포커스 손실 방지),
+    //   보류 해제 지점에서 1회 반영. 오버레이 닫힘은 close* 가 직접 render() 하므로 데이터는 즉시 반영된다.
     const liveView = store.state.view === 'dashboard' || store.state.view === 'home';
-    if (liveView && !store._dragging && !overlayOpen) render();
+    if (liveView) RG.coalesce.request();
   }
   /** onTray 콜백 본체 — action 토큰 디스패치(매핑은 순수 dispatchTrayAction).
    *  [M7 §8.1·R4] 'favorites' 분기 제거 — 트레이 '즐겨찾기'는 main 이 위젯 창을 직접 열고
@@ -4649,12 +4905,10 @@ function initBrowser() {
     // 그 외 — graceful 무시
   }
 
-  /** 메뉴 '정보' — 간단한 정보 토스트(L-1: textContent). */
   /* =====================================================================
    * #6 도움말 팝업 — 프로젝트 인식 패턴 + 각 항목(설명·언어·변경일자·Git·크기 등) 산출 기준 설명.
+   *   [R-28] 진입점: 헤더 '도움말' 버튼 + 설정 '정보' 섹션의 '도움말 보기'(메뉴 '정보' 이관).
    * ===================================================================== */
-  function showAbout() { openHelp(); } // 메뉴 '정보'·헤더 '도움말' 공용 진입점.
-
   function openHelp() {
     store._helpOpener = (typeof document !== 'undefined') ? document.activeElement : null;
     store.showHelp = true;
@@ -4665,7 +4919,8 @@ function initBrowser() {
     store._helpShown = false; // 다음 열림에 진입 애니메이션 재적용
     const opener = store._helpOpener;
     store._helpOpener = null;
-    render();
+    // [F-1] 도움말 닫힘(overlayOpen 해제) 지점 — release()로 즉시 1회 반영 + 보류 중이던 push 누적분 소비.
+    RG.coalesce.release();
     if (opener && typeof opener.focus === 'function' && document.contains(opener)) {
       try { opener.focus(); } catch (_) { /* ignore */ }
     }
@@ -4912,16 +5167,88 @@ function initBrowser() {
       // [R-24] 드래그 동안은 라이브 갱신 재렌더를 보류해 DnD 파손을 막는다.
       onStart: () => { store._dragging = true; },
       onEnd: (evt) => {
-        store._dragging = false;
-        if (!evt || evt.oldIndex === evt.newIndex) return; // 위치 동일 — 무시
-        const grid2 = evt.to || grid;
-        const newIds = Array.prototype.slice.call(grid2.querySelectorAll('[data-card-id]'))
-          .map((n) => (n.dataset && n.dataset.cardId) || '')
-          .filter((x) => typeof x === 'string' && x);
-        if (!newIds.length) return;
-        // onEnd 실행 중 render()가 이 Sortable 인스턴스를 destroy 하지 않도록 마이크로태스크로 지연.
-        Promise.resolve().then(() => commitReorder(newIds));
+        store._dragging = false; // [R4] 보류 해제는 즉시, 단 render/flush 는 마이크로태스크로(아래).
+        const reorder = !!(evt && evt.oldIndex !== evt.newIndex);
+        let newIds = [];
+        if (reorder) {
+          const grid2 = evt.to || grid;
+          newIds = Array.prototype.slice.call(grid2.querySelectorAll('[data-card-id]'))
+            .map((n) => (n.dataset && n.dataset.cardId) || '')
+            .filter((x) => typeof x === 'string' && x);
+        }
+        // [R4·F-1] onEnd 실행 중 render()가 이 Sortable 인스턴스를 destroy 하지 않도록 마이크로태스크로 지연.
+        //   순서가 바뀌었으면 commitReorder(자체 render), 아니면 드래그 중 보류된 push 누적분만 1회 flush.
+        Promise.resolve().then(() => {
+          if (reorder && newIds.length) commitReorder(newIds);
+          else RG.coalesce.flushIfPending();
+        });
       },
+    });
+  }
+
+  /* =====================================================================
+   * [R-32] 홈 섹션 드래그 재정렬 (.home-masonry / .home-section)
+   *   카드 Sortable 선례와 동형: ghost 프리뷰 + onEnd 마이크로태스크 지연(R4). 드롭 시 DOM 의
+   *   data-home-section enum 순서를 읽어 setHomeLayout 영속 → 응답 정규화 순서를 store 반영.
+   *   RG.widget('homeSections')로 render() 1회당 destroy/recreate(중복 인스턴스·핸들러 누적 0).
+   * ===================================================================== */
+  let homeSortable = null;
+  function destroyHomeSortable() {
+    if (homeSortable && typeof homeSortable.destroy === 'function') {
+      try { homeSortable.destroy(); } catch (_) { /* ignore */ }
+    }
+    homeSortable = null;
+  }
+  function initHomeSortable() {
+    destroyHomeSortable();
+    if (typeof document === 'undefined') return;
+    const Sortable = (typeof window !== 'undefined') ? window.Sortable : null;
+    if (!Sortable || typeof Sortable.create !== 'function') return; // 라이브러리 부재 — 재정렬 비활성(표시는 정상)
+    const grid = document.querySelector('.home-masonry');
+    if (!grid) return; // 홈 뷰 아님
+    homeSortable = Sortable.create(grid, {
+      draggable: '.home-section',
+      // 섹션 내부 인터랙티브 컨트롤(버튼/링크/입력)에서 시작하는 포인터다운은 드래그로 잡지 않음(클릭 보존).
+      filter: 'button, a, input, select, textarea, .btn',
+      preventOnFilter: false,
+      animation: prefersReducedMotion() ? 0 : 160,
+      easing: 'cubic-bezier(.2,.8,.2,1)',
+      ghostClass: 'home-section--ghost',   // placeholder(드롭 위치 미리보기)
+      chosenClass: 'home-section--chosen',
+      dragClass: 'home-section--drag',
+      fallbackTolerance: 4,
+      // [R-25] 드래그 동안 라이브 push/폴링 재렌더 보류(_dragging → RG.deferred()).
+      onStart: () => { store._dragging = true; },
+      onEnd: (evt) => {
+        store._dragging = false; // [R4] 보류 해제 즉시, render/flush 는 마이크로태스크로(아래).
+        const reorder = !!(evt && evt.oldIndex !== evt.newIndex);
+        let ids = [];
+        if (reorder) {
+          ids = Array.prototype.slice.call(grid.querySelectorAll('[data-home-section]'))
+            .map((n) => (n.dataset && n.dataset.homeSection) || '')
+            .filter((x) => typeof x === 'string' && x);
+        }
+        // [R4] onEnd 도중 RG.widget.destroyAll 이 이 Sortable 을 파괴하지 않도록 마이크로태스크 지연.
+        Promise.resolve().then(() => {
+          if (reorder && ids.length) commitHomeLayout(ids);
+          else RG.coalesce.flushIfPending();
+        });
+      },
+    });
+  }
+  /** [R-32] 새 섹션 순서 영속 — 낙관적 store 반영 + setHomeLayout IPC → 응답 정규화 순서로 확정.
+   *   메인 normalizeHomeLayout 이 단일 신뢰 경계(렌더러 ids 는 enum 필터만, UX 편의). */
+  function commitHomeLayout(ids) {
+    const next = applyHomeLayout(ids);           // 렌더러 동형 정규화(낙관적)
+    store.homeLayout = next;
+    render();                                    // 새 순서 즉시 반영(드래그 종료 후 1회)
+    if (!bridgeHas('setHomeLayout')) return;      // 웹/테스트 graceful
+    ipc('setHomeLayout', next).then((res) => {
+      if (res && res.ok && Array.isArray(res.homeLayout)) {
+        store.homeLayout = applyHomeLayout(res.homeLayout); // 메인 정규화 최종 순서로 확정
+        render();
+      }
+      // 응답 실패여도 낙관적 순서 유지(다음 getUiState 에서 정합) — 토스트 없음(섹션 순서는 비파괴적).
     });
   }
 
@@ -4944,6 +5271,8 @@ function initBrowser() {
     store.theme = uv.theme || 'system';
     // 할 일(홈 브리핑) — getUiState 응답에 포함. 형식 무효 시 빈 배열.
     store.todos = (res && res.ok !== false && Array.isArray(res.todos)) ? res.todos.filter((t) => t && typeof t.id === 'string') : [];
+    // [R-32] 홈 섹션 순서 — getUiState 응답의 homeLayout 적재(부재/손상 시 동형 정규화로 기본 순서 보충).
+    store.homeLayout = applyHomeLayout(res && res.ok !== false ? res.homeLayout : null);
     applyProjectNames();   // 별칭을 현재 viewModels에 반영
     applyTheme();          // 테마 적용(라이트/다크/시스템)
   }
@@ -5221,6 +5550,196 @@ function initBrowser() {
   }
 
   /* =====================================================================
+   * [R-25] RG — 부분 갱신/재렌더 가드 네임스페이스 (RG-1~RG-4)
+   *   설계 m9-design.html §3. 순수 판정 로직(보류 OR식·coalesce 상태기)은
+   *   lib/common/renderGuard.js 가 정본이며(ADR-M9-1, node:test), 여기 RG 는 그 알고리즘을
+   *   store/DOM 에 잇는 얇은 동형 어댑터다(플래그 수집 + 동일 OR식, 로직 변형 금지).
+   *
+   *   - composition(RG-1): IME 조합 추적(_composing) + render 게이트 입력.
+   *   - deferred()  : 흩어진 보류 조건 6종을 한 곳으로 모아 단일 게이트화(§3.2 매핑표 1:1).
+   *   - preserve(RG-2): 기존 FOCUS_SEL/SCROLL_SEL 캡처/복원 흡수(동작 동일). patchRegion 1차 제외.
+   *   - widget(RG-3): stateful 위젯 라이프사이클(기존 destroyCardSortable/initCardSortable 일반화).
+   *   - coalesce(RG-4): 모든 라이브 트리거의 단일 종착(보류 시 큐, 해제 시 1회 flush) — §3.5 동시성 3규칙.
+   * ===================================================================== */
+  const RG = (function () {
+    // [RG-1] renderGuard.js 의 shouldDeferRender 와 동형(동일 OR식). 플래그 집합 변경 시 양쪽+테스트 동반 수정.
+    function shouldDeferRender(f) {
+      return !!(f && (f.composing || f.dragging || f.overlayOpen
+                  || f.busyMail || f.busyCommit || f.editing));
+    }
+
+    /** 모든 라이브 갱신 트리거의 단일 보류 게이트. true 면 호출측은 render() 를 부르지 않는다.
+     *  §3.2 매핑표와 1:1 — 기존에 흩어졌던 보류 조건(특히 busyMailSummary)을 빠짐없이 흡수. */
+    function deferred() {
+      return shouldDeferRender({
+        composing:   store._composing === true,
+        dragging:    store._dragging === true,
+        overlayOpen: !!(store.showSettings || store.showHelp || store.state.selectedId),
+        busyMail:    store.busyMailSummary === true,
+        busyCommit:  store.busyCommitActivity === true,
+        editing:     store.todoAdding === true,
+      });
+    }
+
+    // ── RG-1: composition(IME 조합) ──
+    const composition = {
+      isComposing() { return store._composing === true; },
+      /** input 요소에 조합 시작/종료를 바인딩. 종료 시 누적분을 1회 반영(flushIfPending). */
+      bind(inputEl) {
+        if (!inputEl || typeof inputEl.addEventListener !== 'function') return;
+        inputEl.addEventListener('compositionstart', () => { store._composing = true; });
+        inputEl.addEventListener('compositionend', () => {
+          store._composing = false;
+          coalesce.flushIfPending(); // 조합 종료 = 보류 해제 지점 → 누적 갱신 1회 반영
+        });
+      },
+    };
+
+    // ── RG-2: preserve(노드 보존 — 포커스/캐럿/스크롤 캡처·복원) ──
+    //   기존 render() 인라인 복원 로직을 동작 동일하게 흡수(로직 변경 없이 위치만). 회귀 0.
+    const SCROLL_SEL = ['.settings-pane', '.modal__body', '.drawer', '.orbit__panel', '.dash__main'];
+    const FOCUS_SEL = ['.topbar__search-input', '.orbit__search'];
+    const preserve = {
+      /** 재렌더 전 스냅샷(활성 입력의 포커스/캐럿 + 스크롤 위치). */
+      capture(rootEl) {
+        const snap = { scroll: {}, focus: null };
+        SCROLL_SEL.forEach((sel) => { const e = rootEl.querySelector(sel); if (e) snap.scroll[sel] = e.scrollTop; });
+        const ae = (typeof document !== 'undefined') ? document.activeElement : null;
+        for (const sel of FOCUS_SEL) {
+          if (ae && rootEl.contains(ae) && typeof ae.matches === 'function' && ae.matches(sel)) {
+            snap.focus = { sel, start: ae.selectionStart, end: ae.selectionEnd, dir: ae.selectionDirection };
+            break;
+          }
+        }
+        return snap;
+      },
+      /** 재렌더 후 동일 셀렉터의 새 노드에 스냅샷 복원. */
+      restore(rootEl, snap) {
+        if (!snap) return;
+        SCROLL_SEL.forEach((sel) => {
+          if (snap.scroll[sel] != null) { const e = rootEl.querySelector(sel); if (e) e.scrollTop = snap.scroll[sel]; }
+        });
+        const f = snap.focus;
+        if (f) {
+          const e = rootEl.querySelector(f.sel);
+          if (e && typeof e.focus === 'function') {
+            try {
+              e.focus({ preventScroll: true });
+              if (f.start != null && typeof e.setSelectionRange === 'function') {
+                e.setSelectionRange(f.start, f.end, f.dir || 'none');
+              }
+            } catch (_) { /* setSelectionRange 미지원 입력은 포커스만 */ }
+          }
+        }
+      },
+      // patchRegion(...) — [R5] M9 1차 범위 제외(후속 마일스톤). destroy/recreate + capture/restore 로만.
+    };
+
+    // ── RG-3: widget(stateful 위젯 라이프사이클) ──
+    //   render() 1회당 destroyAll → 뷰 빌드 → mountAll. 중복 인스턴스·핸들러 누적 0.
+    const _specs = [];            // [{ id, init(root)->instance, destroy(instance) }]
+    const _instances = {};        // id -> 살아있는 instance
+    const widget = {
+      define(spec) {
+        if (!spec || typeof spec.id !== 'string') return;
+        if (_specs.some((s) => s.id === spec.id)) return; // 중복 정의 무시
+        _specs.push(spec);
+      },
+      /** render() 진입부: 살아있는 모든 인스턴스 destroy(노드 교체 전). */
+      destroyAll() {
+        for (const s of _specs) {
+          const inst = _instances[s.id];
+          if (inst != null && typeof s.destroy === 'function') {
+            try { s.destroy(inst); } catch (_) { /* ignore */ }
+          }
+          _instances[s.id] = null;
+        }
+      },
+      /** render() 종료부: 현재 DOM 에 매칭되는 위젯만 init(중복 방지). */
+      mountAll(rootEl) {
+        for (const s of _specs) {
+          if (_instances[s.id] != null) continue;       // 이미 살아있으면 skip(중복 방지)
+          if (typeof s.init !== 'function') continue;
+          let inst = null;
+          try { inst = s.init(rootEl); } catch (_) { inst = null; }
+          _instances[s.id] = (inst != null) ? inst : null;
+        }
+      },
+    };
+
+    // ── RG-4: coalesce(라이브 push 단일 종착) ──
+    //   순수 상태기는 renderGuard.js 와 동형(발화 순서·pending 단조성 동치 — test/renderGuard.test.js 가 계약).
+    //   isDeferred=deferred, flush=debounce(render,120) 의 즉시 render.
+    const _coalescer = (function () {
+      let pending = false, timer = null;
+      function clearTimer() { if (timer != null) { clearTimeout(timer); timer = null; } }
+      function onFire() {
+        timer = null;
+        if (deferred()) return;       // [R2] 발화 직전 보류 시작 → pending 유지, 발화 취소
+        if (!pending) return;
+        pending = false; render();    // 정확히 1회
+      }
+      return {
+        request() {
+          pending = true;
+          if (deferred()) { clearTimer(); return; }
+          if (timer == null) timer = setTimeout(onFire, 120); // 이미 예약돼 있으면 재예약 안 함(단일 타이머)
+        },
+        flushIfPending() {
+          if (!pending) return;
+          if (deferred()) return;     // [R2] 다른 보류 사유 남음 → 마지막 해제자만 발화
+          clearTimer();
+          pending = false; render();
+        },
+        // 보류 해제 지점에서 "즉시 1회 반영 + pending/타이머 소비". 기존 직접 render() 를 대체해
+        //   잔류 pending 으로 인한 잉여 render 1회를 막는다(F-1). 항상 1회 render(즉시 데이터 반영 보장).
+        release() { clearTimer(); pending = false; render(); },
+        // teardown: 잔여 디바운스 타이머 정리(unload 중 잉여 render 방지, D-2). pending 보존.
+        cancel() { clearTimer(); },
+      };
+    })();
+    const coalesce = {
+      request() { _coalescer.request(); },
+      flushIfPending() { _coalescer.flushIfPending(); },
+      release() { _coalescer.release(); },
+      cancel() { _coalescer.cancel(); },
+    };
+
+    return { composition, deferred, preserve, widget, coalesce };
+  })();
+
+  // [R-25 RG-3] 기존 카드 정렬(.cards)을 위젯 라이프사이클로 등록(동작 보존: 기존 init/destroy 그대로).
+  RG.widget.define({
+    id: 'cardSortable',
+    init: () => { initCardSortable(); return cardSortable; }, // init 은 cardSortable 모듈 변수에 인스턴스 보관
+    destroy: () => { destroyCardSortable(); },
+  });
+  // [R-32] 홈 섹션 드래그 재정렬 위젯. .home-masonry 부재(홈 뷰 아님) 시 init 은 no-op.
+  RG.widget.define({
+    id: 'homeSections',
+    init: () => { initHomeSortable(); return homeSortable; },
+    destroy: () => { destroyHomeSortable(); },
+  });
+  // [R-33] 커밋 차트 위젯(SVG 자작). .commit-chart-host 부재(홈 뷰 아님/생산성 섹션 미표시) 시 no-op.
+  //   render() 1회당 destroy/recreate → 호버 핸들러 누수·중복 0. 5분 폴링(R-31) 갱신 시에도 정상 재생성.
+  RG.widget.define({
+    id: 'commitChart',
+    init: () => {
+      if (typeof document === 'undefined') return null;
+      const host = document.querySelector('.commit-chart-host');
+      if (!host) return null;
+      // 기존과 동일: store.commitActivity.days 최근 7일. 라벨은 homeWeekday(date) — textContent 로만 사용.
+      const ca = store.commitActivity || {};
+      const src = Array.isArray(ca.days) ? ca.days.slice(-7) : [];
+      const days = src.map((d) => ({ count: (d && d.count), label: (d && d.date) ? homeWeekday(d.date) : '' }));
+      const chart = chartBars(days, { ariaLabel: '최근 7일 커밋 빈도' });
+      host.appendChild(chart.node);
+      return chart; // { node, destroy }
+    },
+    destroy: (inst) => { if (inst && typeof inst.destroy === 'function') { try { inst.destroy(); } catch (_) { /* ignore */ } } },
+  });
+
+  /* =====================================================================
    * 데이터 로드 (단일 출처, 1회 fetch)
    * ===================================================================== */
   async function load() {
@@ -5293,8 +5812,23 @@ function initBrowser() {
     if (store.state.view === 'orbit') { exitOrbit(); }
   });
 
-  // P2-1: 네이티브 메뉴 구독(앱 1회). 부재 시 graceful — subscribeMenu 내부 가드.
-  subscribeMenu();
+  // [R-28/R-29] 전역 단축키 — 네이티브 메뉴 제거로 사라진 accelerator(Ctrl+O·Ctrl+R)와 신설 F5(새로고침)를
+  //   렌더러 keydown 으로 처리(globalShortcut 아님 — 앱 비포커스 시 미발화 안전). 매핑은 순수 matchShortcut.
+  document.addEventListener('keydown', (e) => {
+    const action = matchShortcut(e);
+    if (!action) return;
+    // [B-1] 편집 가능 요소(input/textarea/contenteditable) 포커스 중에는 Ctrl+O/Ctrl+R 발화 금지
+    //   (텍스트 입력 중 의도치 않은 폴더추가/재스캔 방지). F5(refresh)는 텍스트 충돌 없어 그대로 허용.
+    if (action !== 'refresh' && isEditableTarget(e.target)) return;
+    e.preventDefault();
+    switch (action) {
+      case 'pickFolders': onPickFolders(); break;
+      case 'rescan':      onRescan(); break;
+      case 'refresh':     refreshDashboard(); break;
+      default: /* close 등은 전역 ESC 핸들러 소관 */ break;
+    }
+  });
+
   // R-21: 트레이 push 구독(앱 1회). 부재 시 graceful — subscribeTray 내부 가드.
   subscribeTray();
   // R-24: 상태 주시 라이브 갱신 구독(앱 1회). 부재 시 graceful — 내부 가드.
@@ -5302,21 +5836,26 @@ function initBrowser() {
   // 메일 실시간 갱신: 새 메일 push 구독 + 홈 주기 갱신(앱 1회).
   subscribeMailUpdated();
   startMailAutoRefresh();
+  // [R-31] 커밋 차트 폴링 — 창 가시성 변화 시 폴링 시작/정지 동기화(홈 비가시 시 git 0). 뷰 전환은 render()가 동기화.
+  if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+    document.addEventListener('visibilitychange', () => { try { syncHomePolling(); } catch (_) { /* graceful */ } });
+  }
   // 자동 업데이트 진행 구독(앱 1회). 부재 시 graceful — 내부 가드.
   subscribeUpdateStatus();
   // 테마 즉시 적용(시스템 기본) + 시스템 테마 변경 구독. ui-state 적재 시 사용자 설정으로 갱신.
   applyTheme();
   subscribeSystemTheme();
 
-  // teardown: 창 unload 시 구독 해제(누수 방지 — 메뉴·진행·트레이·주시·업데이트 구독 모두).
+  // teardown: 창 unload 시 구독 해제(누수 방지 — 진행·트레이·주시·업데이트 구독). [R-28] 메뉴 구독 제거됨.
   function teardown() {
-    unsubscribeMenu();
     unsubscribeScan();
     unsubscribeTray();
     unsubscribeProjectsUpdated();
     unsubscribeMailUpdated();
     stopMailAutoRefresh();
+    stopCommitAutoRefresh(); // [R-31] 커밋 폴링 타이머 정리
     unsubscribeUpdateStatus();
+    RG.coalesce.cancel(); // [D-2] 잔여 디바운스 타이머 정리(unload 중 잉여 render 방지)
     stopOrbit(); // 궤도 캔버스 RAF·리스너 정리
   }
   if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
@@ -5367,7 +5906,22 @@ if (typeof module !== 'undefined' && module.exports) {
     classifyRescan,
     // Electron 적응 추가
     describeRejectReason,
-    dispatchMenuAction,
+    // [R-29] 단축키 단일 출처 + keydown 순수 매핑
+    SHORTCUTS,
+    matchShortcut,
+    isEditableTarget,
+    // [R-27] 헤더 뷰별 구성(검색 노출 판정)
+    headerViewConfig,
+    // [R-30] 설정 2-pane 카테고리 단일 출처 + 활성 탭 정규화
+    SETTINGS_CATEGORIES,
+    resolveSettingsTab,
+    // [R-31] 커밋 차트 폴링 게이트(홈 뷰 + 가시성)
+    shouldPollCommit,
+    // [R-32] 홈 섹션 화이트리스트 + 순서 정규화(렌더러 동형)
+    HOME_SECTION_IDS,
+    applyHomeLayout,
+    // [R-33] 커밋 차트 기하 모델(순수 — 수치 sanitize·스케일)
+    commitChartModel,
     resolveScanReloadView,
     nextScanAction,
     sanitizeRescanOpts,

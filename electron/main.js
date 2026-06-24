@@ -28,7 +28,6 @@ const { app, BrowserWindow, Menu, dialog, ipcMain, protocol, shell, clipboard, s
 const { buildContext } = require('./context');
 const { registerIpcHandlers } = require('./ipc/register');
 const { applyCspHeaders, hardenWebContents, TRUSTED_ORIGIN } = require('./security');
-const { buildMenuTemplate } = require('./menu');
 const { createTray } = require('./tray');
 const { resolveAppRelPath } = require('./appProtocol');
 const favoritesWidget = require('./favoritesWidget');
@@ -248,19 +247,10 @@ function onReady() {
     logger.error('상태 주시 시작 실패 — 주시 없이 계속', err);
   }
 
-  // 메뉴(P2-1) — 메뉴 클릭은 포커스된 창의 webContents로 'spip:menu:<action>'를 send하고,
-  //   renderer가 preload onMenu(cb)로 구독해 해당 액션(폴더선택/재스캔/새로고침/정보)을 수행한다.
-  //   dead wiring(아무도 안 받는 send) 해소 — 발신·수신이 단일 계약(action 집합)으로 연결된다.
-  Menu.setApplicationMenu(Menu.buildFromTemplate(buildMenuTemplate({
-    isDev: IS_DEV,
-    // 포커스된 창(없으면 메인 창)으로 보낸다 — 멀티/포커스 상황에서도 올바른 대상.
-    getWebContents: () => {
-      const focused = BrowserWindow.getFocusedWindow();
-      const target = (focused && !focused.isDestroyed()) ? focused
-        : ((win && !win.isDestroyed()) ? win : null);
-      return target ? target.webContents : null;
-    },
-  })));
+  // [R-28] 네이티브 메뉴 제거 — 메뉴 미설치(접근성/기능은 헤더 버튼·렌더러 단축키로 대체).
+  //   메뉴 발신 경로(menu.js)·preload onMenu 수신부도 함께 제거(SEC-L1 양방향, 죽은 채널 0).
+  //   폴더추가/재스캔=헤더+단축키(Ctrl+O/Ctrl+R) · 새로고침=F5 · 정보=설정 '정보' 섹션.
+  Menu.setApplicationMenu(null);
 
   // [R-21] 트레이 생성(창 생성 후). 콜백은 main이 소유하는 생명주기 함수로 연결.
   //   ★P2-2: onQuit는 app.quit()을 직접 부르지 않고 win.close() 트리거로 통일 → 실제 종료(dispose+
@@ -346,7 +336,7 @@ function onReady() {
 
   // [P2-3] 창 unload/reload 시 진행 스냅샷 push는 makeProgressSender의 isDestroyed/getWebContents
   //   지연평가 가드로 자연 격리된다(파괴된 wc로 send 안 함). 추가로 reload 시 renderer 쪽 구독
-  //   (onScanProgress·onMenu)은 페이지 재로드로 자동 폐기되므로 main 측 누수는 없다.
+  //   (onScanProgress 등)은 페이지 재로드로 자동 폐기되므로 main 측 누수는 없다.
   win.on('closed', () => { win = null; });
 
   // 자동 업데이트 클라이언트 초기화(trigger-and-forget) — 패키징 빌드에서만 동작(내부 가드).

@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>코드 리뷰 — M9 P8 (R-33 SVG 커밋 차트)</title>
+<style>
+  :root{
+    --bg:#0b1220; --panel:#111a2e; --panel2:#0f1626; --bd:#1e2b45;
+    --fg:#e6edf7; --muted:#93a4c2; --accent:#34d399; --ref:#38bdf8;
+    --warn:#fbbf24; --bad:#f87171; --ok:#34d399;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+    font:14.5px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Malgun Gothic",sans-serif;}
+  .wrap{max-width:1040px;margin:0 auto;padding:38px 26px 80px}
+  h1{font-size:25px;margin:0 0 6px;letter-spacing:-.3px}
+  h2{font-size:18px;margin:36px 0 12px;padding-bottom:7px;border-bottom:1px solid var(--bd);color:#cfe0fb}
+  h3{font-size:15px;margin:22px 0 8px;color:#cfe0fb}
+  .sub{color:var(--muted);font-size:13px;margin:0 0 4px}
+  code{background:#0a1322;border:1px solid var(--bd);border-radius:5px;padding:.5px 6px;
+    font-family:ui-monospace,"Cascadia Code",Consolas,monospace;font-size:12.6px;color:#cbd6ec}
+  .verdict{display:inline-block;font-weight:700;font-size:15px;padding:7px 18px;border-radius:999px;
+    border:1px solid var(--ok);color:#06291d;background:var(--ok)}
+  .panel{background:var(--panel);border:1px solid var(--bd);border-radius:12px;padding:18px 20px;margin:14px 0}
+  .grid{display:flex;gap:14px;flex-wrap:wrap;margin:14px 0}
+  .stat{flex:1;min-width:130px;background:var(--panel2);border:1px solid var(--bd);border-radius:10px;padding:13px 16px}
+  .stat .n{font-size:26px;font-weight:700}
+  .stat .l{color:var(--muted);font-size:12.5px}
+  table{width:100%;border-collapse:collapse;margin:10px 0;font-size:13.4px}
+  th,td{text-align:left;padding:9px 11px;border-bottom:1px solid var(--bd);vertical-align:top}
+  th{color:#aebfdd;font-weight:600;background:#0d1525}
+  td.loc{white-space:nowrap;color:var(--ref);font-family:ui-monospace,Consolas,monospace;font-size:12.4px}
+  .sev{font-weight:700;font-size:11.5px;padding:2px 9px;border-radius:999px;white-space:nowrap;display:inline-block}
+  .sev.defect{background:#3a1414;color:var(--bad);border:1px solid #5b1d1d}
+  .sev.improve{background:#2b2410;color:var(--warn);border:1px solid #4a3c14}
+  .sev.minor{background:#0e2436;color:var(--ref);border:1px solid #1d3a52}
+  .sev.good{background:#0c2a1e;color:var(--ok);border:1px solid #155}
+  .ref{color:var(--ref)}
+  .muted{color:var(--muted)}
+  ul{margin:8px 0 8px 2px;padding-left:20px}
+  li{margin:4px 0}
+  .tag{display:inline-block;font-size:11px;color:#9fb2d6;border:1px solid var(--bd);border-radius:5px;padding:1px 7px;margin-right:5px}
+  .svgwrap{background:var(--panel2);border:1px solid var(--bd);border-radius:12px;padding:16px;margin:14px 0;overflow:auto}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <p class="sub">SPIP · 코드 품질 리뷰 (1회차) · 2026-06-24</p>
+  <h1>M9 P8 — R-33 SVG 자작 커밋 차트</h1>
+  <p class="sub">대상: <code>public/app.js</code> (<code>commitChartModel</code> · <code>chartBars</code> · <code>CHART_PALETTE</code> · <code>renderHomeProductivity</code> 호스트 · <code>RG.widget('commitChart')</code>) / <code>public/styles.css</code> 차트·툴팁 / <code>test/commitChart.test.js</code> (12건) · 기준: <code>docs/architecture/m9-design.html</code> §10 R-33</p>
+
+  <p style="margin:16px 0"><span class="verdict">판정 · PASS</span></p>
+
+  <div class="panel">
+    <b>요약 —</b> 정확성 결함 0건. 수치 sanitize(Number+isFinite, 음수/NaN/Infinity→0)·maxCount 비례 스케일·7칸 패딩·baseline 안 클램프가 정확하다.
+    <code>chartBars</code>의 <code>destroy</code>는 등록한 모든 핸들러(<code>on()</code> 경유 mouseenter/mouseleave/focus/blur ×막대수)를 빠짐없이 detach해 누수가 없고,
+    호버 강조 원복은 막대별 closure로 캡처한 <code>baseFill</code>로 정확히 복원한다. <code>RG.widget</code> init은 호스트 부재 시 <code>null</code> 반환으로 no-op·멱등이고,
+    render() 1회당 destroyAll→mountAll로 중복 인스턴스가 없다. 기존 div 막대 잔재(죽은 코드)도 없다. 헤드리스 12건 전부 통과.
+    심각도: <b class="ref">개선 1</b> · <b class="ref">사소 4</b>.
+  </div>
+
+  <div class="grid">
+    <div class="stat"><div class="n" style="color:var(--ok)">0</div><div class="l">정확성 결함</div></div>
+    <div class="stat"><div class="n" style="color:var(--warn)">1</div><div class="l">개선</div></div>
+    <div class="stat"><div class="n" style="color:var(--ref)">4</div><div class="l">사소</div></div>
+    <div class="stat"><div class="n" style="color:var(--ok)">12/12</div><div class="l">테스트 통과</div></div>
+  </div>
+
+  <!-- ============ 1. 정확성 검증 ============ -->
+  <h2>1. 정확성 검증 (결함 0)</h2>
+
+  <table>
+    <tr><th>점검</th><th>위치</th><th>판정</th></tr>
+    <tr>
+      <td><b>수치 sanitize</b> — <code>Number(d.count)</code>+<code>isFinite</code>+<code>n&gt;=0</code>, 그 외 0. label은 문자열만 보존.</td>
+      <td class="loc">app.js:683–688</td>
+      <td><span class="sev good">정확</span> NaN/Infinity/음수/문자열·null·undefined 전부 0 클램프. 테스트 line 25–41과 일치.</td>
+    </tr>
+    <tr>
+      <td><b>스케일/패딩</b> — <code>h = max(3, count/maxCount*usableH)</code>, 0막대는 스텁 2px. 7칸 미만은 <code>unshift</code> 앞 패딩, 초과는 <code>slice(-maxBars)</code>.</td>
+      <td class="loc">app.js:682,689,697–709</td>
+      <td><span class="sev good">정확</span> <code>y=baseline-h</code>, <code>baseline=viewH-labelH</code>로 막대가 차트 영역 안. 테스트 line 43–67이 baseline/viewW 경계 검증.</td>
+    </tr>
+    <tr>
+      <td><b>destroy 핸들러 detach</b> — <code>on()</code>이 등록한 모든 핸들러를 <code>handlers[]</code>에 적재, destroy가 전부 <code>removeEventListener</code> 후 배열 비움.</td>
+      <td class="loc">app.js:1294–1295,1323–1326,1344–1347</td>
+      <td><span class="sev good">정확</span> 막대당 4핸들러(mouseenter/leave/focus/blur) 모두 동일 fn 참조로 detach. 누수·중복 0.</td>
+    </tr>
+    <tr>
+      <td><b>호버 강조 원복</b> — <code>showTip</code>이 <code>barHover</code>, <code>hideTip</code>이 막대별 closure의 <code>baseFill</code> 복원.</td>
+      <td class="loc">app.js:1305,1314–1322</td>
+      <td><span class="sev good">정확</span> <code>baseFill</code>이 막대마다 캡처돼 stub/barLast/bar 원색을 정확히 되돌림.</td>
+    </tr>
+    <tr>
+      <td><b>RG.widget no-op·멱등</b> — 호스트 부재 시 <code>null</code> 반환. mountAll은 살아있는 인스턴스 skip, destroyAll은 render마다 정리.</td>
+      <td class="loc">app.js:5727–5740 / 5649–5667</td>
+      <td><span class="sev good">정확</span> 부재 시 <code>_instances</code>에 null → 재시도 가능. 존재 시 render당 1회 destroy/recreate.</td>
+    </tr>
+    <tr>
+      <td><b>M-2 안전</b> — 라벨/툴팁 <code>textContent</code>만, 색은 <code>CHART_PALETTE</code> 상수 setAttribute, 치수는 모델 수치 <code>String(b.x)</code>.</td>
+      <td class="loc">app.js:1272,1300–1316</td>
+      <td><span class="sev good">정확</span> innerHTML/xlink/외부 url 0. (보안 상세는 별도 보안 리뷰 소관 — 여기선 결함 없음만 확인.)</td>
+    </tr>
+  </table>
+
+  <!-- ============ 2. 개선 항목 ============ -->
+  <h2>2. 개선 항목</h2>
+
+  <h3>개선</h3>
+  <table>
+    <tr><th>항목</th><th>위치</th><th>왜 / 권고</th></tr>
+    <tr>
+      <td><span class="sev improve">개선</span> <b>툴팁이 호버 막대를 따라가지 않음</b> — <code>showTip</code>은 텍스트·표시만 바꾸고 위치는 그대로. 툴팁 CSS는 <code>left:50%</code>(랩 전체 중앙) 고정이라 어느 막대를 호버해도 차트 한가운데에 뜬다.</td>
+      <td class="loc">app.js:1314–1318<br>styles.css:386–391</td>
+      <td>설계 §10(design line 537)은 "툴팁은 SVG 외부 div로 <b>포지셔닝</b>"을 명시한다. 현 구현은 수치 텍스트만 정확하고 위치는 막대와 무관해, 첫 칸/마지막 칸을 가리켜도 가운데 풍선이 떠 어느 날짜인지 시각적으로 모호하다(특히 7칸 중 양끝). 권고: <code>showTip(b)</code>에서 막대 중심 x(=<code>b.x+b.w/2</code> 비율) 기준으로 <code>tip.style.left</code>를 설정하거나, 막대 인덱스에 따라 left를 계산. 현 동작이 의도된 1차 범위(중앙 고정)라면 §10과의 차이를 설계 노트로 남길 것.</td>
+    </tr>
+  </table>
+
+  <h3>사소</h3>
+  <table>
+    <tr><th>항목</th><th>위치</th><th>왜 / 권고</th></tr>
+    <tr>
+      <td><span class="sev minor">사소</span> <b>호스트 조회가 전달받은 root를 무시</b> — init이 인자 <code>rootEl</code> 대신 <code>document.querySelector</code> 사용.</td>
+      <td class="loc">app.js:5727,5729</td>
+      <td>설계 예시(line 533)와 다른 형제 위젯 규약(<code>init:(root)=&gt;root.querySelector</code>)과 불일치. 현 앱 구조상 호스트는 1개뿐이라 기능 동일하나, 일관성·스코프 안전성 위해 <code>init:(root)=&gt;{ const host=(root||document).querySelector('.commit-chart-host'); ... }</code> 권고.</td>
+    </tr>
+    <tr>
+      <td><span class="sev minor">사소</span> <b>라벨/수치 문자열 조립 중복</b> — title(<code>(label||'·')+': '+count+' 커밋'</code>)과 tip(<code>(label||'·')+' · '+count+' 커밋'</code>)이 거의 동일 패턴 2회.</td>
+      <td class="loc">app.js:1311,1316</td>
+      <td>구분자만 다른 동일 의미 텍스트. 작은 헬퍼(<code>barText(b, sep)</code>)로 묶으면 표기 변경 시 단일 출처. 신호 대비 가치는 낮으니 선택.</td>
+    </tr>
+    <tr>
+      <td><span class="sev minor">사소</span> <b>createElementNS 반복</b> — chartBars에서 svg/rect/title을 raw <code>createElementNS+setAttribute</code> 나열. 같은 파일에 svg 노드 헬퍼(<code>svg()</code>)가 있으나 viewBox 24 고정이라 재사용 불가.</td>
+      <td class="loc">app.js:1281–1312</td>
+      <td>설계가 "svg()는 차트에 부적합"이라 새 빌더를 둔 판단은 타당. 다만 <code>setAttribute</code> 다발은 작은 로컬 헬퍼(<code>ns(tag, attrs)</code>)로 묶으면 가독성↑. 현 코드도 충분히 읽히므로 필수 아님.</td>
+    </tr>
+    <tr>
+      <td><span class="sev minor">사소</span> <b><code>colW</code> 음수 미가드</b> — <code>colW=(viewW-gap*(n-1))/n</code>. 극단적으로 작은 width 또는 큰 gap opts에선 음수 가능.</td>
+      <td class="loc">app.js:695</td>
+      <td>실제 호출은 기본값(240/gap6/n7→29.1)·테스트(200)만이라 도달 불가에 가깝고, SVG는 음수 width를 무시할 뿐 크래시는 없음. 방어적으로 <code>Math.max(1, ...)</code> 정도면 충분. 우선순위 낮음.</td>
+    </tr>
+  </table>
+
+  <!-- ============ 3. 가독성·CSS·단순성 ============ -->
+  <h2>3. 가독성 · CSS · 단순성</h2>
+  <ul>
+    <li><b>순수 모델/빌더 분리 적절</b> — <code>commitChartModel</code>(좌표·치수·sanitize, 순수)과 <code>chartBars</code>(DOM·핸들러)가 깔끔히 분리돼 헤드리스 테스트 가능. 설계 의도와 일치.</li>
+    <li><b>죽은 코드 없음</b> — 기존 div 인라인 height 막대는 호스트 <code>.commit-chart-host</code>로 완전 대체됐고 잔재 없음(grep 확인). 차트 클래스는 모두 새 SVG 경로에서만 사용.</li>
+    <li><b>CSS 일관</b> — <code>.commit-chart__*</code> BEM 네이밍, <code>var(--accent)</code> 포커스, 다크 툴팁(#1c1917) 모두 주변 스타일과 일관. <code>transition: fill .12s</code>로 호버 강조가 부드럽다.</li>
+    <li><b>다크톤 팔레트</b> — <code>CHART_PALETTE</code>는 라이트 카드(홈은 밝은 카드 배경) 위 인디고 계열로, 홈 생산성 카드 톤과 맞물린다(차트는 밝은 카드 내부 위젯이라 다크 보고서 톤과 별개). 일관성 문제 없음.</li>
+    <li><b>round1 수치 정리</b> — 좌표를 소수1자리로 라운드해 SVG 속성 문자열이 깔끔. 적절한 단순화.</li>
+  </ul>
+
+  <h2>4. 확인 필요</h2>
+  <ul>
+    <li><b>툴팁 포지셔닝 범위</b> — 개선 항목(2-1)이 의도된 1차 단순화(중앙 고정)인지, §10의 "포지셔닝" 충족 미달인지 PM/설계 확인. 7칸 중앙 고정이라도 막대당 텍스트는 정확하므로 차단 결함은 아님.</li>
+    <li><b>재생성 시 깜빡임</b> — 설계 §10/리스크(line 541,631)가 5분 폴링 시 차트 깜빡임을 예고하며 "데이터 무변경 시 재생성 skip(diff 가드)"을 완화책으로 둠. 현 구현은 매 render destroy/recreate(설계가 명시한 1차 단순안). Could 우선순위라 결함 아님 — 체감 시 후속.</li>
+  </ul>
+
+  <p class="sub" style="margin-top:40px">정확성 결함 0 · 개선 1 · 사소 4 · 테스트 12/12 통과 — PASS. 코드는 직접 수정하지 않음.</p>
+
+</div>
+</body>
+</html>

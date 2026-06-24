@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project-SPIP — M9 설계 정본 (부분 갱신 가드 · 헤더/메뉴/설정 정리 · 실시간 · 드래그 · SVG 차트)</title>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#1e293b; --text:#e2e8f0; --sub:#94a3b8;
+    --accent:#34d399; --ref:#38bdf8; --line:#334155; --warn:#fbbf24; --danger:#f87171; --purple:#c4b5fd;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:"Segoe UI","Malgun Gothic",system-ui,sans-serif;line-height:1.7;font-size:14.5px;}
+  header.page{padding:46px 32px 34px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#13203b,#0f172a);}
+  header.page .kicker{font-size:12px;letter-spacing:0.16em;text-transform:uppercase;color:var(--ref);}
+  header.page h1{margin:10px 0 8px;font-size:28px;font-weight:700;letter-spacing:-0.02em;}
+  header.page p{margin:8px 0 0;color:var(--sub);max-width:1000px;}
+  .tag{display:inline-block;background:rgba(52,211,153,.12);color:var(--accent);
+    border:1px solid rgba(52,211,153,.4);border-radius:999px;padding:3px 12px;font-size:12.5px;margin:8px 8px 0 0;}
+  main{max-width:1180px;margin:0 auto;padding:30px 28px 90px;}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:24px 28px;margin:22px 0;}
+  h2{margin:0 0 16px;font-size:21px;color:var(--accent);border-left:4px solid var(--accent);padding-left:12px;}
+  h3{font-size:16px;color:var(--ref);margin:24px 0 10px;}
+  h4{font-size:14px;color:var(--text);margin:16px 0 6px;}
+  p{margin:8px 0;} ul,ol{margin:8px 0;padding-left:22px;} li{margin:6px 0;color:#cbd5e1;}
+  code{background:#0b1220;color:var(--ref);padding:1px 6px;border-radius:5px;font-size:12.5px;font-family:Consolas,monospace;}
+  pre{background:#0b1220;border:1px solid var(--line);border-radius:8px;padding:14px 16px;overflow-x:auto;
+    font-size:12.7px;color:#cbd5e1;font-family:Consolas,monospace;line-height:1.6;}
+  pre .c{color:#64748b;} pre .k{color:#7dd3fc;} pre .s{color:#86efac;} pre .f{color:#fcd34d;}
+  table{width:100%;border-collapse:collapse;margin:12px 0;font-size:13px;}
+  th,td{border:1px solid var(--line);padding:8px 11px;text-align:left;vertical-align:top;}
+  th{background:#142035;color:var(--accent);}
+  tr:nth-child(even) td{background:rgba(255,255,255,.02);}
+  .note{background:rgba(56,189,248,.08);border:1px solid rgba(56,189,248,.3);border-radius:10px;padding:14px 18px;color:#bae6fd;font-size:13.5px;margin:14px 0;}
+  .warnbox{background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.35);border-radius:10px;padding:14px 18px;color:#fde68a;font-size:13.5px;margin:14px 0;}
+  .secbox{background:rgba(248,113,113,.07);border:1px solid rgba(248,113,113,.32);border-radius:10px;padding:14px 18px;color:#fecaca;font-size:13.5px;margin:14px 0;}
+  .rid{font-family:Consolas,monospace;color:var(--accent);font-weight:700;white-space:nowrap;}
+  .dep{display:inline-block;font-family:Consolas,monospace;background:#0b1220;border:1px solid var(--line);color:var(--purple);padding:2px 8px;border-radius:6px;font-size:12px;margin:2px 4px 2px 0;}
+  .svg-wrap{background:#0b1220;border:1px solid var(--line);border-radius:12px;padding:16px;overflow-x:auto;margin:14px 0;}
+  .legend{display:flex;gap:18px;flex-wrap:wrap;font-size:12.5px;color:var(--sub);margin-top:10px;}
+  .legend span{display:inline-flex;align-items:center;gap:6px;}
+  .sw{width:14px;height:14px;border-radius:3px;display:inline-block;}
+  .toc{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px;}
+  .toc a{display:block;background:#0b1220;border:1px solid var(--line);border-radius:8px;padding:9px 13px;color:var(--text);text-decoration:none;font-size:13px;}
+  .toc a:hover{border-color:var(--accent);}
+  .adr{border:1px solid var(--line);border-left:4px solid var(--purple);border-radius:0 10px 10px 0;padding:16px 20px;margin:16px 0;background:rgba(196,181,253,.05);}
+  .adr h4{color:var(--purple);margin-top:0;}
+  .pick{color:var(--accent);font-weight:700;}
+  .good{color:#6ee7b7;} .bad{color:#fca5a5;}
+  footer{text-align:center;color:var(--sub);font-size:12.5px;padding:30px;border-top:1px solid var(--line);}
+  .filemap{font-size:12.7px;}
+  .filemap td:first-child{font-family:Consolas,monospace;color:var(--ref);white-space:nowrap;}
+</style>
+</head>
+<body>
+
+<header class="page">
+  <div class="kicker">Project-SPIP · 아키텍처 설계 정본 · M9 배치 (R-25 ~ R-33)</div>
+  <h1>M9 설계 — 부분 갱신/재렌더 가드 기반 위에 헤더·메뉴·설정·실시간·드래그·SVG 차트를 얹는다</h1>
+  <p>입력: <code>docs/FeatureSpec-backlog-m9.html</code>(확정 기능명세 R-25~R-33) · <code>docs/pm/codebase-audit.html</code>(코드베이스 감사) · <code>docs/design/home-briefing-dashboard.md</code>(디자인 기준) · 기존 정본 <code>architecture.html</code> / <code>m8-design.html</code> / <code>adr.html</code>. 본 문서는 <b>R-25의 구체 API surface를 확정</b>(F-2 위임 완료)하고 R-26~R-33이 그 위에 어떻게 얹히는지 인터페이스 계약·파일 변경 지도·구현 순서를 정의한다.</p>
+  <span class="tag">코드 미작성 — 설계 표현(시그니처·스키마·의사코드)까지</span>
+  <span class="tag">기존 구조·명명·보안 불변식 준수</span>
+  <span class="tag">작성 2026-06-24 · 수석 아키텍트</span>
+  <span class="tag" style="background:rgba(196,181,253,.12);color:#c4b5fd;border-color:rgba(196,181,253,.4);">rev.1 — 설계·보안 검증 1회차 반영(2026-06-24)</span>
+</header>
+
+<div style="max-width:1180px;margin:0 auto;padding:18px 28px 0;">
+  <div class="note" style="margin:0;"><b>검증 반영 안내(rev.1).</b> 설계 검증(<code>docs/reviews/m9_design_review_1.html</code>)·보안 검증(<code>docs/reviews/m9_design_security_review_1.html</code>) 조건부 통과 사항을 반영했다 — R1(deferred 전수 매핑 §3.2) · R2(coalesce 동시성 §3.5) · R3(R-26 debounce 대체 §3.8) · R4(onEnd×flush 타이밍 §3.4) · R5(patchRegion 1차 제외 §3.3) · C-M-1(write/normalizeState/toResponse 동반 + 라운드트립 게이트 §6) · C-M-2(chartBars textContent/Number/팔레트 §10) · D(Q5 도움말→설정 흡수 확정 §9.1/§14) · E(R6 통합 회귀·R7 동형 테스트 §11).</div>
+</div>
+
+<main>
+
+<!-- ===================== 0. 목차 ===================== -->
+<section>
+  <h2>0. 목차</h2>
+  <div class="toc">
+    <a href="#overview">1. 개요 · 아키텍처 동인 · 품질 속성</a>
+    <a href="#trace">2. 요구별 설계 결정 (추적성)</a>
+    <a href="#r25">3. ★ R-25 API surface 명세 (최우선)</a>
+    <a href="#r25flow">4. R-25 적용 데이터 흐름 (다이어그램)</a>
+    <a href="#filemap">5. 모듈/파일 변경 지도</a>
+    <a href="#uistate">6. uiState 신규 스키마 (homeLayout)</a>
+    <a href="#ipc">7. IPC / preload 신규 채널 계약</a>
+    <a href="#settings">8. 설정 IA (R-30 2-pane)</a>
+    <a href="#header">9. 헤더 골격 · 메뉴 제거 · 단축키 단일출처 (R-27/28/29)</a>
+    <a href="#chart">10. SVG 차트 설계 (R-33)</a>
+    <a href="#order">11. 단계적 구현 순서</a>
+    <a href="#sec">12. 보안 불변식 유지 방안</a>
+    <a href="#adr">13. ADR (M9)</a>
+    <a href="#risk">14. 리스크 · 가정 · 미해결 질문</a>
+  </div>
+</section>
+
+<!-- ===================== 1. 개요 ===================== -->
+<section id="overview">
+  <h2>1. 개요 · 아키텍처 동인 · 품질 속성</h2>
+  <p>M9는 새 제품이 아니라 <b>기존 단일 store + 전체 재렌더(<code>render()=app.replaceChildren()</code>) 아키텍처의 구조적 한계를 보강</b>하는 배치다. 감사가 지목한 단일 공통 근원(전체 DOM 교체)이 한글 IME 깨짐(R-26)·드래그 파괴(R-32)·차트 인스턴스 파괴(R-33)의 원인이며 실시간 갱신(R-31)이 이를 악화시킨다. 따라서 <b>R-25(부분 갱신/재렌더 가드)를 먼저 정립</b>하고 나머지를 그 위에 얹는다.</p>
+
+  <h3>1.1 아키텍처 동인 (driver)</h3>
+  <table>
+    <tr><th style="width:120px">동인</th><th>출처 요구</th><th>설계에 미친 영향</th></tr>
+    <tr><td>전체 재렌더가 stateful 상호작용을 파괴</td><td>R-25(기반)</td><td>전면 가상DOM 도입 없이 <b>기존 가드 인프라(<code>store._dragging</code>·오버레이 체크·FOCUS_SEL/SCROLL_SEL 복원)를 단일 모듈로 일반화</b> → 4가지 계약(보류·노드보존·라이프사이클·coalesce)을 제공.</td></tr>
+    <tr><td>번들러·트랜스파일 없음(순수 바닐라)</td><td>전 요구 공통 규약</td><td>새 모듈은 별도 파일 import가 아니라 <b>기존 app.js IIFE 내부의 네임스페이스 객체(<code>const RG = (function(){…})()</code>)</b>로 둔다 — 순수 판정 로직만 <code>lib/common/</code>으로 분리해 <code>node --test</code> 가능하게.</td></tr>
+    <tr><td>로컬 전용·단일 사용자·CSP 강함</td><td>보안 불변식</td><td>새 런타임 의존성 0, 차트 SVG 자작, 새 IPC는 register.js guard·정규화·0600 영속만.</td></tr>
+    <tr><td>git 호출 비용</td><td>R-31</td><td>커밋 차트는 <b>5분 폴링 + 뷰/가시성 이탈 시 정지</b>. 메일 60초 폴링 패턴 복제하되 뷰 가드를 공통 헬퍼로 통합.</td></tr>
+    <tr><td>빅뱅 재작성 금지(5404줄 app.js)</td><td>R-25 수용기준</td><td>R-25는 <b>점진 도입</b> — 1차는 render() 진입/종료 훅으로 기존 동작 포장(회귀 0), 보존 영역은 검색 input부터 옵트인 확장.</td></tr>
+  </table>
+
+  <h3>1.2 품질 속성 목표</h3>
+  <table>
+    <tr><th style="width:130px">속성</th><th>목표치 / 검증</th></tr>
+    <tr><td>정확성(입력)</td><td>한글 조합 중 자모 분리 0건. composition 진행 중 재렌더 호출 0회(순수함수 단위테스트로 보류 판정 검증).</td></tr>
+    <tr><td>성능(coalesce)</td><td>보류 해제 시 누적 갱신이 정확히 1회 병합 반영(중복 렌더 0). 디바운스 창 기본 120ms(기존 검색 debounce와 동일 체감).</td></tr>
+    <tr><td>비용(실시간)</td><td>홈 이탈 시 커밋 git 호출 0회(타이머 정지 검증). 홈 체류 시 5분 주기.</td></tr>
+    <tr><td>유지보수성</td><td>단축키 정의 중복 0(단일 상수 <code>SHORTCUTS</code> 참조). 가드 로직 순수함수 단위테스트 커버.</td></tr>
+    <tr><td>회귀 안전</td><td>기존 dashboard/orbit/home/scan/firstRun/error 뷰 동작 회귀 0, 전체 <code>node --test</code> 그린.</td></tr>
+    <tr><td>보안</td><td>L-1(textContent)·CSP·H-1/H-2·0600·guard 위반 0건.</td></tr>
+  </table>
+</section>
+
+<!-- ===================== 2. 추적성 ===================== -->
+<section id="trace">
+  <h2>2. 요구별 핵심 설계 결정 (추적성)</h2>
+  <table>
+    <tr><th style="width:60px">요구</th><th style="width:230px">핵심 설계 결정</th><th>근거 (수용 기준 추적)</th></tr>
+    <tr><td><span class="rid">R-25</span></td><td>app.js 내부 <b><code>RG</code> 네임스페이스</b> + 순수 판정 로직 <code>lib/common/renderGuard.js</code> 분리. 4 계약 = <code>composition</code>·<code>preserve</code>·<code>widget</code>·<code>coalesce</code>.</td><td>F-2 위임 충족. "순수함수 단위테스트 가능" + "기존 가드 인프라 확장" + "전면 VDOM 비범위" 충족(§3).</td></tr>
+    <tr><td><span class="rid">R-26</span></td><td>검색 input 핸들러를 <code>RG.composition</code> 경유로 변경 + 검색 input을 <b>보존 노드(preserve)</b>로 등록.</td><td>"조합 중 render 미호출"·"compositionend 1회 반영"·"영문 회귀 0" 충족. R-25 의존.</td></tr>
+    <tr><td><span class="rid">R-27</span></td><td><code>renderHeader()</code>의 home early-return 제거 → 공통 골격 함수 + <b>뷰별 차이 1개(검색 노출)</b>만 분기.</td><td>"공통 골격 공유, 검색만 뷰별" 확정 충족. R-28과 동반.</td></tr>
+    <tr><td><span class="rid">R-28</span></td><td><code>Menu.setApplicationMenu(null)</code> + F5는 <b>렌더러 keydown</b>(ESC 패턴). 정보→설정 "정보" 카테고리. 죽은 onMenu 채널 정리.</td><td>"메뉴 비표시"·"대체 진입점 1+"·"F5=globalShortcut 아님"·"죽은 채널 정리" 충족.</td></tr>
+    <tr><td><span class="rid">R-29</span></td><td>단일 상수 <code>SHORTCUTS</code>(app.js 상단) → keydown·안내표가 동일 참조. <code>renderShortcutSettings()</code> 추가.</td><td>"중복 정의 0"·"상수 변경 시 표·동작 동시 반영" 충족.</td></tr>
+    <tr><td><span class="rid">R-30</span></td><td><code>renderSettings()</code> 2-pane 재구성 + <code>store.settingsTab</code>(스캔/연동/외관/단축키/정보). SCROLL_SEL 갱신.</td><td>5분류 확정·매핑표·탭 유지·포커스 트랩 충족.</td></tr>
+    <tr><td><span class="rid">R-31</span></td><td>커밋 차트 <b>5분 폴링 + 뷰/가시성 가드</b>(메일 패턴 복제). 모든 push는 <code>RG</code> 가드·coalesce 경유.</td><td>"5분 주기"·"홈 이탈 시 git 0"·"가드 경유" 충족. R-25 의존, R-26 이후 활성.</td></tr>
+    <tr><td><span class="rid">R-32</span></td><td><code>renderHome()</code> 섹션을 <b>id 배열 데이터-주도</b> 렌더 + 단일 컬럼 그리드(masonry) + SortableJS 부착. <code>homeLayout</code> 스키마·IPC·preload 신설. <code>RG.widget</code>로 init/destroy.</td><td>드래그·프리뷰·영속·정규화·가드 충족(§6). R-25 의존.</td></tr>
+    <tr><td><span class="rid">R-33</span></td><td><code>renderHomeProductivity()</code>를 인터랙티브 SVG로 교체(<code>svg()</code> 확장 또는 <code>chartBars()</code> 헬퍼). <code>RG.widget</code>로 핸들러 정리.</td><td>"SVG 자작·외부 0"·"호버 툴팁/강조"·"핸들러 누적 0" 충족. R-25 의존.</td></tr>
+  </table>
+</section>
+
+<!-- ===================== 3. R-25 API surface ===================== -->
+<section id="r25">
+  <h2>3. ★ R-25 API surface 명세 (최우선 · F-2 확정)</h2>
+  <div class="warnbox"><b>이 절이 본 설계의 핵심 산출물이다.</b> 기능명세가 의도 4가지만 확정하고 함수명·시그니처·모듈을 아키텍트에 위임(F-2)했으므로, 여기서 <b>확정 계약</b>으로 못 박는다. R-26·R-31·R-32·R-33 설계는 모두 이 API를 참조한다.</div>
+
+  <h3>3.1 모듈 배치 결정 — 왜 app.js 내부 네임스페이스 + 순수 로직만 분리인가</h3>
+  <p>번들러·ESM이 없고 <code>public/</code>에 빌드 단계가 없다. 따라서 새 가드는 다음 2층으로 둔다.</p>
+  <ul>
+    <li><b>(A) 렌더러 측 가드 객체 <code>RG</code></b> — <code>public/app.js</code>의 기존 IIFE 내부에 <code>const RG = (function(){ … return {…}; })();</code> 단순 모듈 패턴으로 둔다. DOM·<code>store</code>·<code>render</code>에 접근하는 부분(부수효과)을 담당. app.js는 자동 단위테스트 비대상(F-3 관례)이므로 여기엔 wiring만.</li>
+    <li><b>(B) 순수 판정 로직 <code>lib/common/renderGuard.js</code></b> (CommonJS, 신규) — DOM·타이머 없이 "지금 재렌더를 보류해야 하는가", "coalesce 큐 상태 전이" 같은 <b>순수 함수</b>만. <code>node --test</code>로 헤드리스 검증. app.js의 <code>RG</code>가 <code>window</code> 노출 또는 인라인 복제로 이 로직을 사용(번들러 없으므로 <code>require</code> 불가 → §3.6 로딩 방식 참조).</li>
+  </ul>
+  <div class="note">이 분리는 R-25 수용기준 "가드/coalesce 판정 로직은 app.js DOM과 분리된 순수 함수로 단위테스트 가능"을 직접 충족한다. 마커 <code>RG-1</code>(보류 판정)·<code>RG-2</code>(coalesce)·<code>RG-3</code>(보존)·<code>RG-4</code>(위젯 라이프사이클)를 코드/테스트에 병기한다.</div>
+
+  <h3>3.2 계약 (1) composition / 재렌더 보류 — <code>RG.composition</code> + 순수 <code>shouldDeferRender()</code></h3>
+  <pre><span class="c">// lib/common/renderGuard.js — 순수 판정(헤드리스 단위테스트 대상, RG-1)</span>
+<span class="c">/** 현재 상태에서 라이브 갱신/재렌더를 보류해야 하면 true. DOM 미접근. */</span>
+<span class="k">function</span> <span class="f">shouldDeferRender</span>(f) {  <span class="c">// 모든 보류 플래그를 OR (DOM 미접근, 순수)</span>
+  <span class="k">return</span> !!(f &amp;&amp; (f.composing || f.dragging || f.overlayOpen
+              || f.busyMail || f.busyCommit || f.editing));
+}
+
+<span class="c">// public/app.js — RG 네임스페이스(부수효과 wiring, RG-1)</span>
+RG.composition = {
+  <span class="f">isComposing</span>() { <span class="k">return</span> store._composing === <span class="k">true</span>; },         <span class="c">// 단일 진입점</span>
+  <span class="f">bind</span>(inputEl) { <span class="c">/* compositionstart→_composing=true, compositionend→false+flush */</span> },
+};
+<span class="c">/** 모든 라이브 갱신 트리거의 단일 게이트. true면 호출측은 render()를 부르지 않는다. */</span>
+RG.<span class="f">deferred</span> = () =&gt; <span class="f">shouldDeferRender</span>({  <span class="c">// 아래 매핑표와 1:1</span>
+  composing:   store._composing === <span class="k">true</span>,
+  dragging:    store._dragging === <span class="k">true</span>,
+  overlayOpen: !!(store.showSettings || store.showHelp || store.state.selectedId),
+  busyMail:    store.busyMailSummary === <span class="k">true</span>,     <span class="c">// [R1] 누락 보완</span>
+  busyCommit:  store.busyCommitActivity === <span class="k">true</span>,
+  editing:     store.todoAdding === <span class="k">true</span>,
+});</pre>
+  <p><b>계약 의도:</b> 기존에 <code>applyProjectsUpdate</code>·<code>maybeAutoRefreshMail</code>이 제각각 검사하던 보류 조건을 <code>RG.deferred()</code> 한 곳으로 모으고 <b>composing을 새로 추가</b>한다. R-26·R-31은 이 게이트만 호출한다.</p>
+
+  <div class="secbox"><b>[R1 반영] P1 "기존 동작 100% 보존"을 위한 보류 조건 전수 매핑 (누락 0).</b> 설계 검증에서 <code>busyMailSummary</code> 누락이 지적됐다. 현재 코드에 흩어진 모든 보류/가드 조건을 <code>deferred()</code> 입력에 <b>1:1 매핑</b>한다 — 아래 표의 모든 조건이 들어가야 P1이 회귀 0이다.</div>
+  <table>
+    <tr><th style="width:200px">기존 코드 위치/조건</th><th style="width:130px">deferred() 플래그</th><th>의미 · 출처</th></tr>
+    <tr><td><code>store.showSettings</code></td><td rowspan="3"><code>overlayOpen</code></td><td>설정 모달 열림 (applyProjectsUpdate:4635)</td></tr>
+    <tr><td><code>store.showHelp</code></td><td>도움말 모달 열림 (4635)</td></tr>
+    <tr><td><code>store.state.selectedId</code></td><td>드로어 열림 (4635)</td></tr>
+    <tr><td><code>store._dragging</code></td><td><code>dragging</code></td><td>드래그 세션 중 (4637 · onStart/onEnd)</td></tr>
+    <tr><td><code>store._composing</code> (신규)</td><td><code>composing</code></td><td>IME 조합 중 (R-25/R-26 신설)</td></tr>
+    <tr><td><code>store.busyMailSummary</code></td><td><code>busyMail</code></td><td><b>[R1 누락 보완]</b> 메일 요약 fetch 중 (maybeAutoRefreshMail:4581)</td></tr>
+    <tr><td><code>store.todoAdding</code></td><td><code>editing</code></td><td>할 일 입력 중 (maybeAutoRefreshMail:4581)</td></tr>
+    <tr><td><code>store.busyCommitActivity</code></td><td><code>busyCommit</code></td><td>커밋 활동 fetch 중 (refreshCommitActivity:1993) — R-31 폴링 재진입 방지</td></tr>
+  </table>
+  <div class="warnbox"><b>DoD 게이트(R1):</b> <code>renderGuard.js</code> 단위테스트에서 <b>각 플래그 단독 true → defer=true, 전부 false → defer=false</b>를 케이스별 검증(플래그 6종 단독 + 전부 false + 복합). 마커 RG-1. P1 머지 전 기존 보류 동작(모달 열림 중 push 보류 등) 수동 스모크. <b>[C-M-1 단일 신뢰 경계]</b> 이 게이트는 UX 보류용이지 보안 경계가 아니다 — 보안 단일 신뢰 경계는 메인의 정규화(§6·§7).</p>
+
+  <h3>3.3 계약 (2) 노드 보존 부분 갱신 — <code>RG.preserve</code></h3>
+  <p>기존 render()의 FOCUS_SEL 복원(노드 교체 후 포커스·캐럿 재설정)은 <b>이미 동작</b>하지만 조합 세션은 복원 불가하다. 그래서 보존은 두 단계로 제공한다.</p>
+  <pre><span class="c">// public/app.js — RG.preserve (RG-3)</span>
+RG.preserve = {
+  <span class="c">/** 재렌더 전: 보존 대상 노드의 상태 스냅샷(값·포커스·캐럿·스크롤)을 캡처. */</span>
+  <span class="f">capture</span>(rootEl, selectors) { <span class="k">return</span> snapshot; },   <span class="c">// 기존 FOCUS_SEL/SCROLL_SEL 로직 흡수</span>
+  <span class="c">/** 재렌더 후: 동일 셀렉터 새 노드에 상태 복원. */</span>
+  <span class="f">restore</span>(rootEl, snapshot) { },
+  <span class="c">/** [후속 — 1차 범위 제외] 부분 갱신. 본 M9 배치에서는 구현하지 않는다(R5). */</span>
+  <span class="c">// patchRegion(...) — 후속 마일스톤. M9는 destroy/recreate(전체 재렌더) + capture/restore로만.</span>
+};</pre>
+  <div class="secbox"><b>[R5 반영] 1차 범위 확정 — <code>patchRegion</code>은 M9에서 명시적으로 제외(후속).</b> 부분 갱신 영역 내 위젯 destroy/mount 책임·보존 노드 adopt 순서가 추가 계약을 요구해 빅뱅 회피 원칙과 상충할 여지가 있다. <b>M9 전 요구(R-25~R-33)는 "전체 replaceChildren + RG.widget destroy/recreate + RG.preserve capture/restore"로만 구현</b>한다. 보존(입력값·포커스·캐럿·스크롤)은 <code>capture/restore</code>로 충분하며, 이것이 현 render()의 인라인 복원 로직을 동작 동일하게 리팩터링한 것이라 회귀 0이다.</div>
+  <div class="note"><b>점진 도입 핵심:</b> 1차(R-25 자체)는 <code>capture/restore</code>로 현 render()의 인라인 복원 로직을 <b>리팩터링만</b>(동작 동일, 회귀 0). 차트 깜빡임 등 부분 갱신이 필요해지면 <code>patchRegion</code>은 별도 후속 요구로 분리한다(§10·§14 리스크 참조).</p>
+
+  <h3>3.4 계약 (3) stateful 위젯 라이프사이클 — <code>RG.widget</code></h3>
+  <p>현재 <code>destroyCardSortable()/initCardSortable()</code>가 render() 진입부와 dashboard 분기에 흩어져 있다. 이를 <b>위젯 레지스트리</b>로 일반화해 SortableJS(R-32)·SVG 차트(R-33)가 동일 규약으로 정리·재생성되게 한다.</p>
+  <pre><span class="c">// public/app.js — RG.widget (RG-4): render() 1회당 destroyAll → 뷰 빌드 → mount</span>
+RG.widget = {
+  <span class="c">/** 위젯 정의 등록(앱 1회). { id, init(rootEl)->instance, destroy(instance) } */</span>
+  <span class="f">define</span>(spec) { },
+  <span class="c">/** render() 진입부에서 호출: 살아있는 모든 인스턴스 destroy(노드 교체 전). */</span>
+  <span class="f">destroyAll</span>() { },
+  <span class="c">/** render() 종료부에서 호출: 현재 DOM에 매칭되는 위젯만 init(중복 방지). */</span>
+  <span class="f">mountAll</span>(rootEl) { },
+};
+<span class="c">// 예: 카드 정렬(기존), 홈 섹션 정렬(R-32), 커밋 차트(R-33)</span>
+RG.widget.<span class="f">define</span>({ id: <span class="s">'cardSortable'</span>, init: initCardSortable, destroy: destroyCardSortable });</pre>
+  <p>render()는 <code>RG.widget.destroyAll()</code>(맨 위, 기존 destroyCardSortable 대체) → <code>app.replaceChildren()</code> + 뷰 build → <code>RG.widget.mountAll(app)</code>(맨 아래, 기존 initCardSortable 대체) 순으로 단순화된다. 중복 인스턴스·핸들러 누적·누수 0 보장.</p>
+  <div class="warnbox"><b>[R4 반영] Sortable onEnd × destroy/flush 타이밍 충돌 회피.</b> 기존 카드 Sortable의 <code>onEnd</code>는 (1) <code>store._dragging=false</code> 즉시 설정 후 (2) <code>commitReorder</code>를 <b>마이크로태스크(<code>Promise.resolve().then</code>)로 지연</b>해, onEnd 실행 중 render()가 그 Sortable 인스턴스를 destroy하지 못하게 한다(app.js:4914-4923). 홈 섹션 Sortable(R-32)·flushIfPending도 <b>이 패턴을 그대로 따른다</b>: onEnd에서 <code>_dragging=false</code> → 영속(setHomeLayout)·재렌더는 마이크로태스크로 지연 → 그 시점에 <code>RG.coalesce.flushIfPending()</code>. 즉 <b>drag 해제 → 마이크로태스크 안에서 flush</b> 순서를 고정해 "onEnd 도중 destroyAll이 현재 드래그 인스턴스를 파괴"하는 충돌을 막는다.</div>
+
+  <h3>3.5 계약 (4) 실시간 push coalesce — <code>RG.coalesce</code> + 순수 큐</h3>
+  <pre><span class="c">// lib/common/renderGuard.js — 순수 coalesce 상태기(RG-2, 헤드리스 테스트)</span>
+<span class="c">/** 보류 중 들어온 갱신을 누적. flush 시 1회 병합 결과 반환. */</span>
+<span class="k">function</span> <span class="f">createCoalescer</span>() {
+  <span class="k">let</span> pending = <span class="k">false</span>;
+  <span class="k">return</span> {
+    <span class="f">mark</span>() { pending = <span class="k">true</span>; },           <span class="c">// 보류 중 갱신 도착</span>
+    <span class="f">hasPending</span>() { <span class="k">return</span> pending; },
+    <span class="f">flush</span>() { <span class="k">const</span> had = pending; pending = <span class="k">false</span>; <span class="k">return</span> had; }, <span class="c">// 정확히 1회</span>
+  };
+}
+
+<span class="c">// public/app.js — RG.coalesce: 모든 라이브 트리거의 공통 종착</span>
+<span class="c">// debouncedRender = debounce(()=&gt;{ if (RG.deferred()) { _coalescer.mark(); return; } render(); }, 120)</span>
+<span class="c">//   ↑ [R2] 디바운스 발화 시점에 deferred() 재검사 — 발화 직전 보류가 시작되면 mark 후 발화 취소.</span>
+RG.coalesce = {
+  <span class="f">request</span>() {                              <span class="c">// 기존 render() 직접호출을 대체</span>
+    <span class="k">if</span> (RG.<span class="f">deferred</span>()) { _coalescer.<span class="f">mark</span>(); <span class="k">return</span>; }  <span class="c">// 보류: 큐에만 기록</span>
+    debouncedRender();                       <span class="c">// 비보류: 디바운스 1회 렌더(발화 시 재검사)</span>
+  },
+  <span class="f">flushIfPending</span>() {                        <span class="c">// 보류 해제 지점에서 호출. 아직 다른 보류 사유가 남았으면 발화하지 않음.</span>
+    <span class="k">if</span> (!_coalescer.<span class="f">hasPending</span>()) <span class="k">return</span>;
+    <span class="k">if</span> (RG.<span class="f">deferred</span>()) <span class="k">return</span>;            <span class="c">// [R2] 다중 보류 동시 → 마지막 해제자만 발화</span>
+    <span class="k">if</span> (_coalescer.<span class="f">flush</span>()) debouncedRender();
+  },
+};</pre>
+
+  <div class="secbox"><b>[R2 반영] coalesce "정확히 1회" 동시성 계약 확정.</b> 단일 전역 boolean + 단일 디바운스 타이머가 폴링·IME 조합·드래그가 동시에 일어나는 상황에서 정합성이 미정의라는 지적을 다음 3규칙으로 확정한다.</div>
+  <ol>
+    <li><b>디바운스 발화 시 deferred() 재검사:</b> <code>request()</code>가 비보류로 판단해 타이머를 걸어도, 120ms 안에 보류 사유(조합 시작 등)가 들어올 수 있다. 따라서 <b>타이머 콜백 내부에서 다시 <code>deferred()</code>를 검사</b>해, 보류면 실제 render() 대신 <code>mark()</code>만 하고 발화를 취소한다(중복·조합 중 렌더 0).</li>
+    <li><b>다중 보류 사유의 단일 flush 책임:</b> 동시에 여러 보류 사유(예: 드래그 + 조합)가 걸렸다가 <b>하나가 풀려도</b> 다른 사유가 남아 있으면 <code>flushIfPending()</code>가 <code>deferred()</code> 재검사로 <b>발화하지 않는다</b>. <b>마지막으로 모든 보류를 해제하는 호출자만</b> 실제 1회 render를 트리거한다 — flush 책임이 자동으로 단일화된다.</li>
+    <li><b>pending은 단조:</b> 보류 중 N번 갱신이 와도 <code>mark()</code>는 boolean을 true로 유지(누적 횟수 무관). <code>flush()</code>가 1회 소비하면 false로 — 따라서 해제 후 정확히 1회.</li>
+  </ol>
+  <div class="warnbox"><b>DoD 게이트(R2):</b> <code>createCoalescer()</code> 순수 테스트(마커 RG-2)에 동시성 케이스 명세: ① mark×3 후 flush 1회만 had=true ② flush 후 즉시 flush=false ③ "request(비보류)→타이머 대기 중 보류 시작→발화 콜백이 deferred=true 감지→mark" ④ "보류A+보류B 동시→A해제 시 deferred 여전히 true→발화 안 함→B해제 시 발화 1회". (③④의 deferred 부분은 주입 가능한 deferred 함수로 헤드리스 검증.)</p>
+
+  <div class="note"><b>핵심 흐름:</b> R-31의 메일/커밋 폴링·R-24의 projectsUpdated push는 모두 <code>render()</code>를 직접 부르지 않고 <code>RG.coalesce.request()</code>를 부른다. 보류 상태면 <code>mark()</code>만 하고, 보류가 풀리는 순간(조합 종료·드래그 종료·모달 닫힘) <code>RG.coalesce.flushIfPending()</code>가 누적분을 <b>정확히 1회</b> 반영한다(위 동시성 규칙으로 다중 보류에서도 1회 보장). 수용기준 "중복 렌더 0" 충족.</p>
+
+  <h3>3.6 순수 로직 로딩 방식 (번들러 없음 제약 해소)</h3>
+  <p><code>lib/common/renderGuard.js</code>는 CommonJS라 렌더러가 <code>require</code> 못 한다. 두 안 비교:</p>
+  <table>
+    <tr><th>안</th><th>장점</th><th>단점</th><th>권고</th></tr>
+    <tr><td>A. preload가 <code>renderGuard</code> 순수함수를 <code>window.spipGuard</code>로 노출</td><td>단일 출처, 테스트=실코드 동일</td><td>preload 표면 증가(데이터 채널 아닌 유틸 노출 — 기존 관례와 이질)</td><td>—</td></tr>
+    <tr><td>B. 순수 로직을 <code>renderGuard.js</code>(Node 테스트용)와 app.js 내 <code>RG</code>(렌더러용)에 <b>동형 구현</b>, 시그니처·테스트 케이스 공유</td><td>preload 불변·CSP 무영향, 기존 "VM 함수는 lib에서 test, app.js는 wiring" 패턴과 일치</td><td>판정 로직이 2곳(단, 순수·소규모라 드리프트 위험 낮음)</td><td class="pick">B 채택</td></tr>
+  </table>
+  <p>판정 로직은 <code>shouldDeferRender</code>·coalescer 상태전이뿐이라 매우 작다. 기존에도 순수 VM(homeGreeting 등)은 lib에서 테스트하고 app.js는 호출만 하는 구조였다(F-3 관례). 동일 패턴을 따른다. → <b>ADR-M9-1</b>.</p>
+  <div class="warnbox"><b>[R7 반영] 동형 구현 드리프트 방지 — renderGuard.js를 단일 출처로.</b> "2곳 구현"의 위험을 최소화하기 위해: <b>순수 알고리즘(플래그 OR 규칙·coalescer 상태전이)은 <code>lib/common/renderGuard.js</code>를 정본(single source)</b>으로 본다. app.js의 <code>RG</code>는 그 알고리즘을 <b>가능한 한 얇게</b> 복제하고(플래그를 store에서 읽어 넘기는 어댑터 + 동일 OR식), 로직 자체를 변형하지 않는다. <code>RG.deferred()</code>는 플래그 수집(어댑터)만 하고 판정은 동일 OR식을 쓴다. <b>동형 계약 테스트:</b> renderGuard.js의 케이스 표(플래그 조합 → 기대 boolean)를 명세로 고정하고, app.js의 OR식이 동일 입력에 동일 결과를 내는지 코드 리뷰 체크리스트로 강제(app.js는 자동테스트 비대상이므로). 플래그 집합 변경 시 양쪽·테스트를 한 PR에서 함께 수정한다.</div>
+
+  <h3>3.7 후속 요구의 R-25 의존 인터페이스 (계약 요약)</h3>
+  <table>
+    <tr><th>요구</th><th>호출하는 R-25 API</th><th>용도</th></tr>
+    <tr><td>R-26</td><td><code>RG.composition.bind(input)</code>, <code>RG.coalesce.request()</code>, <code>RG.preserve</code></td><td>조합 중 render 보류 → compositionend flush. 검색 input 보존.</td></tr>
+    <tr><td>R-31</td><td><code>RG.coalesce.request()</code>(폴링·push 종착), <code>RG.deferred()</code></td><td>실시간 갱신을 가드·coalesce 경유로 안전 반영.</td></tr>
+    <tr><td>R-32</td><td><code>RG.widget.define/destroyAll/mountAll</code>, <code>store._dragging</code></td><td>SortableJS init/destroy 표준화, 드래그 중 보류.</td></tr>
+    <tr><td>R-33</td><td><code>RG.widget.define/...</code></td><td>SVG 차트 핸들러·노드 destroy/recreate.</td></tr>
+  </table>
+
+  <h3>3.8 [R3] R-26 검색 핸들러와 기존 debounce(render,120)의 관계 — 대체</h3>
+  <p>현재 검색 input 핸들러(app.js:3533-3534)는 자체 <code>const debounced = debounce(()=&gt;render(), 120)</code>를 만들어 매 입력마다 호출한다. R-26은 이를 <b>중첩이 아니라 대체</b>한다.</p>
+  <pre><span class="c">// 변경 전: store.state.search 갱신 + 자체 debounce(render)</span>
+searchInput.addEventListener(<span class="s">'input'</span>, (e) =&gt; { store.state.search = e.target.value || <span class="s">''</span>; debounced(); });
+
+<span class="c">// 변경 후(R-26): 자체 debounce 제거 → 공통 게이트만. composing이면 render 안 함.</span>
+RG.composition.<span class="f">bind</span>(searchInput);   <span class="c">// compositionstart/end 추적 + end 시 flushIfPending</span>
+searchInput.addEventListener(<span class="s">'input'</span>, (e) =&gt; {
+  store.state.search = e.target.value || <span class="s">''</span>;  <span class="c">// store는 항상 갱신(IME 중에도)</span>
+  RG.coalesce.<span class="f">request</span>();                    <span class="c">// 보류면 mark, 비보류면 debouncedRender(공통 120ms)</span>
+});</pre>
+  <ul>
+    <li><b>대체 관계:</b> 검색 전용 <code>debounce(render,120)</code>를 삭제하고 <code>RG.coalesce.request()</code>의 공통 <code>debouncedRender</code>(동일 120ms)로 일원화한다. 디바운스가 2겹이 되지 않는다.</li>
+    <li><b>한글 조합 중:</b> <code>store._composing===true</code>면 <code>request()</code>가 <code>deferred()</code>로 보류→<code>mark()</code>만. <code>render()</code>가 안 불려 input 노드가 교체되지 않아 조합이 안 깨진다. <code>compositionend</code> 시 <code>RG.composition.bind</code>가 <code>flushIfPending()</code> 호출→1회 반영.</li>
+    <li><b>영문/숫자 입력 회귀 0 검증 경로:</b> 영문은 <code>isComposing</code>이 안 뜨므로 <code>deferred()=false</code>→기존과 동일하게 <b>120ms 디바운스 후 1회 render</b>. 검증: ① 영문 빠른 타이핑 시 화면 갱신 타이밍·결과가 기존과 동일(수동 스모크) ② <code>matchShortcut</code>과 무관(검색 입력은 단축키 비대상) ③ 한글 "프로젝트" 입력 시 자모 분리 0건(수동) — 헤드리스로는 <code>request()</code>가 composing=true에서 render 미호출임을 deferred 순수테스트로 검증.</li>
+  </ul>
+</section>
+
+<!-- ===================== 4. R-25 흐름도 ===================== -->
+<section id="r25flow">
+  <h2>4. R-25 적용 데이터 흐름 (다이어그램)</h2>
+  <div class="svg-wrap">
+  <svg viewBox="0 0 980 470" width="100%" role="img" aria-label="R-25 라이브 갱신 가드/coalesce 흐름">
+    <defs>
+      <marker id="a" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#94a3b8"/></marker>
+      <marker id="ag" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#34d399"/></marker>
+      <marker id="aw" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#fbbf24"/></marker>
+    </defs>
+    <!-- 트리거들 -->
+    <rect x="20" y="30" width="180" height="42" rx="8" fill="#172339" stroke="#38bdf8"/><text x="110" y="56" text-anchor="middle" fill="#7dd3fc" font-size="12.5">메일 push / 60s 폴링</text>
+    <rect x="20" y="92" width="180" height="42" rx="8" fill="#172339" stroke="#38bdf8"/><text x="110" y="118" text-anchor="middle" fill="#7dd3fc" font-size="12.5">커밋 5분 폴링 (R-31)</text>
+    <rect x="20" y="154" width="180" height="42" rx="8" fill="#172339" stroke="#38bdf8"/><text x="110" y="180" text-anchor="middle" fill="#7dd3fc" font-size="12.5">projectsUpdated (R-24)</text>
+    <rect x="20" y="216" width="180" height="42" rx="8" fill="#172339" stroke="#f87171"/><text x="110" y="242" text-anchor="middle" fill="#fca5a5" font-size="12.5">검색 input (R-26)</text>
+
+    <!-- 게이트 -->
+    <rect x="300" y="90" width="200" height="100" rx="12" fill="#1e1b3a" stroke="#c4b5fd" stroke-width="2"/>
+    <text x="400" y="124" text-anchor="middle" fill="#c4b5fd" font-size="14" font-weight="700">RG.coalesce.request()</text>
+    <text x="400" y="148" text-anchor="middle" fill="#a5b4fc" font-size="11.5">RG.deferred() 검사</text>
+    <text x="400" y="168" text-anchor="middle" fill="#94a3b8" font-size="10.5">composing|dragging|overlay|busyMail|busyCommit|editing</text>
+
+    <path d="M200,51 C250,70 260,100 298,118" fill="none" stroke="#38bdf8" stroke-width="1.5" marker-end="url(#a)"/>
+    <path d="M200,113 L298,128" fill="none" stroke="#38bdf8" stroke-width="1.5" marker-end="url(#a)"/>
+    <path d="M200,175 C250,160 260,150 298,150" fill="none" stroke="#38bdf8" stroke-width="1.5" marker-end="url(#a)"/>
+    <path d="M200,237 C250,210 260,180 298,172" fill="none" stroke="#f87171" stroke-width="1.5" marker-end="url(#a)"/>
+
+    <!-- 보류 분기 -->
+    <rect x="600" y="30" width="170" height="60" rx="10" fill="#3a2a13" stroke="#fbbf24"/><text x="685" y="56" text-anchor="middle" fill="#fde68a" font-size="12.5">보류: coalescer.mark()</text><text x="685" y="76" text-anchor="middle" fill="#94a3b8" font-size="10.5">렌더 안 함 (큐 적재)</text>
+    <!-- 비보류 분기 -->
+    <rect x="600" y="120" width="170" height="60" rx="10" fill="#13231a" stroke="#34d399"/><text x="685" y="146" text-anchor="middle" fill="#6ee7b7" font-size="12.5">debouncedRender()</text><text x="685" y="166" text-anchor="middle" fill="#94a3b8" font-size="10.5">120ms 후 deferred 재검사 → 1회</text>
+
+    <path d="M500,120 C540,90 560,70 598,60" fill="none" stroke="#fbbf24" stroke-width="1.6" marker-end="url(#aw)"/><text x="545" y="95" fill="#fbbf24" font-size="10.5">deferred=true</text>
+    <path d="M500,150 L598,150" fill="none" stroke="#34d399" stroke-width="1.6" marker-end="url(#ag)"/><text x="540" y="140" fill="#34d399" font-size="10.5">deferred=false</text>
+
+    <!-- 해제 지점 -->
+    <rect x="560" y="240" width="360" height="60" rx="10" fill="#172339" stroke="#c4b5fd"/>
+    <text x="740" y="266" text-anchor="middle" fill="#c4b5fd" font-size="12.5" font-weight="700">보류 해제 지점 → RG.coalesce.flushIfPending()</text>
+    <text x="740" y="286" text-anchor="middle" fill="#94a3b8" font-size="10.5">compositionend · Sortable onEnd · closeSettings/closeHelp/closeDrawer</text>
+    <path d="M685,90 C660,180 700,210 740,238" fill="none" stroke="#fbbf24" stroke-width="1.4" stroke-dasharray="5,4" marker-end="url(#aw)"/>
+    <path d="M740,300 C740,340 685,150 685,180" fill="none" stroke="#34d399" stroke-width="1.4" stroke-dasharray="5,4" marker-end="url(#ag)"/>
+    <text x="640" y="350" fill="#94a3b8" font-size="10.5">pending 있고 deferred=false면 1회 render (다중 보류 시 마지막 해제자만)</text>
+
+    <!-- render 내부 위젯 라이프사이클 -->
+    <rect x="300" y="360" width="380" height="90" rx="12" fill="#172339" stroke="#34d399"/>
+    <text x="490" y="386" text-anchor="middle" fill="#6ee7b7" font-size="13" font-weight="700">render()</text>
+    <text x="490" y="408" text-anchor="middle" fill="#cbd5e1" font-size="11">RG.widget.destroyAll() → preserve.capture()</text>
+    <text x="490" y="426" text-anchor="middle" fill="#cbd5e1" font-size="11">→ replaceChildren() + build view</text>
+    <text x="490" y="444" text-anchor="middle" fill="#cbd5e1" font-size="11">→ preserve.restore() → RG.widget.mountAll()</text>
+    <path d="M685,180 C620,260 540,320 490,358" fill="none" stroke="#34d399" stroke-width="1.5" marker-end="url(#ag)"/>
+  </svg>
+  </div>
+  <div class="legend">
+    <span><span class="sw" style="background:#38bdf8"></span> 라이브 트리거(실시간)</span>
+    <span><span class="sw" style="background:#34d399"></span> 비보류 → 렌더</span>
+    <span><span class="sw" style="background:#fbbf24"></span> 보류 → 큐 적재 / 해제 시 flush</span>
+    <span><span class="sw" style="background:#c4b5fd"></span> R-25 가드/coalesce/위젯</span>
+  </div>
+</section>
+
+<!-- ===================== 5. 파일 변경 지도 ===================== -->
+<section id="filemap">
+  <h2>5. 모듈 / 파일 변경 지도</h2>
+  <table class="filemap">
+    <tr><th style="width:300px">파일</th><th style="width:60px">동작</th><th>변경 내용 · 관련 요구</th></tr>
+    <tr><td>lib/common/renderGuard.js</td><td><b class="good">신규</b></td><td>순수 <code>shouldDeferRender</code>·<code>createCoalescer</code> + 마커 RG-1/RG-2. <code>node --test</code> 대상. (R-25)</td></tr>
+    <tr><td>lib/common/uiStateStore.js</td><td>수정</td><td><code>homeLayout</code> 스키마 키 + <code>normalizeHomeLayout()</code> + <code>HOME_SECTION_IDS</code> 추가. <b>[C-M-1 필수 동반] <code>normalizeState()</code>·<code>defaultState()</code> 모두에 <code>homeLayout</code> 반영</b>(누락 시 write가 키를 조용히 버림). module.exports 확장. (R-32)</td></tr>
+    <tr><td>public/app.js</td><td>수정(대)</td><td><code>RG</code> 네임스페이스 신설(§3). render() 진입/종료를 RG.widget·preserve로 정리. <code>SHORTCUTS</code> 상수 + F5 keydown(R-29/28). renderHeader() early-return 제거·공통 골격(R-27). renderSettings() 2-pane + <code>store.settingsTab</code>(R-30). renderShortcutSettings()/renderInfoSettings() 신규(R-29/28). renderHome() 데이터-주도 섹션 + homeSortable 위젯(R-32). renderHomeProductivity() SVG 차트(R-33). 커밋 5분 폴링 start/stop(R-31). onMenuCommand/subscribeMenu 정리(R-28).</td></tr>
+    <tr><td>electron/menu.js</td><td>수정</td><td><code>buildMenuTemplate</code> 사용 중단 또는 accelerator-only 축소. (R-28)</td></tr>
+    <tr><td>electron/main.js</td><td>수정</td><td><code>Menu.setApplicationMenu(null)</code>. 메뉴 발신(<code>spip:menu:*</code>) 제거. (R-28)</td></tr>
+    <tr><td>electron/preload.js</td><td>수정</td><td><code>setHomeLayout(ids)</code> 채널 추가. <code>onMenu</code> 화이트리스트 정리(죽은 채널 제거, R-28). (R-32)</td></tr>
+    <tr><td>electron/ipc/uiState.js</td><td>수정</td><td><code>setHomeLayout(args, ctx)</code> 핸들러(항상 <code>normalizeHomeLayout</code> 통과 = 단일 신뢰 경계) + <b>[C-M-1] <code>toResponse()</code>에 <code>homeLayout</code> 포함</b>(누락 시 렌더러가 못 읽음). (R-32)</td></tr>
+    <tr><td>electron/ipc/register.js</td><td>수정</td><td><code>guard('spip:setHomeLayout', …)</code> 등록. (R-32)</td></tr>
+    <tr><td>public/styles.css</td><td>수정</td><td>2-pane 설정 레이아웃, 홈 단일 그리드(masonry), 차트/툴팁, 섹션 ghost 클래스. (R-30/32/33)</td></tr>
+    <tr><td>public/index.html</td><td>무변경</td><td>SortableJS vendor 이미 로드. 차트 자작이라 새 script 추가 없음. CSP 불변.</td></tr>
+    <tr><td>test/renderGuard.test.js</td><td><b class="good">신규</b></td><td>shouldDeferRender 플래그별(6종 단독+복합, R1)·coalescer 동시성(R2: mark×N→flush 1회, 발화시 재검사, 다중보류 마지막 해제자) 단위테스트(RG-1/RG-2). (R-25)</td></tr>
+    <tr><td>test/uiStateStore.test.js</td><td>수정</td><td>normalizeHomeLayout(미지/중복 정리·누락 보충) + <b>[C-M-1] write→read 라운드트립 보존 테스트(homeLayout 키가 버려지지 않음)</b>. (R-32)</td></tr>
+    <tr><td>test/uiStateIpc.test.js</td><td>수정</td><td>setHomeLayout 정규화·응답·toResponse 노출 테스트. (R-32)</td></tr>
+    <tr><td>test/shortcuts.test.js</td><td><b class="good">신규</b></td><td>SHORTCUTS 상수 단일출처·keydown 디스패치 순수함수(F5). (R-28/29)</td></tr>
+  </table>
+  <div class="note">app.js 한 파일에 변경이 집중되나 <b>독립 PR 5~6개로 분리</b>한다(§11). R-25는 동작 보존 리팩터링이라 단독 PR로 회귀 0을 먼저 검증한 뒤 나머지를 얹는다.</p>
+</section>
+
+<!-- ===================== 6. uiState 스키마 ===================== -->
+<section id="uistate">
+  <h2>6. uiState 신규 스키마 — <code>homeLayout</code> (R-32)</h2>
+  <p>현 <code>order</code>는 프로젝트 id 해시 전용(<code>ID_RE=/^[0-9a-f]{1,64}$/</code>)이라 홈 섹션 순서를 담을 수 없다. 새 키 <code>homeLayout</code>(섹션 id 화이트리스트 배열)을 신설한다.</p>
+  <h4>섹션 id 화이트리스트 (고정 enum — 실행/경로 의미 없음)</h4>
+  <pre><span class="c">// lib/common/uiStateStore.js (신규 상수)</span>
+<span class="k">const</span> HOME_SECTION_IDS = [<span class="s">'attention'</span>, <span class="s">'productivity'</span>, <span class="s">'activity'</span>,
+                          <span class="s">'todos'</span>, <span class="s">'mail'</span>, <span class="s">'disk'</span>, <span class="s">'featureAdd'</span>]; <span class="c">// 현 7섹션</span>
+<span class="k">const</span> MAX_HOME_SECTIONS = HOME_SECTION_IDS.length;
+<span class="k">const</span> HOME_SECTION_SET = <span class="k">new</span> Set(HOME_SECTION_IDS);</pre>
+  <h4>정규화 (normalizeHomeLayout)</h4>
+  <pre><span class="c">/** 섹션 순서 정규화: 화이트리스트 외 id 제거, 중복 제거, 누락 섹션은 기본 순서로 보충. */</span>
+<span class="k">function</span> <span class="f">normalizeHomeLayout</span>(input) {
+  <span class="k">const</span> out = [], seen = <span class="k">new</span> Set();
+  <span class="k">if</span> (Array.isArray(input)) <span class="k">for</span> (<span class="k">const</span> id <span class="k">of</span> input) {
+    <span class="k">if</span> (<span class="k">typeof</span> id !== <span class="s">'string'</span> || !HOME_SECTION_SET.has(id) || seen.has(id)) <span class="k">continue</span>;
+    seen.add(id); out.push(id);
+  }
+  <span class="k">for</span> (<span class="k">const</span> id <span class="k">of</span> HOME_SECTION_IDS) <span class="k">if</span> (!seen.has(id)) out.push(id); <span class="c">// 신규 섹션 자동 합류(끝)</span>
+  <span class="k">return</span> out;
+}</pre>
+  <div class="note"><b>설계 결정:</b> 누락 섹션을 <b>거부하지 않고 기본 순서로 보충</b>한다. 향후 섹션이 추가돼도 기존 사용자의 저장값이 그 섹션을 자동 포함하므로 마이그레이션 불필요. 수용기준 "미지 id·중복·길이초과 정리"는 화이트리스트·Set·고정 enum으로 충족(별도 길이 상한 불요 — enum 자체가 상한).</p>
+  <h4>defaultState 확장</h4>
+  <pre>{ schemaVersion, favorites, order, sortMode, names, theme, todos, langTrend,
+  <span class="f">homeLayout</span>: [...HOME_SECTION_IDS] }   <span class="c">// 기본 = 현재 하드코딩 순서</span></pre>
+  <p><code>normalizeState()</code>에 <code>homeLayout: normalizeHomeLayout(obj.homeLayout)</code> 추가, <code>SCHEMA_VERSION</code>은 유지(폴백이 graceful이라 bump 불요).</p>
+
+  <div class="secbox"><b>[C-M-1 반영 · 중요] write()의 normalizeState 재적용으로 인한 "조용한 키 누락" 차단.</b> <code>uiStateStore.write()</code>는 저장 직전 <b><code>normalizeState()</code>를 무조건 재적용</b>하고, <code>normalizeState()</code>는 <b>자신이 명시적으로 반환하는 고정 키만</b> 남긴다(uiStateStore.js:101-111). 따라서 IPC 핸들러가 <code>write({...state, homeLayout})</code>를 호출해도 <b>normalizeState에 <code>homeLayout</code> 키가 없으면 그 값은 조용히 버려진다</b> — 핸들러는 <code>ok:true</code>를 반환하는데 실제 영속·이후 read에는 반영되지 않아 <b>응답과 영속이 어긋난다</b>. 이를 막기 위해 다음 3곳을 <b>반드시 동반 수정</b>한다(하나라도 빠지면 버그):</div>
+  <ul>
+    <li><b>① <code>normalizeState()</code></b> 반환 객체에 <code>homeLayout: normalizeHomeLayout(obj.homeLayout)</code> 추가(필수 — 누락 시 write가 키를 버림).</li>
+    <li><b>② <code>defaultState()</code></b>에 <code>homeLayout: [...HOME_SECTION_IDS]</code> 추가(read 부재/손상 시 graceful 기본).</li>
+    <li><b>③ <code>ipc/uiState.js</code>의 <code>toResponse()</code></b>에 <code>homeLayout: state.homeLayout</code> 추가(getUiState 응답에 노출 — 누락 시 렌더러가 못 읽음).</li>
+  </ul>
+  <div class="warnbox"><b>DoD 게이트(C-M-1):</b> <b>write→read 라운드트립 보존 테스트</b>를 머지 게이트로 — <code>write({homeLayout:['mail','attention',...]})</code> 후 <code>read()</code>가 동일 순서를 반환함을 검증(키가 버려지면 실패). 또한 <b>검증의 단일 신뢰 경계는 메인의 <code>normalizeHomeLayout</code></b>이다: 렌더러의 enum 검증(드래그 DOM에서 읽은 data-id 필터링)은 UX 편의일 뿐 <b>보안 의존 금지</b> — 어떤 입력이 와도 메인 정규화가 화이트리스트로 강제한다(<code>setHomeLayout</code> 핸들러가 항상 <code>normalizeHomeLayout</code> 통과).</p>
+</section>
+
+<!-- ===================== 7. IPC ===================== -->
+<section id="ipc">
+  <h2>7. IPC / preload 신규 채널 계약 (R-32)</h2>
+  <h4>채널 1개 신설: <code>spip:setHomeLayout</code></h4>
+  <table>
+    <tr><th style="width:160px">레이어</th><th>계약</th></tr>
+    <tr><td>preload.js</td><td><code>setHomeLayout: (ids) =&gt; ipcRenderer.invoke('spip:setHomeLayout', { ids: Array.isArray(ids) ? ids.map(String) : [] })</code></td></tr>
+    <tr><td>register.js</td><td><code>guard('spip:setHomeLayout', (args) =&gt; uiStateIpc.setHomeLayout(args, ctx));</code> (senderFrame 정확 일치)</td></tr>
+    <tr><td>ipc/uiState.js</td><td><code>setHomeLayout(args, ctx)</code> → <code>normalizeHomeLayout(args.ids)</code> → <code>write({…, homeLayout})</code> → <code>{ ok:true, homeLayout }</code>. 잘못된 형태도 정규화가 흡수하므로 에러코드 불필요(graceful).</td></tr>
+    <tr><td>읽기</td><td>별도 채널 없음 — <code>getUiState</code> 응답 <code>toResponse</code>에 <code>homeLayout</code> 추가(기존 todos/theme와 동일 방식). 렌더러는 <code>loadUiState()</code>에서 <code>store.homeLayout</code> 적재.</td></tr>
+  </table>
+  <h4>응답 형태 (의사)</h4>
+  <pre><span class="c">// 성공</span> { ok: <span class="k">true</span>, homeLayout: [<span class="s">'mail'</span>, <span class="s">'attention'</span>, ...] }</pre>
+  <div class="secbox"><b>보안:</b> 섹션 id는 고정 enum(화이트리스트)이라 <b>경로·실행·해시와 무관</b>한 표시 메타다. 오염돼도 표면 극소(기존 order id 정책과 동형). 모든 쓰기는 <code>uiStateStore.write</code>(0600 원자적). guard로 senderFrame 검증.</p>
+  <h4>R-28 죽은 채널 정리 (preload onMenu)</h4>
+  <p>메뉴 제거 후 main이 <code>spip:menu:*</code>를 더는 보내지 않으므로 preload <code>onMenu</code>·app <code>subscribeMenu/onMenuCommand</code>를 제거한다(SEC-L1: 죽은 수신 채널 잔존 금지). 잃는 기능은 헤더 버튼(폴더 추가·재스캔)·F5(새로고침)·설정 정보 카테고리(SW 정보)로 이관되어 무손실.</p>
+</section>
+
+<!-- ===================== 8. 설정 IA ===================== -->
+<section id="settings">
+  <h2>8. 설정 IA — R-30 2-pane (스캔/연동/외관/단축키/정보)</h2>
+  <div class="svg-wrap">
+  <svg viewBox="0 0 900 360" width="100%" role="img" aria-label="설정 2-pane 정보구조">
+    <rect x="20" y="20" width="860" height="320" rx="12" fill="#0f1a2e" stroke="#334155"/>
+    <text x="40" y="48" fill="#94a3b8" font-size="12">설정 모달 (.modal--wide · buildModal)</text>
+    <!-- 좌 카테고리 -->
+    <rect x="40" y="64" width="190" height="256" rx="8" fill="#172339" stroke="#38bdf8"/>
+    <text x="135" y="88" text-anchor="middle" fill="#7dd3fc" font-size="12.5" font-weight="700">좌: 카테고리</text>
+    <text x="135" y="92" text-anchor="middle" fill="#7dd3fc" font-size="11"></text>
+    <g font-size="12" fill="#cbd5e1">
+      <rect x="56" y="106" width="158" height="30" rx="6" fill="#1e3a5f"/><text x="135" y="126" text-anchor="middle" fill="#7dd3fc">스캔 (활성)</text>
+      <text x="135" y="160" text-anchor="middle">연동</text>
+      <text x="135" y="192" text-anchor="middle">외관</text>
+      <text x="135" y="224" text-anchor="middle">단축키 (신설)</text>
+      <text x="135" y="256" text-anchor="middle">정보 (신설)</text>
+    </g>
+    <text x="135" y="300" text-anchor="middle" fill="#64748b" font-size="10">store.settingsTab 보관</text>
+    <!-- 우 항목 -->
+    <rect x="250" y="64" width="610" height="256" rx="8" fill="#172339" stroke="#34d399"/>
+    <text x="270" y="88" fill="#6ee7b7" font-size="12.5" font-weight="700">우: 선택 카테고리의 render*Settings()</text>
+    <g font-size="11.5" fill="#cbd5e1">
+      <text x="270" y="118">스캔 → 스캔 폴더 · 제외 항목 · 인식 기준 · 스캔 옵션 (4)</text>
+      <text x="270" y="146">연동 → 외부 툴 경로 · 메일 알림 계정 (2)</text>
+      <text x="270" y="174">외관 → 테마 (1)</text>
+      <text x="270" y="202">단축키 → renderShortcutSettings() [신설 · SHORTCUTS]</text>
+      <text x="270" y="230">정보 → renderInfoSettings() [신설 · 버전] · 소프트웨어 업데이트</text>
+    </g>
+    <rect x="270" y="252" width="570" height="52" rx="6" fill="#0b1220" stroke="#475569"/>
+    <text x="285" y="274" fill="#94a3b8" font-size="11">SCROLL_SEL = 우측 패널 셀렉터로 갱신 · 포커스 트랩(getTabbables)에 좌측 버튼 포함</text>
+    <text x="285" y="292" fill="#94a3b8" font-size="11">전체 재렌더 후에도 store.settingsTab 유지 → 동일 카테고리 복원</text>
+  </svg>
+  </div>
+  <ul>
+    <li>활성 카테고리 = <code>store.settingsTab</code>(기본 <code>'scan'</code>). 좌측 버튼 클릭 시 변경 + render(). 전체 재렌더 후에도 유지.</li>
+    <li>우측은 <code>store.settingsTab</code>에 매핑된 <code>render*Settings()</code>만 append(나머지 미렌더).</li>
+    <li>SCROLL_SEL에 <code>.settings-pane</code>(우측) 추가(또는 <code>.modal__body</code> 유지 + 우측 패널 스크롤).</li>
+    <li>레이아웃은 flex 인라인 style/CSS 클래스(style-src 'self' 무난). Tab 순환은 기존 <code>getTabbables(dialog)</code>가 좌측 버튼을 자동 포함.</li>
+  </ul>
+</section>
+
+<!-- ===================== 9. 헤더/메뉴/단축키 ===================== -->
+<section id="header">
+  <h2>9. 헤더 골격 · 메뉴 제거 · 단축키 단일출처 (R-27/28/29)</h2>
+  <h3>9.1 R-27 헤더 공통 골격</h3>
+  <p>현 <code>renderHeader()</code>는 home에서 early return(<code>마지막 스캔</code> 텍스트만). 이를 제거하고 <b>공통 골격</b>으로 단일화한다.</p>
+  <pre><span class="c">// renderHeader() 구조(설계): 브랜드 → 탭 → [검색(뷰별)] → spacer → 공통 액션</span>
+brand + topnav(홈/프로젝트)
+  + (view==='dashboard' ? searchWrap : null)   <span class="c">// 유일하게 허용된 뷰별 차이</span>
+  + spacer
+  + commonActions: [ 도움말?, 설정, 궤도맵, 재스캔, (홈에선 폴더추가?) ]   <span class="c">// R-28 이관 액션</span></pre>
+  <ul>
+    <li>홈에도 설정·재스캔 등 공통 액션 진입점 노출(현재는 "마지막 스캔" 텍스트만). "마지막 스캔" 표기는 액션 영역 옆 보조 텍스트로 유지 가능.</li>
+    <li>검색 input은 <code>view==='dashboard'</code>에서만 — 홈 미니멀 유지 + R-26 IME 버그 전이 차단(확정).</li>
+    <li><b>[D 확정 — Q5 종료] 헤더 "도움말" 버튼은 제거하고 설정 "정보" 카테고리로 흡수한다</b>(백로그 결정과 일치). <code>renderHeader()</code>의 공통 액션에서 도움말 버튼을 빼고, 도움말 진입은 설정 "정보" 카테고리(<code>renderInfoSettings()</code>) 내 항목으로 제공. <code>openHelp</code>/<code>renderHelp</code> 자체는 모달로 유지하되 진입점만 설정으로 이동. <b>P4 블로킹 해제.</b></li>
+  </ul>
+
+  <h3>9.2 R-29 단축키 단일출처</h3>
+  <pre><span class="c">// public/app.js 상단 상수(단일 출처) — keydown·안내표·(잔존 accelerator) 공유</span>
+<span class="k">const</span> SHORTCUTS = [
+  { keys: <span class="s">'Ctrl+O'</span>, action: <span class="s">'pickFolders'</span>, label: <span class="s">'폴더 추가'</span> },
+  { keys: <span class="s">'Ctrl+R'</span>, action: <span class="s">'rescan'</span>,      label: <span class="s">'재스캔'</span> },
+  { keys: <span class="s">'F5'</span>,     action: <span class="s">'refresh'</span>,     label: <span class="s">'새로고침'</span> },   <span class="c">// R-28 신설</span>
+  { keys: <span class="s">'Esc'</span>,    action: <span class="s">'close'</span>,       label: <span class="s">'닫기'</span> },
+];
+<span class="c">// 순수 매핑(테스트 대상): keydown 이벤트 → action 토큰</span>
+<span class="k">function</span> <span class="f">matchShortcut</span>(ev) { <span class="c">/* SHORTCUTS 순회, ev.key/ctrlKey 비교 → action|null */</span> }</pre>
+  <ul>
+    <li>keydown 핸들러(기존 ESC 핸들러 확장)가 <code>matchShortcut(ev)</code>로 action을 얻어 디스패치. F5→<code>refreshDashboard()</code>.</li>
+    <li><code>renderShortcutSettings()</code>는 <code>SHORTCUTS</code>를 순회해 <code>helpRow(keys, label)</code> 표 렌더(textContent, L-1). 표 = "단축키" 카테고리.</li>
+    <li>상수에 항목 추가/변경 시 표·동작 동시 반영(단위테스트: 추가 항목이 matchShortcut·표에 자동 반영).</li>
+  </ul>
+
+  <h3>9.3 R-28 메뉴 제거 + F5</h3>
+  <ul>
+    <li><code>main.js</code>: <code>Menu.setApplicationMenu(null)</code>. <code>menu.js</code>의 send(<code>spip:menu:*</code>) 경로 제거.</li>
+    <li>F5는 <b>렌더러 keydown</b>(globalShortcut 아님 — 앱 비포커스 시 미발화 안전). 수용기준 충족.</li>
+    <li>SW 정보 → <code>renderInfoSettings()</code>(버전은 <code>package.json</code>에서 — 하드코딩 금지). 정보 카테고리에 배치.</li>
+    <li>죽은 채널 정리: preload <code>onMenu</code> 제거, app <code>subscribeMenu/onMenuCommand</code> 제거(§7).</li>
+  </ul>
+</section>
+
+<!-- ===================== 10. SVG 차트 ===================== -->
+<section id="chart">
+  <h2>10. SVG 차트 설계 — R-33 (자작 · 외부 0)</h2>
+  <p>기존 <code>renderHomeProductivity()</code>의 div 인라인 height 막대를 인터랙티브 SVG로 교체. <code>svg()</code> 헬퍼는 viewBox 24×24 고정이라 차트엔 부적합 → 차트 전용 빌더 추가.</p>
+  <pre><span class="c">// public/app.js — 차트 빌더(헬퍼). 숫자만 받음(L-1 안전).</span>
+<span class="k">const</span> CHART_PALETTE = { bar: <span class="s">'#4f46e5'</span>, barHover: <span class="s">'#312e81'</span>, axis: <span class="s">'#d6d3d1'</span> }; <span class="c">// [C-M-2] 고정 팔레트</span>
+<span class="k">function</span> <span class="f">chartBars</span>(days, opts) {  <span class="c">// days: [{ label, count, iso }]</span>
+  <span class="c">// createElementNS로 &lt;svg viewBox="0 0 W H"&gt; + &lt;rect&gt; 막대 7개 생성</span>
+  <span class="k">const</span> n = Number(d.count); <span class="k">const</span> safe = (Number.isFinite(n) &amp;&amp; n &gt;= 0) ? n : 0; <span class="c">// [C-M-2] 수치 강제</span>
+  rect.setAttribute(<span class="s">'fill'</span>, CHART_PALETTE.bar);  <span class="c">// [C-M-2] 색은 데이터 아닌 고정 팔레트</span>
+  <span class="c">// 각 rect에 mouseenter/mouseleave → 툴팁 div.textContent = label+': '+safe (innerHTML 금지)</span>
+  <span class="c">// 라벨 &lt;text&gt;도 textContent만. 치수(x/y/width/height)는 safe 기반 계산값을 setAttribute.</span>
+  <span class="k">return</span> { node, destroy };  <span class="c">// destroy: 핸들러 detach (RG.widget 규약)</span>
+}</pre>
+  <div class="secbox"><b>[C-M-2 반영 · L-1 회귀 방지 못 박기] chartBars 안전 계약.</b> ① 라벨·툴팁은 <b>오직 <code>textContent</code></b> — <code>innerHTML</code>/<code>insertAdjacentHTML</code> 사용 금지(차트 라벨에 프로젝트명 등 신뢰불가 문자열이 올 수 있음). ② 수치는 <code>Number()</code> + <code>Number.isFinite()</code> 강제, 음수·NaN·비수치는 0으로 클램프(막대 높이 계산에만 사용). ③ 색·치수는 <b>데이터가 아니라 고정 팔레트(<code>CHART_PALETTE</code>)에서 <code>setAttribute</code></b>로 — 데이터 문자열이 스타일/속성에 직접 들어가지 않는다. 구현 PR 게이트로 코드 리뷰에서 innerHTML 0건·Number 가드 존재를 확인한다.</div>
+  <h4>R-25 위젯 라이프사이클 연동</h4>
+  <pre>RG.widget.<span class="f">define</span>({
+  id: <span class="s">'commitChart'</span>,
+  init: (root) =&gt; { <span class="k">const</span> host = root.querySelector(<span class="s">'.commit-chart'</span>); <span class="k">return</span> host ? buildChart(host) : <span class="k">null</span>; },
+  destroy: (inst) =&gt; { <span class="k">if</span> (inst) inst.destroy(); },  <span class="c">// 핸들러·노드 정리 → 누적 0</span>
+});</pre>
+  <ul>
+    <li>인터랙션: 막대 호버 시 정확 수치 툴팁 + 강조. 툴팁은 SVG 외부 div(textContent)로 포지셔닝(SVG 내 foreignObject 회피 — CSP/렌더 단순).</li>
+    <li>CSP: 인라인 <code>&lt;style&gt;</code> 0, 색은 <code>setAttribute('fill', …)</code>/<code>el.style</code>. 외부 fetch 0(자작).</li>
+    <li>전체 재렌더 시 <code>RG.widget.destroyAll</code>이 이전 차트 핸들러를 떼고 <code>mountAll</code>이 1회 재생성 → 누수·중복 0(수용기준).</li>
+  </ul>
+  <div class="warnbox"><b>주의:</b> R-33이 "전체 재렌더마다 차트 재생성"이면 5분 폴링(R-31) 시 차트가 깜빡일 수 있다. 완화: 차트 영역만 <code>RG.preserve.patchRegion</code>로 부분 갱신하거나, 데이터 무변경 시 재생성 skip(diff 가드). 1차는 전체 재렌더 + 위젯 재생성(단순), 깜빡임 체감 시 patchRegion 적용 — Could 우선순위라 점진.</p>
+</section>
+
+<!-- ===================== 11. 구현 순서 ===================== -->
+<section id="order">
+  <h2>11. 단계적 구현 순서</h2>
+  <ol>
+    <li><b>P1 — R-25 기반(단독 PR, 회귀 0 우선).</b> <code>renderGuard.js</code> + 테스트. app.js에 <code>RG</code> 도입하되 <b>동작 보존 리팩터링</b>: 기존 destroyCardSortable/init·FOCUS_SEL/SCROLL_SEL 복원·applyProjectsUpdate/메일 보류 조건을 <code>RG.widget</code>/<code>RG.preserve</code>/<code>RG.deferred</code>로 이관. 이 단계는 새 기능 없음 — 기존 동작 100% 유지 확인이 게이트.</li>
+    <li><b>P2 — R-26.</b> 검색 input을 <code>RG.composition.bind</code> + <code>RG.coalesce.request</code> 경유로. compositionend flush. 다른 input(궤도 검색·할 일)도 동일 가드. (R-25 의존)</li>
+    <li><b>P3 — R-28 + R-29 (묶음, SHORTCUTS 공유).</b> 메뉴 제거·F5 keydown·정보/단축키 카테고리 신설 함수·죽은 채널 정리.</li>
+    <li><b>P4 — R-27.</b> 헤더 공통 골격 정리(R-28 이관 액션 수용). Q5(도움말 버튼) 확정 반영.</li>
+    <li><b>P5 — R-30.</b> 설정 2-pane + <code>store.settingsTab</code> + P3 신설 카테고리 편입.</li>
+    <li><b>P6 — R-31.</b> 커밋 5분 폴링 start/stop(뷰/가시성 가드) + 모든 push를 <code>RG.coalesce</code> 종착으로. R-26 검증 이후 활성화.</li>
+    <li><b>P7 — R-32.</b> homeLayout 스키마·IPC·preload + renderHome 데이터-주도 + SortableJS 섹션 부착(RG.widget) + masonry 그리드.</li>
+    <li><b>P8 — R-33 (Could).</b> SVG 차트 + RG.widget 차트 라이프사이클.</li>
+  </ol>
+  <div class="note">P1은 반드시 단독으로 머지·검증한다(나머지의 토대). P3/P4는 동반(헤더 액션 영역을 한 번에 정리). P2는 P6 이전 필수(F-3 단일 진술: R-26 먼저, R-31 이후).</p>
+  <div class="warnbox"><b>[E 반영 — 구현 단계 통합 검증 항목]</b>
+    <ul>
+      <li><b>R6 — 실시간×드래그×차트 통합 회귀:</b> P6(5분 폴링) 머지 후 P7(드래그)·P8(차트)와의 통합 회귀를 구현 단계 테스트 항목으로 명시한다. 시나리오: ① 커밋 폴링 발화 순간 홈 섹션을 드래그 중 → 드래그 세션 파괴 0(<code>_dragging</code> 보류) ② 폴링 발화 순간 차트 호버 중 → 핸들러 누적·중복 노드 0(RG.widget destroy/recreate) ③ 폴링 + IME 조합 동시 → 입력 안 깨짐(coalesce 동시성 규칙 R2). 헤드리스 불가분은 사용자 PC 수동 스모크.</li>
+      <li><b>R7 — 동형 계약 테스트:</b> §3.6 참조. 순수 로직은 renderGuard.js 단일 출처, app.js RG는 얇은 어댑터. 플래그 집합 변경 시 양쪽+테스트 동일 PR.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ===================== 12. 보안 ===================== -->
+<section id="sec">
+  <h2>12. 보안 불변식 유지 방안</h2>
+  <table>
+    <tr><th style="width:120px">불변식</th><th>M9에서의 준수 방안</th></tr>
+    <tr><td>L-1 textContent</td><td>차트 라벨·툴팁·단축키 표·정보/버전·홈 섹션 모두 <code>el({text})</code>=textContent. innerHTML 도입 0. <code>RG.preserve.patchRegion</code>도 노드 생성은 기존 el() 경로만.</td></tr>
+    <tr><td>CSP</td><td>새 script·외부 fetch·CDN 0(차트 자작). 인라인 &lt;style&gt; 미사용(색은 setAttribute/CSSOM). index.html 불변.</td></tr>
+    <tr><td>H-1/H-2</td><td>새 IPC(setHomeLayout)는 경로·실행 인자 없음(섹션 enum만). git 커밋 수집은 기존 commitActivity 경로(safeExec 절대경로·shell:false·pathGuard) 재사용 — R-31은 호출 빈도만 조정(5분), 새 수집기 0(비범위).</td></tr>
+    <tr><td>guard / 0600</td><td><code>spip:setHomeLayout</code>는 register.js guard(senderFrame 정확 일치) 경유. 영속은 uiStateStore.write(0600 원자적). 응답에 민감정보 0.</td></tr>
+    <tr><td>드래그 DOM 안전</td><td>SortableJS는 self-host(추가 의존성 0). 드래그가 다루는 건 섹션 id(enum)뿐 — 실행/경로 의미 없음. onEnd는 DOM의 data-id를 읽어 enum 검증 후 영속.</td></tr>
+    <tr><td>죽은 채널</td><td>R-28에서 메뉴 제거와 함께 preload onMenu·app subscribeMenu/onMenuCommand 동시 제거(SEC-L1).</td></tr>
+    <tr><td>신뢰 경계</td><td>변화 없음 — 렌더러는 여전히 contextIsolation/sandbox, 모든 데이터는 guard된 IPC로만. 새 표면은 setHomeLayout(enum 쓰기) 1개뿐. security-reviewer 입력: 신뢰 경계는 preload allowlist, 새 데이터 흐름은 §7 다이어그램.</td></tr>
+  </table>
+</section>
+
+<!-- ===================== 13. ADR ===================== -->
+<section id="adr">
+  <h2>13. ADR (M9) — 마일스톤 정본 수록</h2>
+  <p>기존 관례(ADR-M8-1이 m8-design.html에 수록)에 따라 M9 ADR은 본 정본에 둔다. <code>adr.html</code>에는 인덱스 한 줄만 append.</p>
+
+  <div class="adr">
+    <h4>ADR-M9-1 — R-25 가드를 app.js 내부 네임스페이스 + 순수 로직 동형 분리로 구현 (vs preload 노출 vs 전면 VDOM)</h4>
+    <p><b>상태:</b> 승인 · <b>관련:</b> R-25</p>
+    <p><b>맥락:</b> 4가지 가드 계약을 단위테스트 가능하게 두되, 번들러·ESM이 없고 CSP가 강하며 app.js는 5404줄이다.</p>
+    <p><b>대안:</b> (a) 전면 가상DOM/프레임워크 — 비범위·규약 위반. (b) 순수 로직을 preload가 <code>window</code>에 노출 — 데이터 채널 외 유틸 노출로 관례 이질. (c) <span class="pick">순수 판정 로직을 <code>lib/common/renderGuard.js</code>(Node 테스트)와 app.js <code>RG</code>(렌더러)에 동형 구현, DOM 부수효과는 RG에만.</span></p>
+    <p><b>결정:</b> (c). 판정 로직은 작고 순수해 드리프트 위험이 낮고, 기존 "VM은 lib에서 test·app.js는 wiring" 패턴(F-3)과 일치.</p>
+    <p><b>결과:</b> <span class="good">좋은 점</span> preload·CSP 불변, 헤드리스 테스트 가능, 점진 도입(동작 보존 리팩터링). <span class="bad">감수</span> 순수 로직이 2곳(테스트로 동기 보장).</p>
+  </div>
+
+  <div class="adr">
+    <h4>ADR-M9-2 — 라이브 갱신은 직접 render() 대신 coalesce 게이트 단일 경유</h4>
+    <p><b>상태:</b> 승인 · <b>관련:</b> R-25/R-31/R-26</p>
+    <p><b>맥락:</b> 현재 메일 폴링·projectsUpdated·검색이 제각각 보류 조건을 검사하고 render()를 직접 호출. R-31로 빈도가 오르면 입력/드래그/차트가 깨진다.</p>
+    <p><b>대안:</b> (a) 각 호출처에 보류 조건 중복 유지 — 드리프트·누락. (b) <span class="pick">모든 트리거가 <code>RG.coalesce.request()</code> 단일 게이트 경유, 해제 지점에서 flush.</span></p>
+    <p><b>결정:</b> (b). 보류 판정·디바운스·coalesce를 한 곳으로. <b>[R2] 동시성 정합성을 3규칙으로 확정</b>(§3.5): ① 디바운스 발화 시 <code>deferred()</code> 재검사(발화 직전 보류 시작 차단) ② 다중 보류 사유가 동시에 걸리면 <code>flushIfPending</code>이 <code>deferred()</code> 재검사로 <b>마지막 해제자만</b> 1회 발화 ③ pending은 단조 boolean(누적 횟수 무관, flush가 1회 소비).</p>
+    <p><b>결과:</b> <span class="good">좋은 점</span> 폴링+IME+드래그 동시 발생에서도 중복 렌더 0·보류 누락 0·헤드리스 검증 용이. <span class="bad">감수</span> 모든 호출처를 게이트로 바꾸는 1회 리팩터링 비용 + 디바운스 콜백 내 재검사 한 줄.</p>
+  </div>
+
+  <div class="adr">
+    <h4>ADR-M9-3 — 홈 섹션 순서는 새 uiState 키 homeLayout(섹션 enum 배열)로 영속 (vs order 재사용)</h4>
+    <p><b>상태:</b> 승인 · <b>관련:</b> R-32</p>
+    <p><b>맥락:</b> 기존 <code>order</code>는 프로젝트 id 해시 전용(ID_RE). 홈 섹션은 고정 enum.</p>
+    <p><b>대안:</b> (a) order에 섞기 — 검증 정규식 충돌·의미 혼선. (b) <span class="pick">새 키 homeLayout + 화이트리스트 정규화 + 신규 채널 setHomeLayout.</span></p>
+    <p><b>결정:</b> (b). enum 화이트리스트라 별도 길이 상한·해시 검증 불요, 누락 섹션 자동 보충으로 마이그레이션 프리.</p>
+    <p><b>결과:</b> <span class="good">좋은 점</span> 향후 섹션 추가에 강건, 보안 표면 극소(enum). <span class="bad">감수</span> 채널·preload·스키마 1세트 신설.</p>
+  </div>
+
+  <div class="adr">
+    <h4>ADR-M9-4 — 커밋 차트 실시간은 5분 폴링 + 뷰/가시성 정지 (vs onProjectsUpdated 편승 vs fs.watch)</h4>
+    <p><b>상태:</b> 승인 · <b>관련:</b> R-31</p>
+    <p><b>맥락:</b> git log 수집은 비용이 커 현재 폴링 제외. 사용자 확정: 5분 폴링 + 홈 이탈 시 git 0.</p>
+    <p><b>대안:</b> (a) StateWatcher에 편승 — git log는 freshness 폴링보다 무겁고 주기가 다름. (b) fs.watch(.git) — ADR-M8-1과 동일 사유로 보류(Windows·자원). (c) <span class="pick">메일 60초 폴링 패턴 복제: 별도 5분 타이머 + 뷰=home·가시성 가드, 이탈 시 clearInterval.</span></p>
+    <p><b>결정:</b> (c). 사용자 확정값과 일치, 기존 패턴 재사용.</p>
+    <p><b>결과:</b> <span class="good">좋은 점</span> 홈 이탈 시 git 호출 0 검증 가능, 단순. <span class="bad">감수</span> 최대 신선도 지연 5분(허용).</p>
+  </div>
+</section>
+
+<!-- ===================== 14. 리스크 ===================== -->
+<section id="risk">
+  <h2>14. 리스크 · 가정 · 미해결 질문</h2>
+  <h3>14.1 리스크 / 완화</h3>
+  <table>
+    <tr><th style="width:300px">리스크</th><th>완화</th></tr>
+    <tr><td>R-25 동작 보존 리팩터링이 미묘한 회귀 유발(포커스/스크롤/모달 보류)</td><td>P1 단독 PR + 기존 동작 수동 스모크 + 전체 테스트 그린 게이트. 인라인 복원 로직을 1:1 이관(로직 변경 없이 위치만).</td></tr>
+    <tr><td>renderGuard 순수 로직 2곳(lib/app.js) 드리프트</td><td>시그니처·케이스 동일하게 유지, 테스트가 계약. 로직이 작아 위험 낮음(ADR-M9-1).</td></tr>
+    <tr><td>5분 폴링 시 전체 재렌더로 차트 깜빡임/스크롤 흔들림</td><td>RG.preserve(스크롤/포커스 복원) + 데이터 무변경 시 차트 재생성 skip. 필요 시 patchRegion 부분 갱신.</td></tr>
+    <tr><td>masonry(단일 그리드) 재배치 시 중간 프레임 깨짐(R-32 수용기준 c)</td><td>CSS columns/grid + SortableJS animation. JS masonry 재배치는 reduced-motion 대응. 1차 CSS columns로 단순 구현 후 시각 검증.</td></tr>
+    <tr><td>홈 섹션 드래그가 카드 내부 인터랙티브 요소와 충돌</td><td>기존 initCardSortable의 <code>filter: 'button,a,input,...'</code> 패턴 복제(클릭 보존).</td></tr>
+  </table>
+  <h3>14.2 가정</h3>
+  <ul>
+    <li>SortableJS는 이미 vendor self-host(index.html:29)라 R-32에서 재사용만 — 추가 자산 0.</li>
+    <li>커밋 수집기(commitActivity)는 이미 존재(M5)하며 R-31은 호출 빈도만 5분으로 조정(새 수집기 비범위).</li>
+    <li>홈 섹션은 현재 7개(attention/productivity/activity/todos/mail/disk/featureAdd) — 드래그 대상. featureAdd가 순서 대상에서 제외돼야 하면 화이트리스트에서 빼면 됨(설계 유연).</li>
+  </ul>
+  <h3>14.3 확정된 결정 (검증 라운드에서 종료 — 미해결 없음)</h3>
+  <table>
+    <tr><th style="width:60px">번호</th><th>질문</th><th>확정 결정</th></tr>
+    <tr><td>Q5</td><td>R-28 헤더 "도움말" 버튼 존치 여부</td><td><b>확정:</b> 제거하고 설정 "정보" 카테고리로 흡수(백로그 결정 일치). §9.1 반영, P4 블로킹 해제.</td></tr>
+    <tr><td>Q-A</td><td>홈 <code>featureAdd</code> 섹션 드래그 재배치 포함 여부</td><td><b>확정(기본):</b> 포함(화이트리스트로 흡수). 비블로킹. §6 HOME_SECTION_IDS에 유지.</td></tr>
+    <tr><td>Q-B</td><td>masonry 구현 방식</td><td><b>확정(기본):</b> CSS columns로 시작, 시각 결함 시 JS 재배치로 승격. 비블로킹. §14.1 리스크 참조.</td></tr>
+  </table>
+  <p style="color:#94a3b8;font-size:13px;">검증 1회차 완료 후 본 설계에 미해결(블로킹) 질문은 없다. patchRegion은 1차 범위에서 제외(후속, §3.3).</p>
+</section>
+
+<footer>
+  Project-SPIP · M9 설계 정본 · R-25~R-33 · 작성 2026-06-24 · 수석 아키텍트 · 코드 미작성(설계 표현까지) · 입력: FeatureSpec-backlog-m9.html / codebase-audit.html / home-briefing-dashboard.md / architecture.html / m8-design.html
+</footer>
+
+</main>
+</body>
+</html>

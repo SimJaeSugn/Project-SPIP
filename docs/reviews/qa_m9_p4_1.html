@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QA 검증 — M9 P4 (R-27 헤더 통일) + P3 잔여 정리</title>
+<style>
+  :root{ --bg:#0f172a; --panel:#1e293b; --fg:#e2e8f0; --sub:#94a3b8; --acc:#34d399; --ref:#38bdf8; }
+  *{ box-sizing:border-box; }
+  body{ margin:0; padding:32px 28px 64px; background:var(--bg); color:var(--fg);
+        font-family:"Segoe UI","Malgun Gothic",system-ui,sans-serif; line-height:1.6; font-size:14.5px; }
+  h1{ font-size:23px; margin:0 0 4px; }
+  h2{ font-size:17px; margin:34px 0 12px; color:var(--acc); border-bottom:1px solid #334155; padding-bottom:6px; }
+  .sub{ color:var(--sub); font-size:13px; margin:0 0 20px; }
+  .verdict{ display:inline-block; padding:6px 16px; border-radius:8px; font-weight:700; font-size:15px; }
+  .pass{ background:rgba(52,211,153,.15); color:var(--acc); border:1px solid var(--acc); }
+  .fail{ background:rgba(248,113,113,.15); color:#f87171; border:1px solid #f87171; }
+  .warn{ background:rgba(251,191,36,.16); color:#fbbf24; border:1px solid #fbbf24; }
+  .panel{ background:var(--panel); border:1px solid #334155; border-radius:10px; padding:16px 18px; margin:14px 0; }
+  table{ border-collapse:collapse; width:100%; margin:10px 0; font-size:13.5px; }
+  th,td{ border:1px solid #334155; padding:8px 10px; text-align:left; vertical-align:top; }
+  th{ background:#172033; color:var(--ref); font-weight:600; }
+  code{ background:#0b1220; color:#fcd34d; padding:1px 5px; border-radius:4px; font-family:"Geist Mono",Consolas,monospace; font-size:12.5px; }
+  .v{ font-weight:700; padding:2px 9px; border-radius:6px; font-size:12px; white-space:nowrap; }
+  .v-pass{ background:rgba(52,211,153,.18); color:var(--acc); }
+  .v-warn{ background:rgba(251,191,36,.16); color:#fbbf24; }
+  .v-fail{ background:rgba(248,113,113,.18); color:#f87171; }
+  .sev{ font-weight:700; padding:2px 8px; border-radius:6px; font-size:12px; white-space:nowrap; }
+  .s-low{ background:rgba(148,163,184,.16); color:var(--sub); }
+  .s-mid{ background:rgba(251,191,36,.16); color:#fbbf24; }
+  .loc{ color:var(--ref); font-family:"Geist Mono",Consolas,monospace; font-size:12.5px; }
+  ul{ margin:6px 0 6px 18px; padding:0; } li{ margin:3px 0; }
+  .tag{ display:inline-block; font-size:11.5px; color:var(--sub); border:1px solid #334155; border-radius:5px; padding:1px 7px; margin-right:6px; }
+  b.acc{ color:var(--acc); } b.ref{ color:var(--ref); }
+</style>
+</head>
+<body>
+  <h1>QA 검증 — M9 P4 (R-27 헤더 통일) + P3 잔여 정리</h1>
+  <p class="sub">대상: <code>public/app.js</code>(renderHeader · headerViewConfig · isEditableTarget · keydown · dispatchMenuAction 제거) ·
+    <code>test/header.test.js</code>(신규) · <code>test/shortcuts.test.js</code>(isEditableTarget 추가) · <code>test/dashboard-menu.test.js</code>(슬림화) ·
+    기준: <code>docs/architecture/m9-design.html</code> §9.1 R-27 · <code>docs/FeatureSpec-backlog-m9.html</code> R-27 수용기준·Q5 · (docs/Development 부재) ·
+    범위: 동작·통합 정합·회귀(코드품질·보안취약점 제외)</p>
+
+  <p><span class="verdict pass">종합 판정 · PASS</span> &nbsp; <span class="verdict warn">+ 수동 스모크 3건 권고</span></p>
+  <div class="panel">
+    <b>요약.</b> 검증 항목 5개 모두 <b class="acc">PASS</b>. <code>renderHeader()</code> home early-return이 제거되어
+    설정·궤도맵·재스캔 공통 액션이 홈·프로젝트 단일 경로로 구성되고, 검색창은 <code>headerViewConfig(view).showSearch</code> 순수 판정에 따라
+    <code>dashboard</code> 뷰에서만 노출된다(홈 미니멀). 헤더 도움말 버튼은 제거됐고 도움말 진입은 설정 '정보' 섹션
+    <code>renderInfoSettings()</code>의 '도움말 보기'로 유지된다(Q5 확정·완전동일 아님). 검색 input의 IME 가드(<code>RG.composition.bind</code>
+    + <code>RG.coalesce.request</code>)가 헤더 재구성 후에도 그대로 유지된다(P1/P2 회귀 0). <code>isEditableTarget</code> 가드로
+    Ctrl+O/Ctrl+R는 편집요소 포커스 중 발화하지 않고 F5(refresh)는 어디서든 발화한다. <code>dispatchMenuAction</code>은 프로덕션·export에서 완전 제거됐고
+    <code>resolveScanReloadView</code> 등 유효 동작은 무영향(테스트 5건 정상). <code>npm test</code> <b class="acc">645/645 통과·0 실패</b> 재현, <code>node -c</code> 구문 OK.
+    블로커·높음 버그 <b class="acc">0건</b>. 수동 스모크 3건(시각 레이아웃·반응형)만 권고.
+    <div style="margin-top:8px">
+      <span class="tag">PASS 5/5</span><span class="tag">블로커 0</span><span class="tag">높음 0</span><span class="tag">보통 0</span><span class="tag">낮음 0</span><span class="tag">수동스모크 3</span>
+    </div>
+  </div>
+
+  <h2>검증 항목 요약</h2>
+  <table>
+    <tr><th style="width:54px">#</th><th>항목</th><th style="width:78px">판정</th><th>근거(요지)</th></tr>
+    <tr><td>1</td><td>회귀 0 — 공통 액션·검색 노출·도움말 진입</td><td><span class="v v-pass">PASS</span></td><td>설정·궤도맵·재스캔 공통 경로 단일화. 검색 dashboard 전용·홈 부재. 도움말 → 설정 '정보' 섹션 유지</td></tr>
+    <tr><td>2</td><td>검색 IME 가드 유지</td><td><span class="v v-pass">PASS</span></td><td>재구성 후에도 <code>composition.bind(searchInput)</code> + 입력핸들러 <code>coalesce.request()</code> 유지</td></tr>
+    <tr><td>3</td><td>isEditableTarget 가드 정확성</td><td><span class="v v-pass">PASS</span></td><td>Ctrl+O/R 편집요소 포커스 중 차단, F5는 가드 우회 발화. 비정상 입력 graceful</td></tr>
+    <tr><td>4</td><td>죽은 코드 제거 영향</td><td><span class="v v-pass">PASS</span></td><td><code>dispatchMenuAction</code> 프로덕션·export 완전 제거. <code>resolveScanReloadView</code> 무영향</td></tr>
+    <tr><td>5</td><td>빌드/테스트 재현</td><td><span class="v v-pass">PASS</span></td><td><code>npm test</code> 645/645 통과. <code>app.js</code> 구문 OK</td></tr>
+  </table>
+
+  <h2>1. 회귀 0 — 헤더 공통 액션 · 검색 노출 · 도움말 진입 <span class="v v-pass">PASS</span></h2>
+  <div class="panel">
+    <b>경계면 교차.</b> 설계 §9.1(<code>브랜드 → 탭 → [검색(뷰별)] → spacer → 공통 액션</code>)과 <code>renderHeader()</code>(<span class="loc">app.js:3547-3638</span>)를 대조.
+    <ul>
+      <li><b class="acc">공통 액션 단일 경로.</b> 설정(<code>openSettings</code>)·궤도 맵(<code>enterOrbit</code>)·재스캔(<code>onRescan</code>) 버튼이
+        <code>actions</code> 컨테이너에 무조건 추가되고, 함수에 <code>return header;</code>가 <b class="acc">단 1개</b>만 존재(정적 검사 확인) — home early-return 제거 확정.
+        홈·프로젝트 양쪽 모두 동일 위치·동일 핸들러로 노출.</li>
+      <li><b class="acc">검색 뷰별 노출.</b> <code>const { showSearch } = headerViewConfig(store.state.view); if (showSearch) { … }</code>(<span class="loc">app.js:3571-3590</span>).
+        <code>headerViewConfig('dashboard')={showSearch:true}</code>, <code>'home'/'orbit'/'scanning'/undefined</code> 모두 <code>false</code> — 검색이 프로젝트 전용·홈 부재 확정(설계 "유일하게 허용된 뷰별 차이").</li>
+      <li><b class="acc">도움말 진입 유지.</b> 헤더 본문에 <code>text:'도움말'</code>·<code>click:openHelp</code> <b class="acc">부재</b>(정적 검사 false). 도움말/정보 진입은
+        <code>renderInfoSettings()</code>(<span class="loc">app.js:2207-2222</span>)의 '도움말 보기' 버튼(<code>on:{click:openHelp}</code>) + 버전 표시로 설정 '정보' 섹션에 이관됨(P3 정보섹션). <code>openHelp</code>/<code>renderHelp</code> 모달은 보존.</li>
+      <li>'마지막 스캔' 보조 텍스트(<code>store._snapshotLabel</code>)는 공통 액션 영역 좌측에 두 뷰 공통 노출(설계 권고 일치).</li>
+    </ul>
+    수용 기준 "공통 골격만 통일·검색 프로젝트 전용·홈 미니멀·완전동일 아님·Q5 도움말 버튼 제거" 모두 충족.
+  </div>
+
+  <h2>2. 검색 IME 가드 유지 (P1/P2 회귀 0) <span class="v v-pass">PASS</span></h2>
+  <div class="panel">
+    헤더 골격 재구성 후에도 검색 input 핸들러가 P2(R-26) 경로를 그대로 유지(<span class="loc">app.js:3586-3587</span>):
+    <ul>
+      <li><code>RG.composition.bind(searchInput)</code> — 조합(IME) 중 <code>deferred()=true</code>로 render 보류 → 자모 분리 차단 메커니즘 보존.</li>
+      <li>입력 핸들러가 <code>store.state.search</code> 갱신 후 <code>RG.coalesce.request()</code> 경유(자체 <code>debounce(render,120)</code> 미부활 — 단일 게이트 유지).</li>
+      <li>회귀 테스트 <code>test/header.test.js</code>가 정적 소스에서 두 토큰 존재를 강제(<code>R-26/R-27 — 검색 input 에 RG.composition.bind 유지</code>) — PASS.</li>
+    </ul>
+    헤드리스로는 자모분리 0건 자체를 재현 불가 → <b>수동 스모크 권고(아래 SM-2)</b>. 단 메커니즘 결선은 코드·테스트로 확인됨.
+  </div>
+
+  <h2>3. isEditableTarget 가드 정확성 <span class="v v-pass">PASS</span></h2>
+  <div class="panel">
+    <code>isEditableTarget(el)</code>(<span class="loc">app.js:594-599</span>) + keydown 핸들러(<span class="loc">app.js:5480-5493</span>) 교차 검증:
+    <ul>
+      <li><b class="acc">편집요소 판정.</b> <code>INPUT/TEXTAREA/SELECT</code>(tagName 대소문자 무관) + <code>isContentEditable===true</code> → true. 비정상 입력(null/undefined/문자열/빈객체) → false. (shortcuts.test.js 2건 PASS)</li>
+      <li><b class="acc">Ctrl+O/R 차단.</b> keydown 핸들러는 <code>if (action !== 'refresh' &amp;&amp; isEditableTarget(e.target)) return;</code> — 편집요소 포커스 중 pickFolders·rescan 발화 안 함.</li>
+      <li><b class="acc">F5 항상 발화.</b> <code>action === 'refresh'</code>면 가드를 우회(<code>action !== 'refresh'</code>가 false) → 어디서든 <code>refreshDashboard()</code> 호출. <code>matchShortcut</code>은 F5에 수식키가 있으면 null 반환(Ctrl/Shift/Alt+F5 비매칭).</li>
+    </ul>
+    설계 매핑 토큰(refresh/pickFolders/rescan)이 모두 <code>SHORTCUTS</code> 안내표 action에 존재(단일 출처 정합 테스트 PASS).
+  </div>
+
+  <h2>4. 죽은 코드(dispatchMenuAction) 제거 영향 <span class="v v-pass">PASS</span></h2>
+  <div class="panel">
+    <ul>
+      <li><code>public/app.js</code>에서 <code>dispatchMenuAction</code> 정의·export·호출부 <b class="acc">전면 부재</b> — <span class="loc">app.js:610-611</span>에 제거 사유 주석만 잔존(정상). 잔여 grep 매치는 변경 전 리뷰 HTML 문서뿐, 소스 0건.</li>
+      <li>유효 동작 무영향: <code>resolveScanReloadView</code>(<span class="loc">app.js:621-624</span>)는 export·런타임 경로(스캔 done→<span class="loc">app.js:4495</span>) 모두 유지. <code>test/dashboard-menu.test.js</code> 5건(슬림화 후) 전부 PASS.</li>
+      <li>단축키 디스패치는 keydown→<code>matchShortcut</code> 경로로 완결 — 메뉴 매핑 의존 0.</li>
+    </ul>
+  </div>
+
+  <h2>5. 빌드 / 테스트 재현 <span class="v v-pass">PASS</span></h2>
+  <div class="panel">
+    <ul>
+      <li><code>cd "E:/03.프로젝트/Project-SPIP" &amp;&amp; npm test</code> → <b class="acc">tests 645 · pass 645 · fail 0</b> (실제 실행 결과). 설계 명시 645 통과 재확인.</li>
+      <li>영향 3파일 단독 실행(<code>node --test test/header.test.js test/shortcuts.test.js test/dashboard-menu.test.js</code>) → 23/23 PASS.</li>
+      <li><code>node -c public/app.js</code> → <b class="acc">SYNTAX OK</b>.</li>
+    </ul>
+  </div>
+
+  <h2>발견 버그</h2>
+  <div class="panel">
+    <b class="acc">블로커·높음·보통·낮음 모두 0건.</b> 자동 검증 범위 내에서 수용 기준 위반·회귀 미발견.
+  </div>
+
+  <h2>수동 스모크 권고 (헤드리스 비대상 — 시각·반응형·IME)</h2>
+  <table>
+    <tr><th style="width:64px">ID</th><th>항목</th><th>확인 절차</th></tr>
+    <tr><td>SM-1</td><td>헤더 시각 레이아웃·반응형</td><td>홈/프로젝트 전환 시 공통 액션 정렬·spacer·검색창 등장/사라짐의 가로폭 점프 여부, 좁은 창에서 버튼 줄바꿈·오버플로 확인. 정적 검사로는 CSS 레이아웃 미검증.</td></tr>
+    <tr><td>SM-2</td><td>검색 IME 자모분리 회귀 0</td><td>프로젝트 화면 검색창에 한글 "프로젝트" 빠른 입력 시 자모 분리 0건, compositionend 1회 반영. 영문 빠른 타이핑 갱신 타이밍 기존 동일.</td></tr>
+    <tr><td>SM-3</td><td>도움말/정보 진입 경로</td><td>설정 모달 → '정보' 섹션 → '도움말 보기' 클릭 시 도움말 모달 정상 오픈, 버전 문자열(package.json 유래) 표시 확인.</td></tr>
+  </table>
+
+  <p class="sub" style="margin-top:24px">검증자: QA 엔지니어 · 동작·통합 범위 · 코드품질(code-reviewer)·보안(security-reviewer) 제외</p>
+</body>
+</html>

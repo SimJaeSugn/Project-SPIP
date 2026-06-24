@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QA 검증 — M9 P3 (R-28 네이티브 메뉴 제거 · R-29 단축키 단일출처)</title>
+<style>
+  :root{ --bg:#0f172a; --panel:#1e293b; --fg:#e2e8f0; --sub:#94a3b8; --acc:#34d399; --ref:#38bdf8; }
+  *{ box-sizing:border-box; }
+  body{ margin:0; padding:32px 28px 64px; background:var(--bg); color:var(--fg);
+        font-family:"Segoe UI","Malgun Gothic",system-ui,sans-serif; line-height:1.6; font-size:14.5px; }
+  h1{ font-size:23px; margin:0 0 4px; }
+  h2{ font-size:17px; margin:34px 0 12px; color:var(--acc); border-bottom:1px solid #334155; padding-bottom:6px; }
+  .sub{ color:var(--sub); font-size:13px; margin:0 0 20px; }
+  .verdict{ display:inline-block; padding:6px 16px; border-radius:8px; font-weight:700; font-size:15px; }
+  .pass{ background:rgba(52,211,153,.15); color:var(--acc); border:1px solid var(--acc); }
+  .fail{ background:rgba(248,113,113,.15); color:#f87171; border:1px solid #f87171; }
+  .warn{ background:rgba(251,191,36,.16); color:#fbbf24; border:1px solid #fbbf24; }
+  .panel{ background:var(--panel); border:1px solid #334155; border-radius:10px; padding:16px 18px; margin:14px 0; }
+  table{ border-collapse:collapse; width:100%; margin:10px 0; font-size:13.5px; }
+  th,td{ border:1px solid #334155; padding:8px 10px; text-align:left; vertical-align:top; }
+  th{ background:#172033; color:var(--ref); font-weight:600; }
+  code{ background:#0b1220; color:#fcd34d; padding:1px 5px; border-radius:4px; font-family:"Geist Mono",Consolas,monospace; font-size:12.5px; }
+  .v{ font-weight:700; padding:2px 9px; border-radius:6px; font-size:12px; white-space:nowrap; }
+  .v-pass{ background:rgba(52,211,153,.18); color:var(--acc); }
+  .v-warn{ background:rgba(251,191,36,.16); color:#fbbf24; }
+  .v-fail{ background:rgba(248,113,113,.18); color:#f87171; }
+  .sev{ font-weight:700; padding:2px 8px; border-radius:6px; font-size:12px; white-space:nowrap; }
+  .s-low{ background:rgba(148,163,184,.16); color:var(--sub); }
+  .s-mid{ background:rgba(251,191,36,.16); color:#fbbf24; }
+  .loc{ color:var(--ref); font-family:"Geist Mono",Consolas,monospace; font-size:12.5px; }
+  ul{ margin:6px 0 6px 18px; padding:0; } li{ margin:3px 0; }
+  .tag{ display:inline-block; font-size:11.5px; color:var(--sub); border:1px solid #334155; border-radius:5px; padding:1px 7px; margin-right:6px; }
+  b.acc{ color:var(--acc); } b.ref{ color:var(--ref); }
+</style>
+</head>
+<body>
+  <h1>QA 검증 — M9 P3 (R-28 / R-29)</h1>
+  <p class="sub">대상: <code>electron/menu.js</code>(삭제) · <code>electron/main.js</code> · <code>electron/preload.js</code> · <code>public/app.js</code> · <code>test/shortcuts.test.js</code>(신규) · <code>test/electron-preload-contract.test.js</code> · <code>test/dashboard-menu.test.js</code> · 기준: <code>docs/architecture/m9-design.html</code> R-28·R-29 · <code>docs/FeatureSpec-backlog-m9.html</code> R-28·R-29 (docs/Development 부재) · 범위: 동작·통합 정합·회귀(코드품질·보안취약점 제외)</p>
+
+  <p><span class="verdict pass">종합 판정 · PASS</span> &nbsp; <span class="verdict warn">+ 수동 스모크 2건 권고</span></p>
+  <div class="panel">
+    <b>요약.</b> 검증 항목 5개 모두 <b class="acc">PASS</b>. 제거된 4채널(pickFolders·rescan·refresh·about)의 대체 경로가
+    실제 코드에 모두 존재하고 양쪽 경계면이 맞물린다. 메뉴로만 가능했던 기능 손실 <b class="acc">없음</b>.
+    단축키 텍스트 삽입 충돌 <b class="acc">없음</b>(글자 키 비매칭). 단일 출처(SHORTCUTS) 정합 확인.
+    <code>npm test</code> 642 통과·0 실패 재현. 구문 OK 3파일.
+    블로커·높음 버그 0건. 보통/낮음 관찰 2건(입력창 포커스 중 Ctrl+O/Ctrl+R 발화, 죽은 export) — 모두 수용 기준 위반 아님.
+    <div style="margin-top:8px">
+      <span class="tag">PASS 5/5</span><span class="tag">블로커 0</span><span class="tag">높음 0</span><span class="tag">보통 1</span><span class="tag">낮음 1</span><span class="tag">수동스모크 2</span>
+    </div>
+  </div>
+
+  <h2>검증 항목 요약</h2>
+  <table>
+    <tr><th style="width:54px">#</th><th>항목</th><th style="width:78px">판정</th><th>근거(요지)</th></tr>
+    <tr><td>1</td><td>회귀 0 — 메뉴 기능 손실 없음</td><td><span class="v v-pass">PASS</span></td><td>4채널 대체 경로 모두 코드에 실재·연결됨</td></tr>
+    <tr><td>2</td><td>F5/단축키 충돌</td><td><span class="v v-pass">PASS</span></td><td>글자 키 비매칭(텍스트 삽입 안전)·F5 수식키 배제. 입력창 Ctrl 조합은 스모크 권고</td></tr>
+    <tr><td>3</td><td>SHORTCUTS 단일 출처 정합</td><td><span class="v v-pass">PASS</span></td><td>디스패치 action ⊆ 안내표 action. textContent 렌더(L-1)</td></tr>
+    <tr><td>4</td><td>죽은 코드/잔존 매핑</td><td><span class="v v-pass">PASS</span></td><td><code>'about'</code> 매핑·<code>dispatchMenuAction</code> export는 무해(테스트만 참조). 죽은 채널 0</td></tr>
+    <tr><td>5</td><td>빌드/테스트 재현</td><td><span class="v v-pass">PASS</span></td><td><code>npm test</code> 642/642 통과. main·preload·app 구문 OK</td></tr>
+  </table>
+
+  <h2>1. 회귀 0 — 메뉴 기능 손실 없음 (최우선) · <span class="v v-pass">PASS</span></h2>
+  <div class="panel">
+    제거된 네이티브 메뉴 4채널 각각에 대해 <b>대체 경로의 실재·연결</b>을 경계면 양쪽에서 확인했다. "주석에 적혀 있다"가 아니라
+    핸들러 함수와 호출 위치를 교차 대조했다.
+  </div>
+  <table>
+    <tr><th style="width:120px">제거 채널</th><th>대체 경로</th><th>실재 확인 위치</th></tr>
+    <tr><td>pickFolders<br>(폴더 추가)</td><td>설정 '스캔 폴더' UI + 단축키 Ctrl+O</td><td><code>onPickFolders()</code> <span class="loc">app.js:5102</span> → keydown 디스패치 <span class="loc">app.js:5496</span>. 설정 직접입력 경로 <code>onAddRoot()</code> <span class="loc">app.js:5112</span></td></tr>
+    <tr><td>rescan<br>(재스캔)</td><td>헤더 '재스캔' 버튼 + 단축키 Ctrl+R</td><td>헤더 버튼 <code>on:{click:onRescan}</code> <span class="loc">app.js:3640-3642</span> → <code>onRescan()</code> <span class="loc">app.js:4388</span> → <code>triggerRescan('dashboard')</code>. keydown 디스패치 <span class="loc">app.js:5497</span></td></tr>
+    <tr><td>refresh<br>(새로고침)</td><td>단축키 F5 (신설)</td><td><code>refreshDashboard()</code> <span class="loc">app.js:4560</span> → keydown 디스패치 <span class="loc">app.js:5498</span>. SHORTCUTS 항목 <span class="loc">app.js:569</span></td></tr>
+    <tr><td>about<br>(정보)</td><td>설정 '정보' 섹션</td><td><code>renderInfoSettings()</code> <span class="loc">app.js:2202-2217</span> — 버전(<code>store.update.currentVersion</code>, 하드코딩 금지 준수)·도움말 진입(<code>openHelp</code>). 설정 렌더 트리에 포함 <span class="loc">app.js:2184</span></td></tr>
+  </table>
+  <div class="panel">
+    <b>판정.</b> 메뉴로만 도달 가능했던 기능은 없다. 폴더추가·재스캔은 메뉴 제거 이전에도 헤더/설정 UI가 1차 진입점이었고
+    단축키는 보조였으므로(설계 R-28 §"기존 accelerator 이관") 손실 없음. 정보·새로고침은 신설 경로로 완전 대체.
+    <b class="acc">회귀 없음.</b>
+  </div>
+
+  <h2>2. F5 / 단축키 충돌 · <span class="v v-pass">PASS</span></h2>
+  <table>
+    <tr><th style="width:200px">충돌 시나리오</th><th>결과 / 근거</th></tr>
+    <tr><td>입력창 포커스 중 텍스트 삽입 충돌</td><td><b class="acc">충돌 없음.</b> <code>matchShortcut</code>(<span class="loc">app.js:579-587</span>)은 <b>글자 키 단독</b>('o','r' 수식키 없음)을 <code>null</code> 반환(<span class="loc">app.js:584-585</span>의 <code>ctrl &amp;&amp;</code> 가드). 따라서 입력 중 일반 타이핑은 절대 가로채지 않음. 테스트 <code>shortcuts.test.js:56-59</code>가 이를 고정.</td></tr>
+    <tr><td>F5 + 수식키 조합(Ctrl+F5 등)</td><td><b class="acc">안전.</b> <code>key==='F5' &amp;&amp; !ctrl &amp;&amp; !shiftKey &amp;&amp; !altKey</code>(<span class="loc">app.js:583</span>)로 수식키 동반 시 비매칭. 테스트 <code>shortcuts.test.js:61-64</code>.</td></tr>
+    <tr><td>입력창에서 Ctrl+O / Ctrl+R</td><td><b>관찰(보통).</b> 전역 keydown(<span class="loc">app.js:5491</span>)이 입력 포커스 여부를 검사하지 않아, 텍스트 입력 중에도 폴더추가/재스캔이 발화하고 <code>preventDefault</code>가 걸린다. <u>텍스트 삽입을 깨지는 않음</u>(Ctrl+O/R은 글자 입력이 아님)이므로 데이터 손상·기능 손실은 없다. 다만 메일/제외/할일 입력 중 의도치 않은 동작 트리거 가능 — 아래 버그 B-1 참조. <b>수용 기준 위반은 아님</b>(설계는 입력창 가드를 요구하지 않음).</td></tr>
+    <tr><td>전역 ESC 핸들러와 중복 디스패치</td><td><b class="acc">분리됨.</b> Esc는 <code>matchShortcut</code>이 <code>null</code> 반환(<span class="loc">app.js:586</span>), 별도 ESC 핸들러(<span class="loc">app.js:5480-5487</span>)가 단독 처리. SHORTCUTS 안내표엔 'Esc' 표기만(디스패치 비대상). 이중 처리 없음.</td></tr>
+    <tr><td>두 keydown 리스너 상호작용</td><td><b class="acc">안전.</b> ESC 리스너는 <code>e.key!=='Escape'</code>면 early-return, 단축키 리스너는 <code>matchShortcut===null</code>이면 early-return. 키 공간이 겹치지 않아 부작용 없음.</td></tr>
+  </table>
+
+  <h2>3. SHORTCUTS 단일 출처 정합 · <span class="v v-pass">PASS</span></h2>
+  <div class="panel">
+    <b>디스패치 ⊆ 안내표.</b> keydown 디스패치가 실제 실행하는 action 집합 <code>{pickFolders, rescan, refresh}</code>(<span class="loc">app.js:5495-5500</span>)는
+    모두 <code>SHORTCUTS</code> 상수(<span class="loc">app.js:566-571</span>)에 존재한다. 안내표 렌더 <code>renderShortcutSettings()</code>(<span class="loc">app.js:2191-2198</span>)는
+    동일 <code>SHORTCUTS</code>를 그대로 순회(<code>SHORTCUTS.forEach</code>) → <b class="acc">표시 집합 = 상수 = 디스패치의 상위집합</b>. 불일치 경로 없음.
+    'Esc'는 안내표엔 있으나 matchShortcut 비대상(전역 ESC 소관)으로, 표 ⊇ 디스패치 관계가 유지됨. 테스트 <code>shortcuts.test.js:75-82</code>가 고정.
+  </div>
+  <div class="panel">
+    <b>L-1(textContent) 준수.</b> 안내표는 <code>helpRow(sc.keys, sc.label)</code>로 렌더되며 <code>el(...,{text:...})</code> 경로(textContent)만 사용.
+    정보 섹션(<code>renderInfoSettings</code>)도 <code>text:</code>·<code>helpRow</code>만 사용, <code>innerHTML</code> 미사용 확인. XSS 표면 추가 없음.
+  </div>
+
+  <h2>4. 죽은 코드 / 잔존 매핑 · <span class="v v-pass">PASS</span></h2>
+  <table>
+    <tr><th style="width:220px">대상</th><th>판정 / 근거</th></tr>
+    <tr><td><code>dispatchMenuAction</code>의 <code>'about'</code> 매핑(<span class="loc">app.js:603</span>)</td><td><b class="acc">무해.</b> <code>dispatchMenuAction</code> 자체가 더 이상 런타임에서 호출되지 않음(정의·export 외 호출처 0건). <code>test/dashboard-menu.test.js:26</code>가 <code>'about'→'about'</code> 매핑을 여전히 검증하므로 함수·매핑은 테스트 회귀 고정용으로 의도적 유지. 'about' 핸들러가 실제로 실행될 경로는 없어 부작용 없음.</td></tr>
+    <tr><td><code>dispatchMenuAction</code> export(<span class="loc">app.js:5575</span>)</td><td><b>관찰(낮음).</b> 죽은 export(런타임 미호출). 단 dashboard-menu.test.js가 import하므로 제거 시 테스트 깨짐 — 현 상태 유지가 맞다. 버그 B-2 참조.</td></tr>
+    <tr><td>preload <code>onMenu</code> / <code>spip:menu:*</code></td><td><b class="acc">완전 제거.</b> preload에서 <code>onMenu</code> 노출 없음(주석만, <span class="loc">preload.js:157-159</span>). <code>electron-preload-contract.test.js:108-117</code>가 preload·main·app 세 곳 모두에서 <code>spip:menu:</code>·<code>spip.onMenu</code> 잔존을 금지로 검증·통과.</td></tr>
+    <tr><td>app.js <code>subscribeMenu</code>/<code>onMenuCommand</code>/<code>showAbout</code></td><td><b class="acc">제거 확인.</b> Grep 결과 정의·호출 0건(주석 <span class="loc">app.js:4533-4537</span>만 잔존). teardown에서 메뉴 구독 해제 제거됨(<span class="loc">app.js:5516</span>).</td></tr>
+    <tr><td><code>electron/menu.js</code></td><td><b class="acc">삭제 확인.</b> 파일 부재(Glob 0건). <code>electron/</code> 어디서도 require 안 함(main.js의 <code>Menu</code>는 <code>electron</code> 코어에서 직접 import, tray.js의 <code>Menu</code>는 트레이 컨텍스트 메뉴용으로 무관).</td></tr>
+    <tr><td>main.js <code>setApplicationMenu(null)</code></td><td><b class="acc">설치됨.</b> <span class="loc">main.js:253</span>. preload-contract <code>:121-123</code>가 정규식으로 검증·통과.</td></tr>
+  </table>
+
+  <h2>5. 빌드 / 테스트 재현 · <span class="v v-pass">PASS</span></h2>
+  <div class="panel">
+    <b><code>npm test</code> 실측.</b> <code>node --test "test/**/*.test.js"</code> 직접 실행.
+    <table>
+      <tr><th>tests</th><th>pass</th><th>fail</th><th>skipped</th><th>duration</th></tr>
+      <tr><td>642</td><td><b class="acc">642</b></td><td>0</td><td>0</td><td>~1.71s</td></tr>
+    </table>
+    신규 <code>test/shortcuts.test.js</code>(9건)·변경된 contract/menu 테스트 포함 전부 통과. 642 통과 목표 재확인됨.
+  </div>
+  <div class="panel">
+    <b>구문 검사.</b> <code>node -c</code> 통과 — <code>electron/main.js</code> OK · <code>electron/preload.js</code> OK · <code>public/app.js</code> OK.
+  </div>
+
+  <h2>발견 버그 (블로커·높음 0)</h2>
+  <table>
+    <tr><th style="width:64px">ID</th><th>내용</th><th style="width:74px">심각도</th></tr>
+    <tr>
+      <td>B-1</td>
+      <td>
+        <b>무엇.</b> 입력창(메일 host/user/label, 제외 패턴, 할일, 경로 직접입력, 인식기준 등) 포커스 중 <code>Ctrl+O</code>/<code>Ctrl+R</code>를 누르면 전역 핸들러가 폴더추가/재스캔을 발화한다.<br>
+        <b>어디서.</b> 전역 keydown 리스너 <span class="loc">app.js:5491-5501</span> — 입력 포커스(<code>e.target</code>이 INPUT/TEXTAREA) 여부 미검사.<br>
+        <b>기대 vs 실제.</b> 기대=텍스트 입력 중 단축키는 입력 우선(보통 데스크톱 UX). 실제=항상 단축키가 우선·<code>preventDefault</code>. 단 텍스트 삽입 자체는 깨지지 않음(글자 입력이 아니므로 데이터 손상 없음).<br>
+        <b>재현.</b> 설정 → 메일 계정 추가 입력란 포커스 → <code>Ctrl+R</code> → 재스캔 트리거(또는 입력 중 폴더선택 다이얼로그 등장).<br>
+        <b>비고.</b> 설계/명세 어디에도 입력창 가드 요구 없음 → <b>수용 기준 위반 아님</b>. 개선 여지로 분류. 권고: 핸들러 진입부에서 <code>e.target</code>가 편집 가능 요소면 Ctrl+O/Ctrl+R 한정 skip(F5는 통과 무방).
+      </td>
+      <td><span class="sev s-mid">보통</span></td>
+    </tr>
+    <tr>
+      <td>B-2</td>
+      <td>
+        <b>무엇.</b> <code>dispatchMenuAction</code> 및 <code>'about'</code> 분기가 런타임에서 호출되지 않는 죽은 코드(테스트만 참조).<br>
+        <b>어디서.</b> <span class="loc">app.js:597-606</span>, export <span class="loc">app.js:5575</span>.<br>
+        <b>기대 vs 실제.</b> 기대=메뉴 제거 후 관련 매핑 정리. 실제=함수·매핑·테스트(dashboard-menu.test.js)가 잔존.<br>
+        <b>재현.</b> 정적 — Grep으로 호출처 0건 확인.<br>
+        <b>비고.</b> 동작·보안 영향 없음(순수 함수, 부작용 없음). 정리 여부는 코드 품질 영역(<code>code-reviewer</code> 소관)이며 현재 테스트 회귀 고정 목적상 유지가 합리적. QA 관점 무해.
+      </td>
+      <td><span class="sev s-low">낮음</span></td>
+    </tr>
+  </table>
+
+  <h2>수동 스모크 권고 (헤드리스 미검증 — F-3)</h2>
+  <div class="panel">
+    main.js의 창·메뉴 wiring은 GUI 스모크로만 검증된다(파일 주석 F-3 명시). 아래 2건은 실 앱 기동 확인 권고:
+    <ul>
+      <li><b>S-1 메뉴 부재·접근성.</b> 앱 기동 시 네이티브 메뉴바가 완전히 사라졌는지(<code>setApplicationMenu(null)</code> 효과), Alt 키로도 메뉴가 뜨지 않는지. F5로 새로고침·Ctrl+O 폴더선택·Ctrl+R 재스캔이 실제 발화하는지(브라우저 KeyboardEvent와 Electron renderer 동작 일치 확인).</li>
+      <li><b>S-2 정보 섹션.</b> 설정 → '정보' 섹션에 버전(<code>v…</code>)이 <code>store.update.currentVersion</code> 적재 시점 이후 올바로 표시되는지(적재 전 <code>—</code> 폴백), '도움말 보기'가 모달을 여는지.</li>
+    </ul>
+  </div>
+
+</body>
+</html>

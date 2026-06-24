@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QA 검증 — M9 P8 (R-33 SVG 자작 인터랙티브 커밋 차트)</title>
+<style>
+  :root{
+    --bg:#0b1220; --panel:#111a2e; --panel2:#0f1626; --bd:#1e2b45;
+    --fg:#e6edf7; --muted:#93a4c2; --accent:#34d399; --ref:#38bdf8;
+    --warn:#fbbf24; --bad:#f87171; --ok:#34d399;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+    font:14.5px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Malgun Gothic",sans-serif;}
+  .wrap{max-width:1040px;margin:0 auto;padding:38px 26px 80px}
+  h1{font-size:25px;margin:0 0 6px;letter-spacing:-.3px}
+  h2{font-size:18px;margin:36px 0 12px;padding-bottom:7px;border-bottom:1px solid var(--bd);color:#cfe0fb}
+  h3{font-size:15px;margin:22px 0 8px;color:#cfe0fb}
+  .sub{color:var(--muted);font-size:13px;margin:0 0 4px}
+  code{background:#0a1322;border:1px solid var(--bd);border-radius:5px;padding:.5px 6px;
+    font-family:ui-monospace,"Cascadia Code",Consolas,monospace;font-size:12.6px;color:#cbd6ec}
+  .verdict{display:inline-block;font-weight:700;font-size:15px;padding:7px 18px;border-radius:999px;
+    border:1px solid var(--ok);color:#06291d;background:var(--ok)}
+  .panel{background:var(--panel);border:1px solid var(--bd);border-radius:12px;padding:18px 20px;margin:14px 0}
+  .grid{display:flex;gap:14px;flex-wrap:wrap;margin:14px 0}
+  .stat{flex:1;min-width:140px;background:var(--panel2);border:1px solid var(--bd);border-radius:10px;padding:13px 16px}
+  .stat .n{font-size:26px;font-weight:700}
+  .stat .l{color:var(--muted);font-size:12.5px}
+  table{width:100%;border-collapse:collapse;margin:10px 0;font-size:13.4px}
+  th,td{text-align:left;padding:9px 11px;border-bottom:1px solid var(--bd);vertical-align:top}
+  th{color:#aebfdd;font-weight:600;background:#0d1525}
+  td.loc{white-space:nowrap;color:var(--ref);font-family:ui-monospace,Consolas,monospace;font-size:12.4px}
+  .pf{font-weight:700;font-size:11.5px;padding:2px 10px;border-radius:999px;white-space:nowrap;display:inline-block}
+  .pf.pass{background:#0c2a1e;color:var(--ok);border:1px solid #155}
+  .pf.fail{background:#3a1414;color:var(--bad);border:1px solid #5b1d1d}
+  .pf.manual{background:#0e2436;color:var(--ref);border:1px solid #1d3a52}
+  .ref{color:var(--ref)}
+  .muted{color:var(--muted)}
+  ul{margin:8px 0 8px 2px;padding-left:20px}
+  li{margin:4px 0}
+  .tag{display:inline-block;font-size:11px;color:#9fb2d6;border:1px solid var(--bd);border-radius:5px;padding:1px 7px;margin-right:5px}
+  .ok{color:var(--ok)} .warn{color:var(--warn)} .bad{color:var(--bad)}
+  .diff{display:flex;gap:14px;flex-wrap:wrap;margin:10px 0}
+  .diff > div{flex:1;min-width:260px;background:var(--panel2);border:1px solid var(--bd);border-radius:10px;padding:12px 15px}
+  .diff h4{margin:0 0 8px;font-size:13px;color:#cfe0fb}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <p class="sub">SPIP · QA 동작·통합·회귀 검증 (1회차) · 2026-06-24</p>
+  <h1>M9 P8 — R-33 SVG 자작 인터랙티브 커밋 차트</h1>
+  <p class="sub">대상: <code>public/app.js</code>(commitChartModel · chartBars · renderHomeProductivity · RG.widget 'commitChart') · <code>public/styles.css</code> · <code>test/commitChart.test.js</code>(12) · <code>test/homeLayout-equivalence.test.js</code>(15)</p>
+  <p class="sub">기준: 설계 <code>docs/architecture/m9-design.html</code> R-33(§10), 수용 기준(SVG 자작 · 인터랙티브 호버 툴팁/강조 · 외부 네트워크 0 · 기간/데이터 동일). <code>docs/Development/</code> 부재 → 수용 기준·설계 계약·보안 불변식(L-1/M-2)으로 검증.</p>
+
+  <p style="margin:16px 0"><span class="verdict">종합 판정 · PASS (자동 검증 범위, 회귀 0)</span></p>
+
+  <div class="grid">
+    <div class="stat"><div class="n ok">705</div><div class="l">npm test 통과 (fail 0)</div></div>
+    <div class="stat"><div class="n ok">12+15</div><div class="l">P8 R-33 / P7 R-32 동치 신규 통과</div></div>
+    <div class="stat"><div class="n ok">0</div><div class="l">발견 결함(블로커/높음)</div></div>
+    <div class="stat"><div class="n ref">3</div><div class="l">수동 스모크 필요 항목</div></div>
+  </div>
+
+  <div class="panel">
+    <b>요약 —</b> div 막대를 SVG 자작 차트로 교체했으나 <b>데이터 출처·기간·합계 표기·요일 라벨·우측 언어/스택 컬럼이 전부 동일</b>하게 보존돼 <span class="ok">회귀 0</span>으로 판정한다. 차트 막대만 <code>renderHomeProductivity</code> 본문에서 빠지고 <code>.commit-chart-host</code> 빈 호스트로 대체됐으며, 실제 SVG는 render() 라이프사이클(<code>RG.widget.destroyAll → mountAll</code>)을 타는 <code>commitChart</code> 위젯이 mount 시 <code>chartBars()</code>로 생성한다. 위젯은 render() 1회당 <b>정확히 1회 destroy + 1회 recreate</b>되고 <code>chartBars</code>가 모든 핸들러를 <code>removeEventListener</code>로 detach하므로 호버 핸들러 중복·누수 0이 구조적으로 보장된다. <code>commitChartModel</code>은 음수/NaN/Infinity/비수치를 0으로 클램프하고 항상 7칸을 패딩/절삭하며, 라벨·툴팁은 <code>textContent</code>만(L-1/M-2), 색은 고정 팔레트, 외부 url/xlink 0이다. <code>npm test</code>를 직접 실행해 <b>705/705 통과</b>를 재확인했고 <code>node -c</code> 구문 검사도 통과했다. 실제 포인터 호버·5분 폴링 후 재호버·픽셀 정렬은 헤드리스 한계로 <span class="ref">수동 스모크</span>에 위임한다.
+  </div>
+
+  <h2>검증 항목별 결과</h2>
+  <table>
+    <thead><tr><th style="width:42px">#</th><th>항목</th><th style="width:64px">판정</th><th>근거</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>1</td>
+        <td><b>회귀 0 (최우선)</b> — 데이터 출처·기간·라벨·합계·우측 컬럼·로드 경로</td>
+        <td><span class="pf pass">PASS</span></td>
+        <td>
+          HEAD(div막대) <code>renderHomeProductivity</code>와 현재본을 교차 비교(<span class="loc">app.js HEAD:1694–1743 / WT:1912–1956</span>): 헤더 <code>'주간 생산성'</code>·<code>total7 + ' 커밋'</code> 합계·<code>commitActivityLoaded ? '최근 7일 커밋 빈도' : '집계하려면 새로고침…'</code> 문구·<b>우측 언어/스택 컬럼(1929–1954)</b>까지 바이트 동일. 차트 데이터는 양쪽 모두 <code>store.commitActivity.days.slice(-7)</code>. 위젯도 동일하게 <code>ca.days.slice(-7)</code> + <code>homeWeekday(d.date)</code> 라벨(<span class="loc">app.js:5731–5734</span>). 로드 경로 무변경: 초기 1회 <code>maybeLoadCommitActivity</code>(2189), 수동 새로고침 <code>refreshCommitActivity</code>(2202), 5분 폴링 게이트 R-31(1104/4835/5839)은 손대지 않았고 모두 <code>render()</code>를 경유. 미데이터/미로드 시 <code>commitChartModel([])</code>이 7칸 0막대를 graceful 반환(테스트로 강제) → 에러 0.
+        </td>
+      </tr>
+      <tr>
+        <td>2</td>
+        <td><b>commitChartModel 정확성</b> — sanitize·패딩·스케일·baseline</td>
+        <td><span class="pf pass">PASS</span></td>
+        <td>
+          <span class="loc">app.js:672–712</span>. 비배열 → <code>[]</code>(7칸 0). count는 <code>Number()</code> + <code>Number.isFinite && n&gt;=0</code> 가드, 위반 시 0(NaN/Infinity/음수/'abc'/null/undefined 전부 0 검증). <code>slice(-maxBars)</code>로 7칸 초과 절삭, <code>unshift</code>로 앞쪽 0 패딩 → 항상 7칸. 높이 <code>max(3, count/maxCount*usableH)</code>, 0이면 스텁 2px. 12건 테스트(빈/비배열 graceful, 클램프, Number 변환, 비례·baseline 내포, 절삭/패딩, label 문자열 보존, isLast) 전부 통과.
+        </td>
+      </tr>
+      <tr>
+        <td>3</td>
+        <td><b>인터랙티브</b> — 호버/포커스 강조+툴팁·원복·키보드 접근</td>
+        <td><span class="pf pass">PASS</span><br><span class="pf manual">스모크</span></td>
+        <td>
+          <span class="loc">app.js:1314–1327</span>. <code>showTip</code>이 <code>fill=barHover</code> 강조 + 툴팁 <code>textContent</code> 설정 + <code>display:block</code>, <code>hideTip</code>이 <code>baseFill</code> 원복 + <code>display:none</code>. <code>mouseenter/mouseleave</code> 및 <code>focus/blur</code> 양쪽 바인딩 → 키보드 포커스에도 동일 동작. 각 rect <code>tabindex='0'</code>(1307), <code>:focus-visible</code> outline(<span class="loc">styles.css:385</span>), 접근성 <code>&lt;title&gt;</code> 요소·<code>role</code> 부여. 정적·헤드리스로는 바인딩/원복 로직 확인 완료, 실제 마우스 호버 시각·툴팁 위치는 스모크 위임.
+        </td>
+      </tr>
+      <tr>
+        <td>4</td>
+        <td><b>RG.widget 정합·누수 0</b> — destroy/recreate·폴링·드래그 후 정상</td>
+        <td><span class="pf pass">PASS</span></td>
+        <td>
+          <span class="loc">app.js:5725–5740 / 5648–5667 / 1375·1409</span>. render() = <code>destroyAll()</code> → 뷰 빌드 → <code>mountAll(app)</code>. <code>destroyAll</code>이 살아있는 인스턴스의 <code>spec.destroy(inst)</code> 호출 후 null → <code>chartBars.destroy()</code>가 <code>handlers</code> 전부 <code>removeEventListener</code>(1344–1346). <code>mountAll</code>은 인스턴스 null일 때만 init → 중복 mount 0. 5분 폴링·R-32 드래그도 결국 render()를 경유하므로 매 갱신마다 깨끗이 재생성. <code>.commit-chart-host</code> 부재(홈 외 뷰) 시 <code>init</code>이 null 반환 no-op. <code>{node,destroy}</code> 반환·detach 정적 검증 테스트 통과.
+        </td>
+      </tr>
+      <tr>
+        <td>5</td>
+        <td><b>빌드/테스트</b> — npm test 705 통과·구문 OK</td>
+        <td><span class="pf pass">PASS</span></td>
+        <td>
+          <code>node -c public/app.js</code> → <code>SYNTAX_OK</code>. <code>npm test</code> 실제 실행 결과 <b>tests 705 / pass 705 / fail 0 / duration ≈1.9s</b>. R-33 12건·R-32 동치 15건 개별 재실행 모두 통과(27/27).
+        </td>
+      </tr>
+      <tr>
+        <td>+</td>
+        <td><b>보안 불변식</b> — L-1/M-2(textContent·고정 팔레트·외부 0)</td>
+        <td><span class="pf pass">PASS</span></td>
+        <td>
+          <code>chartBars</code> 본문 정적 검증: <code>innerHTML</code>/<code>insertAdjacentHTML</code> 0, 라벨·툴팁·title 전부 <code>textContent</code>(1311/1316/1337). 색은 <code>CHART_PALETTE</code> 상수에서 <code>setAttribute('fill', …)</code>, 치수는 <code>String(b.x/b.w/…)</code> 모델 수치 → 데이터 문자열 속성 인터폴레이션 0. <code>xlink:href</code>·<code>http(s)://</code> 0. CSS도 외부 <code>url()</code> 없이 var()/내부색만(<span class="loc">styles.css:381–393</span>) → 외부 네트워크 0.
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>div 막대 → SVG 교차 비교 (회귀 추적)</h2>
+  <div class="diff">
+    <div>
+      <h4>변경 전 (HEAD, div 막대)</h4>
+      <ul>
+        <li><code>days = ca.days.slice(-7)</code></li>
+        <li><code>total7 = Σ(d.count||0)</code></li>
+        <li><code>max=1</code> 초기 → 단일 소량값은 낮게</li>
+        <li>막대+라벨 한 col(<code>homeWeekday</code>/<code>·</code>)</li>
+        <li>빈 데이터 → 7칸 0막대 push</li>
+        <li>오늘=마지막 막대 <code>#4f46e5</code></li>
+      </ul>
+    </div>
+    <div>
+      <h4>변경 후 (SVG 위젯)</h4>
+      <ul>
+        <li>동일 <code>ca.days.slice(-7)</code> (host + 위젯)</li>
+        <li>동일 <code>total7</code> 헤더 표기</li>
+        <li><code>maxCount=0</code> 초기 → 단일값 풀 높이 <span class="muted">(표현 차이, 허용)</span></li>
+        <li>막대=SVG / 라벨=<code>.commit-chart__labels</code> 분리 행</li>
+        <li>빈/비배열 → <code>commitChartModel</code>이 7칸 0 보장</li>
+        <li><code>isLast</code>=마지막 <code>barLast #4f46e5</code></li>
+      </ul>
+    </div>
+  </div>
+  <p class="sub muted">표현(SVG화)에 따른 비기능적 차이 2점: ① 단일 소량값의 막대 높이 스케일(max 초기값 1→0), ② 막대(SVG viewBox gap)와 라벨(CSS flex)의 정렬이 narrow 폭에서 미세하게 어긋날 가능성. 둘 다 데이터·기간·합계 불변이며 기능 회귀가 아님 — 시각 스모크로 확인 권장.</p>
+
+  <h2>발견 결함</h2>
+  <div class="panel">
+    <b>블로커/높음/보통/낮음 — 없음.</b> 자동 검증 범위에서 데이터·로직·라이프사이클·보안 결함 모두 미검출.
+  </div>
+
+  <h2>수동 스모크 필요 항목 <span class="pf manual">사용자</span></h2>
+  <ol>
+    <li><b>차트 시각</b> — 홈 진입 후 주간 생산성 카드에 SVG 막대 7개가 그려지고, 합계(<code>N 커밋</code>)·요일 라벨·오늘 막대 진한색이 div 시절과 동일하게 보이는지. 막대와 하단 요일 라벨의 가로 정렬이 자연스러운지.</li>
+    <li><b>호버/포커스</b> — 막대에 마우스를 올리면 진한색 강조 + 상단 툴팁(<code>요일 · N 커밋</code>)이 뜨고, 벗어나면 원복. Tab으로 막대 포커스 이동 시에도 동일하게 강조/툴팁이 나타나는지.</li>
+    <li><b>폴링 갱신 후 재호버</b> — 홈에 5분 체류해 R-31 폴링 갱신이 일어난 뒤(또는 새로고침/섹션 드래그 이동 후) 다시 호버해도 강조·툴팁이 중복·잔상 없이 한 번만 정상 동작하는지(핸들러 누수 부재 확인).</li>
+  </ol>
+
+  <h2>실행 로그 (재현)</h2>
+  <div class="panel">
+    <p class="sub"><code>cd "E:/03.프로젝트/Project-SPIP" &amp;&amp; node -c public/app.js</code> → <span class="ok">SYNTAX_OK</span></p>
+    <p class="sub"><code>npm test</code> → <span class="ok">ℹ tests 705 · pass 705 · fail 0 · skipped 0 · duration_ms ≈1900</span></p>
+    <p class="sub"><code>node --test test/commitChart.test.js test/homeLayout-equivalence.test.js</code> → <span class="ok">tests 27 · pass 27 · fail 0</span></p>
+  </div>
+
+  <p class="sub muted" style="margin-top:30px">QA 엔지니어 · 동작·통합·회귀 검증. 코드 품질은 code-reviewer, 보안 취약점은 security-reviewer 소관.</p>
+
+</div>
+</body>
+</html>

@@ -202,6 +202,8 @@ function registerIpcHandlers(deps) {
   });
   guard('spip:setOrder', (args) => uiStateIpc.setOrder(args, ctx));
   guard('spip:setSortMode', (args) => uiStateIpc.setSortMode(args, ctx));
+  // [R-32] 홈 섹션 순서 — 섹션 enum 화이트리스트만(경로·실행 무관). 검증은 메인 normalizeHomeLayout 단일 경계.
+  guard('spip:setHomeLayout', (args) => uiStateIpc.setHomeLayout(args, ctx));
   // 프로젝트 표시 별칭 + 테마(라이트/다크/시스템).
   guard('spip:setProjectName', (args) => uiStateIpc.setProjectName(args, ctx));
   guard('spip:setTheme', (args) => uiStateIpc.setTheme(args, ctx));

@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QA 검증 — M9 P6 (R-31 커밋 차트 5분 폴링)</title>
+<style>
+  :root { --bg:#0f1115; --panel:#171a21; --panel2:#1d2129; --bd:#2a2f3a; --tx:#d7dbe2; --mut:#8b93a3;
+          --ok:#34d399; --ref:#38bdf8; --warn:#fbbf24; --bad:#f87171; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--tx); font:14px/1.65 -apple-system,Segoe UI,Pretendard,system-ui,sans-serif; }
+  .wrap { max-width:1080px; margin:0 auto; padding:36px 28px 80px; }
+  h1 { font-size:23px; margin:0 0 6px; letter-spacing:-.3px; }
+  h2 { font-size:16px; margin:34px 0 12px; padding-bottom:7px; border-bottom:1px solid var(--bd); color:#fff; }
+  .sub { color:var(--mut); font-size:13px; margin:0 0 22px; }
+  .verdict { display:inline-block; padding:6px 16px; border-radius:8px; font-weight:700; font-size:15px; letter-spacing:.5px; }
+  .pass { background:rgba(52,211,153,.13); color:var(--ok); border:1px solid rgba(52,211,153,.35); }
+  .card { background:var(--panel); border:1px solid var(--bd); border-radius:12px; padding:18px 20px; margin:14px 0; }
+  .grid { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin:18px 0; }
+  .stat { background:var(--panel2); border:1px solid var(--bd); border-radius:10px; padding:13px 14px; text-align:center; }
+  .stat b { display:block; font-size:24px; line-height:1.1; }
+  .stat span { font-size:11px; color:var(--mut); text-transform:uppercase; letter-spacing:.6px; }
+  table { width:100%; border-collapse:collapse; margin:10px 0; font-size:13px; }
+  th,td { text-align:left; padding:9px 11px; border-bottom:1px solid var(--bd); vertical-align:top; }
+  th { color:var(--mut); font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:.5px; }
+  code { background:#11141a; border:1px solid var(--bd); border-radius:5px; padding:1px 6px; color:var(--ref); font-size:12px; }
+  .tag { font-weight:700; font-size:11px; padding:2px 9px; border-radius:20px; white-space:nowrap; }
+  .t-pass { background:rgba(52,211,153,.14); color:var(--ok); }
+  .t-fail { background:rgba(248,113,113,.14); color:var(--bad); }
+  .t-note { background:rgba(251,191,36,.14); color:var(--warn); }
+  .loc { color:var(--mut); font-size:12px; }
+  ul { margin:6px 0; padding-left:20px; } li { margin:4px 0; }
+  .legend { font-size:12px; color:var(--mut); margin-top:6px; }
+  .flow { background:var(--panel2); border:1px solid var(--bd); border-radius:10px; padding:14px; margin:12px 0; font-size:13px; }
+  .flow b { color:#fff; }
+  svg text { font-family:-apple-system,Segoe UI,sans-serif; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>QA 검증 — M9 P6 (R-31 커밋 차트 실시간 갱신 · 5분 폴링)</h1>
+  <p class="sub">대상: <code>public/app.js</code> · <code>test/commitPolling.test.js</code>(신규 7건) · <code>test/settings-categories.test.js</code>(키 일치 1건)
+    &nbsp;|&nbsp; 기준: <code>docs/architecture/m9-design.html</code> R-31 / ADR-M9-4 · R-31 수용 기준 &nbsp;|&nbsp; 검증일 2026-06-24</p>
+
+  <p><span class="verdict pass">종합 판정 — PASS</span></p>
+
+  <div class="card">
+    <strong>요약.</strong> R-31 커밋 차트 5분 폴링은 동작·통합·회귀 측면에서 결함 없이 수용 기준을 충족한다.
+    최우선 수용 기준인 <b>"홈 비활성 시 git 호출 0"</b>은 두 겹의 방어로 보장된다 — (1) 순수
+    <code>shouldPollCommit(view, visible)</code>가 <code>view==='home' &amp;&amp; visible!==false</code>일 때만 <code>true</code>이고,
+    뷰 전환(<code>render</code> 말미 <code>_lastView</code> 변경 시)과 <code>visibilitychange</code> 양쪽에서
+    <code>syncHomePolling()</code>이 호출돼 게이트가 false면 <code>clearInterval</code>로 타이머를 실제 정지한다(<code>setInterval</code> 자체가 사라져 git 콜백이 더는 발화하지 않음).
+    (2) 타이머가 살아있더라도 폴링 콜백 <code>maybeAutoRefreshCommit</code> 첫 줄의 <code>store.state.view !== 'home'</code> 이중 가드가 git 조회를 차단한다.
+    폴링 주기 상수 <code>COMMIT_POLL_MS = 300000</code>(5분)은 메일 <code>60000</code>(1분)보다 길다. 폴링 콜백은 <code>RG.deferred()</code>(조합·드래그·오버레이·busy)
+    중 1회 건너뛰고, 완료 반영은 <code>refreshCommitActivity</code> → <code>RG.coalesce.release()</code> 종착이라 R-25/R-26과 정합한다.
+    메일 60초 폴링은 별도 타이머(<code>mailRefreshTimer</code>)로 독립이라 회귀 0. <b>npm test 660건 전부 통과(신규 R-31 7건 포함), 0 fail. <code>node --check</code> 구문 OK.</b>
+  </div>
+
+  <div class="grid">
+    <div class="stat"><b style="color:var(--ok)">5/5</b><span>검증 항목 PASS</span></div>
+    <div class="stat"><b style="color:var(--bad)">0</b><span>회귀 / 버그</span></div>
+    <div class="stat"><b style="color:var(--ok)">2겹</b><span>git 0 방어</span></div>
+    <div class="stat"><b style="color:var(--ok)">660/660</b><span>테스트</span></div>
+  </div>
+
+  <h2>폴링 게이트 흐름 (경계면 교차)</h2>
+  <div class="flow">
+    <svg width="100%" viewBox="0 0 1000 200" role="img" aria-label="커밋 폴링 게이트 흐름도">
+      <rect x="10" y="20" width="180" height="50" rx="8" fill="#1d2129" stroke="#2a2f3a"/>
+      <text x="100" y="42" fill="#d7dbe2" font-size="13" text-anchor="middle">뷰 전환(render 말미)</text>
+      <text x="100" y="60" fill="#8b93a3" font-size="11" text-anchor="middle">_lastView !== v</text>
+
+      <rect x="10" y="120" width="180" height="50" rx="8" fill="#1d2129" stroke="#2a2f3a"/>
+      <text x="100" y="142" fill="#d7dbe2" font-size="13" text-anchor="middle">visibilitychange</text>
+      <text x="100" y="160" fill="#8b93a3" font-size="11" text-anchor="middle">document 리스너</text>
+
+      <line x1="190" y1="45" x2="300" y2="90" stroke="#38bdf8" stroke-width="1.5"/>
+      <line x1="190" y1="145" x2="300" y2="100" stroke="#38bdf8" stroke-width="1.5"/>
+
+      <rect x="300" y="70" width="200" height="50" rx="8" fill="#171a21" stroke="#38bdf8"/>
+      <text x="400" y="92" fill="#fff" font-size="13" text-anchor="middle">syncHomePolling()</text>
+      <text x="400" y="110" fill="#8b93a3" font-size="11" text-anchor="middle">shouldPollCommit(view, visible)</text>
+
+      <line x1="500" y1="80" x2="620" y2="45" stroke="#34d399" stroke-width="1.5"/>
+      <text x="555" y="55" fill="#34d399" font-size="11">true</text>
+      <line x1="500" y1="110" x2="620" y2="150" stroke="#f87171" stroke-width="1.5"/>
+      <text x="555" y="145" fill="#f87171" font-size="11">false</text>
+
+      <rect x="620" y="20" width="200" height="50" rx="8" fill="#1d2129" stroke="#2a2f3a"/>
+      <text x="720" y="42" fill="#34d399" font-size="13" text-anchor="middle">startCommitAutoRefresh</text>
+      <text x="720" y="60" fill="#8b93a3" font-size="11" text-anchor="middle">setInterval 300s (가드)</text>
+
+      <rect x="620" y="125" width="200" height="50" rx="8" fill="#1d2129" stroke="#2a2f3a"/>
+      <text x="720" y="147" fill="#f87171" font-size="13" text-anchor="middle">stopCommitAutoRefresh</text>
+      <text x="720" y="165" fill="#8b93a3" font-size="11" text-anchor="middle">clearInterval → git 0</text>
+
+      <line x1="820" y1="45" x2="900" y2="45" stroke="#34d399" stroke-width="1.5"/>
+      <rect x="900" y="20" width="90" height="50" rx="8" fill="#171a21" stroke="#34d399"/>
+      <text x="945" y="42" fill="#d7dbe2" font-size="12" text-anchor="middle">maybeAuto</text>
+      <text x="945" y="58" fill="#8b93a3" font-size="10" text-anchor="middle">view 이중가드</text>
+    </svg>
+  </div>
+
+  <h2>검증 항목별 결과</h2>
+  <table>
+    <thead><tr><th style="width:30px"></th><th>항목 · 수용 기준</th><th style="width:90px">판정</th><th>근거 (경계면)</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><b>1</b></td>
+        <td><b>홈 비활성 시 git 호출 0</b> (최우선)<br><span class="loc">shouldPollCommit 게이트 · 이중 가드 · 전 뷰 전환 커버 · 타이머 실제 정지</span></td>
+        <td><span class="tag t-pass">PASS</span></td>
+        <td>
+          <ul>
+            <li><code>shouldPollCommit</code>(app.js:637) = <code>view==='home' &amp;&amp; visible!==false</code> — 홈+가시일 때만 true. dashboard/orbit/scanning/loading 및 hidden 전부 false.</li>
+            <li><code>syncHomePolling</code>(4692) → false 시 <code>stopCommitAutoRefresh</code>(4687)가 <code>clearInterval</code> 호출 → <code>setInterval</code> 소멸로 콜백 자체가 발화 안 함(git 0의 1차 보장).</li>
+            <li>콜백 <code>maybeAutoRefreshCommit</code>(4677) 첫 줄 <code>store.state.view !== 'home'</code> 이중 가드(2차 보장 — 타이머 잔존 레이스 시에도 git 0).</li>
+            <li><b>모든 뷰 전환 커버</b>: <code>render()</code> 말미(1254) <code>if (store._lastView !== v) syncHomePolling()</code> — 어떤 경로로 뷰가 바뀌든 단일 종착. visibilitychange는 별도 document 리스너(5588).</li>
+            <li>git 조회(<code>getCommitActivity</code>)는 오직 <code>refreshCommitActivity</code>(2041) 안 1곳에서만 IPC 발화 → 타이머/수동 외 진입점 없음.</li>
+          </ul>
+        </td>
+      </tr>
+      <tr>
+        <td><b>2</b></td>
+        <td><b>회귀 0</b><br><span class="loc">초기 1회 로드 · 수동 새로고침 · 메일 60초 폴링 무영향</span></td>
+        <td><span class="tag t-pass">PASS</span></td>
+        <td>
+          <ul>
+            <li>초기 1회 로드: <code>maybeLoadCommitActivity</code>(2028)의 <code>!commitActivityLoaded &amp;&amp; !busyCommitActivity</code> 가드 불변 — 폴링과 독립.</li>
+            <li>수동 새로고침: <code>refreshCommitActivity</code>(2041) 본문 미변경, <code>busyCommitActivity</code> 재진입 가드·<code>release()</code> 종착 그대로.</li>
+            <li>메일 폴링: <code>mailRefreshTimer</code>/<code>maybeAutoRefreshMail</code>/<code>setInterval(...,60000)</code>(4668) 완전 별개 타이머 — R-31이 손대지 않음. 커밋은 신규 <code>commitRefreshTimer</code>.</li>
+            <li>전 테스트 660 통과 — 기존 회귀 스위트 포함 0 fail.</li>
+          </ul>
+        </td>
+      </tr>
+      <tr>
+        <td><b>3</b></td>
+        <td><b>coalesce/deferred 정합</b><br><span class="loc">deferred 보류 · release/coalesce 종착 · R-25/R-26</span></td>
+        <td><span class="tag t-pass">PASS</span></td>
+        <td>
+          <ul>
+            <li>폴링 콜백(4680) <code>if (RG.deferred()) return;</code> — 조합·드래그·오버레이·busyMail·busyCommit·editing 6종 중 하나라도 참이면 1회 건너뜀(다음 틱 반영). 입력/레이아웃 비파손.</li>
+            <li>완료 반영은 <code>refreshCommitActivity</code> 종착에서 홈일 때 <code>RG.coalesce.release()</code>(2050) — 직접 render 아닌 단일 종착이라 잔류 pending 1회 소비(F-1) · R-25/R-26 정합.</li>
+            <li><code>busyCommitActivity</code>는 <code>RG.deferred()</code>(5350 busyCommit)에 이미 편입 — 조회 중엔 다른 push render도 자동 보류.</li>
+          </ul>
+        </td>
+      </tr>
+      <tr>
+        <td><b>4</b></td>
+        <td><b>idempotency / 누수</b><br><span class="loc">start/stop 연쇄 · 중복 타이머 방지 · teardown</span></td>
+        <td><span class="tag t-pass">PASS</span></td>
+        <td>
+          <ul>
+            <li><code>startCommitAutoRefresh</code>(4683) <code>if (store.commitRefreshTimer || ...) return;</code> — 이미 타이머 있으면 재생성 안 함(중복 setInterval 0).</li>
+            <li><code>stopCommitAutoRefresh</code>(4687) null 가드 후 clear+null화 — 반복 stop도 무해.</li>
+            <li>visibilitychange + 뷰전환 동시 발화해도 <code>syncHomePolling</code>이 idempotent(같은 상태면 no-op). 같은 뷰 반복 render는 <code>_lastView</code> 비교로 sync 자체 스킵.</li>
+            <li>teardown(5597)에 <code>stopCommitAutoRefresh()</code>(5603) 포함 — pagehide 시 타이머 누수 0.</li>
+          </ul>
+        </td>
+      </tr>
+      <tr>
+        <td><b>5</b></td>
+        <td><b>빌드/테스트</b><br><span class="loc">npm test 660 · app.js 구문</span></td>
+        <td><span class="tag t-pass">PASS</span></td>
+        <td>
+          <ul>
+            <li><code>node --check public/app.js</code> → SYNTAX_OK.</li>
+            <li><code>npm test</code> → <b>tests 660 / pass 660 / fail 0</b> (실행 1.77s). 신규 <code>commitPolling.test.js</code> 7건 포함.</li>
+          </ul>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>관찰 (비차단)</h2>
+  <div class="card">
+    <ul>
+      <li><span class="tag t-note">관찰</span> <code>visibilitychange</code> 리스너는 앱 1회 등록되며 teardown에서 명시 해제하지 않으나, 단일 윈도우 SPA·pagehide 시 문서 폐기라 실질 누수 아님. 향후 다중 마운트 시 주의.</li>
+      <li><span class="tag t-note">관찰</span> 메일 <code>maybeAutoRefreshMail</code>은 자체 deferred 유사 가드(<code>showSettings||showHelp||todoAdding</code>)를 쓰고, 커밋은 통합 <code>RG.deferred()</code>를 사용 — 커밋 쪽이 더 일관적(드래그·조합까지 보류). 동작 결함 아님.</li>
+    </ul>
+  </div>
+
+  <h2>수동 스모크 권장 항목 (코드로 미검증 — 런타임 확인 권장)</h2>
+  <div class="card">
+    <ul>
+      <li>홈 진입 후 창 최소화/탭 전환(hidden) → 5분 경과해도 git 프로세스 0회(작업관리자/로그). 복귀 시 1회 재개.</li>
+      <li>홈→대시보드 이동 후 5분 대기 → 커밋 차트 IPC 미발화 확인.</li>
+      <li>한글 조합 중·카드 드래그 중·설정 모달 열린 채 폴링 틱 도달 → 입력/레이아웃 비파손, 다음 틱에 차트 갱신.</li>
+      <li>홈 체류 시 5분 후 차트 자동 갱신(신규 커밋 반영) 가시 확인.</li>
+    </ul>
+  </div>
+
+  <p class="legend">QA: 동작·통합·회귀 범위. 코드 품질은 code-reviewer, 보안은 security-reviewer 소관. 본 검증은 경계면 교차 정독 + npm test 실행 기반.</p>
+</div>
+</body>
+</html>

@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QA 검증 — M9 P5 (R-30 설정 2-pane)</title>
+<style>
+  :root { --bg:#0f1115; --panel:#171a21; --panel2:#1d2129; --bd:#2a2f3a; --tx:#d7dbe2; --mut:#8b93a3;
+          --ok:#34d399; --ref:#38bdf8; --warn:#fbbf24; --bad:#f87171; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--tx); font:14px/1.65 -apple-system,Segoe UI,Pretendard,system-ui,sans-serif; }
+  .wrap { max-width:1080px; margin:0 auto; padding:36px 28px 80px; }
+  h1 { font-size:23px; margin:0 0 6px; letter-spacing:-.3px; }
+  h2 { font-size:16px; margin:34px 0 12px; padding-bottom:7px; border-bottom:1px solid var(--bd); color:#fff; }
+  .sub { color:var(--mut); font-size:13px; margin:0 0 22px; }
+  .verdict { display:inline-block; padding:6px 16px; border-radius:8px; font-weight:700; font-size:15px; letter-spacing:.5px; }
+  .pass { background:rgba(52,211,153,.13); color:var(--ok); border:1px solid rgba(52,211,153,.35); }
+  .card { background:var(--panel); border:1px solid var(--bd); border-radius:12px; padding:18px 20px; margin:14px 0; }
+  .grid { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin:18px 0; }
+  .stat { background:var(--panel2); border:1px solid var(--bd); border-radius:10px; padding:13px 14px; text-align:center; }
+  .stat b { display:block; font-size:24px; line-height:1.1; }
+  .stat span { font-size:11px; color:var(--mut); text-transform:uppercase; letter-spacing:.6px; }
+  table { width:100%; border-collapse:collapse; margin:10px 0; font-size:13px; }
+  th,td { text-align:left; padding:9px 11px; border-bottom:1px solid var(--bd); vertical-align:top; }
+  th { color:var(--mut); font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:.5px; }
+  code { background:#11141a; border:1px solid var(--bd); border-radius:5px; padding:1px 6px; color:var(--ref); font-size:12px; }
+  .tag { font-weight:700; font-size:11px; padding:2px 9px; border-radius:20px; white-space:nowrap; }
+  .t-pass { background:rgba(52,211,153,.14); color:var(--ok); }
+  .t-fail { background:rgba(248,113,113,.14); color:var(--bad); }
+  .t-note { background:rgba(251,191,36,.14); color:var(--warn); }
+  .loc { color:var(--mut); font-size:12px; }
+  ul { margin:6px 0; padding-left:20px; } li { margin:4px 0; }
+  .legend { font-size:12px; color:var(--mut); margin-top:6px; }
+  .flow { background:var(--panel2); border:1px solid var(--bd); border-radius:10px; padding:14px; margin:12px 0; font-size:13px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>QA 검증 — M9 P5 (R-30 설정 2-pane 좌우 분할)</h1>
+  <p class="sub">대상: <code>public/app.js</code> · <code>public/styles.css</code> · <code>test/settings-categories.test.js</code> &nbsp;|&nbsp; 기준: <code>docs/architecture/m9-design.html</code> §8 (R-30) &nbsp;|&nbsp; 검증일 2026-06-24</p>
+
+  <p><span class="verdict pass">종합 판정 — PASS</span></p>
+
+  <div class="card">
+    <strong>요약.</strong> R-30 설정 2-pane 재구성은 동작·통합·회귀 측면에서 결함 없이 수용 기준을 충족한다.
+    기존 10개 설정 섹션이 5카테고리에 누락·중복 0으로 정확히 배치되며, 각 섹션은 기존
+    <code>render*Settings</code> 함수를 그대로 재사용해 저장 로직 변경이 없다(회귀 0). 좌측 카테고리 클릭은
+    <code>showSettings=true</code>를 유지한 채 전체 <code>render()</code>를 경유하므로 모달이 닫히지 않고 우측만 교체되며,
+    <code>store.settingsTab</code>은 <code>resolveSettingsTab</code>로 재렌더 후에도 복원된다. <code>SCROLL_SEL</code>에
+    <code>.settings-pane</code>이 선두로 추가되어 우측 스크롤이 복원되고, 포커스 트랩은 좌측 탭 버튼을 자동 포함한다.
+    <code>:has()</code> 미지원 시에도 2-pane flex 레이아웃은 기본 규칙으로 동작(폭만 폴백). 다른 wide 모달(메일·도움말)에는
+    영향 0. <b>npm test 652건 전부 통과(신규 R-30 7건 포함), 0 fail.</b>
+  </div>
+
+  <div class="grid">
+    <div class="stat"><b style="color:var(--ok)">5/5</b><span>검증 항목 PASS</span></div>
+    <div class="stat"><b style="color:var(--bad)">0</b><span>회귀</span></div>
+    <div class="stat"><b style="color:var(--warn)">1</b><span>경미 관찰</span></div>
+    <div class="stat"><b style="color:var(--ok)">652/652</b><span>테스트</span></div>
+  </div>
+
+  <h2>항목별 판정</h2>
+  <table>
+    <thead><tr><th style="width:34px">#</th><th>검증 항목</th><th style="width:64px">판정</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>회귀 0 — 10개 섹션의 5카테고리 정확 배치 + 기존 render* 재사용</td><td><span class="tag t-pass">PASS</span></td></tr>
+      <tr><td>2</td><td>모달 유지 · 카테고리 전환 · settingsTab 기본/유지 · 포커스 트랩 · Esc</td><td><span class="tag t-pass">PASS</span></td></tr>
+      <tr><td>3</td><td>RG 정합 — R-25 가드(overlayOpen) · SCROLL_SEL 우측 복원 · 애니메이션 1회</td><td><span class="tag t-pass">PASS</span></td></tr>
+      <tr><td>4</td><td>:has() 폴백 — flex 2-pane 동작 · 타 wide 모달 영향 0</td><td><span class="tag t-pass">PASS</span></td></tr>
+      <tr><td>5</td><td>빌드/테스트 — npm test 652 통과 · app.js 구문</td><td><span class="tag t-pass">PASS</span></td></tr>
+    </tbody>
+  </table>
+
+  <h2>1. 회귀 0 — 섹션 배치·동작 보존 <span class="tag t-pass">PASS</span></h2>
+  <div class="card">
+    <p><b>경계면 교차 검증.</b> <code>SETTINGS_CATEGORIES</code>(app.js:615) ↔ 설계 §8 매핑표(m9-design.html:455-459) ↔
+    테스트(settings-categories.test.js:28-48)를 3중 대조했다. 매핑이 정확히 일치한다.</p>
+    <ul>
+      <li><b>스캔</b> → roots · exclude · detect · scanOptions (4)</li>
+      <li><b>연동</b> → tools · mail (2)</li>
+      <li><b>외관</b> → theme (1)</li>
+      <li><b>단축키</b> → shortcuts (1)</li>
+      <li><b>정보</b> → info · update (2) &nbsp;→ 총 10개, 누락·중복 0</li>
+    </ul>
+    <p><code>buildSettingsSection(key)</code>(app.js:2182)의 switch가 10개 키를 각각 기존
+    <code>renderRootManager/renderExcludeSettings/renderDetectSettings/renderScanOptions/renderToolSettings/renderMailSettings/renderThemeSettings/renderShortcutSettings/renderInfoSettings/renderUpdateSettings</code>로
+    디스패치한다. 10개 함수 모두 코드에 존재(grep 확인)하며, 빌더는 이들을 <b>호출만</b> 할 뿐 저장·이벤트 로직을
+    재작성하지 않는다. 따라서 항목별 동작·저장 경로는 변경 전과 동일하다. 우측은 활성 카테고리의 sections만 append하고
+    나머지는 미렌더 — 설계 §8 명세와 일치.</p>
+    <p class="legend">근거: 단위 테스트 4건(매핑/중복/누락/단일출처 무결성)이 데이터 무결성을 못박고, 디스패치 switch가 동일 키 집합을 커버.</p>
+  </div>
+
+  <h2>2. 모달 유지 · 카테고리 전환 <span class="tag t-pass">PASS</span></h2>
+  <div class="card">
+    <p><b>모달 비종료.</b> 좌측 버튼 핸들러(app.js:2216)는
+    <code>store.settingsTab = cat.id; render()</code>만 수행하고 <code>store.showSettings</code>를 건드리지 않는다.
+    <code>render()</code>의 <code>if (store.showSettings) app.appendChild(renderSettings())</code>(app.js:1232) 조건이
+    여전히 참이므로 모달이 재구성되어 유지된다 — 우측만 교체되는 효과. 결함 없음.</p>
+    <p><b>기본값/유지.</b> <code>store.settingsTab</code> 초기값 <code>'scan'</code>(app.js:1067).
+    <code>resolveSettingsTab</code>(627)이 미지정·미지값을 <code>'scan'</code>으로 보정하고 유효값은 그대로 통과 —
+    재렌더(폴링 포함)를 거쳐도 동일 카테고리 복원. 테스트 2건(56-67)이 기본/정규화/유지 전 경로를 커버.</p>
+    <p><b>포커스 트랩.</b> 좌측 nav는 <code>bodyChildren=[layout]</code>로 dialog 내부에 들어가고,
+    <code>getTabbables(dialog)</code>(4185)가 <code>button:not([disabled])</code>를 셀렉트하므로 좌측 탭 버튼이
+    트랩 순환에 자동 포함된다. Esc는 <code>buildModal</code> keydown 핸들러(2163)가 <code>onClose=closeSettings</code> 호출 —
+    유지. nav 버튼에 <code>role=tab</code>/<code>aria-selected</code>, nav에 <code>role=tablist</code>, pane에 <code>role=tabpanel</code> 적용(접근성 양호).</p>
+  </div>
+
+  <h2>3. RG 정합 <span class="tag t-pass">PASS</span></h2>
+  <div class="card">
+    <p><b>R-25 가드 정합.</b> <code>RG.deferred()</code>의 <code>overlayOpen</code>(app.js:5308)이
+    <code>store.showSettings</code>를 포함 → 설정 열린 동안 5분 폴링 등 라이브 트리거의 render는 보류된다(모달 지속·깜빡임 차단).
+    한편 좌측 클릭→<code>render()</code>는 사용자 직접 액션으로 deferred 게이트를 거치지 않고 즉시 반영 —
+    의도된 동작이며 충돌 없음.</p>
+    <p><b>SCROLL_SEL.</b> <code>SCROLL_SEL = ['.settings-pane', '.modal__body', ...]</code>(app.js:5331)에
+    <code>.settings-pane</code>이 <b>선두</b>로 추가됨. capture/restore(5337,5350)가 우측 패널 스크롤을 저장·복원하므로
+    카테고리 전환·재렌더 시 긴 섹션(예: 스캔)의 스크롤 위치가 보존된다. <code>.modal__body</code>도 배열에 남아 폴백
+    경로(:has 미적용 시 body가 스크롤 컨테이너)에서도 복원이 동작 — 견고.</p>
+    <p><b>애니메이션 1회.</b> <code>enter = !store._settingsShown; store._settingsShown = true</code>(app.js:2202)로
+    최초 열림에만 <code>is-enter</code> 페이드 적용. 카테고리 전환 시 <code>_settingsShown</code>이 이미 true라 재생 안 됨(깜빡임 없음).
+    <code>closeSettings</code>(2122)가 <code>_settingsShown=false</code>로 리셋해 다음 열림에 재적용 — 정확.</p>
+  </div>
+
+  <h2>4. :has() 폴백 · 타 모달 영향 <span class="tag t-pass">PASS</span></h2>
+  <div class="card">
+    <p><b>폴백 동작.</b> 2-pane의 기능 골격은 <code>.settings-2pane{display:flex}</code> ·
+    <code>.settings-nav{...}</code> · <code>.settings-pane{flex:1;overflow-y:auto}</code>(styles.css:717-730)로,
+    <b>:has() 없이도 성립</b>한다. <code>:has(.settings-2pane)</code> 셀렉터(715-716)는 모달 폭(820px)과
+    body 패딩/overflow 조정만 담당 — 미지원 브라우저에선 <code>.modal--wide</code> 폭(660px)으로 폴백하고
+    좌우 분할·우측 스크롤은 그대로 작동. 설계 §8 "폭만 폴백" 명세와 일치.</p>
+    <p><b>타 wide 모달 영향 0.</b> 메일 본문(app.js:1996)·도움말(4785)도 <code>wide:true</code>지만 bodyChildren에
+    <code>.settings-2pane</code>를 넣지 않는다. 따라서 <code>:has(.settings-2pane)</code> 셀렉터는 이들 모달과
+    매칭되지 않아 폭·패딩에 부작용이 없다. 비대상 모달은 기존 660px·패딩 유지 — 격리 확인.</p>
+    <p>참고: 현 Electron 런타임(Chromium 최신)은 <code>:has()</code>를 지원하므로 실제 앱에서는 820px 정상 적용.</p>
+  </div>
+
+  <h2>5. 빌드 / 테스트 <span class="tag t-pass">PASS</span></h2>
+  <div class="flow">
+    <code>npm test</code> 실행 결과 (실측):<br>
+    tests <b>652</b> &nbsp;·&nbsp; pass <b style="color:var(--ok)">652</b> &nbsp;·&nbsp; fail <b>0</b> &nbsp;·&nbsp; skipped 0 &nbsp;·&nbsp; duration ~1.7s<br>
+    <code>node --check public/app.js</code> → <b style="color:var(--ok)">app.js syntax OK</b><br>
+    신규 <code>test/settings-categories.test.js</code> → 7/7 PASS (R-30 매핑·중복·누락·정규화)
+  </div>
+
+  <h2>경미 관찰 (블로커 아님) <span class="tag t-note">NOTE</span></h2>
+  <div class="card">
+    <p><b>무엇이:</b> <code>:has()</code> 미지원 환경 폴백 시 이중 스크롤바 가능성(경미).<br>
+    <b>어디서:</b> <code>public/styles.css</code> — <code>.modal__body:has(.settings-2pane){overflow:hidden}</code>(716)가
+    적용 안 되면 <code>.modal__body</code>의 기본 <code>overflow-y:auto</code>(712)와 <code>.settings-pane</code>의
+    <code>overflow-y:auto</code>(729)가 공존.<br>
+    <b>기대 vs 실제:</b> 단일 스크롤(우측 패널) 기대 / 폴백 시 body+pane 두 스크롤 컨테이너 존재 가능. 단, 기능 손상은 없고
+    실제 Electron(Chromium)은 :has() 지원이라 발현 안 됨.<br>
+    <b>심각도:</b> 낮음 (설계가 명시한 "폭만 폴백" 범위 내 시각적 미세 항목, 현 런타임 미발현).</p>
+  </div>
+
+  <h2>수동 스모크 체크리스트 (실기 권장)</h2>
+  <div class="card">
+    <p>헤드리스 검증으로 데이터·로직·통합은 확정. 다음은 <code>npm start</code> 실기에서 눈으로 확인할 항목:</p>
+    <ul>
+      <li><b>시각:</b> 설정 열기 → 좌측 5탭(스캔·연동·외관·단축키·정보) 표시, 모달 폭 820px, 활성 탭 강조(accent), 첫 진입 시 페이드 1회.</li>
+      <li><b>전환:</b> 각 탭 클릭 시 모달 유지된 채 우측만 교체 · 깜빡임 없음 · 같은 탭 재클릭 시 무동작(가드) · 긴 섹션 스크롤 후 다른 탭 갔다 복귀 시 스크롤 복원.</li>
+      <li><b>키보드:</b> Esc 닫힘 · Tab 순환이 좌측 탭 버튼→우측 컨트롤→닫기 버튼을 감싸고 트랩 이탈 없음.</li>
+      <li><b>반응형:</b> 창 폭 640px 이하로 줄여 좌측 nav가 가로 행으로 스택(아래 우측 패널) 전환 확인.</li>
+      <li><b>회귀:</b> 각 섹션의 실제 동작(폴더 추가/제외 토글/테마 변경/메일 계정 저장/업데이트 확인)이 전환 후에도 정상.</li>
+    </ul>
+  </div>
+
+  <p class="sub" style="margin-top:30px">QA 엔지니어 · M9 P5 검증 완료 · 652/652 PASS · 회귀 0</p>
+</div>
+</body>
+</html>

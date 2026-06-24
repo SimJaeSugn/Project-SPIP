@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>코드 리뷰 — M9 P3 (R-28 메뉴 제거 · R-29 SHORTCUTS)</title>
+<style>
+  :root{
+    --bg:#0b0f14; --panel:#121821; --panel2:#0f141b; --line:#1f2937;
+    --fg:#e5e7eb; --mut:#9ca3af; --acc:#34d399; --ref:#38bdf8;
+    --warn:#fbbf24; --bad:#f87171; --ok:#34d399;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+    font:14px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Malgun Gothic",sans-serif;}
+  .wrap{max-width:1080px;margin:0 auto;padding:32px 24px 80px}
+  h1{font-size:24px;margin:0 0 4px;letter-spacing:-.01em}
+  h2{font-size:18px;margin:34px 0 12px;padding-bottom:6px;border-bottom:1px solid var(--line);color:var(--acc)}
+  h3{font-size:15px;margin:22px 0 8px;color:var(--ref)}
+  .sub{color:var(--mut);margin:0 0 18px}
+  code,.mono{font-family:"SFMono-Regular",Consolas,"Liberation Mono",monospace;font-size:12.5px}
+  code{background:#0f1620;border:1px solid var(--line);border-radius:4px;padding:1px 5px;color:#cbd5e1}
+  .verdict{display:inline-block;font-weight:700;padding:6px 16px;border-radius:999px;font-size:15px}
+  .v-pass{background:rgba(52,211,153,.14);color:var(--ok);border:1px solid rgba(52,211,153,.4)}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px 20px;margin:14px 0}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:16px 0}
+  .kpi{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:14px 16px;text-align:center}
+  .kpi .n{font-size:26px;font-weight:700}
+  .kpi .l{color:var(--mut);font-size:12px;margin-top:2px}
+  .n-bad{color:var(--bad)} .n-warn{color:var(--warn)} .n-ok{color:var(--ok)}
+  table{width:100%;border-collapse:collapse;margin:10px 0;font-size:13px}
+  th,td{text-align:left;padding:9px 11px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--mut);font-weight:600;background:var(--panel2)}
+  tr:last-child td{border-bottom:none}
+  .sev{display:inline-block;font-weight:700;font-size:11px;padding:2px 9px;border-radius:6px;white-space:nowrap}
+  .s-defect{background:rgba(248,113,113,.16);color:var(--bad);border:1px solid rgba(248,113,113,.4)}
+  .s-improve{background:rgba(251,191,36,.14);color:var(--warn);border:1px solid rgba(251,191,36,.36)}
+  .s-minor{background:rgba(148,163,184,.14);color:#cbd5e1;border:1px solid rgba(148,163,184,.34)}
+  .loc{color:var(--ref);white-space:nowrap}
+  ul{margin:6px 0 6px 18px;padding:0} li{margin:3px 0}
+  .ok-row{color:var(--ok)} .tag{color:var(--acc);font-weight:600}
+  .legend span{margin-right:14px;font-size:12px;color:var(--mut)}
+  svg{max-width:100%;height:auto;display:block;margin:8px 0}
+  .foot{color:var(--mut);font-size:12px;margin-top:30px;border-top:1px solid var(--line);padding-top:14px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>코드 리뷰 — M9 P3</h1>
+  <p class="sub">R-28 네이티브 메뉴 제거 + R-29 단축키 단일 출처(SHORTCUTS) 구현 · 코드 품질·정확성 한정<br>
+  대상: <code>electron/menu.js</code>(삭제) · <code>electron/main.js</code> · <code>electron/preload.js</code> ·
+  <code>public/app.js</code> · <code>test/shortcuts.test.js</code> · <code>test/electron-preload-contract.test.js</code></p>
+
+  <p><span class="verdict v-pass">판정 · PASS</span></p>
+
+  <div class="card">
+    <b>요약.</b> 정확성 결함 0. <code>matchShortcut</code> 수식키 판정·F5 처리·ESC 핸들러 분리가 정확하고,
+    keydown 핸들러는 ESC 핸들러와 책임이 깔끔히 나뉘어 충돌·중복 디스패치가 없다. 죽은 채널(<code>onMenu</code>/<code>spip:menu:*</code>)
+    양방향 제거와 <code>menu.js</code>/<code>showAbout</code> 제거는 깔끔하다. 전체 테스트 642/642 통과.
+    다만 <b>R-28의 사후 정리가 절반만 끝났다</b> — 네이티브 메뉴 전용 매핑 함수 <code>dispatchMenuAction</code>과 그 전용 테스트
+    <code>dashboard-menu.test.js</code>가 살아 있어 "죽은 코드 정리 완전성" 기준에서 개선이 필요하다(정확성 무영향).
+  </div>
+
+  <div class="grid3">
+    <div class="kpi"><div class="n n-bad">0</div><div class="l">결함 (정확성)</div></div>
+    <div class="kpi"><div class="n n-warn">3</div><div class="l">개선</div></div>
+    <div class="kpi"><div class="n n-ok">2</div><div class="l">사소</div></div>
+  </div>
+
+  <!-- ───────────────────────────── 정확성 ───────────────────────────── -->
+  <h2>1. 정확성 — 결함 없음 (확인 결과)</h2>
+
+  <p class="sub">중점 항목을 코드로 검증한 결과, 정확성 결함은 발견되지 않았다.</p>
+
+  <table>
+    <tr><th>검증 항목</th><th>결과</th><th>근거</th></tr>
+    <tr>
+      <td><b>수식키 판정</b> — F5만/Ctrl+O/Ctrl+R, 조합 충돌 회피</td>
+      <td class="ok-row">정상</td>
+      <td><code>app.js:579-587</code> — F5는 <code>!ctrl &amp;&amp; !shiftKey &amp;&amp; !altKey</code>로 무수식만 매칭,
+        Ctrl+O/R은 <code>ctrl=(ctrlKey||metaKey)</code>로 Cmd 동등. 수식키 없는 <code>o/r</code>은 <code>null</code>(텍스트 입력 충돌 차단).
+        테스트가 F5+수식·무수식 o/r·미지정 키까지 망라(<code>shortcuts.test.js:44-72</code>).</td>
+    </tr>
+    <tr>
+      <td><b>ESC 충돌·중복 등록</b></td>
+      <td class="ok-row">정상</td>
+      <td>두 개의 <code>document.keydown</code> 리스너가 책임을 분리한다 — ESC 핸들러(<code>app.js:5480</code>)는
+        <code>e.key!=='Escape'</code>면 즉시 <code>return</code>, 단축키 핸들러(<code>:5491</code>)는 <code>matchShortcut</code>이
+        ESC를 의도적으로 <code>null</code> 반환(<code>:586</code>)하므로 같은 이벤트를 두 핸들러가 모두 소비하는 경로가 없다.
+        모달·드로어 내부의 지역 ESC/Enter 핸들러들도 자체 <code>stopPropagation</code> 또는 별도 엘리먼트 스코프라 전역과 분리.</td>
+    </tr>
+    <tr>
+      <td><b>F5 브라우저 기본 reload 차단</b></td>
+      <td class="ok-row">정상</td>
+      <td>matchShortcut이 action을 줄 때만 <code>e.preventDefault()</code>(<code>:5493-5494</code>). F5→'refresh'이므로
+        Electron 렌더러의 F5 전체 reload 기본동작이 차단되고 앱 내 <code>refreshDashboard()</code>만 호출 → 상태 소실 없음.
+        보안 리뷰 권고(m9_design_security_review_1 R-28)와 일치.</td>
+    </tr>
+    <tr>
+      <td><b>refreshDashboard 안전성</b></td>
+      <td class="ok-row">정상</td>
+      <td><code>app.js:4560-4563</code> — 스캔 중(<code>view==='scanning'</code>)엔 push 갱신에 양보하고 조기 return,
+        그 외엔 <code>reloadAfterScan()</code> 재사용. 새 IPC·부수효과 없음.</td>
+    </tr>
+    <tr>
+      <td><b>'about' 죽은 매핑의 정확성 영향</b></td>
+      <td class="ok-row">없음</td>
+      <td><code>dispatchMenuAction</code>의 <code>case 'about'</code>(<code>:603</code>)은 호출되지 않는다 —
+        유일 발신원이던 <code>onMenu</code>가 제거됐고, keydown 핸들러는 <code>dispatchMenuAction</code>을 거치지 않고
+        <code>matchShortcut</code>이 내는 3개 토큰만 처리(<code>:5495-5500</code>)한다. 'about'은 도달 불가 → 정확성 무영향.
+        (단, 죽은 코드로서 §2-A 개선 대상)</td>
+    </tr>
+    <tr>
+      <td><b>비정상 입력 graceful</b></td>
+      <td class="ok-row">정상</td>
+      <td><code>matchShortcut</code> 가드 <code>!ev || typeof ev.key!=='string'</code>(<code>:580</code>) — null/undefined/숫자 key 모두 null.</td>
+    </tr>
+  </table>
+
+  <!-- 흐름도 -->
+  <h3>keydown 디스패치 흐름 (충돌 없음)</h3>
+  <svg viewBox="0 0 920 230" role="img" aria-label="keydown 이벤트가 ESC 핸들러와 단축키 핸들러로 분리되는 흐름">
+    <defs>
+      <marker id="arr" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto">
+        <path d="M0,0 L8,4 L0,8 z" fill="#475569"/>
+      </marker>
+    </defs>
+    <rect x="20" y="92" width="150" height="46" rx="8" fill="#121821" stroke="#1f2937"/>
+    <text x="95" y="112" fill="#e5e7eb" font-size="13" text-anchor="middle">document</text>
+    <text x="95" y="128" fill="#9ca3af" font-size="11" text-anchor="middle">keydown</text>
+
+    <!-- ESC handler -->
+    <rect x="240" y="20" width="250" height="64" rx="8" fill="#0f141b" stroke="#1f2937"/>
+    <text x="365" y="40" fill="#38bdf8" font-size="12.5" text-anchor="middle">ESC 핸들러 (:5480)</text>
+    <text x="365" y="58" fill="#9ca3af" font-size="11" text-anchor="middle">key!=='Escape' → return</text>
+    <text x="365" y="74" fill="#9ca3af" font-size="11" text-anchor="middle">닫기(help·drawer·settings·orbit)</text>
+
+    <!-- shortcut handler -->
+    <rect x="240" y="146" width="250" height="64" rx="8" fill="#0f141b" stroke="#1f2937"/>
+    <text x="365" y="166" fill="#38bdf8" font-size="12.5" text-anchor="middle">단축키 핸들러 (:5491)</text>
+    <text x="365" y="184" fill="#9ca3af" font-size="11" text-anchor="middle">matchShortcut(e) → action</text>
+    <text x="365" y="200" fill="#9ca3af" font-size="11" text-anchor="middle">!action → return (ESC 포함)</text>
+
+    <!-- match -->
+    <rect x="560" y="120" width="160" height="90" rx="8" fill="#121821" stroke="#1f2937"/>
+    <text x="640" y="142" fill="#34d399" font-size="12.5" text-anchor="middle">matchShortcut</text>
+    <text x="640" y="162" fill="#9ca3af" font-size="11" text-anchor="middle">F5 → refresh</text>
+    <text x="640" y="178" fill="#9ca3af" font-size="11" text-anchor="middle">Ctrl/Cmd+O → pickFolders</text>
+    <text x="640" y="194" fill="#9ca3af" font-size="11" text-anchor="middle">Ctrl/Cmd+R → rescan</text>
+
+    <!-- handlers -->
+    <rect x="770" y="120" width="130" height="90" rx="8" fill="#0f141b" stroke="#1f2937"/>
+    <text x="835" y="142" fill="#e5e7eb" font-size="11.5" text-anchor="middle">preventDefault</text>
+    <text x="835" y="160" fill="#9ca3af" font-size="11" text-anchor="middle">refreshDashboard</text>
+    <text x="835" y="176" fill="#9ca3af" font-size="11" text-anchor="middle">onPickFolders</text>
+    <text x="835" y="192" fill="#9ca3af" font-size="11" text-anchor="middle">onRescan</text>
+
+    <line x1="170" y1="108" x2="238" y2="56" stroke="#475569" marker-end="url(#arr)"/>
+    <line x1="170" y1="122" x2="238" y2="174" stroke="#475569" marker-end="url(#arr)"/>
+    <line x1="490" y1="178" x2="558" y2="165" stroke="#475569" marker-end="url(#arr)"/>
+    <line x1="720" y1="165" x2="768" y2="165" stroke="#475569" marker-end="url(#arr)"/>
+  </svg>
+
+  <!-- ───────────────────────────── 개선 ───────────────────────────── -->
+  <h2>2. 개선 항목</h2>
+
+  <table>
+    <tr><th style="width:30px">#</th><th>무엇 / 위치</th><th>왜 문제 / 권고</th><th style="width:64px">심각도</th></tr>
+
+    <tr>
+      <td><b>A</b></td>
+      <td><b>네이티브 메뉴 전용 매핑 <code>dispatchMenuAction</code>이 죽은 코드로 잔존</b><br>
+        <span class="loc">app.js:589-606 · export :5575</span></td>
+      <td>R-28로 유일 호출원(<code>onMenu</code> → <code>onMenuCommand</code>)이 사라졌고, keydown 경로는 이 함수를 거치지
+        않는다(<code>matchShortcut</code> 토큰 직접 switch). 함수·<code>case 'about'</code>·JSDoc("네이티브 메뉴 명령 …")이
+        통째로 도달 불가 코드다. 주석은 "keydown 디스패치와 동일 토큰 체계라 유지"라고 하나, 실제 keydown 디스패치는
+        이 함수를 쓰지 않으므로 근거가 성립하지 않는다(반쪽 제거).<br>
+        <span class="tag">권고:</span> <code>dispatchMenuAction</code>·export·관련 JSDoc 제거. 단 §3 정합 테스트
+        <code>shortcuts.test.js:75-82</code>가 이미 "keydown action ⊆ SHORTCUTS"를 단일 출처로 검증하므로 매핑 회귀는 그쪽으로 충분히 커버된다.</td>
+      <td><span class="sev s-improve">개선</span></td>
+    </tr>
+
+    <tr>
+      <td><b>B</b></td>
+      <td><b>죽은 매핑 전용 테스트 <code>test/dashboard-menu.test.js</code>가 메뉴 코드를 살려두는 앵커</b><br>
+        <span class="loc">dashboard-menu.test.js:5-85</span></td>
+      <td>이 파일은 P2-1 "네이티브 메뉴 {action}→핸들러"와 <code>onMenuCommand</code> 라우팅을 검증한다 —
+        R-28로 메뉴·<code>onMenuCommand</code>가 제거됐으므로 검증 대상이 더는 존재하지 않는다(:53-85의 <code>onMenu</code>는
+        테스트 내부 모킹일 뿐 프로덕션 경로 아님). 이 테스트가 <code>dispatchMenuAction</code> export를 요구하기 때문에
+        항목 A의 죽은 코드가 "테스트가 쓰니 못 지운다"는 형태로 묶여 있다. <code>resolveScanReloadView</code>(P2-6)는 유효하므로
+        파일을 통째 삭제하면 안 된다.<br>
+        <span class="tag">권고:</span> A와 함께 처리 — <code>dispatchMenuAction</code> 블록(:20-85) 삭제,
+        <code>resolveScanReloadView</code> 블록(:87-118)만 별도 파일로 남기거나 파일명을 <code>scan-reload-view.test.js</code> 등으로
+        정리. 파일 헤더의 "subscribeMenu wiring/onMenu 계약" 설명도 갱신.</td>
+      <td><span class="sev s-improve">개선</span></td>
+    </tr>
+
+    <tr>
+      <td><b>C</b></td>
+      <td><b>두 개의 전역 <code>document.keydown</code> 리스너로 분리 등록</b><br>
+        <span class="loc">app.js:5480 · 5491</span></td>
+      <td>ESC와 단축키를 별도 <code>addEventListener('keydown', …)</code>로 등록한다. 정확성·중복 디스패치 문제는 없으나
+        (둘 다 같은 이벤트를 받되 책임이 배타적), 동일 이벤트에 핸들러 2개가 붙어 등록·해제(teardown은 ESC/단축키 둘 다 미해제 —
+        앱 수명 리스너라 허용 범위)와 처리 순서를 두 군데서 추론해야 한다. ESC도 결국 "전역 단축키"의 일종이므로 응집도 면에서
+        단일 핸들러가 읽기 쉽다.<br>
+        <span class="tag">권고(선택):</span> 단일 <code>keydown</code> 핸들러에서 ESC 분기 → 단축키 분기 순으로 합치거나,
+        현 분리 구조를 유지하려면 두 주석에 "이벤트는 분리 리스너지만 책임 배타(ESC만 vs ESC 외)"를 한 줄 명시. 강제 아님.</td>
+      <td><span class="sev s-minor">사소</span></td>
+    </tr>
+
+    <tr>
+      <td><b>D</b></td>
+      <td><b>'Esc' 항목과 디스패치 출처의 미세 분리(단일 출처 품질)</b><br>
+        <span class="loc">app.js:570 SHORTCUTS · :5480 ESC 핸들러</span></td>
+      <td>SHORTCUTS는 안내표(설정)와 keydown 매핑의 단일 출처지만, <code>Esc</code> 항목만은 <code>matchShortcut</code>이
+        의도적으로 매핑하지 않고(:586) 실제 동작은 별도 ESC 핸들러(:5480)가 담당한다. 즉 Esc는 "표시 전용" 항목으로
+        디스패치 출처가 분리돼 있다 — 설계상 의도(주석에 명문화됨)이고 테스트(<code>shortcuts.test.js:77</code>)도 이를 인지하나,
+        나중에 ESC 동작을 바꿀 때 SHORTCUTS의 <code>action:'close'</code>가 어디에도 연결되지 않아 추적이 끊긴다.<br>
+        <span class="tag">권고(선택):</span> 현 구조 수용 가능. 다만 SHORTCUTS의 Esc 항목 인라인 주석에
+        "action:'close'는 표시용 — 실제 디스패치는 :5480 ESC 핸들러"를 한 줄 부기하면 단일 출처 착시를 막는다.</td>
+      <td><span class="sev s-minor">사소</span></td>
+    </tr>
+
+    <tr>
+      <td><b>E</b></td>
+      <td><b><code>renderInfoSettings</code> 버전 출처 결합</b><br>
+        <span class="loc">app.js:2205</span></td>
+      <td>버전을 <code>store.update.currentVersion</code>에서 읽어 하드코딩 금지 규약을 지킨 점은 정확하다.
+        다만 자동 업데이트 상태(<code>store.update</code>)가 미적재인 환경(웹/테스트/업데이트 미초기화)에서는 항상 <code>—</code>로
+        표시된다 — "정보" 섹션 본질(앱 버전 표시)이 업데이트 서브시스템 적재 타이밍에 종속된다. 기능 회귀는 아니나
+        의도된 폴백인지 확인 필요(아래 §4). 중복·복잡도는 낮고 <code>renderShortcutSettings</code>와 패턴 일관(insight 블록 + helpRow) — 양호.</td>
+      <td><span class="sev s-improve">개선</span></td>
+    </tr>
+  </table>
+
+  <!-- ───────────────────────────── 정리 완전성 ───────────────────────────── -->
+  <h2>3. 죽은 코드 정리 완전성 — 점검 결과</h2>
+  <table>
+    <tr><th>대상</th><th>상태</th><th>근거</th></tr>
+    <tr><td><code>electron/menu.js</code> 파일</td><td class="ok-row">삭제됨</td>
+      <td>존재 안 함(Glob). <code>main.js</code>에 <code>require('./menu')</code>·<code>buildMenuTemplate</code> 잔존 0(테스트 :124가 고정).</td></tr>
+    <tr><td>preload <code>onMenu</code> / <code>spip:menu:*</code></td><td class="ok-row">양방향 제거</td>
+      <td><code>preload.js:157-159</code> 제거 주석만, 함수 본체 없음. <code>main.js</code>·preload에 <code>spip:menu:</code> 리터럴 0(테스트 :113-114).</td></tr>
+    <tr><td>app <code>subscribeMenu</code>/<code>unsubscribeMenu</code>/<code>onMenuCommand</code></td><td class="ok-row">제거됨</td>
+      <td>전역 검색 결과 정의·호출 0. <code>:4533</code> 제거 사유 주석 + teardown(:5516-5526)에서 메뉴 구독 해제 누락 없이 정리.</td></tr>
+    <tr><td><code>store.menuUnsubscribe</code></td><td class="ok-row">제거됨</td>
+      <td>잔존 참조 0. trayUnsubscribe 등 다른 구독 해제는 정상 유지.</td></tr>
+    <tr><td><code>showAbout</code></td><td class="ok-row">제거됨</td>
+      <td>app.js 내 정의·호출 0. 정보 진입점은 <code>renderInfoSettings</code>로 이관, 도움말은 <code>openHelp</code> 재사용.</td></tr>
+    <tr><td><code>dispatchMenuAction</code></td><td><span class="sev s-improve" style="font-weight:700">잔존</span></td>
+      <td>도달 불가 코드 + export 살아있음(§2-A). 죽은 코드 정리 미완 — 유일한 정리 누락.</td></tr>
+    <tr><td>preload-favorites <code>onMenu</code> 언급</td><td class="ok-row">무해</td>
+      <td><code>preload-favorites.js:15</code>·<code>preload-favorites-contract.test.js:27</code>의 onMenu는 "위젯에 노출 금지" FORBIDDEN 목록·주석 — 실코드 노출 아님. 정리 불필요(애초 노출된 적 없음). 단 §2-A 제거 후에는 주석에서 빼도 무방(선택).</td></tr>
+  </table>
+
+  <!-- ───────────────────────────── 확인 필요 ───────────────────────────── -->
+  <h2>4. 확인 필요 (설계 의도)</h2>
+  <ul>
+    <li><b>dispatchMenuAction 보존 의도?</b> — 향후 메뉴/커맨드 팔레트 재도입을 대비해 의도적으로 매핑을 남긴 것이라면
+      개선 A/B는 보류 가능. 그렇지 않다면 죽은 코드로 제거 권고(현 시점 도달 불가).</li>
+    <li><b>renderInfoSettings 버전 폴백(<code>—</code>)</b> — 업데이트 상태 미적재 시 버전이 안 보이는 게 허용 범위인지.
+      (별도 동기 버전 소스가 있으면 그쪽 우선이 더 견고. 규약상 <code>package.json</code> 출처 유지가 전제)</li>
+  </ul>
+
+  <div class="card">
+    <b>테스트 실측.</b> <code>npm test</code> → <span class="ok-row"><b>642 pass / 0 fail</b></span>.
+    <code>shortcuts.test.js</code>가 수식키 경계·F5+수식·단일출처 무결성·graceful까지 망라하고,
+    <code>electron-preload-contract.test.js:108-125</code>가 onMenu/spip:menu 양방향 제거·menu.js 삭제·setApplicationMenu(null)을
+    정적 검증한다 — R-28 회귀 방지 검출력 충분.
+  </div>
+
+  <p class="foot">
+    리뷰 범위: 코드 품질·정확성(동작=qa, 보안=별도 담당 분리). 코드는 직접 수정하지 않음.
+    팔레트: 강조 <code>#34d399</code> · 참조 <code>#38bdf8</code>. 생성 도구: Claude Code.
+  </p>
+
+</div>
+</body>
+</html>

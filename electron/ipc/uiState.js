@@ -27,7 +27,7 @@ function resolveStore(ctx) {
 }
 
 function toResponse(state) {
-  return { favorites: state.favorites, order: state.order, sortMode: state.sortMode, names: state.names, theme: state.theme, todos: state.todos, langTrend: state.langTrend };
+  return { favorites: state.favorites, order: state.order, sortMode: state.sortMode, names: state.names, theme: state.theme, todos: state.todos, langTrend: state.langTrend, homeLayout: state.homeLayout };
 }
 
 /** 할 일 id 생성(메인 권한). genTodoId 주입 가능(테스트). */
@@ -103,6 +103,22 @@ function setOrder(args, ctx) {
   const order = uiStateStore.normalizeIdArray(ids, uiStateStore.MAX_ORDER);
   const next = store.write(Object.assign({}, state, { order, sortMode: 'manual' }), storeCtx);
   return { ok: true, order: next.order, sortMode: next.sortMode };
+}
+
+/**
+ * spip:setHomeLayout — 홈 섹션 순서 설정(R-32). 렌더러 입력은 신뢰하지 않으며
+ *   메인의 normalizeHomeLayout이 유일 검증 경계: 화이트리스트 외/중복/비배열/손상 입력을 모두 흡수한다.
+ *   잘못된 형태도 정규화가 graceful 처리하므로 에러코드 불필요.
+ * @param {object} args { ids:string[] }
+ * @returns {{ok:true,homeLayout:string[]}}
+ */
+function setHomeLayout(args, ctx) {
+  const ids = (args && typeof args === 'object') ? args.ids : undefined;
+  const homeLayout = uiStateStore.normalizeHomeLayout(ids); // 단일 신뢰 경계
+  const { store, storeCtx } = resolveStore(ctx);
+  const state = store.read(storeCtx);
+  const next = store.write(Object.assign({}, state, { homeLayout }), storeCtx);
+  return { ok: true, homeLayout: next.homeLayout };
 }
 
 /**
@@ -228,4 +244,4 @@ function updateLangTrend(args, ctx) {
   return { ok: true, prev: written.langTrend.prev, cur: written.langTrend.cur };
 }
 
-module.exports = { getUiState, setFavorite, setOrder, setSortMode, setProjectName, setTheme, addTodo, toggleTodo, removeTodo, updateLangTrend };
+module.exports = { getUiState, setFavorite, setOrder, setSortMode, setHomeLayout, setProjectName, setTheme, addTodo, toggleTodo, removeTodo, updateLangTrend };

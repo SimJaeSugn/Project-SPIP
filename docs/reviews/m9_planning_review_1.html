@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>M9 백로그 기능명세 — 기획 검증 보고서 (1회차)</title>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#1e293b; --text:#e2e8f0; --sub:#94a3b8;
+    --accent:#34d399; --ref:#38bdf8; --line:#334155; --warn:#fbbf24; --danger:#f87171;
+    --purple:#c4b5fd;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:"Segoe UI","Malgun Gothic",system-ui,sans-serif;line-height:1.7;font-size:14.5px;}
+  header.page{padding:44px 32px 32px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#13203b,#0f172a);}
+  header.page .kicker{font-size:12px;letter-spacing:0.16em;text-transform:uppercase;color:var(--ref);}
+  header.page h1{margin:10px 0 8px;font-size:27px;font-weight:700;letter-spacing:-0.02em;}
+  header.page p{margin:6px 0 0;color:var(--sub);max-width:980px;}
+  .verdict{display:inline-block;font-size:15px;font-weight:800;padding:8px 22px;border-radius:999px;margin:14px 8px 0 0;}
+  .v-pass{background:rgba(52,211,153,.16);color:var(--accent);border:1.5px solid rgba(52,211,153,.6);}
+  .v-fail{background:rgba(248,113,113,.16);color:#fca5a5;border:1.5px solid rgba(248,113,113,.6);}
+  .v-cond{background:rgba(251,191,36,.14);color:#fcd34d;border:1.5px solid rgba(251,191,36,.6);}
+  main{max-width:1180px;margin:0 auto;padding:30px 28px 90px;}
+  section{margin:30px 0;}
+  h2{font-size:20px;color:var(--accent);border-left:4px solid var(--accent);padding-left:12px;margin:0 0 14px;}
+  h3{font-size:15.5px;color:var(--ref);margin:18px 0 8px;}
+  code{background:#0b1220;color:var(--ref);padding:1px 6px;border-radius:5px;font-size:12.5px;font-family:Consolas,monospace;}
+  ul{margin:8px 0;padding-left:22px;} li{margin:5px 0;color:#cbd5e1;}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px 24px;margin:16px 0;}
+  .note{background:rgba(56,189,248,.08);border:1px solid rgba(56,189,248,.3);border-radius:10px;padding:14px 18px;color:#bae6fd;font-size:13.5px;margin:14px 0;}
+  .warnbox{background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.35);border-radius:10px;padding:14px 18px;color:#fde68a;font-size:13.5px;margin:14px 0;}
+  .dangerbox{background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.4);border-radius:10px;padding:14px 18px;color:#fecaca;font-size:13.5px;margin:14px 0;}
+  table{width:100%;border-collapse:collapse;margin:12px 0;font-size:13px;}
+  th,td{border:1px solid var(--line);padding:9px 11px;text-align:left;vertical-align:top;}
+  th{background:#142035;color:var(--accent);}
+  .pass{color:var(--accent);font-weight:800;white-space:nowrap;}
+  .fail{color:#fca5a5;font-weight:800;white-space:nowrap;}
+  .cond{color:#fcd34d;font-weight:800;white-space:nowrap;}
+  .pill{font-size:11px;font-weight:700;padding:2px 9px;border-radius:6px;white-space:nowrap;display:inline-block;}
+  .p-p1{background:rgba(248,113,113,.16);color:#fca5a5;border:1px solid rgba(248,113,113,.5);}
+  .p-p2{background:rgba(251,191,36,.16);color:#fcd34d;border:1px solid rgba(251,191,36,.45);}
+  .p-p3{background:rgba(148,163,184,.16);color:#cbd5e1;border:1px solid rgba(148,163,184,.4);}
+  .fid{font-family:Consolas,monospace;color:var(--purple);font-weight:800;}
+  footer{text-align:center;color:var(--sub);font-size:12.5px;padding:28px;border-top:1px solid var(--line);}
+</style>
+</head>
+<body>
+
+<header class="page">
+  <div class="kicker">Project-SPIP · 독립 검증 (Reviewer) · 기획 검증 1회차</div>
+  <h1>M9 백로그 기능명세 — 기획 검증 보고서</h1>
+  <p>검증 대상: <code>docs/FeatureSpec-backlog-m9.html</code>(신규 요구 R-25~R-33) · 기준 문서: <code>docs/ref.md</code>(원본 백로그 8) · <code>docs/pm/codebase-audit.html</code>(코드베이스 감사) · <code>docs/traceability.html</code>(요구 ID 체계).</p>
+  <span class="verdict v-cond">종합 판정: CONDITIONAL PASS (조건부 통과)</span>
+  <p style="margin-top:14px;font-size:13px;">치명적 결함 없음. 다만 추적성 역추적표 부재(P2)와 R-25 수용기준의 검증경계 모호(P2) 등 보완 권고 4건. 권고 반영 후 설계 착수 가능.</p>
+</header>
+
+<main>
+
+<!-- 종합 -->
+<section>
+  <h2>1. 종합 판정 및 요약</h2>
+  <div class="panel">
+    <p><b>판정: CONDITIONAL PASS</b> — 명세는 원본 백로그 8개를 빠짐없이 9개 요구로 분해했고, 감사가 지목한 공통 근원(전체 재렌더)을 기반 요구 R-25로 분리한 결정은 타당하다. ID 체계도 충돌이 없다. 그러나 아래 보완 권고(P2 3건·P3 1건)를 반영하면 설계 착수의 안정성이 높아진다. <b>FAIL을 부를 치명적 결함(P1)은 발견되지 않았다.</b></p>
+    <div class="note"><b>회의적 검토 결과 한 줄 요약:</b> "8→9 분해·의존성·보안 정합은 견고. 약점은 (1) ref↔요구 1:1 역추적표가 산문에만 있고 표로 없음, (2) R-25 기반 요구가 후속 전체를 막는 단일 병목인데 그 범위·완료 정의가 후속 요구들의 가정보다 느슨함."</div>
+  </div>
+</section>
+
+<!-- 체크리스트 판정표 -->
+<section>
+  <h2>2. 체크리스트별 판정</h2>
+  <table>
+    <tr><th style="width:150px">검증 항목</th><th style="width:80px">판정</th><th>근거</th></tr>
+    <tr>
+      <td>1. 완결성 (8항목 추적·누락·중복)</td>
+      <td class="pass">PASS</td>
+      <td>ref.md 8개 항목이 모두 요구로 매핑됨: 헤더통일→R-27, 실시간→R-31, 드래그→R-32, 차트→R-33, 메뉴제거→R-28, 단축키정보→R-29, 설정분할→R-30, 한글버그→R-26. 8→9 증가는 감사 교차이슈의 "공통 근원(전체 재렌더)"을 기반 R-25로 분리한 결과로 명시적 근거가 있음(누락·근거없는 신설 아님). 중복 없음.</td>
+    </tr>
+    <tr>
+      <td>2. 수용기준 검증가능성</td>
+      <td class="cond">PASS (보완)</td>
+      <td>대부분 검증가능(단위테스트·사용자 PC 1회 확인 명시, 헤드리스 한계 솔직). 다만 R-25의 "보존 영역 API"·"표준 훅"은 <b>구현 형태 선택지를 또는으로 나열</b>해 무엇이 충족인지 경계가 모호(P2-2). R-32 "워터폴 빈틈 없이"는 정량 기준 부재(P3).</td>
+    </tr>
+    <tr>
+      <td>3. 일관성 (의존성·MoSCoW 충돌)</td>
+      <td class="pass">PASS</td>
+      <td>R-25 기반 → R-26·R-31·R-32·R-33 의존 관계가 다이어그램·각 요구에 일관 기재. 우선순위 역전 없음(기반/Must가 Should/Could보다 선행). 구현순서 권고가 의존성 준수. R-28↔R-29 단일출처 공유, R-28·R-29→R-30 수용 관계 모순 없음.</td>
+    </tr>
+    <tr>
+      <td>4. 범위 명확성 (in/out)</td>
+      <td class="pass">PASS</td>
+      <td>§5 비범위 7항목 명시(가상DOM·단축키편집·설정검색·섹션추가삭제·신규데이터수집·프로젝트카드재배치·신규 npm 의존성). 범위 과대/과소 징후 없음. R-32가 기존 카드 reorder(R-19/R-23)와 명확히 구분됨.</td>
+    </tr>
+    <tr>
+      <td>5. 제약 정합 (보안·의존성)</td>
+      <td class="pass">PASS</td>
+      <td>L-1(textContent)·CSP(self-host·인라인 style 블록 금지)·런타임 의존성 최소(self-host 자산 별개 취급)가 §1 불변식 + 각 요구 수용기준에 반영. R-33이 감사의 "Chart.js canvas 안전 vs SVG 라이브러리 style-src 위험" 판단을 정확히 승계. 신규 IPC(R-32)의 guard·고정 에러코드·0600 영속 명시.</td>
+    </tr>
+    <tr>
+      <td>6. 사용자 스토리 품질 (역할·목적·이유)</td>
+      <td class="cond">PASS (보완)</td>
+      <td>모든 요구에 "~로서 / ~하고 싶다 / 왜냐하면" 3요소 구비. 단 R-25 스토리는 역할이 "개발자/사용자"로 혼합되어 수혜자가 모호 — 기반 요구의 성격상 허용 가능하나, 사용자 가치 진술이 약함(P3).</td>
+    </tr>
+    <tr>
+      <td>추가. ID 체계 무결성 (R-25~R-33 충돌)</td>
+      <td class="pass">PASS</td>
+      <td>traceability.html 확인 결과 기능요구 최대값은 <code>R-24</code>, 비기능 <code>N-07</code>, 보안 <code>V-2</code>. R-25~R-33은 R-24 다음으로 충돌 없이 이어짐. 명세 헤더의 "R-24 / N-07까지 사용중" 기재가 정확. N-07(접근성) 승계 주장도 traceability N-07 행과 정합.</td>
+    </tr>
+  </table>
+</section>
+
+<!-- 반영 항목 -->
+<section>
+  <h2>3. 반영 항목 (생산자 시정 요청)</h2>
+  <p style="color:var(--sub);font-size:13px;">치명(P1) 0건. 아래는 권고(P2·P3)로, 설계 착수를 막지는 않으나 반영을 권한다.</p>
+
+  <div class="panel">
+    <h3><span class="fid">F-1</span> &nbsp;<span class="pill p-p2">P2</span>&nbsp; ref↔요구 1:1 역추적표 부재</h3>
+    <ul>
+      <li><b>무엇:</b> 원본 백로그 8개 항목이 어느 요구로 가는지 명시적 매핑표(역추적 행렬)가 없다.</li>
+      <li><b>위치:</b> 명세 §1·§2(개요·인덱스) — 매핑이 §1 산문("UX 일관성… R-27" 식)에만 흩어져 있음.</li>
+      <li><b>문제:</b> 추적성은 이 저장소의 1급 산출물(<code>traceability.html</code>) 원칙이다. 산문 매핑은 빠뜨린 항목을 자동으로 드러내지 못해, 검증자/구현자가 8→9 분해의 완결성을 매번 수작업 대조해야 한다. 특히 ref 2번("모든 섹션 실시간")이 R-31 하나로 가는지, R-25에도 걸치는지 표가 없으면 모호.</li>
+      <li><b>권고:</b> <code>ref.md 항목번호 → 요구ID(들)</code> 8행 매핑표를 §2 근처에 추가하고, R-25는 "감사 교차이슈 #1 파생(원본 항목 아님)"으로 명시. 후속 traceability.html에 R-25~R-33 행을 추가할 때 그대로 재사용 가능하게.</li>
+    </ul>
+  </div>
+
+  <div class="panel">
+    <h3><span class="fid">F-2</span> &nbsp;<span class="pill p-p2">P2</span>&nbsp; R-25 기반 요구의 완료 정의(DoD)가 후속 요구의 가정보다 느슨함</h3>
+    <ul>
+      <li><b>무엇:</b> R-25 수용기준이 "보존 영역 API: <code>withPreservedNode</code> <b>또는</b> destroy/recreate 표준화", "갱신 가드 공통화"처럼 <b>구현 선택지를 OR로 나열</b>하고, 무엇이 갖춰져야 R-25 완료인지(=후속이 의존할 수 있는 계약)가 확정되지 않았다.</li>
+      <li><b>위치:</b> R-25 "수용 기준" 4·5번 항목, "상세 기능 명세" 보존 영역 API 항목.</li>
+      <li><b>문제:</b> R-25는 R-26·R-31·R-32·R-33 <b>4개가 동시에 의존하는 단일 병목</b>이다. 그런데 R-32는 "SortableJS init/destroy 표준 훅", R-33은 "차트 destroy/recreate 훅", R-26은 "composition 가드"를 각각 R-25에서 제공받는다고 가정한다. R-25 완료 정의가 "또는"으로 열려 있으면, R-25를 만든 뒤에도 후속이 기대한 훅이 실제로 존재하는지 보장되지 않아 통합 단계에서 재작업 위험이 있다.</li>
+      <li><b>권고:</b> R-25 수용기준에 후속이 의존하는 <b>공개 계약(API surface)을 확정 목록으로</b> 박는다 — 예: ① <code>shouldDeferRender(state)</code> 순수함수, ② composition 단일 진입점(<code>store._composing</code> 세팅 보장), ③ 인스턴스 destroy/recreate 표준 훅(차트·Sortable 공용 시그니처), ④ coalesce 1회 보장. "또는" 표현을 줄이고, R-26/R-32/R-33의 수용기준이 참조하는 이름과 R-25가 제공하는 이름을 일치시킨다.</li>
+    </ul>
+  </div>
+
+  <div class="panel">
+    <h3><span class="fid">F-3</span> &nbsp;<span class="pill p-p2">P2</span>&nbsp; R-31 ↔ R-26 의존이 다이어그램과 본문에서 어긋남</h3>
+    <ul>
+      <li><b>무엇:</b> 의존성 다이어그램(§3)은 R-31→R-26으로 점선("실시간이 IME 깨짐 악화")을 그리지만, 구현순서 권고와 R-31 본문은 "R-31은 <b>R-26 이후</b> 활성화"라고 한다. 또 R-26 수용기준 마지막 항목은 "R-31이 켜진 상태에서도…"를 검증 대상으로 둔다.</li>
+      <li><b>위치:</b> §3 다이어그램 점선 레이블 + §3 note 구현순서 + R-26 수용기준 5번 + R-31 의존성 칸.</li>
+      <li><b>문제:</b> 셋의 방향이 미묘하게 다르다. "악화 관계"(R-31이 R-26 문제를 키움)와 "활성화 순서"(R-26 먼저)와 "R-26이 R-31 켜진 상태를 테스트"가 섞여, 구현자가 어느 것을 먼저·무엇을 누구 수용기준에서 검증하는지 혼동할 수 있다. 특히 R-26 수용기준 5번은 R-31에 의존하는데 R-26은 R-25에만 depends로 표기됨(R-31 의존 누락 또는 순서 역전 가능).</li>
+      <li><b>권고:</b> 관계를 한 문장으로 단일화: "R-26은 R-25 위에서 단독 완결(R-31 불요). R-31 활성화의 <b>선결 조건</b>으로 R-26 완료를 둔다(R-31 depends: R-25, R-26)." R-26 수용기준 5번의 'R-31 켜진 상태' 검증은 R-31 수용기준으로 옮기거나, R-26에 'R-31 의존' 표기를 추가해 일관시킨다.</li>
+    </ul>
+  </div>
+
+  <div class="panel">
+    <h3><span class="fid">F-4</span> &nbsp;<span class="pill p-p3">P3</span>&nbsp; 정량 기준·스토리 수혜자 모호 (경미)</h3>
+    <ul>
+      <li><b>무엇:</b> (a) R-32 "워터폴/그리드로 빈틈 없이 재배치"에 정량/판정 기준 없음. (b) R-25 스토리 역할이 "개발자/사용자" 혼합.</li>
+      <li><b>위치:</b> R-32 수용기준 2번, R-25 스토리.</li>
+      <li><b>문제:</b> (a) "빈틈 없이"는 검증자가 통과/실패를 가르기 어려운 모호어 — 사용자 PC 확인으로 빠지면 회귀 검출 불가. (b) 기반 요구라 불가피하나 사용자 가치 진술이 약해 우선순위 방어 근거가 얇다.</li>
+      <li><b>권고:</b> (a) "재배치 후 컬럼 간 높이 편차가 가장 큰 섹션 1개 높이 이내" 같은 관찰 가능한 판정 기준, 또는 "masonry 레이아웃 적용 + 시각 확인(사용자 PC)"으로 한계를 명시. (b) R-25 스토리를 "사용자로서 … 입력/드래그/차트가 깨지지 않기를 원한다"로 사용자 가치 중심 1문장 + "개발 관점 근거"로 분리 서술.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- 가장 위험한 약점 -->
+<section>
+  <h2>4. 가장 위험한 약점 (Top 2)</h2>
+  <div class="dangerbox">
+    <b>① R-25 단일 병목 + 느슨한 완료 정의 (F-2).</b> 9개 중 4개가 R-25에 의존하는데 R-25의 제공 계약이 "또는"으로 열려 있다. R-25를 잘못 좁게 만들면 R-26~R-33 통합 시 일괄 재작업이 발생하고, 너무 넓게 잡으면 비범위(가상 DOM) 경계를 넘는다. <b>설계 단계에서 R-25의 API surface를 먼저 확정</b>하지 않으면 이 배치 전체의 일정 리스크가 한 요구에 집중된다.
+  </div>
+  <div class="warnbox">
+    <b>② R-31×R-26 관계 진술의 비일관 (F-3).</b> 악화/순서/교차검증 세 진술이 미묘하게 다른 방향을 가리켜, 구현자가 "R-26을 먼저 끝냈는데 R-31 켜니 또 깨진다"는 상황을 만들 여지가 있다. 의존 방향과 검증 소속을 한 문장으로 못 박아야 한다.
+  </div>
+  <div class="note"><b>참고(검증 범위 밖):</b> 두 약점 모두 <b>설계 단계에서 해소 가능</b>한 명세 수준 모호함이지, 기획의 완결성·추적성을 깨는 결함은 아니다. 따라서 종합 판정은 FAIL이 아닌 CONDITIONAL PASS다.</div>
+</section>
+
+<!-- 확인 필요 -->
+<section>
+  <h2>5. 사용자 판단 필요 (명세가 이미 식별)</h2>
+  <div class="panel">
+    <p>명세 §6이 Q1~Q5(헤더 통일 방향·설정 카테고리·차트 폴링 주기·차트 구현 수단·도움말 버튼 존치)를 미결정으로 올리고 각각 기본 진행값을 제시했다 — 이는 적절한 처리다. 검증자는 이 5건을 <b>추가 결함으로 보지 않으며</b>, 기본 진행값이 모두 보안·디자인 근거를 동반해 미응답 시에도 진행 가능하다. PM이 Q4(Chart.js vs SVG 자작)만은 R-33 착수 전 확정 권고 — self-host/CSP 검증 부담이 수단에 따라 크게 갈리기 때문.</p>
+  </div>
+</section>
+
+<footer>
+  Project-SPIP · M9 백로그 기능명세 기획 검증 1회차 · 판정 CONDITIONAL PASS · 반영항목 P2 3건·P3 1건 · 작성 2026-06-24 · 검증 입력: FeatureSpec-backlog-m9.html / ref.md / codebase-audit.html / traceability.html
+</footer>
+
+</main>
+</body>
+</html>

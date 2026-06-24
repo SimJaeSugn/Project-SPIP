@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>코드 리뷰 — M9 P1 R-25 renderGuard</title>
+<style>
+  :root{ --bg:#0f172a; --panel:#1e293b; --fg:#e2e8f0; --sub:#94a3b8; --acc:#34d399; --ref:#38bdf8; }
+  *{ box-sizing:border-box; }
+  body{ margin:0; padding:32px 28px 64px; background:var(--bg); color:var(--fg);
+        font-family:"Segoe UI","Malgun Gothic",system-ui,sans-serif; line-height:1.6; font-size:14.5px; }
+  h1{ font-size:23px; margin:0 0 4px; }
+  h2{ font-size:17px; margin:34px 0 12px; color:var(--acc); border-bottom:1px solid #334155; padding-bottom:6px; }
+  .sub{ color:var(--sub); font-size:13px; margin:0 0 20px; }
+  .verdict{ display:inline-block; padding:6px 16px; border-radius:8px; font-weight:700; font-size:15px; }
+  .pass{ background:rgba(52,211,153,.15); color:var(--acc); border:1px solid var(--acc); }
+  .fail{ background:rgba(248,113,113,.15); color:#f87171; border:1px solid #f87171; }
+  .panel{ background:var(--panel); border:1px solid #334155; border-radius:10px; padding:16px 18px; margin:14px 0; }
+  table{ border-collapse:collapse; width:100%; margin:10px 0; font-size:13.5px; }
+  th,td{ border:1px solid #334155; padding:8px 10px; text-align:left; vertical-align:top; }
+  th{ background:#172033; color:var(--ref); font-weight:600; }
+  code{ background:#0b1220; color:#fcd34d; padding:1px 5px; border-radius:4px; font-family:"Geist Mono",Consolas,monospace; font-size:12.5px; }
+  .sev{ font-weight:700; padding:2px 8px; border-radius:6px; font-size:12px; white-space:nowrap; }
+  .s-high{ background:rgba(248,113,113,.18); color:#f87171; }
+  .s-mid{ background:rgba(251,191,36,.16); color:#fbbf24; }
+  .s-low{ background:rgba(148,163,184,.16); color:var(--sub); }
+  .loc{ color:var(--ref); font-family:"Geist Mono",Consolas,monospace; font-size:12.5px; }
+  ul{ margin:6px 0 6px 18px; padding:0; } li{ margin:3px 0; }
+  .tag{ display:inline-block; font-size:11.5px; color:var(--sub); border:1px solid #334155; border-radius:5px; padding:1px 7px; margin-right:6px; }
+  b.acc{ color:var(--acc); } b.ref{ color:var(--ref); }
+</style>
+</head>
+<body>
+  <h1>코드 리뷰 — M9 P1 R-25 <code>renderGuard</code> 구현</h1>
+  <p class="sub">대상: <code>lib/common/renderGuard.js</code> · <code>public/app.js</code>(RG IIFE/render/검색핸들러/applyProjectsUpdate) · <code>test/renderGuard.test.js</code> · 기준: 주변 코드 일관성 + <code>docs/architecture/m9-design.html</code> §3 (docs/Development 부재) · 범위: 코드 품질·정확성(동작/보안 제외)</p>
+
+  <p><span class="verdict fail">판정 · FAIL (정확성 결함 1건)</span></p>
+  <div class="panel">
+    <b>요약.</b> 순수 정본(<code>renderGuard.js</code>)과 테스트는 견고하고 잘 문서화돼 있으며 node:test 12건 전부 통과한다.
+    그러나 app.js 통합부에서 <b class="acc">설계가 명시한 "보류 해제 지점 → flushIfPending()" 규칙을 일부만 구현</b>해
+    coalesce 큐가 처리되지 않는 경로가 있다(정확성 결함 1건 — 높음).
+    품질 개선 4건(중 2 / 낮 2), 확인 필요 2건.
+    <div style="margin-top:8px">
+      <span class="tag">정확성결함 1</span><span class="tag">품질·중 2</span><span class="tag">품질·낮 2</span><span class="tag">확인필요 2</span>
+    </div>
+  </div>
+
+  <h2>1. 정확성 결함 (높음)</h2>
+  <table>
+    <tr><th style="width:130px">항목</th><th>분석</th></tr>
+    <tr>
+      <td><span class="sev s-high">결함</span><br>F-1<br>flush 미호출 보류 해제 경로</td>
+      <td>
+        <b>무엇.</b> 설계 §3.4·§3.5 및 데이터플로 다이어그램(<span class="loc">m9-design.html:332-333</span>)은
+        <i>보류 해제 지점 = compositionend · Sortable onEnd · closeSettings/closeHelp/closeDrawer</i> 모두에서
+        <code>RG.coalesce.flushIfPending()</code>를 부르도록 규정한다. 구현은 <b>compositionend 단 한 곳</b>에서만 호출한다
+        (<span class="loc">app.js:5242</span>).<br>
+        <b>위치.</b> 누락: 드래그 <code>onEnd</code> <span class="loc">app.js:4892-4893</span>(<code>_dragging=false</code> 후 flush 없음, 설계 §3.4 R4가 명시적으로 "onEnd → 마이크로태스크 안에서 flushIfPending" 패턴을 요구) · <code>closeDrawer</code> <span class="loc">app.js:4070-4081</span> · <code>closeSettings</code> <span class="loc">app.js:2060-2069</span> · <code>refreshMailSummary</code> busy 해제 <span class="loc">app.js:1951</span> · <code>refreshCommitActivity</code> busy 해제 <span class="loc">app.js:1974</span> · <code>todoAdding=false</code> <span class="loc">app.js:1830</span>.<br>
+        <b>왜 문제.</b> 보류 중(드래그/모달/busy) <code>applyProjectsUpdate</code>가 들어오면 데이터는 viewModels에 병합되지만 <code>render()</code>는 보류되고 <code>pending=true</code>로 큐에 남는다(<span class="loc">app.js:4614-4615</span>). 해제 지점에서 flush를 부르지 않으면 <b>누적분이 즉시 화면에 반영되지 않는다</b>. close* 류는 자체 <code>render()</code>를 직접 부르므로 <i>데이터는</i> 따라오지만(우연한 보정), <code>pending</code>·예약 타이머는 정리되지 않은 채 남는다. 특히 <b>드래그 onEnd</b>는 자체 render도, flush도 없어 보류 해제 후 다음 트리거(다음 push/검색 입력)까지 갱신이 지연된다 — 수용기준 "보류 해제 시 정확히 1회 병합 반영"(설계 line 256) 위반.<br>
+        <b>권고.</b> 각 보류 해제 지점에 <code>RG.coalesce.flushIfPending()</code> 추가. 드래그는 설계 §3.4대로 <code>onEnd</code>에서 <code>_dragging=false</code> 직후 <code>Promise.resolve().then(() =&gt; { commitReorder(...); RG.coalesce.flushIfPending(); })</code> 순서로(현 마이크로태스크 패턴에 흡수). close*/busy 해제 지점은 기존 직접 <code>render()</code> 호출을 <code>flushIfPending()</code>로 치환하거나, 데이터 즉시성이 필요하면 <code>render()</code> 후 큐 정리를 위해 <code>flushIfPending()</code>(이미 render 됐으면 pending 소비)를 보조 호출. <b>대안(권장)</b>: <code>coalesce</code> 래퍼에 정본의 <code>hasPending()</code>를 노출하고, 보류 해제 헬퍼 1개(<code>RG.coalesce.releaseAndFlush()</code>)로 단일화해 호출처 누락 위험 자체를 제거.
+      </td>
+    </tr>
+  </table>
+
+  <h2>2. 동형 드리프트 위험 (R7) 평가</h2>
+  <div class="panel">
+    <p>정본 <code>renderGuard.js</code>의 <code>shouldDeferRender</code>/<code>createCoalescer</code>와 app.js의 인라인 동형 복제를 라인 단위로 대조했다.</p>
+    <table>
+      <tr><th style="width:200px">대조 항목</th><th>결과</th></tr>
+      <tr><td><code>shouldDeferRender</code> OR식</td><td><b class="acc">완전 동형</b>. 6플래그·OR순서·<code>!!(f && ...)</code> 가드까지 동일(<span class="loc">renderGuard.js:24-25</span> ↔ <span class="loc">app.js:5216-5217</span>).</td></tr>
+      <tr><td><code>request/onFire/flushIfPending</code> 상태전이</td><td><b class="acc">동형</b>. <code>cancelTimer</code>만 인라인화됐을 뿐 분기·순서 동일(<span class="loc">renderGuard.js:62-89</span> ↔ <span class="loc">app.js:5321-5342</span>).</td></tr>
+      <tr><td>동반수정 규칙 명시</td><td><b class="acc">양호</b>. <span class="loc">app.js:5214</span> "플래그 집합 변경 시 양쪽+테스트 동반 수정" 주석 존재. 정본도 <span class="loc">renderGuard.js:10-11</span>에 "정본/어댑터" 관계 명시.</td></tr>
+    </table>
+    <p><b class="acc">평가:</b> 현 시점 드리프트 없음(동형 일치). 규칙 주석도 명시돼 신호는 충분하다.
+    다만 <b>주석 규칙은 강제력이 없다</b> — 동형 동치를 자동 검증하는 테스트가 없어, 한쪽만 바뀌어도 CI가 잡지 못한다.
+    설계 R7("동형 테스트")이 요구한 <b>동치 회귀 테스트가 누락</b>됐다(아래 D-3).</p>
+  </div>
+
+  <h2>3. 품질 개선</h2>
+  <table>
+    <tr><th style="width:130px">항목</th><th>분석</th></tr>
+    <tr>
+      <td><span class="sev s-mid">개선</span><br>D-1<br>코드 중복(어댑터가 복제)</td>
+      <td>
+        <b>무엇/위치.</b> app.js의 <code>_coalescer</code>(<span class="loc">app.js:5321-5342</span>)는 정본 <code>createCoalescer</code> 본문을 통째로 재작성한 것이다. 정본은 타이머 주입(<code>setTimer/clearTimer</code>)을 지원하므로 app.js는 <b>래핑만으로 재사용 가능</b>한데 굳이 알고리즘을 복제했다.<br>
+        <b>왜 문제.</b> 동형 드리프트 표면적의 근원. 주석으로 "변형 금지"를 거는 것보다 <b>코드로 단일 출처를 강제</b>하는 게 견고하다.<br>
+        <b>권고.</b> app.js에서 <code>renderGuard.js</code>를 직접 쓸 수 있으면(번들 없음 → 불가하면 X) <code>RG._coalescer = createCoalescer({ isDeferred: deferred, flush: render, delay: 120 })</code>로 교체. 순수 프런트엔드 제약상 require 불가라면 D-3(동치 테스트)로 대체 방어. <i>실현 가능성은 빌드 구조에 달림 — 확인 필요 C-1.</i>
+      </td>
+    </tr>
+    <tr>
+      <td><span class="sev s-mid">개선</span><br>D-2<br>teardown에서 coalesce 타이머 미정리</td>
+      <td>
+        <b>무엇/위치.</b> 정본은 teardown용 <code>cancel()</code>을 제공하나(<span class="loc">renderGuard.js:93</span>), app.js <code>coalesce</code> 래퍼는 <code>request</code>/<code>flushIfPending</code>만 노출하고(<span class="loc">app.js:5343-5346</span>) <code>teardown()</code>(<span class="loc">app.js:5447-5456</span>)에서 디바운스 타이머를 정리하지 않는다.<br>
+        <b>왜 문제.</b> pagehide 직전 예약된 120ms 타이머가 살아남아 unload 중 <code>render()</code> 발화 가능성(경미). 설계가 정본에 <code>cancel()</code>을 둔 의도와도 어긋난다.<br>
+        <b>권고.</b> <code>coalesce</code> 래퍼에 <code>cancel()</code> 노출 → <code>teardown()</code>에서 <code>RG.coalesce.cancel()</code> 호출. 한 줄.
+      </td>
+    </tr>
+    <tr>
+      <td><span class="sev s-low">사소</span><br>D-3<br>동형 동치 테스트 부재 (R7)</td>
+      <td>
+        <b>무엇.</b> renderGuard.test.js는 정본만 검증한다. app.js RG는 순수 추출이 안 돼 테스트 사각지대.<br>
+        <b>왜 문제.</b> 동반수정 규칙의 유일한 안전망이 주석뿐 → R7 회귀 위험이 코드로 차단되지 않음.<br>
+        <b>권고.</b> RG의 순수 함수(특히 <code>shouldDeferRender</code> 사본)를 별도 모듈로 빼 정본과 동일 입력셋으로 동치 단언하거나, 최소한 app.js에서 정본을 import할 수 있는 경로 확보(D-1). 불가 시 "OR식 문자열 비교" 같은 가벼운 정합 테스트라도 추가.
+      </td>
+    </tr>
+    <tr>
+      <td><span class="sev s-low">사소</span><br>D-4<br>죽은/이중 경로 점검 결과</td>
+      <td>
+        <b>결과(양호).</b> <code>destroyCardSortable</code>/<code>initCardSortable</code>은 RG.widget으로 <i>위임 등록</i>만 하고 본체는 그대로 재사용 — 죽은 코드 없음(<span class="loc">app.js:4865-4904, 5351-5356</span>). 기존 <code>debounce(render,120)</code>는 검색 핸들러에서 <code>RG.coalesce.request()</code>로 깔끔히 대체됐고 잔재 없음(<span class="loc">app.js:5196-5199</span>의 범용 <code>debounce</code>는 타 용도로 여전히 사용).<br>
+        <b>경미.</b> <code>initCardSortable</code> 첫 줄 <code>destroyCardSortable()</code>(<span class="loc">app.js:4873</span>)은 RG.widget이 <code>destroyAll</code>→<code>mountAll</code> 순서를 보장하므로 이제 방어적 중복이다. 위젯 경로로만 호출된다면 제거 가능하나, 직접 호출 경로가 남아있을 수 있어(외부 호출처 확인 필요) 보수적으로 유지해도 무방 — 지적 수준.
+      </td>
+    </tr>
+  </table>
+
+  <h2>4. 정확성 정밀 점검 (정본 createCoalescer)</h2>
+  <div class="panel">
+    <ul>
+      <li><b>타이머 이중 예약:</b> <code>if (timer == null)</code> 가드로 방지됨(<span class="loc">renderGuard.js:80</span>). 정상.</li>
+      <li><b>타이머 누수:</b> 보류 진입 시 <code>cancelTimer()</code>, onFire/flush에서 <code>timer=null</code> 일관. 정본 내부는 누수 없음. (누수 위험은 app.js teardown 미정리 D-2뿐.)</li>
+      <li><b>flush 후 pending 리셋:</b> onFire·flushIfPending 모두 <code>pending=false</code> 후 doFlush — 1회 소비 보장(<span class="loc">renderGuard.js:71-72, 87-88</span>). 정상.</li>
+      <li><b>발화 직전 보류 시작:</b> onFire의 <code>isDeferred()</code> 재검사로 차단(<span class="loc">renderGuard.js:69</span>) — 테스트로 검증됨.</li>
+      <li><b>shouldDeferRender 매핑:</b> 6플래그 ↔ deferred() 수집(<span class="loc">app.js:5223-5230</span>) 1:1 일치, 오타·누락 없음. truthy(overlayOpen=selectedId 문자열) 허용도 테스트로 커버.</li>
+    </ul>
+    <p><b class="acc">정본 로직 자체에 정확성 결함 없음.</b> 결함은 전적으로 통합부(F-1, 호출처 누락)에 있다.</p>
+  </div>
+
+  <h2>5. 확인 필요</h2>
+  <table>
+    <tr><th style="width:60px">ID</th><th>쟁점</th></tr>
+    <tr><td>C-1</td><td>순수 프런트엔드(번들 없음) 제약상 <code>public/app.js</code>에서 <code>lib/common/renderGuard.js</code>를 직접 <code>require</code>할 수 없는가? 가능하면 D-1로 중복 자체를 제거해 R7을 근본 해소. 불가하면 D-3 동치 테스트가 차선.</td></tr>
+    <tr><td>C-2</td><td>궤도 검색 input(<code>.orbit__search</code>, <span class="loc">app.js:3318</span>)은 FOCUS_SEL에 등록(preserve 대상)됐으나 <code>RG.composition.bind</code>가 미적용이다. 설계 §3.8(line 549)은 "궤도 검색·할 일도 동일 가드"를 언급하나 P2-R-26 범위로 보인다. orbit는 liveView가 아니라 coalesce 비대상이므로 P1에서 의도적 제외인지 확인.</td></tr>
+  </table>
+
+  <h2>판정 근거</h2>
+  <div class="panel">
+    정본 로직·테스트는 통과 품질이나, 설계가 규정한 보류 해제 flush 규칙이 통합부에서 일부만 구현돼
+    "보류 해제 시 정확히 1회 반영" 수용기준을 충족하지 못한다(F-1, 정확성 결함). 따라서 <b class="acc">FAIL</b>.
+    F-1 해소(보류 해제 지점 flush 보강) 시 통과 가능하며, D-1~D-3로 동형 드리프트를 코드 차원에서 방어하면 견고성이 크게 오른다.
+  </div>
+</body>
+</html>
