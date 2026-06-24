@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>M10 설계 독립 검증 보고 #1 — patchRegion · 차트 깜빡임 · 툴팁 · 폴링</title>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#1e293b; --text:#e2e8f0; --sub:#94a3b8;
+    --accent:#34d399; --ref:#38bdf8; --line:#334155; --warn:#fbbf24;
+    --danger:#f87171; --purple:#c4b5fd;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:"Segoe UI","Malgun Gothic",system-ui,sans-serif;line-height:1.7;font-size:14.5px;}
+  header.page{padding:46px 32px 34px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#13203b,#0f172a);}
+  header.page .kicker{font-size:12px;letter-spacing:0.16em;text-transform:uppercase;color:var(--ref);}
+  header.page h1{margin:10px 0 8px;font-size:26px;font-weight:700;letter-spacing:-0.02em;}
+  header.page p{margin:8px 0 0;color:var(--sub);max-width:1000px;}
+  .verdict{display:inline-block;border-radius:999px;padding:6px 18px;font-size:15px;font-weight:700;margin:14px 8px 0 0;}
+  .v-cond{background:rgba(251,191,36,.14);color:var(--warn);border:1px solid rgba(251,191,36,.5);}
+  .v-pass{background:rgba(52,211,153,.14);color:var(--accent);border:1px solid rgba(52,211,153,.5);}
+  .v-fail{background:rgba(248,113,113,.14);color:var(--danger);border:1px solid rgba(248,113,113,.5);}
+  main{max-width:1180px;margin:0 auto;padding:30px 28px 90px;}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:24px 28px;margin:22px 0;}
+  h2{margin:0 0 16px;font-size:21px;color:var(--accent);border-left:4px solid var(--accent);padding-left:12px;}
+  h3{font-size:16px;color:var(--ref);margin:24px 0 10px;}
+  p{margin:8px 0;} ul,ol{margin:8px 0;padding-left:22px;} li{margin:6px 0;color:#cbd5e1;}
+  code{background:#0b1220;color:var(--ref);padding:1px 6px;border-radius:5px;font-size:12.5px;font-family:Consolas,monospace;}
+  table{width:100%;border-collapse:collapse;margin:12px 0;font-size:13px;}
+  th,td{border:1px solid var(--line);padding:8px 11px;text-align:left;vertical-align:top;}
+  th{background:#142035;color:var(--accent);}
+  tr:nth-child(even) td{background:rgba(255,255,255,.02);}
+  .note{background:rgba(56,189,248,.08);border:1px solid rgba(56,189,248,.3);border-radius:10px;padding:14px 18px;color:#bae6fd;font-size:13.5px;margin:14px 0;}
+  .warnbox{background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.35);border-radius:10px;padding:14px 18px;color:#fde68a;font-size:13.5px;margin:14px 0;}
+  .secbox{background:rgba(248,113,113,.07);border:1px solid rgba(248,113,113,.32);border-radius:10px;padding:14px 18px;color:#fecaca;font-size:13.5px;margin:14px 0;}
+  .pass{color:var(--accent);font-weight:700;} .fail{color:var(--danger);font-weight:700;} .cond{color:var(--warn);font-weight:700;}
+  .pill{display:inline-block;border-radius:6px;padding:2px 9px;font-size:11.5px;font-weight:700;font-family:Consolas,monospace;}
+  .p-pass{background:rgba(52,211,153,.15);color:var(--accent);}
+  .p-cond{background:rgba(251,191,36,.15);color:var(--warn);}
+  .p-fail{background:rgba(248,113,113,.15);color:var(--danger);}
+  .ref{color:var(--ref);font-family:Consolas,monospace;font-size:12.5px;}
+  .sev{font-family:Consolas,monospace;font-weight:700;white-space:nowrap;}
+  .sev-hi{color:var(--danger);} .sev-md{color:var(--warn);} .sev-lo{color:var(--sub);}
+  footer{text-align:center;color:var(--sub);font-size:12.5px;padding:30px;border-top:1px solid var(--line);}
+  .findid{font-family:Consolas,monospace;color:var(--purple);font-weight:700;white-space:nowrap;}
+</style>
+</head>
+<body>
+
+<header class="page">
+  <div class="kicker">Project-SPIP · 독립 검증(Reviewer) · 문서·계획 차원</div>
+  <h1>M10 설계 독립 검증 보고 #1 — patchRegion 부분 갱신 · 차트 깜빡임 · 툴팁 추적 · 폴링 재시도</h1>
+  <p>검증 대상: <code>docs/architecture/m10-design.html</code> · <code>docs/architecture/adr.html</code>(ADR-M10-1~4 append).
+     기준/입력: <code>m9-design.html</code>(R-25 §3.3 patchRegion 제외 결정) · 실제 코드 <code>public/app.js</code> ·
+     <code>lib/common/renderGuard.js</code> · 후속 메모 <code>code_review_m9_p8_1.html</code>(툴팁)·<code>code_review_m9_p6_1.html</code>(폴링).</p>
+  <span class="verdict v-cond">종합 판정 · CONDITIONAL PASS (조건부 통과)</span>
+  <p style="margin-top:14px;">설계 골격(API surface·폴백 안전망·점진 도입·ADR 정합)은 견고하다. 다만 <b>실제 코드 구조와의 정합에서 4건의 구체적 빈틈</b>이 있어 구현 착수 전 보정이 필요하다. 직접 수정 없음 — 판정과 반영 항목만 산출.</p>
+</header>
+
+<main>
+
+<!-- ===================== 요약 ===================== -->
+<section>
+  <h2>0. 체크리스트 판정 요약</h2>
+  <table>
+    <tr><th style="width:40px">#</th><th>검증 항목</th><th style="width:90px">판정</th><th>핵심 근거</th></tr>
+    <tr>
+      <td>1</td><td>R-25 정합 · 회귀 방지 (시그니처 보존·render 경로·폴백 안전망·신규 내부 메서드)</td>
+      <td><span class="pill p-pass">PASS</span></td>
+      <td>capture/restore/destroyAll/mountAll/coalesce/deferred 시그니처 불변 확인. _destroyById/_mountById가 기존 null-체크 라이프사이클과 동형(이중 null 안전). ADR-M10-1~4가 adr.html에 §13과 정합 append됨.</td>
+    </tr>
+    <tr>
+      <td>2</td><td>patchRegion 계약 완결성 (5단계·위젯 식별·adopt 순서·opts)</td>
+      <td><span class="pill p-cond">CONDITIONAL</span></td>
+      <td><span class="findid">F-2</span> commitChart 위젯 <code>init</code>이 <b>스스로 host.appendChild</b> 한다. 4단계 replaceChildren과 5단계 _mountById의 append가 <b>이중 삽입/노드 정합 충돌</b>을 일으킬 수 있다 — 계약에 명시 빈틈.</td>
+    </tr>
+    <tr>
+      <td>3</td><td>차트 깜빡임 접근 (patchRegion + diff 가드 병합) · Q-M10-1 리스크</td>
+      <td><span class="pill p-cond">CONDITIONAL</span></td>
+      <td><span class="findid">F-1</span> 설계가 <code>refreshCommitActivity</code> 진입부의 <b>로딩 render()(app.js:2205)</b>를 누락. P2(diff 가드) 단독으로는 폴링 1회당 진입 render가 남아 깜빡임이 사라지지 않음 — "render 미호출 효과" 주장 과장. Q-M10-1 리스크는 실재(아래 권장 해소책).</td>
+    </tr>
+    <tr>
+      <td>4</td><td>툴팁/폴링 설계 (좌표·클램핑·offsetWidth · 무재시도 플래그·이중발화)</td>
+      <td><span class="pill p-cond">CONDITIONAL</span></td>
+      <td><span class="findid">F-3</span> showTip 시그니처 불일치 + <code>barRectEl</code> 미정의 참조 + <b>CSS translateY(-100%) 제거 누락</b>(툴팁이 차트 위로 안 뜨고 겹침). 폴링 무재시도/이중발화 분석은 <span class="pass">타당</span>.</td>
+    </tr>
+    <tr>
+      <td>5</td><td>점진 도입 순서 (P1~P4 의존성·독립 검증)</td>
+      <td><span class="pill p-pass">PASS</span></td>
+      <td>P1 즉효(툴팁·폴링)·P2 diff·P3 기반(patchRegion 신설, render 불건드림)·P4 옵트인 전환. 의존성 순서 정합, 각 단계 롤백 가능. <span class="findid">F-4</span> P 번호 표기 불일치(경미)만 지적.</td>
+    </tr>
+  </table>
+</section>
+
+<!-- ===================== 항목 1 ===================== -->
+<section>
+  <h2>1. R-25 정합 · 회귀 방지 — <span class="pass">PASS</span></h2>
+  <h3>1.1 확인된 정합 (실제 코드 대조)</h3>
+  <ul>
+    <li><b>시그니처 불변 확인:</b> <code>renderGuard.js</code>의 <code>shouldDeferRender</code>/<code>createCoalescer</code>는 순수 함수로 M10이 건드리지 않음(설계 §9.2·§10 "변경 없음" 확인). <code>app.js</code>의 RG.preserve.capture/restore(5604·5617), widget.define/destroyAll/mountAll(5643·5649·5659), coalesce.request/flushIfPending/release/cancel(5702~5705), deferred 6플래그(5580 editing 등) 모두 M10에서 시그니처 변경 0 — 설계 주장 정확.</li>
+    <li><b>render() 경로 보존:</b> render()(1375·1381·1407·1409)의 destroyAll→capture→replaceChildren→restore→mountAll 순서를 patchRegion이 전혀 변경하지 않음. 설계 §2.7 의사코드가 실제 render 골격과 일치.</li>
+    <li><b>신규 내부 메서드 라이프사이클 정합:</b> 설계 §2.3의 <code>_destroyById</code>/<code>_mountById</code>는 실제 destroyAll(5649)·mountAll(5659)과 동일한 <b>null-체크 + try/catch 흡수 + _instances[id] 갱신</b> 패턴을 그대로 따른다. 리스크 표(§14.1 4행)의 "이중 null 안전"(_destroyById가 null이면 destroyAll no-op) 주장은 실제 코드(5651~5655 inst!=null 체크)로 검증됨.</li>
+    <li><b>폴백 안전망:</b> §2.4 표의 4분기(null→fallback / throw→fallback / deferred→request후 반환 / 정상→영역교체)가 빅뱅을 막는 구조로 타당. fallback 기본값이 <code>render()</code>이므로 patchRegion 실패 시 M9 검증 통과 경로로 안전 회귀.</li>
+    <li><b>ADR append 정합:</b> <code>adr.html</code> 65~69행에 ADR-M10-1~4가 m10-design.html §13과 결정·기각안까지 일치하게 추가됨. 추적성 OK.</li>
+  </ul>
+  <div class="note">이 항목은 "회귀를 막는 골격"에 한해 PASS다. 단 실제 적용(P4)에서의 위젯 노드 정합 문제는 항목 2(F-2)에서 별도로 다룬다 — 그 빈틈이 회귀를 유발할 수 있어 항목 1의 PASS가 P4 안전을 보증하지 않는다.</div>
+</section>
+
+<!-- ===================== 항목 2 ===================== -->
+<section>
+  <h2>2. patchRegion 계약 완결성 — <span class="cond">CONDITIONAL</span></h2>
+  <div class="warnbox">
+    <span class="findid">F-2</span> <span class="sev sev-hi">[HIGH]</span> <b>commitChart 위젯의 self-append와 patchRegion 5단계 계약 충돌 — 계약에 빈틈.</b>
+    <ul>
+      <li><b>무엇:</b> patchRegion의 ④단계는 <code>builderFn() → containerEl.replaceChildren(...nodes)</code>로 영역을 직접 교체하고, ⑤단계는 <code>_mountById('commitChart', containerEl)</code>로 위젯을 mount한다.</li>
+      <li><b>위치:</b> 설계 §2.2 ④⑤ + §2.7 patchCommitChart 예시(229행) vs 실제 <code>app.js:5726~5737</code> commitChart 위젯 <code>init</code>.</li>
+      <li><b>문제:</b> 실제 commitChart <code>init</code>은 <b>스스로</b> <code>const host=querySelector('.commit-chart-host'); host.appendChild(chart.node)</code> 한다(5729·5736). 즉 차트 노드 생성·삽입 책임이 위젯 init 안에 있다. 그런데 설계의 patchCommitChart는 builderFn이 <code>chartBars(...).node</code>를 <b>반환</b>해 patchRegion이 <code>replaceChildren</code>으로 삽입한다고 본다. 두 경로가 동시에 살아있으면 — ④에서 builderFn이 차트를 한 번 삽입하고, ⑤의 _mountById가 init을 호출해 <b>또 한 번</b> 삽입한다(이중 차트). 반대로 builderFn을 빈 노드로 두고 _mountById에만 맡기면 ④의 replaceChildren 대상이 모호해진다. 설계는 "builderFn이 차트를 만들고 위젯도 mount"라는 두 모델을 혼용하고 있어 <b>어느 쪽이 노드를 소유하는지 계약이 불명확</b>하다.</li>
+      <li><b>권고:</b> 둘 중 하나로 책임을 못박아 §2에 명시할 것. (A) <b>위젯-소유 모델</b>: builderFn은 빈 호스트(또는 host 자체)만 반환/통과시키고, 차트 생성·삽입은 전적으로 _mountById(commitChart init)에 맡긴다. 이때 ④는 host의 <i>자식만</i> 비우는 역할(replaceChildren()). 또는 (B) <b>빌더-소유 모델</b>: commitChart 위젯을 patchRegion 경로에서 widgets 목록에서 빼고, builderFn이 chartBars 생성+핸들러 destroy 책임을 직접 진다. 현재 위젯이 호버 핸들러 정리(destroy)를 담당하므로 (A)가 회귀 위험이 작다. 어느 쪽이든 "_destroyById → replaceChildren → _mountById"가 노드를 정확히 1번만 만들고, init 내부의 host.appendChild가 replaceChildren 결과와 충돌하지 않음을 계약으로 적어야 한다.</li>
+    </ul>
+  </div>
+
+  <h3>2.2 그 외 계약 빈틈 (경미)</h3>
+  <table>
+    <tr><th style="width:90px">ID</th><th style="width:70px">심각도</th><th>항목 / 위치 / 문제 / 권고</th></tr>
+    <tr>
+      <td class="findid">F-2b</td><td class="sev sev-md">MED</td>
+      <td><b>opts.widgets 부재 시 동작 미정의.</b> §2.1 시그니처는 widgets를 optional(<code>widgets?</code>)로 두지만, ②/⑤단계가 widgets 미지정 시 어떤 위젯도 destroy/mount 안 하는지(영역 내 위젯이 stale 핸들러로 남을 위험) 계약에 없다. 권고: widgets 미지정 = "이 영역엔 위젯 없음"으로 명시하거나 필수로 승격.</td>
+    </tr>
+    <tr>
+      <td class="findid">F-2c</td><td class="sev sev-lo">LOW</td>
+      <td><b>adopt 순서(§2.6)의 capture 시점 부정합.</b> §2.6은 replaceChildren→scrollTop→focus→setSelectionRange 복원 순서를 적었으나, 영역 내 위젯 destroy(②)와 capture(③)의 상호 순서가 흐름도(§3)와 본문에서 ②destroy→③capture로 동일해 OK. 다만 차트 영역엔 FOCUS_SEL/SCROLL_SEL 대상(.topbar__search-input 등, 5600~5601)이 <b>존재하지 않는다</b> — patchRegion의 preserve 캡처가 차트 호스트에선 사실상 no-op. 설계가 "부분영역에 포커스/스크롤 복원"을 강조하나 첫 적용 대상(차트)에선 무의미. 잘못은 아니나 §2.6의 강조가 과하다. 권고: 차트 영역엔 <code>preserveFocus:false</code>로 명시해 불필요한 querySelector 리플로우를 줄이고 의도를 분명히.</td>
+    </tr>
+  </table>
+</section>
+
+<!-- ===================== 항목 3 ===================== -->
+<section>
+  <h2>3. 차트 깜빡임 접근 · Q-M10-1 — <span class="cond">CONDITIONAL</span></h2>
+  <div class="secbox">
+    <span class="findid">F-1</span> <span class="sev sev-hi">[HIGH]</span> <b>refreshCommitActivity 진입부의 로딩 render()를 설계가 누락 — P2 효과 과장.</b>
+    <ul>
+      <li><b>무엇:</b> 설계 §4.2/§8 P2는 "diff 가드로 동일 데이터 폴링 시 render() 미호출 효과"라 주장.</li>
+      <li><b>위치:</b> 설계 §4.2 의사코드(364~376행)·§8 P2(655행) vs 실제 <code>app.js:2202~2211</code>.</li>
+      <li><b>문제:</b> 실제 <code>refreshCommitActivity</code>는 <b>fetch 시작 직후</b> <code>busyCommitActivity=true; if(view==='home') render();</code>(2204~2205)로 <b>전체 render를 한 번 호출</b>한다(로딩 상태 표시). 설계 의사코드는 이 진입 render를 전혀 다루지 않고 "완료 후"만 분기한다. 따라서 P2 diff 가드를 완료 후에만 넣어도, 폴링 틱마다 <b>진입 render 1회는 그대로 발생</b>해 차트 destroy/recreate(깜빡임)가 남는다. "동일 데이터면 render 미호출"은 거짓 — 진입 render는 데이터 동일 여부와 무관하게 발화한다.</li>
+      <li><b>권고:</b> (1) P2 설계에 진입 render(2205)를 명시하고, 폴링 경로에서는 진입 시 로딩 render를 <b>스킵</b>하는 조건을 추가하라(예: 폴링 자동 갱신이면 commitActivityLoaded가 이미 true이므로 진입 render 생략, 사용자 최초 로드만 진입 render). (2) 또는 진입 render도 patchRegion(P4) 이후에는 host만 "집계 중…" 상태로 부분 갱신하도록 동일 영역에 묶어라. 어느 쪽이든 "P2 단독으로 동일 데이터 시 깜빡임 0"이라는 품질 목표(§1.2)는 P2만으로는 달성 불가임을 설계에 바로잡아야 한다.</li>
+    </ul>
+  </div>
+
+  <h3>3.1 대안 비교·결정의 타당성</h3>
+  <p>§4.1의 A(patchRegion)+조건부 B(diff skip) 병합 결정 자체는 <span class="pass">타당</span>하다. patchRegion이 스크롤 흔들림까지 해결한다는 §4.3 주장도 맞다(폴링 시 render() 미호출이면 .dash__main scrollTop 보존 문제가 사라짐). 단 위 F-1 때문에 <b>"P4까지 가야 깜빡임이 실제로 0"</b>이며 P1~P3 단계 동안은 완화가 부분적임을 §1.2/§8에 솔직히 반영해야 한다.</p>
+
+  <h3>3.2 Q-M10-1 (commitActivityKey 날짜창 미포함) — 리스크 실재 확인</h3>
+  <p><b>리스크는 실재한다.</b> §4.2 commitActivityKey(354)는 <code>days.slice(-7)</code>의 count 시퀀스만 join한다. 7일 슬라이딩 창이 하루 넘어가면(예: 어제까지 [월..일]=[3,1,0,2,5,1,4] → 오늘 [화..월]=[1,0,2,5,1,4,3]) <b>count 멀티셋이 우연히 동일</b>하거나, 더 흔하게 <b>새 날짜의 count가 직전 마지막 날과 같으면</b> 키가 충돌해 차트가 옛 라벨을 유지할 수 있다. 폴링이 5분 주기라 자정 직후 창이 밀리는 순간을 포착해도 키가 같으면 갱신을 건너뛴다. §14.1 마지막 행·Q-M10-1이 이를 "단순화 채택"으로 미뤘으나, 라벨이 요일 텍스트라 사용자가 즉시 알아챈다(틀린 요일에 데이터 표시).</p>
+  <div class="note">
+    <b>권장 해소책(Q-M10-1):</b> count 시퀀스에 <b>창의 경계 날짜 식별자</b>를 함께 포함하라. 단 L-1/M-2 원칙(신뢰불가 날짜 문자열을 키에 직접 넣지 않음)을 지키기 위해 <b>원시 date 문자열 대신 정규화된 정수</b>를 쓴다.
+    <ul>
+      <li><b>1순위 (권장):</b> 키에 <code>days.slice(-7)</code>의 <b>마지막 날짜를 epoch-day 정수</b>(예: <code>Math.floor(Date.parse(lastDate)/86400000)</code>, NaN이면 0)로 prefix. 날짜 문자열 자체는 키에 안 들어가고 정수만 들어가므로 보안 채널 불변식 유지. 창이 하루라도 밀리면 lastEpochDay가 바뀌어 키가 달라진다 → 갱신 누락 0. 구현 비용 최소(한 줄).</li>
+      <li><b>2순위:</b> count 시퀀스 + 라벨 시퀀스(homeWeekday 결과는 요일 enum 7종으로 신뢰 가능)를 함께 join. 단 라벨은 요일이라 주 단위 반복이면 동일할 수 있어 1순위보다 약함.</li>
+      <li>이 보강은 P2 구현 시 <b>처음부터</b> 넣을 것(설계는 "P4 이후 재검토"로 미뤘으나, count-only 키는 자정 경계에서 즉시 버그를 내므로 미루면 안 됨). 단위 테스트(M10-DG-1)에 "count 동일·날짜창 이동 → 다른 키" 케이스를 추가.</li>
+    </ul>
+  </div>
+  <div class="secbox" style="margin-top:10px;"><b>L-1/M-2 확인:</b> 권장 1순위는 <code>Date.parse</code> 결과(정수)만 키에 넣으므로 신뢰불가 문자열이 키 계산·textContent 외 경로로 흐르지 않는다. 설계 §4.2 secbox의 "count 수치만" 원칙과 양립.</div>
+</section>
+
+<!-- ===================== 항목 4 ===================== -->
+<section>
+  <h2>4. 툴팁 / 폴링 설계 — <span class="cond">CONDITIONAL</span></h2>
+
+  <div class="warnbox">
+    <span class="findid">F-3</span> <span class="sev sev-hi">[HIGH]</span> <b>툴팁 설계 3건의 코드 정합 빈틈.</b>
+    <table>
+      <tr><th style="width:60px">소분류</th><th>문제 / 위치 / 권고</th></tr>
+      <tr>
+        <td>F-3a<br><span class="sev sev-md">MED</span></td>
+        <td><b>showTip 시그니처 불일치 + 미정의 참조.</b> 설계 §5.1(391행)은 <code>showTip(barModel, svgEl, tipEl, wrapEl)</code> 4-인자로 쓰고 본문에서 <code>barRectEl</code>(412행)을 참조한다. 실제 코드(<code>app.js:1314</code>)는 <code>const showTip = () =&gt; {...}</code> <b>인자 없는 클로저</b>로 <code>b</code>·<code>rect</code>·<code>tip</code>·<code>model.viewW</code>를 모두 클로저 캡처한다. 설계의 <code>barRectEl</code>은 실제 코드에 존재하지 않는 변수(<code>rect</code>의 오기). 권고: 좌표 산출 로직 자체는 클로저 그대로 구현 가능하므로, §5.1 의사코드를 실제 클로저 형태(인자 없이 b/rect/tip/svgEl/wrap 캡처)로 정정하고 <code>barRectEl</code>→<code>rect</code>로 고칠 것. 시그니처를 4-인자로 바꾸라는 의미가 아님을 명확히.</td>
+      </tr>
+      <tr>
+        <td>F-3b<br><span class="sev sev-hi">HIGH</span></td>
+        <td><b>CSS transform 제거가 툴팁의 수직 띄움(translateY(-100%))을 함께 없앤다.</b> 설계 §5.1(408행)은 <code>tipEl.style.transform='none'</code>로 기존 <code>translateX(-50%)</code>를 제거한다고 본다. 그러나 실제 CSS(<code>styles.css:386~387</code>)는 <code>top:-4px; left:50%; transform:translate(-50%, -100%)</code> — <b>가로 중앙맞춤(-50%)뿐 아니라 세로로 자기 높이만큼 위로 띄우는 -100%</b>가 같은 transform에 묶여 있다. <code>transform:'none'</code>으로 만들면 -100%도 사라져 툴팁이 <code>top:-4px</code> 위치에서 차트 막대와 <b>겹친다</b>(위로 안 뜸). 설계 §5.2 CSS는 <code>top:-32px</code>로 바꾼다 했으나 본문 §5.1 JS는 transform만 'none'으로 덮어쓰므로 둘이 어긋난다. 권고: (1) JS는 <code>transform</code>을 통째로 'none'하지 말고 <code>tipEl.style.transform='translateY(-100%)'</code>로 세로 띄움만 유지하거나, (2) CSS에서 세로 띄움을 <code>top:</code> 음수 픽셀+<code>bottom</code> 기반으로 옮기고 JS는 left만 건드리도록 §5.1/§5.2를 일관되게 정정.</td>
+      </tr>
+      <tr>
+        <td>F-3c<br><span class="sev sev-lo">LOW</span></td>
+        <td><b>offsetWidth=0 폴백의 첫 호버 오차.</b> §5.1·§14.1은 display:none(1292행)이라 첫 측정 시 offsetWidth=0 → 80px 추정. 실제 tip은 <code>white-space:nowrap</code>(설계 CSS)이라 "수 · 12 커밋" 같은 텍스트는 80px를 넘을 수 있어 첫 호버에서 클램핑 maxLeft 계산이 빗나갈 수 있다. 설계가 "두 번째 호버부터 정확"이라 인정하나, 권고: showTip에서 <b>display:block을 left 계산 전에</b> 수행(visibility:hidden로 측정 후 표시)하면 첫 호버도 정확. 경미하므로 수용 가능하되 명시 권장.</td>
+      </tr>
+    </table>
+  </div>
+
+  <h3>4.2 폴링 무재시도 / 이중발화 — <span class="pass">분석 타당</span></h3>
+  <ul>
+    <li><b>현재 동작 분석 정확:</b> 설계 §6.1이 인용한 <code>maybeAutoRefreshCommit</code>(실제 4838~4843)의 <code>if(RG.deferred()) return</code>로 틱 통째 건너뜀 → 최대 ~600s 지연 분석이 실제 코드와 일치.</li>
+    <li><b>_pendingCommitRefresh + maybeFlushCommitRefresh 패턴 정합:</b> §6.3 설계가 maybeFlush 안에서 <code>busyCommitActivity || RG.deferred()</code> 재검사로 "아직 보류 중이면 대기"하는 가드(설계 530행)는, renderGuard.js의 coalesce <code>flushIfPending</code> 규칙③(마지막 해제자만 발화, 69·85행)과 동형이라 <b>다중 보류 사유 동시 해제 시 이중 발화를 막는다</b>. 타당.</li>
+    <li><b>release()와의 이중발화 검토 OK:</b> refreshCommitActivity 완료부는 실제 <code>RG.coalesce.release()</code>(2211)로 render를 1회 트리거한다. maybeFlushCommitRefresh는 <b>fetch를 트리거</b>(render 아님)하고, 그 fetch 완료가 다시 release()로 render 1회 — 경로가 분리돼 render 이중발화 없음. <code>busyCommitActivity</code> 재진입 가드(2203·4840)가 중복 fetch도 막는다. §14.1 3행 분석 타당.</li>
+  </ul>
+  <table>
+    <tr><th style="width:90px">ID</th><th style="width:70px">심각도</th><th>항목 / 위치 / 문제 / 권고</th></tr>
+    <tr>
+      <td class="findid">F-3d</td><td class="sev sev-md">MED</td>
+      <td><b>보류 해제 지점 3곳 누락 가능성 — onProjectsUpdated/메일 release 경로 미포함.</b> §6.4 표는 compositionend·Sortable onEnd·closeSettings/Help/Drawer 3곳에 maybeFlush를 단다. 그러나 실제 코드엔 <b>busyMail 해제(2187)·todoAdding 해제(2064)·드로어 닫힘(4352)·도움말 닫힘(4923)</b> 등 release() 호출 지점이 더 많다(grep 확인). deferred 사유가 busyMail이나 editing(todoAdding)이었다면 그 해제 지점에도 maybeFlush가 없으면 커밋 폴링이 다음 5분 틱까지 또 지연된다. 권고: maybeFlush를 §6.4의 3곳이 아니라 <b>RG.coalesce.release()/flushIfPending()를 호출하는 모든 보류 해제 지점</b>에 일괄 동반하도록 범위를 넓히고, 가능하면 release()/flushIfPending() 래퍼 안에 maybeFlush를 흡수해 산포·누락을 원천 차단(ADR-M10-3의 "코드 산포" 결과 항목도 이로써 완화).</td>
+    </tr>
+  </table>
+</section>
+
+<!-- ===================== 항목 5 ===================== -->
+<section>
+  <h2>5. 점진 도입 순서 — <span class="pass">PASS</span></h2>
+  <ul>
+    <li><b>의존성 정합:</b> P1(툴팁·폴링, patchRegion 무관 즉효) → P2(diff 가드, 순수 함수) → P3(patchRegion·_destroyById/_mountById 신설, render 불건드림) → P4(차트 옵트인 전환). P4만 patchRegion을 실제 적용하고 fallback:render()가 안전망 — 빅뱅 금지 원칙 충족. 각 단계 독립 롤백 가능(§8 warnbox) 주장 타당.</li>
+    <li><b>독립 검증 가능:</b> 단계별 테스트 매핑(§10·§11: M10-TT-1·DG-1·PG-1·PR-1·WG-1)이 단계와 정합. P3 patchRegion 계약 테스트가 헤드리스로 가능(builderFn 주입형).</li>
+  </ul>
+  <table>
+    <tr><th style="width:90px">ID</th><th style="width:70px">심각도</th><th>항목 / 위치 / 문제 / 권고</th></tr>
+    <tr>
+      <td class="findid">F-4</td><td class="sev sev-lo">LOW</td>
+      <td><b>P 번호 표기 불일치.</b> §4 결정 note(348행)·§7 다이어그램(605·629행)은 "<b>P2</b>에서 A(patchRegion)로 전환"이라 적었으나, §8 점진 도입은 P2=diff 가드, <b>P4</b>=patchRegion 차트 전환으로 정의한다. §4.2 의사코드 주석(374행)도 "M10 P2 이후 patchRegion"이라 적어 §8과 어긋난다. 권고: §4·§7의 "P2 이후 patchRegion" 표현을 모두 "P4 이후"로 통일. 문서 내부 모순 — 구현 단계 혼동 유발.</td>
+    </tr>
+    <tr>
+      <td class="findid">F-4b</td><td class="sev sev-lo">LOW</td>
+      <td><b>오타 다수(가독성).</b> "boilesce"(108·492·506행 — coalesce 오기)가 반복. 설계 정본 신뢰성 차원에서 정정 권장. 기능 영향 없음.</td>
+    </tr>
+  </table>
+</section>
+
+<!-- ===================== 반영 항목 ===================== -->
+<section>
+  <h2>6. 반영 항목 (우선순위순)</h2>
+  <table>
+    <tr><th style="width:80px">우선순위</th><th style="width:80px">ID</th><th>반영 내용 [무엇 / 위치 / 권고]</th></tr>
+    <tr>
+      <td><span class="sev sev-hi">P0</span></td><td class="findid">F-1</td>
+      <td><b>차트:</b> refreshCommitActivity 진입 render()(app.js:2205) 누락 보정. 폴링 자동 갱신 시 진입 로딩 render를 스킵하는 조건을 P2 설계에 명시. "P2 단독 깜빡임 0" 주장(§1.2/§8) 정정 — 실제 0은 P4부터.</td>
+    </tr>
+    <tr>
+      <td><span class="sev sev-hi">P0</span></td><td class="findid">F-2</td>
+      <td><b>patchRegion:</b> commitChart 위젯 init의 self-append(app.js:5736)와 ④replaceChildren/⑤_mountById의 노드 소유권 충돌 해소. "위젯-소유" 또는 "빌더-소유" 중 하나로 §2 계약 확정(권장: 위젯-소유, ④는 host 자식만 비움).</td>
+    </tr>
+    <tr>
+      <td><span class="sev sev-hi">P0</span></td><td class="findid">F-3b</td>
+      <td><b>툴팁:</b> CSS translate(-50%,-100%)의 세로 띄움(-100%)이 transform:'none'으로 함께 사라져 툴팁이 막대와 겹침. §5.1 JS는 transform을 통째로 none하지 말고 세로 띄움 유지, §5.2 CSS와 일관화.</td>
+    </tr>
+    <tr>
+      <td><span class="sev sev-md">P1</span></td><td class="findid">Q-M10-1</td>
+      <td><b>차트:</b> commitActivityKey에 마지막 날짜의 epoch-day 정수를 prefix(L-1 안전). 자정 경계 창 이동 시 갱신 누락 방지. P2 구현 시 처음부터 + 단위 테스트 케이스 추가.</td>
+    </tr>
+    <tr>
+      <td><span class="sev sev-md">P1</span></td><td class="findid">F-3d</td>
+      <td><b>폴링:</b> maybeFlushCommitRefresh를 §6.4 3곳이 아닌 모든 release()/flushIfPending() 보류 해제 지점(busyMail·todoAdding·드로어·도움말 포함)에 동반. release/flushIfPending 래퍼에 흡수 권장.</td>
+    </tr>
+    <tr>
+      <td><span class="sev sev-md">P1</span></td><td class="findid">F-3a</td>
+      <td><b>툴팁:</b> §5.1 showTip 의사코드를 실제 클로저 형태(인자 없음, b/rect/tip/svgEl/wrap 캡처)로 정정. 미정의 <code>barRectEl</code>→<code>rect</code>.</td>
+    </tr>
+    <tr>
+      <td><span class="sev sev-lo">P2</span></td><td class="findid">F-2b</td>
+      <td><b>patchRegion:</b> opts.widgets 미지정 시 동작(위젯 없음)을 §2 계약에 명시.</td>
+    </tr>
+    <tr>
+      <td><span class="sev sev-lo">P2</span></td><td class="findid">F-2c</td>
+      <td><b>patchRegion:</b> 차트 영역에 preserveFocus:false 명시(FOCUS/SCROLL_SEL 비대상 — 불필요 리플로우 제거).</td>
+    </tr>
+    <tr>
+      <td><span class="sev sev-lo">P2</span></td><td class="findid">F-3c</td>
+      <td><b>툴팁:</b> visibility:hidden로 측정 후 표시해 첫 호버 offsetWidth 정확도 확보(선택).</td>
+    </tr>
+    <tr>
+      <td><span class="sev sev-lo">P2</span></td><td class="findid">F-4 / F-4b</td>
+      <td><b>문서:</b> patchRegion 전환 단계 표기를 "P2 이후"→"P4 이후"로 통일(§4·§7). "boilesce"→"coalesce" 오타 정정.</td>
+    </tr>
+  </table>
+</section>
+
+<!-- ===================== 확인 필요 ===================== -->
+<section>
+  <h2>7. 확인 필요 (사용자/생산자 판단)</h2>
+  <ul>
+    <li><b>Q-M10-1 채택 시점:</b> 본 리뷰는 epoch-day prefix를 <b>P2에서 즉시</b> 반영할 것을 권한다(자정 경계 버그가 출시 후 즉시 노출되므로). 설계의 "P4 이후 재검토"를 유지할지 생산자/PM 결정 필요.</li>
+    <li><b>F-2 책임 모델:</b> 위젯-소유(A) vs 빌더-소유(B) 결정은 commitChart 위젯의 향후 재사용 방향에 영향. 본 리뷰는 회귀 위험이 작은 A를 권장하나 최종 선택은 설계자 몫.</li>
+  </ul>
+</section>
+
+<footer>
+  Project-SPIP · M10 설계 독립 검증 #1 · 종합 CONDITIONAL PASS · Reviewer(문서·계획 차원) ·
+  대조 코드 app.js(2202·2205·1314·5726·5736·4838)·styles.css(386)·renderGuard.js·adr.html(65~69) · 작성 2026-06-24
+</footer>
+
+</main>
+</body>
+</html>

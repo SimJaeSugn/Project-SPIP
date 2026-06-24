@@ -9,8 +9,94 @@ const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
 
-const { commitChartModel } = require('../public/app.js');
+const { commitChartModel, commitActivityKey, tipLeft } = require('../public/app.js');
 const APP_SRC = fs.readFileSync(path.join(__dirname, '..', 'public', 'app.js'), 'utf8');
+const CSS_SRC = fs.readFileSync(path.join(__dirname, '..', 'public', 'styles.css'), 'utf8');
+
+// ── [M10-DG-1] commitActivityKey (diff 가드, epoch-day prefix + count 시퀀스) ──
+test('M10-DG-1 — 동일 count·동일 마지막날짜 → 동일 키', () => {
+  const a = { days: [{ date: '2026-06-20', count: 1 }, { date: '2026-06-24', count: 3 }] };
+  const b = { days: [{ date: '2026-06-20', count: 1 }, { date: '2026-06-24', count: 3 }] };
+  assert.strictEqual(commitActivityKey(a), commitActivityKey(b));
+});
+
+test('M10-DG-1 — count 1개 변경 → 다른 키', () => {
+  const a = { days: [{ date: '2026-06-24', count: 3 }] };
+  const b = { days: [{ date: '2026-06-24', count: 4 }] };
+  assert.notStrictEqual(commitActivityKey(a), commitActivityKey(b));
+});
+
+test('M10-DG-1 — count 동일·마지막 날짜 1일 이동(epoch-day) → 다른 키(날짜창 이동 감지)', () => {
+  const a = { days: [{ date: '2026-06-23', count: 5 }] };
+  const b = { days: [{ date: '2026-06-24', count: 5 }] };
+  assert.notStrictEqual(commitActivityKey(a), commitActivityKey(b));
+});
+
+test('M10-DG-1 — NaN/음수 count → 0 정규화(M-2)', () => {
+  const a = { days: [{ date: '2026-06-24', count: NaN }, { date: '2026-06-24', count: -3 }] };
+  const k = commitActivityKey(a);
+  assert.ok(/\|0,0$/.test(k), '0,0 으로 정규화: ' + k);
+});
+
+test('M10-DG-1 — Date.parse 실패(잘못된 date) → epochDay=0', () => {
+  const a = { days: [{ date: 'not-a-date', count: 2 }] };
+  assert.strictEqual(commitActivityKey(a), '0|2');
+});
+
+test('M10-DG-1 — 빈/비배열 → 빈 문자열', () => {
+  assert.strictEqual(commitActivityKey({ days: [] }), '');
+  assert.strictEqual(commitActivityKey(null), '');
+  assert.strictEqual(commitActivityKey({}), '');
+});
+
+test('M10-DG-1 — 키는 정수만 포함(L-1/M-2: 날짜·라벨 문자열 미진입)', () => {
+  const k = commitActivityKey({ days: [{ date: '2026-06-24', count: 3 }, { date: '2026-06-24', count: 0 }] });
+  assert.ok(/^[0-9]+\|[0-9,]+$/.test(k), '정수·쉼표·파이프만: ' + k);
+});
+
+// ── [M10-TT-1] tipLeft (툴팁 가로위치 순수 계산, 경계 클램핑) ──
+test('M10-TT-1 — 좌측 끝 막대 → left=0 클램핑', () => {
+  // 막대 중심 비율 ~0(맨 왼쪽). svgLeft=wrapLeft=0, svgWidth=240, tipWidth=80.
+  const left = tipLeft(0.07, 0, 240, 0, 240, 80);
+  assert.strictEqual(left, 0, '음수 rawLeft → 0 클램핑');
+});
+
+test('M10-TT-1 — 우측 끝 막대 → maxLeft 클램핑', () => {
+  const left = tipLeft(0.93, 0, 240, 0, 240, 80);
+  assert.strictEqual(left, 240 - 80, 'maxLeft=wrapWidth-tipWidth');
+});
+
+test('M10-TT-1 — 중앙 막대 → 중심 정렬(클램핑 안 됨)', () => {
+  // centerRatio=0.5 → rawLeft = 0.5*240 - 40 = 80. maxLeft=160. 클램핑 없이 80.
+  const left = tipLeft(0.5, 0, 240, 0, 240, 80);
+  assert.strictEqual(left, 80);
+});
+
+test('M10-TT-1 — tipWidth >= wrapWidth → maxLeft=0 가드', () => {
+  const left = tipLeft(0.5, 0, 240, 0, 100, 200);
+  assert.strictEqual(left, 0, '음수 maxLeft 방지(0)');
+});
+
+test('M10-TT-1 — 비정상 입력 graceful(NaN → 기본값)', () => {
+  assert.strictEqual(typeof tipLeft(NaN, 0, NaN, 0, NaN, NaN), 'number');
+});
+
+// ── 정적: 툴팁 세로 띄움 유지(F-3b) ──
+test('M10-P1 — showTip 가 left(px) + translateY(-100%) 분리 설정(세로 띄움 유지)', () => {
+  const start = APP_SRC.indexOf('const showTip = () =>');
+  assert.ok(start >= 0, 'showTip 클로저가 있어야 한다');
+  const body = APP_SRC.slice(start, start + 700);
+  assert.ok(/tip\.style\.left\s*=/.test(body), 'left 픽셀 설정');
+  assert.ok(/translateY\(-100%\)/.test(body), 'translateY(-100%) 세로 띄움 유지');
+  assert.ok(!/transform\s*=\s*'none'/.test(body), "transform='none' 으로 덮지 않음(F-3b)");
+});
+
+test('M10-P1 — CSS .commit-chart__tip 에서 left:50%/translateX(-50%) 제거', () => {
+  const m = CSS_SRC.match(/\.commit-chart__tip\s*\{[^}]*\}/);
+  assert.ok(m, '.commit-chart__tip 규칙 존재');
+  assert.ok(!/left:\s*50%/.test(m[0]), 'left:50% 제거');
+  assert.ok(!/translateX/.test(m[0]), 'translateX 제거');
+});
 
 // ── commitChartModel: 수치 sanitize / 스케일 ─────────────────────────────
 test('R-33 — 빈/비배열 입력은 7칸 0 막대(graceful, 기간 동일)', () => {

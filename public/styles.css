@@ -378,13 +378,17 @@ input, button, select { font-family: inherit; }
 @media (max-width: 980px) { .home-masonry { column-count: 1; } }
 
 /* [R-33] 커밋 SVG 차트(자작·외부 0). 막대 강조/툴팁은 chartBars 가 setAttribute/textContent 로 제어. */
+/* [M10-P4] patchRegion 교체 대상 영역(차트 호스트를 감쌈). 레이아웃 영향 없는 단순 래퍼. */
+.commit-chart-region { display: block; }
 .commit-chart { display: flex; flex-direction: column; gap: 7px; }
 .commit-chart__wrap { position: relative; }
 .commit-chart__svg { display: block; width: 100%; overflow: visible; }
 .commit-chart__svg rect { transition: fill .12s ease; cursor: default; outline: none; }
 .commit-chart__svg rect:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* [M10-P1] 가로(left)는 JS 가 막대 중심으로 직접 설정, 세로 띄움은 JS transform: translateY(-100%) 단독.
+   CSS 에서 left:50%/translateX(-50%) 제거(중복 금지 — F-3b). top:0 = 막대 상단 기준. */
 .commit-chart__tip {
-  position: absolute; top: -4px; left: 50%; transform: translate(-50%, -100%);
+  position: absolute; top: 0; left: 0;
   background: #1c1917; color: #fff; font-size: 11px; line-height: 1; white-space: nowrap;
   padding: 5px 8px; border-radius: 6px; pointer-events: none; z-index: 2;
   box-shadow: 0 4px 14px rgba(28,25,23,.25);

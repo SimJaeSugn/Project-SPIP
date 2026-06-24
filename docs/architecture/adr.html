@@ -62,6 +62,11 @@
   <b>M9-2</b> 모든 라이브 갱신은 직접 render() 대신 <code>RG.coalesce.request()</code> 단일 게이트 경유 + 해제 지점 flush(중복 렌더 0) ·
   <b>M9-3</b> 홈 섹션 순서는 새 키 <code>homeLayout</code>(섹션 enum 배열) + <code>spip:setHomeLayout</code> 채널 신설(기존 order 재사용 기각) ·
   <b>M9-4</b> 커밋 차트 실시간 = 5분 폴링 + 뷰/가시성 정지(홈 이탈 시 git 호출 0; onProjectsUpdated 편승·fs.watch 기각).
+  <br><br><b>ADR-M10-1~4 (M10 배치, 정본 <code>docs/architecture/m10-design.html</code> §13):</b>
+  <b>M10-1</b> patchRegion = RG.preserve 메서드로 추가(독립 함수·별도 모듈 기각 — M9 §3.3 계약 정합, lib/common 순수 원칙 불변) ·
+  <b>M10-2</b> 차트 깜빡임 완화 = patchRegion + diff 가드 병합 채택(diff 가드 단독 기각 — 변경 시 깜빡임 잔존, CSS transition 마스킹 기각) ·
+  <b>M10-3</b> 폴링 재시도 = _pendingCommitRefresh 플래그 + 보류 해제 훅 3곳 연결(폴링 주기 단축 기각 — ADR-M9-4 근거 파기, coalesce 내부 콜백 기각 — 단일 책임 위반) ·
+  <b>M10-4</b> 툴팁 좌표 = getBoundingClientRect 기반 동적 계산 + 경계 클램핑(인덱스 기반 비율 기각 — 막대 간격/패딩 무시 오차 큼).
 </div>
 
 <section class="toc">

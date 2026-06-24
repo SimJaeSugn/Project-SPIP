@@ -53,7 +53,7 @@
 </head>
 <body>
 <header>
-  <span class="tag">변경 이력</span><span class="tag">Change Log</span><span class="tag">최신 회차: M9</span>
+  <span class="tag">변경 이력</span><span class="tag">Change Log</span><span class="tag">최신 회차: M10</span>
   <h1>Project-SPIP — 기획·설계 변경 이력</h1>
   <p>요구·설계·결정·검증의 변경을 회차별로 기록하는 PM 산출물. 각 항목은 <b>날짜 · 회차 · 유형 · 대상(요구 ID) · 변경 내용 · 사유 · 영향 산출물</b>로 추적된다.
   최신 항목이 위에 온다. 코드 구현 상태는 <code>docs/traceability.html</code>(추적성 매트릭스)에서 관리한다.</p>
@@ -63,10 +63,61 @@
     <span><span class="type t-verify">검증</span> 리뷰·게이트 통과 기록</span>
     <span><span class="type t-change">변경</span> 기존 요구·설계 수정</span>
   </div>
-  <div class="meta">문서 유형: 변경 이력 · 작성: 기술 문서 작성자 · 최종 갱신: 2026-06-24</div>
+  <div class="meta">문서 유형: 변경 이력 · 작성: 기술 문서 작성자 · 최종 갱신: 2026-06-25</div>
 </header>
 
 <main>
+
+<section>
+  <h2>M10 — patchRegion 부분갱신 + 폴리시 3종 (M9 후속 배치 · 새 R-요구 없음)<span class="round">2026-06-25</span></h2>
+  <div class="note" style="background:rgba(196,181,253,.08);border-color:rgba(196,181,253,.3);color:#ddd6fe;">
+    M9에서 "의도된 후속"으로 미뤘던 <b>patchRegion(설계 R5)</b> + 차트 깜빡임 완화 + 툴팁 막대추적 + 폴링 무재시도 보강 4건을 실현했다. <b>새 R-요구 번호를 만들지 않는다</b> — 기존 <span class="rid">R-31</span>(차트 실시간)·<span class="rid">R-33</span>(SVG 차트)의 개선 + 미뤘던 <b>R5(patchRegion)</b> 실현이다. 현재 단계: <b>구현 완료·검증 통과(전체 732 테스트, 705→732)</b> — 설계검증 CONDITIONAL→반영(<code>m10_design_review_1.html</code>)·qa·code-review PASS(<code>qa_m10_1.html</code>·<code>code_review_m10_1.html</code>, 정확성 결함 0). ADR-M10-1~4는 <code>adr.html</code>에 인덱스 append 완료.
+  </div>
+  <div class="tbl-wrap">
+  <table>
+    <tr>
+      <th class="c-date">날짜</th>
+      <th class="c-round">회차</th>
+      <th class="c-type">유형</th>
+      <th class="c-target">대상(요구 ID)</th>
+      <th>변경 내용</th>
+      <th>사유</th>
+      <th class="c-impact">영향 산출물</th>
+    </tr>
+
+    <tr>
+      <td class="date">2026-06-25</td>
+      <td class="round-pill">M10</td>
+      <td><span class="type t-verify">검증</span></td>
+      <td><span class="rid">R-31·R-33</span> · R5</td>
+      <td><b>설계검증·qa·code-review 통과</b> — 설계 검증 <b>CONDITIONAL PASS → 설계 정본 rev.1 반영</b>(<code>m10_design_review_1.html</code>), <b>qa·code-review PASS</b>(<code>qa_m10_1.html</code>·<code>code_review_m10_1.html</code>) — <b>정확성 결함 0</b>·<b>전체 732 테스트 통과</b>(705→732, M10 후속 +27·fail 0). patchRegion 영역 부분 patch·차트 폴링 깜빡임 0·툴팁 막대추적·폴링 8지점 maybeFlush 무재시도 보강 확인.</td>
+      <td>M9 후속 4건 수용 기준 충족·출시 가능. 보안 불변식(L-1·textContent·CSP·widget 누적 0) 0 약화.</td>
+      <td class="mono">docs/reviews/m10_design_review_1.html<br>docs/reviews/qa_m10_1.html<br>docs/reviews/code_review_m10_1.html<br>docs/traceability.html(R-31·R-33 행 갱신·705→732)</td>
+    </tr>
+
+    <tr>
+      <td class="date">2026-06-25</td>
+      <td class="round-pill">M10</td>
+      <td><span class="type t-add">추가</span></td>
+      <td><span class="rid">R-33</span> · R5</td>
+      <td><b>patchRegion 부분 갱신 구현</b> — <code>RG.preserve.patchRegion</code> + widget <code>_destroyById</code>/<code>_mountById</code> 신설. 영역 단위 부분 patch로 폴링 시 전체 재구성 대신 변경분만 갱신.</td>
+      <td>부분 갱신으로 차트 깜빡임 근본 완화(M9 R5 후속 실현). 설계 R5에서 1차 명시 제외했던 항목을 실현.</td>
+      <td class="mono">public/app.js(RG.preserve.patchRegion·widget _destroyById/_mountById)<br>docs/architecture/m10-design.html(rev.1)<br>adr.html(ADR-M10-1~4 인덱스 append됨)</td>
+    </tr>
+
+    <tr>
+      <td class="date">2026-06-25</td>
+      <td class="round-pill">M10</td>
+      <td><span class="type t-change">변경</span></td>
+      <td><span class="rid">R-33·R-31</span></td>
+      <td><b>차트 깜빡임 0 + 툴팁 막대추적 + 폴링 무재시도 보강</b> — ① <b>차트 깜빡임 0</b>(silent 진입 render + 영역 patch + epoch-day diff 가드) ② <b>툴팁 막대추적</b>(세로 띄움 유지) ③ <b>커밋 폴링 <code>deferred</code> 무재시도 보강</b>(8지점 <code>maybeFlush</code>).</td>
+      <td>차트 실시간 폴링 시 시각적 안정성 향상(깜빡임 제거)·툴팁 정확 추적·폴링 보류 갭 보강.</td>
+      <td class="mono">public/app.js(silent render·영역 patch·epoch-day diff·툴팁 추적·8지점 maybeFlush)<br>public/styles.css(차트/툴팁)<br>test/patchRegion.test.js·commitChart.test.js·commitPolling.test.js</td>
+    </tr>
+
+  </table>
+  </div>
+</section>
 
 <section>
   <h2>M9 — 홈 대시보드 백로그 배치 (R-25 ~ R-33)<span class="round">2026-06-24</span></h2>
@@ -221,6 +272,6 @@
 </section>
 
 </main>
-<footer>Project-SPIP · 기획·설계 변경 이력 · 최신 회차 M9(R-25~R-33) 구현 완료·검증 통과(705 테스트) · 2026-06-24 · 자족형 HTML 산출물 · 구현 상태는 docs/traceability.html 참조</footer>
+<footer>Project-SPIP · 기획·설계 변경 이력 · 최신 회차 M10(patchRegion + 폴리시 3종·새 R-요구 없음·R-31·R-33 개선 + R5 실현) 구현 완료·검증 통과(732 테스트) · 2026-06-25 · 자족형 HTML 산출물 · 구현 상태는 docs/traceability.html 참조</footer>
 </body>
 </html>

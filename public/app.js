@@ -711,6 +711,48 @@ function commitChartModel(days, opts) {
 }
 function round1(v) { return Math.round(v * 10) / 10; }
 
+/**
+ * [M10-P3] patchRegion 분기 결정(순수, DOM 미접근). 계약 §2.2/§2.4 의 진입 분기를 테스트 가능하게 분리.
+ *   @returns 'defer'(deferred=true → coalesce.request) | 'fallback'(container 부재 → render) | 'patch'(정상 영역 교체)
+ */
+function patchRegionPlan(containerPresent, isDeferred) {
+  if (isDeferred) return 'defer';
+  if (!containerPresent) return 'fallback';
+  return 'patch';
+}
+
+/**
+ * [M10-P2] commitActivity 데이터 동일성 키(순수). 마지막 날짜의 epoch-day 정수 + count 시퀀스.
+ *   [Q-M10-1] 날짜 문자열이 아니라 정수만 키에 넣어 L-1/M-2 불변식 유지하면서, 자정 경계로 7일 창이
+ *   밀리면(count 같아도) 키가 달라져 갱신 누락 0. Date.parse 실패(NaN)면 epochDay=0. count 는 M-2 규칙.
+ */
+function commitActivityKey(ca) {
+  if (!ca || !Array.isArray(ca.days) || ca.days.length === 0) return '';
+  const last = ca.days[ca.days.length - 1];
+  const ms = Date.parse(last && last.date);
+  const epochDay = Number.isFinite(ms) ? Math.floor(ms / 86400000) : 0;
+  const counts = ca.days.slice(-7).map((d) => {
+    const n = Number(d && d.count);
+    return (Number.isFinite(n) && n >= 0) ? n : 0;
+  }).join(',');
+  return epochDay + '|' + counts;
+}
+
+/**
+ * [M10-P1] 툴팁 가로 위치(left px) 순수 계산 — DOM 미접근(getBoundingClientRect 값은 인자 주입).
+ *   막대 중심을 wrap 기준 픽셀로 환산한 뒤 [0, wrapWidth-tipWidth] 로 클램핑.
+ *   세로 띄움(translateY(-100%))은 호출측이 별도 유지 — 여기선 가로만 계산.
+ * @returns {number} 정수 px(반올림)
+ */
+function tipLeft(centerRatio, svgLeft, svgWidth, wrapLeft, wrapWidth, tipWidth) {
+  const cr = (Number.isFinite(centerRatio)) ? centerRatio : 0.5;
+  const sw = (Number.isFinite(svgWidth) && svgWidth > 0) ? svgWidth : 0;
+  const tw = (Number.isFinite(tipWidth) && tipWidth >= 0) ? tipWidth : 0;
+  const rawLeft = (svgLeft - wrapLeft) + cr * sw - tw / 2;
+  const maxLeft = Math.max(0, ((Number.isFinite(wrapWidth) ? wrapWidth : 0)) - tw);
+  return Math.round(Math.max(0, Math.min(rawLeft, maxLeft)));
+}
+
 // [R-28 정리] dispatchMenuAction 제거 — 네이티브 메뉴 폐기로 도달 불가한 죽은 코드.
 //   단축키 디스패치는 matchShortcut(keydown→action)이 담당한다(SHORTCUTS 단일 출처).
 
@@ -1314,7 +1356,14 @@ function initBrowser() {
       const showTip = () => {
         rect.setAttribute('fill', CHART_PALETTE.barHover);    // 강조
         tip.textContent = (b.label || '·') + ' · ' + b.count + ' 커밋'; // [M-2] textContent 만
-        tip.style.display = 'block';
+        tip.style.display = 'block';                          // offsetWidth 실측 위해 먼저 표시
+        // [M10-P1/F-3b] 가로는 막대 중심 추적, 세로 띄움(translateY(-100%))은 항상 유지(가로만 변경).
+        const centerRatio = (b.x + b.w / 2) / model.viewW;
+        const svgRect = svgEl.getBoundingClientRect();
+        const wrapRect = wrap.getBoundingClientRect();
+        const left = tipLeft(centerRatio, svgRect.left, svgRect.width, wrapRect.left, wrapRect.width, tip.offsetWidth || 80);
+        tip.style.left = left + 'px';
+        tip.style.transform = 'translateY(-100%)'; // 세로 띄움 — 'none' 으로 덮지 않는다(F-3b)
       };
       const hideTip = () => {
         rect.setAttribute('fill', baseFill);
@@ -1921,10 +1970,12 @@ function initBrowser() {
     hd.appendChild(el('span', { text: total7 + ' 커밋', style: HOME_MONO + 'font-size:12.5px;font-weight:600;color:#1c1917;' }));
     leftCol.appendChild(hd);
     leftCol.appendChild(el('div', { text: store.commitActivityLoaded ? '최근 7일 커밋 빈도' : '집계하려면 새로고침…', style: 'font-size:11.5px;color:#a8a29e;margin-bottom:18px;' }));
-    // [R-33] SVG 자작 차트 호스트(.commit-chart-host). 실제 차트는 RG.widget('commitChart')가 mount 시
-    //   chartBars()로 생성(호버 툴팁·강조·핸들러 정리). 데이터 무변경 등 재렌더 시 destroy/recreate.
-    //   기간/데이터는 기존과 동일(최근 7일 days) — 표현만 div→SVG.
-    leftCol.appendChild(el('div', { cls: 'commit-chart-host', attrs: { 'aria-label': '최근 7일 커밋 빈도 차트' } }));
+    // [R-33/M10-P4] 차트 영역 2단 구조: .commit-chart-region(patchRegion 교체 대상) > .commit-chart-host
+    //   (위젯이 차트 노드를 꽂는 컨테이너). 실제 차트 노드 생성·삽입·destroy·핸들러는 RG.widget('commitChart')
+    //   단독 소유(_destroyById/_mountById). 폴링 갱신은 patchCommitChart()가 region 만 교체 → 깜빡임 0.
+    var chartRegion = el('div', { cls: 'commit-chart-region' });
+    chartRegion.appendChild(el('div', { cls: 'commit-chart-host', attrs: { 'aria-label': '최근 7일 커밋 빈도 차트' } }));
+    leftCol.appendChild(chartRegion);
     card.appendChild(leftCol);
     card.appendChild(el('div', { style: 'width:1px;background:#f0efed;flex:0 0 auto;' }));
     // 우: 언어 · 스택 추세
@@ -2062,6 +2113,7 @@ function initBrowser() {
     else toast(res && res.code === 'LIMIT' ? '할 일이 너무 많습니다.' : '할 일 추가에 실패했습니다.', true);
     // [F-1] todoAdding(editing) 해제 가능 지점 — release()로 즉시 1회 반영 + 잔류 pending 소비.
     RG.coalesce.release();
+    maybeFlushCommitRefresh(); // [M10-P1] editing 해제 → 보류된 커밋 폴링 따라감
   }
   async function onToggleTodo(id, done) {
     if (store.busyTodos || !bridgeHas('toggleTodo')) return;
@@ -2185,6 +2237,7 @@ function initBrowser() {
     store.mailSummary = (res && res.ok && Array.isArray(res.accounts)) ? res.accounts : [];
     // [F-1] busyMail 해제 지점 — 직접 render() 대신 coalesce.release()로 즉시 1회 반영 + 잔류 pending 소비.
     if (store.state.view === 'home') RG.coalesce.release();
+    maybeFlushCommitRefresh(); // [M10-P1] busyMail 해제 → 보류된 커밋 폴링 따라감
   }
   function maybeLoadCommitActivity() {
     if (bridgeHas('getCommitActivity') && !store.commitActivityLoaded && !store.busyCommitActivity) refreshCommitActivity();
@@ -2199,16 +2252,29 @@ function initBrowser() {
     store.langPrev = (res && res.ok && res.prev && typeof res.prev === 'object') ? res.prev : {};
     if (store.state.view === 'home') render();
   }
-  async function refreshCommitActivity() {
+  async function refreshCommitActivity(opts) {
+    opts = opts || {};
     if (!bridgeHas('getCommitActivity') || store.busyCommitActivity) return;
     store.busyCommitActivity = true;
-    if (store.state.view === 'home') render();
+    // [M10-P1/F-1] silent(폴링/재시도)면 진입 로딩 render 생략 — fetch 동안 이전 차트 유지(깜빡임 0).
+    //   최초/수동(silent 아님)은 기존대로 로딩 표시용 render.
+    if (!opts.silent && store.state.view === 'home') render();
     var res = await ipc('getCommitActivity');
     store.busyCommitActivity = false;
     store.commitActivityLoaded = true;
     store.commitActivity = (res && res.ok) ? res : { days: [], total: 0, repos: 0 };
-    // [F-1] busyCommit 해제 지점 — release()로 즉시 1회 반영 + 잔류 pending 소비.
-    if (store.state.view === 'home') RG.coalesce.release();
+    // [M10-P2/P4] 완료부 — 데이터·날짜창 무변경이면 갱신 skip, 변경 시 차트 영역만 patchRegion 교체.
+    if (store.state.view === 'home') onCommitActivityFetched();
+  }
+
+  /** [M10-P2] commitActivity 데이터 동일성 키(epoch-day prefix + count 시퀀스, 순수·정수만). */
+  var _lastCommitActivityKey = '';
+  function onCommitActivityFetched() {
+    var newKey = commitActivityKey(store.commitActivity);
+    if (newKey === _lastCommitActivityKey) return; // [P2] 데이터·날짜창 무변경 → 갱신 skip
+    _lastCommitActivityKey = newKey;
+    // [P4] 차트 영역만 부분 교체(깜빡임 0). 영역 부재/오류 시 patchCommitChart 내부 fallback=render.
+    patchCommitChart();
   }
 
   function renderHomeDisk(reclaim) {
@@ -2298,6 +2364,7 @@ function initBrowser() {
     store._settingsOpener = null;
     // [F-1] 오버레이 닫힘(overlayOpen 해제) 지점 — release()로 즉시 1회 반영 + 보류 중이던 push 누적분 소비.
     RG.coalesce.release();
+    maybeFlushCommitRefresh(); // [M10-P1] overlayOpen 해제 → 보류된 커밋 폴링 따라감
     if (opener && typeof opener.focus === 'function' && document.contains(opener)) {
       try { opener.focus(); } catch (_) { /* ignore */ }
     }
@@ -4350,6 +4417,7 @@ function initBrowser() {
     store._drawerOpener = null;
     // [F-1] 드로어 닫힘(overlayOpen 해제) 지점 — release()로 즉시 1회 반영 + 보류 중이던 push 누적분 소비.
     RG.coalesce.release();
+    maybeFlushCommitRefresh(); // [M10-P1] overlayOpen 해제 → 보류된 커밋 폴링 따라감
     // 닫은 뒤 여는 버튼으로 포커스 복귀(요소가 재렌더로 사라졌으면 무시)
     if (opener && typeof opener.focus === 'function' && document.contains(opener)) {
       try { opener.focus(); } catch (_) { /* ignore */ }
@@ -4835,11 +4903,25 @@ function initBrowser() {
   /* [R-31] 커밋 차트 5분 폴링 — 홈 체류 + 창 가시 상태에서만 git 조회. 홈 이탈/비가시 시 타이머 정지(git 호출 0).
    *   메일 60초 폴링 패턴 복제(주기만 300초). 갱신은 refreshCommitActivity(완료 시 RG.coalesce.release 경유).
    *   조합/드래그/오버레이/재진입 중에는 RG.deferred()로 폴링 1회 건너뜀(다음 틱에 반영) — R-25/R-26 정합. */
+  var _pendingCommitRefresh = false; // [M10-P1] 보류로 건너뛴 폴링 틱 추적(해제 시 1회 따라감)
   function maybeAutoRefreshCommit() {
     if (store.state.view !== 'home' || !bridgeHas('getCommitActivity')) return;
     if (store.busyCommitActivity) return;            // 재진입 방지(in-flight)
-    if (RG.deferred()) return;                       // 조합·드래그·오버레이·busy 중엔 보류(깜빡임/입력 방해 방지)
-    refreshCommitActivity();
+    if (RG.deferred()) {                             // 조합·드래그·오버레이·busy 중엔 보류
+      _pendingCommitRefresh = true;                  // [M10-P1] 건너뜀 기록 → 해제 지점에서 따라감
+      return;
+    }
+    _pendingCommitRefresh = false;
+    refreshCommitActivity({ silent: true });         // [M10-P1/F-1] 폴링은 silent(진입 로딩 render 생략)
+  }
+  /** [M10-P1] 보류 해제 지점에서 호출 — 건너뛴 폴링 틱이 있으면 즉시 1회 커밋 갱신(silent).
+   *   pending 가드 + busyCommit/deferred 재진입 가드로 이중 발화 방지. 8곳(release/flushIfPending 옆)에 동반. */
+  function maybeFlushCommitRefresh() {
+    if (!_pendingCommitRefresh) return;
+    if (store.state.view !== 'home') { _pendingCommitRefresh = false; return; }
+    if (store.busyCommitActivity || RG.deferred()) return; // 아직 보류 중이면 다음 해제 지점에서 재시도
+    _pendingCommitRefresh = false;
+    refreshCommitActivity({ silent: true });
   }
   function startCommitAutoRefresh() {
     if (store.commitRefreshTimer || !bridgeHas('getCommitActivity')) return;
@@ -4921,6 +5003,7 @@ function initBrowser() {
     store._helpOpener = null;
     // [F-1] 도움말 닫힘(overlayOpen 해제) 지점 — release()로 즉시 1회 반영 + 보류 중이던 push 누적분 소비.
     RG.coalesce.release();
+    maybeFlushCommitRefresh(); // [M10-P1] overlayOpen 해제 → 보류된 커밋 폴링 따라감
     if (opener && typeof opener.focus === 'function' && document.contains(opener)) {
       try { opener.focus(); } catch (_) { /* ignore */ }
     }
@@ -5181,6 +5264,7 @@ function initBrowser() {
         Promise.resolve().then(() => {
           if (reorder && newIds.length) commitReorder(newIds);
           else RG.coalesce.flushIfPending();
+          maybeFlushCommitRefresh(); // [M10-P1] dragging 해제 → 보류된 커밋 폴링 따라감
         });
       },
     });
@@ -5232,6 +5316,7 @@ function initBrowser() {
         Promise.resolve().then(() => {
           if (reorder && ids.length) commitHomeLayout(ids);
           else RG.coalesce.flushIfPending();
+          maybeFlushCommitRefresh(); // [M10-P1] dragging 해제 → 보류된 커밋 폴링 따라감
         });
       },
     });
@@ -5591,6 +5676,7 @@ function initBrowser() {
         inputEl.addEventListener('compositionend', () => {
           store._composing = false;
           coalesce.flushIfPending(); // 조합 종료 = 보류 해제 지점 → 누적 갱신 1회 반영
+          maybeFlushCommitRefresh(); // [M10-P1] composing 해제 → 보류된 커밋 폴링 따라감
         });
       },
     };
@@ -5632,7 +5718,36 @@ function initBrowser() {
           }
         }
       },
-      // patchRegion(...) — [R5] M9 1차 범위 제외(후속 마일스톤). destroy/recreate + capture/restore 로만.
+      /** [M10-P3] 특정 영역만 부분 갱신(전체 replaceChildren 대신). 5단계 계약(설계 §2.2).
+       *   @param containerEl 교체 대상 DOM 요소. null/미발견이면 fallback(전체 render).
+       *   @param builderFn () => Node|Node[]|null. 새 영역 콘텐츠(차트는 빈 호스트만 — 위젯 소유).
+       *   @param opts { widgets?:string[], preserveFocus?:boolean(기본 true), fallback?:()=>void(기본 render) } */
+      patchRegion(containerEl, builderFn, opts) {
+        opts = opts || {};
+        const fallback = (typeof opts.fallback === 'function') ? opts.fallback : render;
+        const widgets = Array.isArray(opts.widgets) ? opts.widgets : [];
+        const present = !!containerEl && !(typeof document !== 'undefined' && document.body && !document.body.contains(containerEl));
+        const plan = patchRegionPlan(present, deferred()); // 순수 분기 결정(테스트 동형)
+        // ① deferred → 부분 갱신 안 하고 coalesce 적재(M9 계약 정합). containerEl 부재 → 전체 render 폴백.
+        if (plan === 'defer') { coalesce.request(); return; }
+        if (plan === 'fallback') { try { fallback(); } catch (_) { /* ignore */ } return; }
+        try {
+          // ② 영역 내 위젯만 destroy(전체 destroyAll 아님).
+          for (const id of widgets) widget._destroyById(id);
+          // ③ 포커스/스크롤 캡처(opt-in).
+          const snap = (opts.preserveFocus !== false) ? preserve.capture(containerEl) : null;
+          // ④ 빌더 → 영역 교체.
+          const built = builderFn ? builderFn() : null;
+          const nodes = (built == null) ? [] : (Array.isArray(built) ? built.filter(Boolean) : [built]);
+          containerEl.replaceChildren(...nodes);
+          // ⑤ 복원 → 영역 내 위젯 mount(containerEl 을 root 로 — 스코프 한정).
+          if (snap) preserve.restore(containerEl, snap);
+          for (const id of widgets) widget._mountById(id, containerEl);
+        } catch (_) {
+          // builderFn 예외 등 → 전체 render 폴백.
+          try { fallback(); } catch (__) { /* ignore */ }
+        }
+      },
     };
 
     // ── RG-3: widget(stateful 위젯 라이프사이클) ──
@@ -5664,6 +5779,24 @@ function initBrowser() {
           try { inst = s.init(rootEl); } catch (_) { inst = null; }
           _instances[s.id] = (inst != null) ? inst : null;
         }
+      },
+      /** [M10-P3] patchRegion 전용: 특정 id 위젯만 destroy. id 불일치/미생성 시 no-op. */
+      _destroyById(id) {
+        const s = _specs.find((x) => x.id === id);
+        const inst = _instances[id];
+        if (s && inst != null && typeof s.destroy === 'function') {
+          try { s.destroy(inst); } catch (_) { /* ignore */ }
+        }
+        _instances[id] = null;
+      },
+      /** [M10-P3] patchRegion 전용: 특정 id 위젯만 mount. 이미 살아있으면 skip. */
+      _mountById(id, rootEl) {
+        if (_instances[id] != null) return;
+        const s = _specs.find((x) => x.id === id);
+        if (!s || typeof s.init !== 'function') return;
+        let inst = null;
+        try { inst = s.init(rootEl); } catch (_) { inst = null; }
+        _instances[id] = (inst != null) ? inst : null;
       },
     };
 
@@ -5724,9 +5857,12 @@ function initBrowser() {
   //   render() 1회당 destroy/recreate → 호버 핸들러 누수·중복 0. 5분 폴링(R-31) 갱신 시에도 정상 재생성.
   RG.widget.define({
     id: 'commitChart',
-    init: () => {
+    // [M10-P4/F-2] root 스코프로 .commit-chart-host 탐색 — mountAll 은 app, _mountById 는 containerEl(region) 전달.
+    //   차트 노드 생성·삽입·destroy 를 위젯이 단독 소유(builderFn 은 빈 호스트만 → 이중 삽입·핸들러 누수 0).
+    init: (root) => {
       if (typeof document === 'undefined') return null;
-      const host = document.querySelector('.commit-chart-host');
+      const scope = root || document;
+      const host = (typeof scope.querySelector === 'function') ? scope.querySelector('.commit-chart-host') : null;
       if (!host) return null;
       // 기존과 동일: store.commitActivity.days 최근 7일. 라벨은 homeWeekday(date) — textContent 로만 사용.
       const ca = store.commitActivity || {};
@@ -5738,6 +5874,21 @@ function initBrowser() {
     },
     destroy: (inst) => { if (inst && typeof inst.destroy === 'function') { try { inst.destroy(); } catch (_) { /* ignore */ } } },
   });
+
+  /** [M10-P4] 커밋 차트 영역만 부분 갱신 — builderFn 은 빈 호스트만(차트는 commitChart 위젯 소유).
+   *   영역 부재/오류/deferred 시 patchRegion 내부에서 안전 처리(fallback=render / coalesce 보류). */
+  function patchCommitChart() {
+    if (typeof document === 'undefined') { render(); return; }
+    const region = document.querySelector('.commit-chart-region');
+    RG.preserve.patchRegion(region, function () {
+      // 빈 호스트 컨테이너만 반환 — 차트 노드는 _mountById('commitChart')가 단독 생성/삽입.
+      return el('div', { cls: 'commit-chart-host', attrs: { 'aria-label': '최근 7일 커밋 빈도 차트' } });
+    }, {
+      widgets: ['commitChart'],   // ②_destroyById → ⑤_mountById 가 차트 노드 단독 소유
+      preserveFocus: false,       // 차트 영역엔 포커스 입력 없음 — 캡처/복원 생략
+      fallback: function () { render(); },
+    });
+  }
 
   /* =====================================================================
    * 데이터 로드 (단일 출처, 1회 fetch)
@@ -5922,6 +6073,10 @@ if (typeof module !== 'undefined' && module.exports) {
     applyHomeLayout,
     // [R-33] 커밋 차트 기하 모델(순수 — 수치 sanitize·스케일)
     commitChartModel,
+    // [M10] 커밋 데이터 동일성 키(diff 가드) + 툴팁 가로위치 + patchRegion 분기(순수)
+    commitActivityKey,
+    tipLeft,
+    patchRegionPlan,
     resolveScanReloadView,
     nextScanAction,
     sanitizeRescanOpts,

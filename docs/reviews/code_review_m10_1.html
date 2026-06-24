@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project-SPIP — M10 코드 리뷰 (patchRegion · 폴리시 3종)</title>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#1e293b; --text:#e2e8f0; --sub:#94a3b8;
+    --accent:#34d399; --ref:#38bdf8; --line:#334155; --warn:#fbbf24;
+    --danger:#f87171; --purple:#c4b5fd;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:"Segoe UI","Malgun Gothic",system-ui,sans-serif;line-height:1.7;font-size:14.5px;}
+  header.page{padding:46px 32px 34px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#13203b,#0f172a);}
+  header.page .kicker{font-size:12px;letter-spacing:0.16em;text-transform:uppercase;color:var(--ref);}
+  header.page h1{margin:10px 0 8px;font-size:27px;font-weight:700;letter-spacing:-0.02em;}
+  header.page p{margin:8px 0 0;color:var(--sub);max-width:1000px;}
+  .verdict{display:inline-block;font-weight:800;font-size:15px;border-radius:999px;padding:6px 20px;margin:14px 8px 0 0;}
+  .verdict.pass{background:rgba(52,211,153,.15);color:var(--accent);border:1px solid rgba(52,211,153,.5);}
+  .tag{display:inline-block;background:rgba(56,189,248,.12);color:var(--ref);
+    border:1px solid rgba(56,189,248,.4);border-radius:999px;padding:3px 12px;font-size:12.5px;margin:8px 8px 0 0;}
+  main{max-width:1180px;margin:0 auto;padding:30px 28px 90px;}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:24px 28px;margin:22px 0;}
+  h2{margin:0 0 16px;font-size:21px;color:var(--accent);border-left:4px solid var(--accent);padding-left:12px;}
+  h3{font-size:16px;color:var(--ref);margin:22px 0 10px;}
+  p{margin:8px 0;} ul,ol{margin:8px 0;padding-left:22px;} li{margin:6px 0;color:#cbd5e1;}
+  code{background:#0b1220;color:var(--ref);padding:1px 6px;border-radius:5px;font-size:12.5px;font-family:Consolas,monospace;}
+  table{width:100%;border-collapse:collapse;margin:12px 0;font-size:13px;}
+  th,td{border:1px solid var(--line);padding:8px 11px;text-align:left;vertical-align:top;}
+  th{background:#142035;color:var(--accent);}
+  tr:nth-child(even) td{background:rgba(255,255,255,.02);}
+  .loc{font-family:Consolas,monospace;color:#fcd34d;white-space:nowrap;font-size:12px;}
+  .sev{font-weight:700;white-space:nowrap;border-radius:6px;padding:2px 9px;font-size:12px;}
+  .sev.def{background:rgba(248,113,113,.14);color:#fca5a5;border:1px solid rgba(248,113,113,.4);}
+  .sev.imp{background:rgba(251,191,36,.13);color:#fde68a;border:1px solid rgba(251,191,36,.4);}
+  .sev.nit{background:rgba(148,163,184,.13);color:#cbd5e1;border:1px solid rgba(148,163,184,.4);}
+  .note{background:rgba(56,189,248,.08);border:1px solid rgba(56,189,248,.3);border-radius:10px;padding:14px 18px;color:#bae6fd;font-size:13.5px;margin:14px 0;}
+  .good{background:rgba(52,211,153,.08);border:1px solid rgba(52,211,153,.3);border-radius:10px;padding:14px 18px;color:#bbf7d0;font-size:13.5px;margin:14px 0;}
+  .warnbox{background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.35);border-radius:10px;padding:14px 18px;color:#fde68a;font-size:13.5px;margin:14px 0;}
+  .svg-wrap{background:#0b1220;border:1px solid var(--line);border-radius:12px;padding:16px;overflow-x:auto;margin:14px 0;}
+  footer{text-align:center;color:var(--sub);font-size:12.5px;padding:30px;border-top:1px solid var(--line);}
+  .pill{display:inline-block;font-family:Consolas,monospace;background:#0b1220;border:1px solid var(--line);color:var(--purple);padding:2px 8px;border-radius:6px;font-size:12px;margin:2px 4px 2px 0;}
+</style>
+</head>
+<body>
+
+<header class="page">
+  <div class="kicker">Project-SPIP · 코드 품질 리뷰 · M10 배치</div>
+  <h1>M10 코드 리뷰 — patchRegion + 폴리시 3종(차트 깜빡임 · 툴팁 추적 · 폴링 재시도)</h1>
+  <p>대상: <code>public/app.js</code>(RG.preserve.patchRegion · RG.widget._destroyById/_mountById · 순수 patchRegionPlan/commitActivityKey/tipLeft · refreshCommitActivity/onCommitActivityFetched · _pendingCommitRefresh/maybeFlushCommitRefresh · renderHomeProductivity 2단 · patchCommitChart · chartBars showTip) ·
+     <code>public/styles.css</code>(.commit-chart__tip) ·
+     <code>test/patchRegion.test.js</code>·<code>commitChart.test.js</code>·<code>commitPolling.test.js</code> ·
+     설계 <code>docs/architecture/m10-design.html</code>(rev.1).</p>
+  <span class="verdict pass">판정 · PASS</span>
+  <span class="tag">정확성 결함 0</span>
+  <span class="tag">개선 1 · 사소 4</span>
+  <span class="tag">대상 테스트 46/46 통과 · 전체 732 그린</span>
+  <span class="tag">기준문서 docs/Development 부재 → 주변 코드·설계 정본 기준</span>
+</header>
+
+<main>
+
+<section>
+  <h2>요약</h2>
+  <p>M10 P1~P4 구현은 설계 정본(rev.1)의 5단계 patchRegion 계약·위젯-소유 모델(F-2)·8지점 flush(F-3d)·epoch-day diff 가드(Q-M10-1)·툴팁 가로/세로 분리(F-3b)를 <b>충실히 반영</b>했다. 정확성 결함(논리 오류·경계 누락·리소스 누수·이중발화)은 <b>발견되지 않았다</b>. 위젯 소유권은 builderFn=빈 호스트·노드 생성/파괴를 위젯 단독으로 단일화해 <b>이중 삽입·핸들러 누수 0</b>이 코드로 보장된다. 이중 발화는 pending 가드 + busy/deferred 재진입 가드 + 단조 boolean으로 다중 방어된다. 개선 1·사소 4는 모두 테스트 커버리지·가독성 차원이며 동작에 영향 없다.</p>
+  <table>
+    <tr><th style="width:90px">심각도</th><th style="width:60px">건수</th><th>성격</th></tr>
+    <tr><td><span class="sev def">결함</span></td><td>0</td><td>정확성 결함 없음 — 5단계 순서·present 판정·diff 가드·클램핑·8지점 배선 모두 정확</td></tr>
+    <tr><td><span class="sev imp">개선</span></td><td>1</td><td>_destroyById/_mountById 런타임 동작(M10-WG-1 설계)이 정적 소스 매칭으로만 검증됨 — 헤드리스 단위 테스트 여지</td></tr>
+    <tr><td><span class="sev nit">사소</span></td><td>4</td><td>주석 드리프트·중복 가드·테스트 명명·죽은 분기 가독성</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>1. 정확성 — 결함 0 (집중 검증 결과)</h2>
+  <p>중점 1(정확성 결함) 항목을 코드 인용으로 하나씩 검증했고 모두 정확하다.</p>
+  <table>
+    <tr><th style="width:210px">검증 항목</th><th style="width:120px">위치</th><th>판정 · 근거</th></tr>
+    <tr>
+      <td>patchRegion 5단계 순서</td>
+      <td class="loc">app.js:5725-5750</td>
+      <td><b>정확.</b> ①defer(coalesce.request 후 반환) → ②_destroyById(widgets) → ③capture(preserveFocus!==false) → ④builderFn+replaceChildren(null→[]) → ⑤restore→_mountById. 순서가 설계 §2.2와 일치하고 정적 테스트(patchRegion.test.js:42-48)가 인덱스 순서를 강제한다.</td>
+    </tr>
+    <tr>
+      <td>예외 fallback 정확성</td>
+      <td class="loc">app.js:5733,5746-5749</td>
+      <td><b>정확.</b> fallback/builderFn 예외 모두 <code>try{fallback()}catch(__){}</code> 이중 흡수. ②에서 위젯을 먼저 destroy한 뒤 builderFn이 throw해도 fallback=render의 destroyAll→mountAll이 일관성 회복(commitChart는 store에서 직접 재생성 — stale 없음).</td>
+    </tr>
+    <tr>
+      <td>present(컨테이너 생존) 판정</td>
+      <td class="loc">app.js:5729</td>
+      <td><b>정확.</b> <code>!!el &amp;&amp; !(docDefined &amp;&amp; body &amp;&amp; !body.contains(el))</code> — null·detached 노드는 false(→fallback), DOM 부착 노드는 true. document 미정의(헤드리스)는 true로 graceful. 4경우 진리표 모두 의도대로.</td>
+    </tr>
+    <tr>
+      <td>_destroyById / destroyAll 모순·멱등</td>
+      <td class="loc">app.js:5764-5800</td>
+      <td><b>정확.</b> 둘 다 <code>inst!=null &amp;&amp; typeof destroy==='function'</code> 가드 후 try-destroy, 종료 시 <code>_instances[id]=null</code>. _destroyById 후 render의 destroyAll이 같은 id를 만나도 inst가 null이라 no-op(이중 null 안전, 설계 §14.1 리스크 해소). 멱등 보장.</td>
+    </tr>
+    <tr>
+      <td>_mountById 멱등(중복 mount 방지)</td>
+      <td class="loc">app.js:5793-5800</td>
+      <td><b>정확.</b> 진입부 <code>if(_instances[id]!=null) return</code>로 이미 살아있으면 skip. init throw 시 <code>inst=null</code> → <code>_instances[id]=null</code>(회복 가능). mountAll과 동일 규약.</td>
+    </tr>
+    <tr>
+      <td>위젯-소유: 이중 삽입·누수 0</td>
+      <td class="loc">app.js:5862-5891</td>
+      <td><b>정확.</b> patchCommitChart builderFn은 <b>빈 .commit-chart-host만</b> 반환(chartBars 미호출), 차트 노드 생성·<code>host.appendChild</code>·핸들러 detach는 commitChart 위젯이 단독. ②_destroyById가 핸들러 detach → ④빈 호스트 → ⑤_mountById가 1회 삽입. patchRegion.test.js:74가 builderFn 내 chartBars 부재를 강제.</td>
+    </tr>
+    <tr>
+      <td>maybeFlush 8지점 + 이중발화 가드</td>
+      <td class="loc">app.js:2116,2240,2367,4420,5006,5267,5319,5679</td>
+      <td><b>정확.</b> release/flushIfPending 호출 8곳(2115,2239,2366,4419,5005,5266,5318,5678)과 1:1로 짝지어짐. flush는 <code>if(!_pendingCommitRefresh)return</code> + <code>busyCommit||deferred</code> 재진입 가드 + busyCommitActivity in-flight 가드(3중). 드래그 onEnd는 if/else 밖에 두어 reorder 경로에서도 누락 없음(5267,5319).</td>
+    </tr>
+    <tr>
+      <td>commitActivityKey epoch-day(NaN graceful)</td>
+      <td class="loc">app.js:729-739</td>
+      <td><b>정확.</b> <code>Date.parse</code> 실패→<code>Number.isFinite(ms)?…:0</code>, count는 <code>Number.isFinite(n)&amp;&amp;n&gt;=0?n:0</code>(M-2). 정수만 키 진입(L-1 안전). 빈/비배열→''. 날짜창 1일 이동 시 키 변경 검증(commitChart.test.js:29-33).</td>
+    </tr>
+    <tr>
+      <td>tipLeft 클램핑</td>
+      <td class="loc">app.js:747-754</td>
+      <td><b>정확.</b> <code>Math.max(0, Math.min(rawLeft, maxLeft))</code>, <code>maxLeft=Math.max(0, wrapWidth-tipWidth)</code>(tip&gt;wrap 시 0 가드). NaN 입력은 centerRatio→0.5 등 기본값으로 graceful. 양끝/중앙/초과 4케이스 테스트 통과.</td>
+    </tr>
+    <tr>
+      <td>showTip 세로 띄움 유지(F-3b)</td>
+      <td class="loc">app.js:1356-1367 · styles.css:390-395</td>
+      <td><b>정확.</b> JS는 <code>style.left=px</code>(가로) + <code>style.transform='translateY(-100%)'</code>(세로)만 설정, <code>transform='none'</code> 미사용. CSS는 left:50%/translateX(-50%) 제거, top:0·left:0만 — JS translateY와 중복 없음. 가로/세로 채널 분리 정확.</td>
+    </tr>
+  </table>
+  <div class="good"><b>정확성 결론:</b> 집중 검증 9개 항목 전부 정확. 정확성 결함 0 → 통과 게이트 충족. patchRegion이 "막으려던 문제(이중 삽입·누수)를 역유발"하던 F-2 리스크가 코드 레벨에서 차단됐음을 확인했다.</p>
+</section>
+
+<section>
+  <h2>2. 위젯 소유권 · 이중 발화 평가</h2>
+  <h3>2.1 위젯-소유 모델(F-2) — 통과</h3>
+  <p>노드 소유권이 단일 모델로 못 박혀 있다: <b>builderFn = 빈 호스트 컨테이너만</b>, <b>차트 노드의 생성·삽입·파괴·핸들러는 commitChart 위젯 단독</b>. patchRegion 실행 순서(②destroy→④빈 호스트→⑤mount)가 이 모델과 정확히 맞물려 이중 삽입·핸들러 누수가 구조적으로 0이다. init이 <code>root||document</code> 스코프를 받아 _mountById가 containerEl(region)을 root로 전달 → 전역 querySelector 의존 제거(m9_p8 사소 항목 동반 해소)도 확인.</p>
+  <div class="svg-wrap">
+  <svg viewBox="0 0 920 200" width="100%" role="img" aria-label="위젯 소유권 흐름">
+    <rect x="14" y="40" width="200" height="50" rx="9" fill="#172339" stroke="#38bdf8"/>
+    <text x="114" y="62" text-anchor="middle" fill="#7dd3fc" font-size="12">patchCommitChart()</text>
+    <text x="114" y="80" text-anchor="middle" fill="#94a3b8" font-size="10.5">builderFn → 빈 호스트만</text>
+    <rect x="270" y="20" width="180" height="40" rx="8" fill="#0f261e" stroke="#34d399"/>
+    <text x="360" y="44" text-anchor="middle" fill="#6ee7b7" font-size="11.5">② _destroyById</text>
+    <rect x="270" y="80" width="180" height="40" rx="8" fill="#172339" stroke="#38bdf8"/>
+    <text x="360" y="104" text-anchor="middle" fill="#7dd3fc" font-size="11.5">④ replaceChildren(빈 호스트)</text>
+    <rect x="270" y="140" width="180" height="40" rx="8" fill="#0f261e" stroke="#34d399"/>
+    <text x="360" y="164" text-anchor="middle" fill="#6ee7b7" font-size="11.5">⑤ _mountById(region)</text>
+    <rect x="510" y="80" width="200" height="40" rx="8" fill="#172339" stroke="#c4b5fd"/>
+    <text x="610" y="100" text-anchor="middle" fill="#c4b5fd" font-size="11">commitChart 위젯 단독</text>
+    <text x="610" y="116" text-anchor="middle" fill="#94a3b8" font-size="10">init=appendChild · destroy=detach</text>
+    <rect x="760" y="80" width="146" height="40" rx="8" fill="#0f261e" stroke="#34d399" stroke-width="2"/>
+    <text x="833" y="100" text-anchor="middle" fill="#6ee7b7" font-size="11">차트 노드 1회 삽입</text>
+    <text x="833" y="116" text-anchor="middle" fill="#34d399" font-size="10">이중 삽입·누수 0</text>
+    <path d="M214,65 L268,45" fill="none" stroke="#34d399" stroke-width="1.4" marker-end="url(#a)"/>
+    <path d="M360,60 L360,78" fill="none" stroke="#94a3b8" stroke-width="1.4" marker-end="url(#a)"/>
+    <path d="M360,120 L360,138" fill="none" stroke="#94a3b8" stroke-width="1.4" marker-end="url(#a)"/>
+    <path d="M450,160 L508,110" fill="none" stroke="#c4b5fd" stroke-width="1.4" marker-end="url(#a)"/>
+    <path d="M710,100 L758,100" fill="none" stroke="#34d399" stroke-width="1.4" marker-end="url(#a)"/>
+    <defs><marker id="a" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#94a3b8"/></marker></defs>
+  </svg>
+  </div>
+
+  <h3>2.2 이중 발화 — 통과</h3>
+  <p>maybeFlushCommitRefresh가 8지점에서 매번 불려도 실제 fetch는 다음 3중 방어로 정확히 보류분이 있을 때만 1회 일어난다:</p>
+  <ul>
+    <li><b>pending 가드</b>(app.js:4920): <code>if(!_pendingCommitRefresh)return</code> — 건너뛴 틱이 없으면 즉시 반환.</li>
+    <li><b>재진입 가드</b>(app.js:4922): <code>busyCommitActivity || RG.deferred()</code>면 반환(아직 보류/in-flight면 다음 해제 지점에서 재시도).</li>
+    <li><b>in-flight 가드</b>(app.js:2257): refreshCommitActivity 진입부 <code>store.busyCommitActivity</code> 재확인으로 중복 fetch 최종 차단.</li>
+  </ul>
+  <p>또한 coalesce는 단조 boolean pending + 단일 타이머로 render 경로의 이중 발화도 막는다(renderGuard.js와 동형). flush(fetch 트리거)와 release(render 트리거)는 독립 경로라 서로 간섭하지 않는다(설계 §6.4 정합). <b>이중 발화 결함 없음.</b></p>
+</section>
+
+<section>
+  <h2>3. 동형 드리프트 · 단순화 — 통과</h2>
+  <ul>
+    <li><b>순수 로직 위치(ADR-M9-1):</b> patchRegionPlan·commitActivityKey·tipLeft는 모두 <code>public/app.js</code>에만 존재하고 <code>lib/common/renderGuard.js</code>는 shouldDeferRender/createCoalescer만 export(불변). patchRegion.test.js:120-123이 renderGuard.js에 patchRegion 미진입을 강제. <b>동형 드리프트 없음.</b></li>
+    <li><b>새 순수 함수 테스트 커버:</b> patchRegionPlan(3분기)·commitActivityKey(7케이스)·tipLeft(5케이스) 모두 헤드리스 단위 테스트 존재. DOM 미접근 순수 분리가 깔끔하다.</li>
+    <li><b>8지점 누락 위험 구조화:</b> "release/flushIfPending 옆 한 줄" 규칙을 patchRegion.test.js:113-118이 <code>maybeFlushCommitRefresh()</code> 등장 횟수 &gt;=8로 회귀 방어한다. 완벽한 구조는 아니나(아래 사소 N-2 참조) 현재 누락 0.</li>
+    <li><b>죽은 코드:</b> 발견 없음. dispatchMenuAction 등 기존 정리 흔적만 주석에 남음.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>4. 개선 항목</h2>
+  <table>
+    <tr><th style="width:60px">심각도</th><th style="width:150px">위치</th><th>무엇 / 왜 / 권고</th></tr>
+    <tr>
+      <td><span class="sev imp">개선</span></td>
+      <td class="loc">test/patchRegion.test.js:52-59</td>
+      <td><b>_destroyById/_mountById 런타임 동작이 정적 소스 매칭으로만 검증됨.</b> 설계 §11.1 M10-WG-1은 "존재 id→destroy 1회·instances[id]=null, 없는 id→no-op, 이미 살아있으면 skip, init throw→null 회복"의 <b>동작</b> 검증을 명시했으나 현재 테스트는 정규식으로 정의 존재·skip 가드 문구만 확인한다. jsdom 0-의존 정책은 이해하나, 이 두 메서드는 fake spec(<code>{id, init:()=&gt;obj, destroy}</code>)을 define한 뒤 호출하는 식으로 <b>DOM 없이도 라이프사이클 멱등성을 헤드리스로 검증 가능</b>하다(rootEl은 미사용 또는 stub). <b>권고:</b> RG.widget을 테스트에 노출(이미 일부 RG가 export됨)하거나 _specs/_instances 동작을 작은 순수 헬퍼로 분리해 멱등·throw 회복을 실제 호출로 커버. 정확성 결함은 아님(코드 자체는 정확) — 회귀 안전망 강화 차원.</td>
+    </tr>
+  </table>
+</section>
+
+<section>
+  <h2>5. 사소 항목 (묶음)</h2>
+  <table>
+    <tr><th style="width:60px">심각도</th><th style="width:150px">위치</th><th>무엇 / 권고</th></tr>
+    <tr>
+      <td><span class="sev nit">사소</span></td>
+      <td class="loc">app.js:4904</td>
+      <td><b>N-1 주석 드리프트.</b> 폴링 헤더 주석이 "갱신은 refreshCommitActivity(완료 시 RG.coalesce.release 경유)"라고 쓰여 있으나, P4 이후 완료부는 <code>onCommitActivityFetched→patchCommitChart</code>(release 아님)다. 주석이 P1 시점 설명에 머묾. <b>권고:</b> "완료부는 onCommitActivityFetched diff 가드→patchCommitChart"로 갱신.</td>
+    </tr>
+    <tr>
+      <td><span class="sev nit">사소</span></td>
+      <td class="loc">app.js:2116,2240,…(8곳)</td>
+      <td><b>N-2 8지점 산포 — 구조적 누락 방지 여지.</b> "release 옆 maybeFlush 한 줄" 규칙은 현재 누락 0이고 테스트가 횟수를 지키나, 새 release 지점이 추가될 때 짝 호출을 잊으면 테스트는 여전히 &gt;=8을 통과한다(횟수만 셈). <b>권고(선택):</b> coalesce.release/flushIfPending 래퍼 안에서 maybeFlushCommitRefresh를 1회 동반 호출하도록 응집하면 호출처 산포·누락 위험이 사라진다. 단 "render 트리거와 fetch 트리거 독립"(설계 §6.4) 원칙과의 트레이드오프가 있어 현 구조도 합리적 — 설계 의도 확인 후 판단 권장(아래 §6).</td>
+    </tr>
+    <tr>
+      <td><span class="sev nit">사소</span></td>
+      <td class="loc">app.js:5729</td>
+      <td><b>N-3 present 판정 가독성.</b> <code>!!el &amp;&amp; !(docDefined &amp;&amp; body &amp;&amp; !body.contains(el))</code> 의 이중 부정이 한 줄에 압축돼 의도(=DOM에 부착된 노드인가) 파악이 느리다. 논리는 정확. <b>권고:</b> <code>const attached = !el ? false : (typeof document==='undefined' || !document.body) ? true : document.body.contains(el)</code> 같은 명시 분기 또는 한 줄 주석 보강.</td>
+    </tr>
+    <tr>
+      <td><span class="sev nit">사소</span></td>
+      <td class="loc">test/commitPolling.test.js · patchRegion.test.js</td>
+      <td><b>N-4 폴링 재시도 테스트 명명/위치 분산.</b> 설계 §10 파일지도는 _pendingCommitRefresh 동작을 commitPolling.test.js에 두기로 했으나, 실제 8지점 횟수·flush 가드는 patchRegion.test.js에 들어가 있다(commitPolling은 maybeAutoRefreshCommit 정적 매칭만). 동작상 문제 없으나 마커(M10-PR-1)와 파일 배치가 설계와 약간 어긋남. <b>권고:</b> 다음 정리 시 폴링 재시도 단언을 commitPolling.test.js로 모으거나 설계 파일지도 주석을 현 배치에 맞춤.</td>
+    </tr>
+    <tr>
+      <td><span class="sev nit">사소</span></td>
+      <td class="loc">app.js:2274-2277</td>
+      <td><b>N-5 키 갱신과 보류의 미묘한 결합(무해).</b> onCommitActivityFetched가 _lastCommitActivityKey를 먼저 갱신한 뒤 patchCommitChart를 호출하는데, patchRegion이 deferred면 coalesce.request만 하고 차트는 실제 미갱신이다. 이 경우 키는 이미 새 값이라 다음 폴링에서 같은 데이터면 skip되지만, 보류 해제 시 coalesce가 발화하는 전체 render의 mountAll이 store.commitActivity에서 직접 차트를 재생성하므로 <b>stale 없음</b>(데이터 정합 유지). 결함 아님. <b>권고:</b> 동작 유지. 다만 "키 선갱신 + 보류" 상호작용에 한 줄 주석을 남겨 후속 유지보수자의 오해를 방지하면 좋다.</td>
+    </tr>
+  </table>
+</section>
+
+<section>
+  <h2>6. 확인 필요(설계 의도)</h2>
+  <ul>
+    <li><b>N-2 관련:</b> 8지점 산포를 그대로 둘지(현 설계 §6.4 "fetch/render 트리거 독립" 의도) vs release 래퍼로 응집할지는 <b>설계 의도 확인 사항</b>이다. 현 구현은 설계 정본을 정확히 따랐으므로 코드 리뷰 판정에는 영향 없음 — tech-lead/아키텍트가 후속 단순화 여부만 결정하면 된다.</li>
+  </ul>
+  <div class="note">위 개선·사소 항목은 전부 <b>동작·정확성에 영향 없는 테스트 커버·가독성·문서 정합</b> 차원이다. M10 코드는 설계 정본(rev.1)의 모든 확정 결정(F-1·F-2·F-3a·F-3b·F-3d·Q-M10-1)을 정확히 구현했다.</div>
+</section>
+
+<footer>
+  Project-SPIP · M10 코드 리뷰 1회차 · patchRegion + 폴리시 3종 · 판정 PASS(정확성 결함 0) · 개선 1 · 사소 4 ·
+  대상 테스트 46/46 통과 · 코드 미수정(리뷰 전담) · 입력: m10-design.html(rev.1) / app.js / styles.css / test 3종
+</footer>
+
+</main>
+</body>
+</html>

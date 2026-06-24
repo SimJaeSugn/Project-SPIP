@@ -1,0 +1,912 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project-SPIP — M10 설계 (patchRegion · 차트 깜빡임 완화 · 툴팁 추적 · 폴링 재시도)</title>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#1e293b; --text:#e2e8f0; --sub:#94a3b8;
+    --accent:#34d399; --ref:#38bdf8; --line:#334155; --warn:#fbbf24;
+    --danger:#f87171; --purple:#c4b5fd;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:"Segoe UI","Malgun Gothic",system-ui,sans-serif;line-height:1.7;font-size:14.5px;}
+  header.page{padding:46px 32px 34px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#13203b,#0f172a);}
+  header.page .kicker{font-size:12px;letter-spacing:0.16em;text-transform:uppercase;color:var(--ref);}
+  header.page h1{margin:10px 0 8px;font-size:28px;font-weight:700;letter-spacing:-0.02em;}
+  header.page p{margin:8px 0 0;color:var(--sub);max-width:1000px;}
+  .tag{display:inline-block;background:rgba(52,211,153,.12);color:var(--accent);
+    border:1px solid rgba(52,211,153,.4);border-radius:999px;padding:3px 12px;font-size:12.5px;margin:8px 8px 0 0;}
+  main{max-width:1180px;margin:0 auto;padding:30px 28px 90px;}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:24px 28px;margin:22px 0;}
+  h2{margin:0 0 16px;font-size:21px;color:var(--accent);border-left:4px solid var(--accent);padding-left:12px;}
+  h3{font-size:16px;color:var(--ref);margin:24px 0 10px;}
+  h4{font-size:14px;color:var(--text);margin:16px 0 6px;}
+  p{margin:8px 0;} ul,ol{margin:8px 0;padding-left:22px;} li{margin:6px 0;color:#cbd5e1;}
+  code{background:#0b1220;color:var(--ref);padding:1px 6px;border-radius:5px;font-size:12.5px;font-family:Consolas,monospace;}
+  pre{background:#0b1220;border:1px solid var(--line);border-radius:8px;padding:14px 16px;overflow-x:auto;
+    font-size:12.7px;color:#cbd5e1;font-family:Consolas,monospace;line-height:1.6;}
+  pre .c{color:#64748b;} pre .k{color:#7dd3fc;} pre .s{color:#86efac;} pre .f{color:#fcd34d;}
+  table{width:100%;border-collapse:collapse;margin:12px 0;font-size:13px;}
+  th,td{border:1px solid var(--line);padding:8px 11px;text-align:left;vertical-align:top;}
+  th{background:#142035;color:var(--accent);}
+  tr:nth-child(even) td{background:rgba(255,255,255,.02);}
+  .note{background:rgba(56,189,248,.08);border:1px solid rgba(56,189,248,.3);border-radius:10px;padding:14px 18px;color:#bae6fd;font-size:13.5px;margin:14px 0;}
+  .warnbox{background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.35);border-radius:10px;padding:14px 18px;color:#fde68a;font-size:13.5px;margin:14px 0;}
+  .secbox{background:rgba(248,113,113,.07);border:1px solid rgba(248,113,113,.32);border-radius:10px;padding:14px 18px;color:#fecaca;font-size:13.5px;margin:14px 0;}
+  .rid{font-family:Consolas,monospace;color:var(--accent);font-weight:700;white-space:nowrap;}
+  .dep{display:inline-block;font-family:Consolas,monospace;background:#0b1220;border:1px solid var(--line);color:var(--purple);padding:2px 8px;border-radius:6px;font-size:12px;margin:2px 4px 2px 0;}
+  .svg-wrap{background:#0b1220;border:1px solid var(--line);border-radius:12px;padding:16px;overflow-x:auto;margin:14px 0;}
+  .legend{display:flex;gap:18px;flex-wrap:wrap;font-size:12.5px;color:var(--sub);margin-top:10px;}
+  .legend span{display:inline-flex;align-items:center;gap:6px;}
+  .sw{width:14px;height:14px;border-radius:3px;display:inline-block;}
+  .toc{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px;}
+  .toc a{display:block;background:#0b1220;border:1px solid var(--line);border-radius:8px;padding:9px 13px;color:var(--text);text-decoration:none;font-size:13px;}
+  .toc a:hover{border-color:var(--accent);}
+  .adr{border:1px solid var(--line);border-left:4px solid var(--purple);border-radius:0 10px 10px 0;padding:16px 20px;margin:16px 0;background:rgba(196,181,253,.05);}
+  .adr h4{color:var(--purple);margin-top:0;}
+  .pick{color:var(--accent);font-weight:700;}
+  .good{color:#6ee7b7;} .bad{color:#fca5a5;}
+  footer{text-align:center;color:var(--sub);font-size:12.5px;padding:30px;border-top:1px solid var(--line);}
+  .filemap td:first-child{font-family:Consolas,monospace;color:var(--ref);white-space:nowrap;}
+  .callsite td:first-child{font-family:Consolas,monospace;color:#fcd34d;white-space:nowrap;font-size:12.5px;}
+</style>
+</head>
+<body>
+
+<header class="page">
+  <div class="kicker">Project-SPIP · 아키텍처 설계 정본 · M10 배치</div>
+  <h1>M10 설계 — patchRegion 부분 갱신 · 차트 깜빡임 완화 · 툴팁 막대 추적 · 폴링 무재시도 보강</h1>
+  <p>입력: <code>docs/architecture/m9-design.html</code>(R-25 §3.3 patchRegion 후속 마일스톤 예고 · §10 차트 리스크) ·
+     <code>docs/reviews/code_review_m9_p8_1.html</code>(툴팁 중앙 고정 개선 요청) ·
+     <code>docs/reviews/code_review_m9_p6_1.html</code>(폴링 deferred 무재시도 확인 요청) ·
+     <code>public/app.js</code>(실구현 RG 네임스페이스·chartBars·maybeAutoRefreshCommit) ·
+     <code>lib/common/renderGuard.js</code>(순수 정본).</p>
+  <span class="tag">코드 미작성 — 설계 표현(시그니처·계약·의사코드)까지</span>
+  <span class="tag">빅뱅 금지 — 옵트인 점진 도입</span>
+  <span class="tag">M9 계약 정합 · 회귀 방지</span>
+  <span class="tag">작성 2026-06-24 · 수석 아키텍트</span>
+  <span class="tag" style="background:rgba(196,181,253,.12);color:#c4b5fd;border-color:rgba(196,181,253,.4);">rev.1 — 설계 검증 1회차 반영(2026-06-24)</span>
+</header>
+
+<div style="max-width:1180px;margin:0 auto;padding:18px 28px 0;">
+  <div class="note" style="margin:0;"><b>검증 반영 안내(rev.1).</b> 독립 검증(<code>docs/reviews/m10_design_review_1.html</code>) CONDITIONAL PASS 4건을 반영했다 —
+  <b>F-2</b>(patchRegion 노드 소유권을 <b>위젯-소유 모델</b>로 단일화 §2.7·§4.4) ·
+  <b>F-1</b>(차트 깜빡임 0 시점을 P4 이후로 정정, 진입 로딩 render() 처리 명시 §4.1·§8) ·
+  <b>F-3b</b>(툴팁 세로 띄움 <code>translateY(-100%)</code> 유지·가로만 변경 §5.1·§5.2) ·
+  <b>Q-M10-1</b>(commitActivityKey에 마지막 날짜 epoch-day 정수 prefix를 P2부터 확정 §4.2) ·
+  <b>F-3d</b>(폴링 flush를 모든 보류 해제 지점 8곳에 동반 §6.4) · <b>F-3a</b>(showTip 클로저·<code>rect</code> 정정 §5.1) · P2 경미 항목.</div>
+</div>
+
+<main>
+
+<!-- ===================== 0. 목차 ===================== -->
+<section>
+  <h2>0. 목차</h2>
+  <div class="toc">
+    <a href="#overview">1. 개요 · 아키텍처 동인 · 품질 속성</a>
+    <a href="#patch-api">2. ★ patchRegion API surface (핵심 기반)</a>
+    <a href="#patch-flow">3. patchRegion 적용 흐름 다이어그램</a>
+    <a href="#chart-flicker">4. 차트 깜빡임 완화 설계 결정</a>
+    <a href="#tooltip">5. 툴팁 막대 추적 설계</a>
+    <a href="#poll-retry">6. 커밋 폴링 무재시도 보강 설계</a>
+    <a href="#callsite-map">7. 적용 호출처 지도 (patchRegion vs 전체 render 유지)</a>
+    <a href="#incremental">8. 점진 도입 순서</a>
+    <a href="#m9-compat">9. R-25 기존 계약과의 정합 · 회귀 방지</a>
+    <a href="#filemap">10. 파일 변경 지도</a>
+    <a href="#test">11. 테스트 전략</a>
+    <a href="#security">12. 보안 유지</a>
+    <a href="#adr">13. ADR (M10)</a>
+    <a href="#risk">14. 리스크 · 가정 · 미해결 질문</a>
+  </div>
+</section>
+
+<!-- ===================== 1. 개요 ===================== -->
+<section id="overview">
+  <h2>1. 개요 · 아키텍처 동인 · 품질 속성</h2>
+  <p>M9는 전체 <code>replaceChildren</code> + RG.widget destroy/recreate + RG.preserve capture/restore 조합으로 stateful 상호작용(IME·드래그·모달)을 보호했다. 그러나 <b>매 render마다 DOM 전체를 교체</b>하기 때문에 5분 폴링 시 차트가 깜빡이고, 툴팁이 막대 위치를 따라가지 않으며, deferred 보류로 건너뛴 폴링 틱이 최대 ~10분까지 지연되는 구조적 한계가 남았다(코드 리뷰 m9_p8·m9_p6 QA 메모). M10은 이 4가지 후속을 설계한다.</p>
+  <p><b>핵심 원칙:</b> patchRegion은 기존 전체 render 경로를 완전히 교체하지 않고 <b>옵트인으로 특정 호출처만 전환</b>한다. M9의 RG 계약(deferred·coalesce·widget·preserve)과 정합을 유지하며, 점진 도입 중 어느 시점에도 전체 render 폴백이 살아 있다.</p>
+
+  <h3>1.1 아키텍처 동인</h3>
+  <table>
+    <tr><th style="width:180px">동인</th><th>출처</th><th>설계에 미친 영향</th></tr>
+    <tr><td>5분 폴링 시 차트 깜빡임</td><td>m9-design.html §10 리스크 · m9_p8 QA</td><td>차트 영역만 부분 갱신하거나 데이터 동일 시 재생성 skip. patchRegion 첫 번째 적용 호출처.</td></tr>
+    <tr><td>툴팁 중앙 고정</td><td>m9_p8 코드 리뷰 개선 항목</td><td>showTip()이 막대 모델 좌표(<code>b.x, b.w</code>)를 이용해 tooltip.style.left 동적 산출. 경계 클램핑 필요.</td></tr>
+    <tr><td>폴링 틱 건너뜀 후 최대 10분 지연</td><td>m9_p6 코드 리뷰 개선 항목</td><td>boilesce 해제 직후 커밋 폴링도 1회 따라가게 — 메일 release 패턴을 커밋에도 연결.</td></tr>
+    <tr><td>빅뱅 금지 · 번들러 없음</td><td>M9 설계 원칙 · CLAUDE.md</td><td>patchRegion은 RG.preserve 내부 메서드로 추가. 기존 전체 render 경로는 반드시 보존.</td></tr>
+    <tr><td>L-1 보안 불변식</td><td>CLAUDE.md 보안 모델</td><td>patchRegion이 신뢰불가 스캔/커밋 데이터를 다룰 때도 textContent만. innerHTML 0.</td></tr>
+  </table>
+
+  <h3>1.2 품질 속성 목표</h3>
+  <table>
+    <tr><th style="width:140px">속성</th><th>목표 / 검증</th></tr>
+    <tr><td>차트 깜빡임</td><td>5분 폴링·수동 새로고침 시 commitActivity 데이터 불변이면 chart DOM 재생성 0건. 변경 시에도 flash 없이 부분 교체.</td></tr>
+    <tr><td>툴팁 정확성</td><td>7칸 어느 막대 호버에도 툴팁 left가 해당 막대 중심 ±2px 이내(뷰포트 경계 클램핑 포함).</td></tr>
+    <tr><td>폴링 최대 지연</td><td>deferred 보류로 폴링 틱이 1회 건너뛰어도, 보류 해제 직후 1회 따라가므로 최대 지연 ≤ 폴링 주기 + 보류 지속 시간(기존 2×주기 → 1×주기+보류).</td></tr>
+    <tr><td>회귀 안전</td><td>기존 render() 전체 경로 동작 불변. 전체 node --test 그린. patchRegion 미적용 경로에서 동작 변화 0.</td></tr>
+    <tr><td>보안</td><td>L-1(textContent) 불변. 새 IPC 0. 신뢰 경계 변화 0. innerHTML 도입 0.</td></tr>
+  </table>
+</section>
+
+<!-- ===================== 2. patchRegion API surface ===================== -->
+<section id="patch-api">
+  <h2>2. ★ patchRegion API surface (핵심 기반)</h2>
+  <div class="warnbox"><b>이 절이 M10 설계의 핵심 산출물이다.</b> M9 §3.3이 "후속 마일스톤"으로 명시 위임한 patchRegion을 여기서 확정 계약으로 못 박는다. 이후 차트·툴팁·폴링 설계는 모두 이 API를 참조한다.</div>
+
+  <h3>2.1 시그니처 확정</h3>
+  <pre><span class="c">// public/app.js — RG.preserve 확장 (M9 계약 정합, 기존 capture/restore 메서드 보존)</span>
+RG.preserve = {
+  <span class="f">capture</span>(rootEl) { <span class="c">/* M9 기존 — 전체 render 전 스냅샷 */</span> },
+  <span class="f">restore</span>(rootEl, snap) { <span class="c">/* M9 기존 — 전체 render 후 복원 */</span> },
+
+  <span class="c">/** [M10 신규] 특정 영역만 부분 갱신. 전체 replaceChildren 대신 지정 컨테이너만 교체. */</span>
+  <span class="f">patchRegion</span>(containerEl, builderFn, opts) {
+    <span class="c">// containerEl : 교체 대상 DOM 요소(살아있는 노드). null/미발견이면 전체 render 폴백.</span>
+    <span class="c">// builderFn   : () => Node | Node[] | null. 새 콘텐츠 생성 순수 빌더.</span>
+    <span class="c">// opts        : { widgets?: string[], preserveFocus?: boolean, fallback?: () => void }</span>
+    <span class="c">//   widgets     — 이 영역 안에 마운트된 RG.widget id 배열(영역 내 위젯만 destroy/mount).</span>
+    <span class="c">//   preserveFocus — 영역 안 포커스된 입력 캐럿 보존 여부(기본 true).</span>
+    <span class="c">//   fallback    — containerEl 부재·빌더 오류 시 호출할 전체 render 대리(기본 render).</span>
+  },
+};</pre>
+
+  <h3>2.2 내부 실행 순서 (계약)</h3>
+  <p>patchRegion은 다음 5단계를 순서대로 실행한다. 단계 중 복구 불가 오류가 발생하면 <code>opts.fallback()</code>으로 전체 render 폴백한다.</p>
+  <ol>
+    <li><b>가드 검사:</b> <code>RG.deferred()</code>가 true이면 <code>RG.coalesce.request()</code>를 호출하고 즉시 반환(보류 중에는 부분 갱신도 수행하지 않는다). — M9 deferred 계약과 동일한 규칙.</li>
+    <li><b>영역 내 위젯 destroy:</b> <code>opts.widgets</code> 배열에 지정된 id만 <code>RG.widget._destroyById(id)</code>로 정리. 전체 destroyAll이 아닌 <b>영역 범위 위젯만</b> 파괴한다.</li>
+    <li><b>포커스/스크롤 캡처(opt-in):</b> <code>opts.preserveFocus !== false</code>이면 <code>RG.preserve.capture(containerEl)</code>로 영역 내 포커스·캐럿 스냅샷.</li>
+    <li><b>영역 교체:</b> <code>builderFn()</code> 호출 → 반환된 노드로 <code>containerEl.replaceChildren(...nodes)</code>. builderFn이 null 반환하면 영역을 비움(삭제 의미).</li>
+    <li><b>복원 + 영역 내 위젯 mount:</b> <code>RG.preserve.restore(containerEl, snap)</code> → <code>RG.widget._mountById(id, containerEl)</code> for each <code>opts.widgets</code>.</li>
+  </ol>
+
+  <h3>2.3 영역 내 위젯 destroy/mount — 신규 내부 메서드</h3>
+  <p>기존 <code>RG.widget.destroyAll/mountAll</code>은 전체 위젯 레지스트리를 순회한다. patchRegion용으로 id 단위 조작 메서드를 <b>RG.widget 내부에 추가</b>한다(공개 API는 아님, 밑줄 접두어로 내부 표기).</p>
+  <pre><span class="c">// RG.widget 내부 확장 — 공개 API 추가 없음(기존 define/destroyAll/mountAll 보존)</span>
+widget = {
+  <span class="c">// ... 기존 define/destroyAll/mountAll 그대로 ...</span>
+
+  <span class="c">/** patchRegion 전용: 특정 id 위젯만 destroy. id 불일치 시 no-op. */</span>
+  _destroyById(id) {
+    <span class="k">const</span> s = _specs.find((s) => s.id === id);
+    <span class="k">const</span> inst = _instances[id];
+    <span class="k">if</span> (s &amp;&amp; inst != <span class="k">null</span> &amp;&amp; <span class="k">typeof</span> s.destroy === <span class="s">'function'</span>) {
+      <span class="k">try</span> { s.destroy(inst); } <span class="k">catch</span> (_) {}
+    }
+    _instances[id] = <span class="k">null</span>;
+  },
+  <span class="c">/** patchRegion 전용: 특정 id 위젯만 mount. 이미 살아있으면 skip. */</span>
+  _mountById(id, rootEl) {
+    <span class="k">if</span> (_instances[id] != <span class="k">null</span>) <span class="k">return</span>;
+    <span class="k">const</span> s = _specs.find((s) => s.id === id);
+    <span class="k">if</span> (!s || <span class="k">typeof</span> s.init !== <span class="s">'function'</span>) <span class="k">return</span>;
+    <span class="k">let</span> inst = <span class="k">null</span>;
+    <span class="k">try</span> { inst = s.init(rootEl); } <span class="k">catch</span> (_) {}
+    _instances[id] = (inst != <span class="k">null</span>) ? inst : <span class="k">null</span>;
+  },
+};</pre>
+
+  <h3>2.4 전체 render 폴백 규칙</h3>
+  <table>
+    <tr><th>조건</th><th>동작</th></tr>
+    <tr><td><code>containerEl</code>가 null 또는 DOM에 없음</td><td><code>opts.fallback()</code> 호출 (기본: <code>render()</code>)</td></tr>
+    <tr><td><code>builderFn()</code>이 예외를 throw</td><td>예외 흡수 후 <code>opts.fallback()</code></td></tr>
+    <tr><td><code>RG.deferred()</code>가 true</td><td><code>RG.coalesce.request()</code> 후 즉시 반환(폴백 아님, 보류)</td></tr>
+    <tr><td>정상 실행</td><td>영역만 교체. render() 미호출.</td></tr>
+  </table>
+  <div class="note"><b>폴백 설계 의도:</b> patchRegion 자체가 실패해도 앱이 빈 상태로 남지 않는다. 전체 render가 폴백으로 동작하므로 사용자에게는 약간의 깜빡임이 있을 뿐 정보 손실이 없다. 점진 도입 중 안전망 역할을 한다.</div>
+
+  <h3>2.5 deferred / coalesce 상호작용 계약</h3>
+  <ul>
+    <li>patchRegion 진입 시 <code>RG.deferred()</code>가 true이면 <b>부분 갱신을 수행하지 않는다</b>. 대신 <code>RG.coalesce.request()</code>를 호출해 보류 해제 시 전체 render가 1회 반영되게 한다.</li>
+    <li>patchRegion이 정상 완료되면 coalesce pending을 건드리지 않는다. 이미 pending이 쌓인 상태라면 보류 해제 시 전체 render가 추가로 1회 발화하는 것이 정상(영역 외 변경 반영).</li>
+    <li>patchRegion은 <b>coalesce.release()를 호출하지 않는다</b>. release는 "즉시 1회 전체 render"를 뜻하므로 patchRegion 목적과 충돌한다. 부분 갱신 완료 후 추가 전체 render가 필요한 경우는 호출처가 명시적으로 release()를 부른다.</li>
+  </ul>
+
+  <h3>2.6 보존 노드 adopt 순서 (focus/caret/scroll)</h3>
+  <p>영역 교체 후 복원 순서는 다음을 따른다. 이 순서가 바뀌면 브라우저가 focus 이후 setSelectionRange를 무시할 수 있다.</p>
+  <ol>
+    <li>containerEl.replaceChildren (새 노드로 DOM 교체 완료)</li>
+    <li>scrollTop 복원 (새 노드가 DOM에 붙은 뒤 레이아웃이 확정된 시점)</li>
+    <li>focus({ preventScroll: true }) 호출</li>
+    <li>setSelectionRange(start, end, dir) 호출</li>
+  </ol>
+  <div class="secbox"><b>보안 채널 안전성 확인:</b> patchRegion이 보존·adopt하는 것은 캐럿 위치(정수)·scrollTop(정수)·셀렉터(하드코딩 상수)뿐이다. 스캔/커밋 데이터에서 읽은 문자열은 adopt 경로에 진입하지 않는다(L-1 불변식 영향 없음).</div>
+
+  <h4>opts 기본값 · 미지정 동작 (P2 경미 명시)</h4>
+  <table>
+    <tr><th style="width:160px">opts 키</th><th style="width:120px">기본값</th><th>미지정/기본 동작</th></tr>
+    <tr><td><code>widgets</code></td><td><code>[]</code> (빈 배열)</td><td>영역 내 위젯 destroy/mount를 <b>수행하지 않는다</b>. 순수 콘텐츠 영역(위젯 없는 영역)을 갱신할 때 사용. 차트처럼 위젯이 있는 영역은 반드시 명시.</td></tr>
+    <tr><td><code>preserveFocus</code></td><td><code>true</code></td><td>기본은 capture/restore 수행. 차트처럼 포커스 입력이 없는 영역은 <code>false</code>로 캡처/복원 생략(불필요 reflow 절감).</td></tr>
+    <tr><td><code>fallback</code></td><td><code>render</code></td><td>미지정 시 전체 <code>render()</code>로 폴백.</td></tr>
+  </table>
+
+  <h3>2.7 옵트인 점진 도입 — 기존 render() 경로 보존 + 노드 소유권 단일화 (F-2)</h3>
+  <p>patchRegion은 기존 render()를 건드리지 않는다. 각 호출처가 독립적으로 patchRegion으로 전환한다.</p>
+  <pre><span class="c">// 기존 전체 render 경로 — 변경 없음</span>
+<span class="k">function</span> <span class="f">render</span>() {
+  RG.widget.destroyAll();
+  <span class="k">const</span> snap = RG.preserve.capture(app);
+  app.replaceChildren(); <span class="c">// 전체 교체 — patchRegion 도입 후에도 유지</span>
+  <span class="c">// ... 뷰 빌드 ...</span>
+  RG.preserve.restore(app, snap);
+  RG.widget.mountAll(app);
+}</pre>
+
+  <div class="secbox"><b>[F-2 반영 · 중요] 노드 소유권 = 위젯-소유 모델로 단일화.</b> 현재 commitChart 위젯의 <code>init</code>(app.js:5727~5737)은 스스로 <code>chartBars()</code>로 차트 노드를 생성해 <code>host.appendChild(chart.node)</code>로 삽입하고, <code>destroy</code>에서 호버 핸들러를 detach한다 — <b>즉 차트 노드의 생성·삽입·파괴 전권을 위젯이 가진다.</b> 따라서 patchRegion의 <code>builderFn</code>이 차트 노드를 또 만들어 반환하면 <b>노드가 이중 삽입되고 핸들러가 누수</b>된다(patchRegion이 막으려던 문제를 역유발). 이를 막기 위해 소유권을 다음 한 모델로 못 박는다:</div>
+  <ul>
+    <li><b>builderFn은 차트 노드를 만들지 않는다.</b> builderFn은 <b>빈 호스트 컨테이너만</b>(<code>.commit-chart-host</code> div) 반환한다. 실제 차트 노드 생성·삽입·destroy는 <b>오직 <code>RG.widget('commitChart')</code></b>가 <code>_mountById</code>(init이 <code>host.appendChild</code>)·<code>_destroyById</code>(destroy가 핸들러 detach)로 단독 책임진다.</li>
+    <li>patchRegion 실행 순서(§2.2)가 이 모델과 정확히 맞물린다: ② <code>_destroyById('commitChart')</code>로 기존 차트·핸들러 정리 → ④ builderFn이 <b>빈 호스트</b>를 replaceChildren → ⑤ <code>_mountById('commitChart', containerEl)</code>가 빈 호스트 안에 차트를 1회 삽입. <b>이중 삽입·핸들러 누수 0.</b></li>
+    <li>commitChart 위젯의 <code>init</code>은 현재대로 <code>(root||document).querySelector('.commit-chart-host')</code>로 호스트를 찾되, patchRegion 경로에서는 <code>_mountById(id, containerEl)</code>가 <b>containerEl을 root로 전달</b>하므로 스코프가 영역으로 한정된다(전역 querySelector 의존 제거 — m9_p8 사소 항목도 동반 해소).</li>
+  </ul>
+  <pre><span class="c">// patchRegion 전환 예시 — 차트 호스트만 교체(옵트인). 위젯-소유 모델.</span>
+<span class="k">function</span> <span class="f">patchCommitChart</span>() {
+  <span class="k">const</span> region = document.querySelector(<span class="s">'.commit-chart-region'</span>); <span class="c">// 차트 호스트를 감싸는 영역</span>
+  RG.preserve.<span class="f">patchRegion</span>(region, () =&gt; {
+    <span class="c">// builderFn은 빈 호스트 컨테이너만 반환 — 차트 노드는 만들지 않는다(소유권은 위젯).</span>
+    <span class="k">return</span> el(<span class="s">'div'</span>, { cls: <span class="s">'commit-chart-host'</span>, attrs: { <span class="s">'aria-label'</span>: <span class="s">'최근 7일 커밋 빈도 차트'</span> } });
+  }, {
+    widgets: [<span class="s">'commitChart'</span>],   <span class="c">// ②_destroyById → ⑤_mountById 가 차트 노드를 단독 생성/삽입/파괴</span>
+    preserveFocus: <span class="k">false</span>,        <span class="c">// [P2 경미] 차트 영역엔 포커스 입력 없음 — 캡처/복원 생략</span>
+    fallback: () =&gt; render(),    <span class="c">// 영역 부재·빌더 오류 시 전체 render 안전망</span>
+  });
+}</pre>
+  <div class="note"><b>호스트 vs 영역 구분:</b> 기존 <code>.commit-chart-host</code>는 차트 위젯이 노드를 꽂는 컨테이너다. patchRegion의 교체 대상(containerEl)은 그 호스트를 감싸는 한 단계 바깥의 <b>영역(<code>.commit-chart-region</code>)</b>으로 두어, builderFn이 호스트 자체를 새로 만들어 갈아끼우고 위젯이 그 안을 채우게 한다. 이렇게 하면 builderFn 결과 노드(빈 호스트)와 위젯 소유 노드(차트)의 경계가 명확해진다. <b>renderHomeProductivity()는 <code>.commit-chart-host</code>를 <code>.commit-chart-region &gt; .commit-chart-host</code> 2단 구조로 변경</b>(P4 동반 — §10 파일 변경 지도).</div>
+</section>
+
+<!-- ===================== 3. patchRegion 흐름 다이어그램 ===================== -->
+<section id="patch-flow">
+  <h2>3. patchRegion 적용 흐름 다이어그램</h2>
+  <div class="svg-wrap">
+  <svg viewBox="0 0 980 520" width="100%" role="img" aria-label="patchRegion 실행 흐름과 전체 render 폴백 분기">
+    <defs>
+      <marker id="ar" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#94a3b8"/></marker>
+      <marker id="ag" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#34d399"/></marker>
+      <marker id="aw" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#fbbf24"/></marker>
+      <marker id="ad" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#f87171"/></marker>
+    </defs>
+
+    <!-- 진입 -->
+    <rect x="360" y="20" width="260" height="46" rx="10" fill="#172339" stroke="#38bdf8" stroke-width="2"/>
+    <text x="490" y="48" text-anchor="middle" fill="#7dd3fc" font-size="13.5" font-weight="700">RG.preserve.patchRegion(el, fn, opts)</text>
+
+    <!-- 1단계: deferred 검사 -->
+    <path d="M490,66 L490,100" fill="none" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#ar)"/>
+    <rect x="330" y="100" width="320" height="44" rx="9" fill="#1e1b3a" stroke="#c4b5fd" stroke-width="1.5"/>
+    <text x="490" y="124" text-anchor="middle" fill="#c4b5fd" font-size="12.5">① RG.deferred() 검사</text>
+
+    <!-- deferred=true 분기 -->
+    <path d="M330,122 C240,122 200,122 200,180" fill="none" stroke="#fbbf24" stroke-width="1.5" marker-end="url(#aw)"/>
+    <text x="244" y="118" fill="#fbbf24" font-size="11">true</text>
+    <rect x="120" y="168" width="200" height="44" rx="8" fill="#2b2410" stroke="#fbbf24"/>
+    <text x="220" y="187" text-anchor="middle" fill="#fde68a" font-size="11.5">RG.coalesce.request()</text>
+    <text x="220" y="203" text-anchor="middle" fill="#94a3b8" font-size="10.5">보류 적재 후 즉시 반환</text>
+
+    <!-- deferred=false → 2단계 -->
+    <path d="M490,144 L490,178" fill="none" stroke="#34d399" stroke-width="1.5" marker-end="url(#ag)"/>
+    <text x="500" y="164" fill="#34d399" font-size="11">false</text>
+    <rect x="330" y="178" width="320" height="44" rx="9" fill="#172339" stroke="#34d399"/>
+    <text x="490" y="202" text-anchor="middle" fill="#6ee7b7" font-size="12.5">② opts.widgets별 _destroyById(id)</text>
+    <text x="490" y="218" text-anchor="middle" fill="#94a3b8" font-size="10.5">영역 내 위젯만 destroy (전체 아님)</text>
+
+    <!-- 3단계 -->
+    <path d="M490,222 L490,256" fill="none" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#ar)"/>
+    <rect x="330" y="256" width="320" height="44" rx="9" fill="#172339" stroke="#38bdf8"/>
+    <text x="490" y="280" text-anchor="middle" fill="#7dd3fc" font-size="12.5">③ preserve.capture(containerEl)</text>
+    <text x="490" y="296" text-anchor="middle" fill="#94a3b8" font-size="10.5">포커스·캐럿·스크롤 스냅샷 (opt-in)</text>
+
+    <!-- 4단계 -->
+    <path d="M490,300 L490,334" fill="none" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#ar)"/>
+    <rect x="300" y="334" width="380" height="52" rx="9" fill="#172339" stroke="#38bdf8"/>
+    <text x="490" y="356" text-anchor="middle" fill="#7dd3fc" font-size="12.5">④ builderFn() → 새 노드</text>
+    <text x="490" y="374" text-anchor="middle" fill="#94a3b8" font-size="10.5">containerEl.replaceChildren(...nodes)</text>
+
+    <!-- 빌더 예외 분기 -->
+    <path d="M680,362 C780,362 800,300 800,240" fill="none" stroke="#f87171" stroke-width="1.4" stroke-dasharray="5,4" marker-end="url(#ad)"/>
+    <text x="760" y="312" fill="#f87171" font-size="10.5">throw</text>
+    <rect x="740" y="200" width="200" height="50" rx="8" fill="#3a1414" stroke="#f87171"/>
+    <text x="840" y="222" text-anchor="middle" fill="#fca5a5" font-size="11.5">예외 흡수</text>
+    <text x="840" y="240" text-anchor="middle" fill="#94a3b8" font-size="10.5">opts.fallback() — 전체 render</text>
+
+    <!-- containerEl 없음 분기 -->
+    <path d="M680,210 C740,210 760,210 738,210" fill="none" stroke="#f87171" stroke-width="1.4" stroke-dasharray="5,4" marker-end="url(#ad)"/>
+
+    <!-- 5단계 -->
+    <path d="M490,386 L490,420" fill="none" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#ar)"/>
+    <rect x="280" y="420" width="420" height="52" rx="9" fill="#0f261e" stroke="#34d399" stroke-width="2"/>
+    <text x="490" y="444" text-anchor="middle" fill="#6ee7b7" font-size="12.5" font-weight="700">⑤ preserve.restore(containerEl, snap)</text>
+    <text x="490" y="462" text-anchor="middle" fill="#94a3b8" font-size="10.5">→ _mountById(id, containerEl) for each opts.widgets</text>
+
+    <!-- containerEl 없음 표시 -->
+    <rect x="60" y="334" width="220" height="52" rx="9" fill="#3a1414" stroke="#f87171"/>
+    <text x="170" y="356" text-anchor="middle" fill="#fca5a5" font-size="12">containerEl 없음</text>
+    <text x="170" y="374" text-anchor="middle" fill="#94a3b8" font-size="10.5">opts.fallback() — 전체 render</text>
+    <path d="M300,360 L282,360" fill="none" stroke="#f87171" stroke-width="1.4" marker-end="url(#ad)"/>
+    <text x="287" y="350" fill="#f87171" font-size="10">null</text>
+
+    <!-- 범례 -->
+    <rect x="20" y="480" width="940" height="30" rx="6" fill="#0b1220"/>
+    <text x="34" y="499" fill="#34d399" font-size="11">정상 흐름</text>
+    <text x="130" y="499" fill="#fbbf24" font-size="11">보류 분기(deferred)</text>
+    <text x="280" y="499" fill="#f87171" font-size="11">오류/부재 → 전체 render 폴백</text>
+    <text x="470" y="499" fill="#c4b5fd" font-size="11">deferred 검사(M9 계약 정합)</text>
+    <text x="650" y="499" fill="#94a3b8" font-size="11">render() 미호출 = 영역만 교체</text>
+  </svg>
+  </div>
+  <div class="legend">
+    <span><span class="sw" style="background:#34d399"></span> 정상 실행 경로</span>
+    <span><span class="sw" style="background:#fbbf24"></span> deferred 보류 분기</span>
+    <span><span class="sw" style="background:#f87171"></span> 오류/부재 → 전체 render 폴백</span>
+    <span><span class="sw" style="background:#c4b5fd"></span> M9 RG 계약 접점</span>
+  </div>
+</section>
+
+<!-- ===================== 4. 차트 깜빡임 완화 ===================== -->
+<section id="chart-flicker">
+  <h2>4. 차트 깜빡임 완화 — 설계 결정</h2>
+  <p>M9 §10 리스크와 m9_p8 QA 모두 "5분 폴링 시 전체 render → chart destroy/recreate → 깜빡임"을 예고했다. 두 접근을 비교하고 권장안을 확정한다.</p>
+
+  <h3>4.1 대안 비교</h3>
+  <table>
+    <tr><th style="width:180px">접근</th><th>장점</th><th>단점 / 트레이드오프</th><th>적합성</th></tr>
+    <tr>
+      <td><b>A. patchRegion 적용</b><br>(차트 호스트 영역만 부분 갱신)</td>
+      <td>데이터 변경 시에도 차트 영역 외 DOM 불변 → 깜빡임 0. 범용 patchRegion 기반 닦음.</td>
+      <td>patchRegion 구현 필요(M10 핵심 기반). commitChart 위젯을 _destroyById/_mountById로 정밀 제어.</td>
+      <td class="pick">권장</td>
+    </tr>
+    <tr>
+      <td><b>B. diff 가드</b><br>(데이터 동일 시 재생성 skip)</td>
+      <td>구현 단순. 폴링으로 동일 데이터가 오면 render()는 호출하되 chart를 skip.</td>
+      <td>데이터가 바뀌면 전체 render → 깜빡임 여전. 카드 스크롤 흔들림도 해결 안 됨. 가드 상태 관리 필요.</td>
+      <td>보완책</td>
+    </tr>
+    <tr>
+      <td><b>C. A + B 병합</b><br>(patchRegion + 데이터 동일 skip)</td>
+      <td>데이터 동일 → skip, 변경 → patchRegion. 최소 재작업.</td>
+      <td>두 메커니즘의 조합 — 이해하기 쉽고 구현 비용도 낮음(A를 기반으로 데이터 hash 비교만 추가).</td>
+      <td>선택적 강화</td>
+    </tr>
+  </table>
+
+  <div class="note"><b>결정: A(patchRegion) + 조건부 B(데이터 동일 skip) 병합.</b> patchRegion을 기반으로 하되, commitActivity 데이터가 이전과 동일하면 patchRegion 자체도 호출하지 않는 단순 직렬화 키 비교를 추가한다. <b>단계별 효과를 정확히 구분한다:</b></p>
+  <ul>
+    <li><b>P2(diff 가드 단독)</b> — 데이터 <b>무변경</b> 폴링 틱에서 <b>불필요한 갱신을 skip</b>(완료부 render/release 미호출). 데이터 변경 시에는 여전히 전체 render → 깜빡임 잔존. 즉 P2의 효과는 "깜빡임 0"이 아니라 <b>"무변경 시 불필요 갱신 0"</b>이다.</li>
+    <li><b>P4(patchRegion 전환) 이후</b>에 비로소 데이터 변경 시에도 차트 영역만 교체 → <b>깜빡임 0 + 홈 카드 스크롤 흔들림 0</b>이 달성된다.</li>
+  </ul>
+
+  <div class="secbox"><b>[F-1 반영 · 중요] 진입부 로딩 render()가 깜빡임의 진짜 원인.</b> 현재 <code>refreshCommitActivity</code>는 <b>진입부(app.js:2204~2205)에서 <code>store.busyCommitActivity=true</code> 직후 <code>if (view==='home') render()</code></b>로 로딩 표시를 위해 <b>fetch 완료 전에 이미 전체 render를 1회</b> 한다. 따라서 "완료부만 patchRegion으로 바꿔도" 이 <b>진입 로딩 render</b> 때문에 깜빡임이 남는다. P4에서 다음을 동반해야 깜빡임이 실제로 0이 된다:</div>
+  <ul>
+    <li><b>진입부 로딩 render() 제거 또는 영역 한정:</b> 폴링 경로(maybeAutoRefreshCommit→refreshCommitActivity)에서는 진입 로딩 render()를 <b>호출하지 않는다</b>(차트 호스트는 fetch 동안 이전 차트를 그대로 유지 — 폴링은 백그라운드 갱신이라 로딩 스피너가 불필요). 최초 로드(maybeLoadCommitActivity 경유, <code>commitActivityLoaded===false</code>)에서만 로딩 상태를 표시하되, 그조차 차트 영역에 한정한 patchRegion(빈 호스트 + "집계 중…" 텍스트)으로 처리한다.</li>
+    <li>이를 위해 <code>refreshCommitActivity(opts)</code>에 <code>{ silent }</code> 플래그를 둬, 폴링 호출(<code>maybeAutoRefreshCommit</code>·<code>maybeFlushCommitRefresh</code>)은 <code>silent:true</code>(진입 render 생략), 최초/수동 호출은 기본(로딩 표시)으로 분기한다.</li>
+  </ul>
+
+  <h3>4.2 commitActivity 데이터 동일성 판정 (epoch-day prefix 포함 — Q-M10-1 확정)</h3>
+  <pre><span class="c">// public/app.js — 폴링/완료부 diff 가드 (순수 키 함수는 헤드리스 테스트 대상)</span>
+<span class="k">let</span> _lastCommitActivityKey = <span class="s">''</span>;
+
+<span class="c">/** [Q-M10-1] 키 = 마지막 날짜의 epoch-day 정수 + count 시퀀스.</span>
+<span class="c"> *  날짜 문자열이 아니라 정수만 키에 넣어 L-1/M-2 불변식 유지하면서,</span>
+<span class="c"> *  자정 경계로 7일 창이 밀리면(count가 같아도) 키가 달라져 갱신 누락 0. */</span>
+<span class="k">function</span> <span class="f">commitActivityKey</span>(ca) {
+  <span class="k">if</span> (!ca || !Array.isArray(ca.days) || ca.days.length === 0) <span class="k">return</span> <span class="s">''</span>;
+  <span class="k">const</span> last = ca.days[ca.days.length - 1];
+  <span class="c">// epoch-day: Date.parse → ms → 일 단위 정수. 파싱 실패(NaN)면 0. 데이터 문자열은 키에 미진입.</span>
+  <span class="k">const</span> ms = Date.parse(last &amp;&amp; last.date);
+  <span class="k">const</span> epochDay = Number.isFinite(ms) ? Math.floor(ms / 86400000) : 0;
+  <span class="k">const</span> counts = ca.days.slice(-7).map((d) =&gt; {
+    <span class="k">const</span> n = Number(d &amp;&amp; d.count);                  <span class="c">// M-2 동일 규칙(Number+isFinite, 음수/NaN→0)</span>
+    <span class="k">return</span> (Number.isFinite(n) &amp;&amp; n &gt;= 0) ? n : 0;
+  }).join(<span class="s">','</span>);
+  <span class="k">return</span> epochDay + <span class="s">'|'</span> + counts;                       <span class="c">// 예: "20263|0,1,3,0,12,5,2"</span>
+}
+
+<span class="c">// 완료부 — fetch 직후. silent 여부와 무관하게 동일.</span>
+<span class="k">function</span> <span class="f">onCommitActivityFetched</span>() {
+  <span class="k">const</span> newKey = commitActivityKey(store.commitActivity);
+  <span class="k">if</span> (newKey === _lastCommitActivityKey) <span class="k">return</span>; <span class="c">// [P2] 데이터·날짜창 무변경 → 갱신 skip</span>
+  _lastCommitActivityKey = newKey;
+  <span class="c">// [P1 단계] RG.coalesce.release()로 전체 render. [P4 단계] patchCommitChart()로 영역만 교체.</span>
+  patchCommitChart();
+}</pre>
+  <div class="secbox"><b>L-1 / M-2 안전성:</b> 키는 <b>정수(epoch-day)와 정수(count)만</b> 사용한다 — <code>Date.parse</code>는 문자열을 ms 정수로 환원하고 실패 시 0, count는 Number+isFinite로 강제한다. 날짜·라벨 문자열은 키 계산에 직접 들어가지 않으므로 신뢰불가 스캔/커밋 데이터가 비교 경로에 흐르지 않는다. 라벨은 textContent 렌더 경로에만 흐른다(불변).</div>
+
+  <h3>4.3 전체 render 스크롤 흔들림도 함께 완화 (P4 이후)</h3>
+  <p>P4에서 (1) 진입 로딩 render 생략(폴링 silent) + (2) 완료부 patchCommitChart(영역만 교체)가 함께 적용되면, 폴링 시 전체 render()가 한 번도 호출되지 않으므로 홈 카드의 스크롤 위치 흔들림이 자동으로 해결된다. 이것이 diff 가드(P2)만으로는 얻을 수 없는 patchRegion의 추가 이점이다.</p>
+</section>
+
+<!-- ===================== 5. 툴팁 막대 추적 ===================== -->
+<section id="tooltip">
+  <h2>5. 툴팁 막대 추적 설계</h2>
+  <p>m9_p8 코드 리뷰 개선 항목: 현재 툴팁 CSS는 <code>left:50%</code> 고정(wrap 전체 중앙). 막대 위치에 관계없이 항상 차트 중앙에 떠서 양끝 막대와의 시각적 대응이 모호하다. M9 §10은 "툴팁은 SVG 외부 div로 포지셔닝"을 명시했으나 1차 구현에서 미완으로 남겼다.</p>
+
+  <h3>5.1 좌표 계산 설계 (F-3a 정정 — 막대별 클로저)</h3>
+  <p>차트 모델(<code>commitChartModel</code>)은 각 막대의 <code>b.x</code>(SVG 좌표계 left), <code>b.w</code>(너비)를 이미 계산한다. 현 <code>chartBars</code>는 <code>model.bars.forEach((b)=&gt;{...})</code> 안에서 막대마다 <code>rect</code>를 만들고 <code>showTip/hideTip</code> 클로저로 <code>on(rect,'mouseenter',showTip)</code> 등을 등록한다(app.js:1297~1326). 툴팁 위치 계산을 <b>이 클로저 안</b>에 두어 <code>b</code>(막대 모델)·<code>rect</code>를 그대로 캡처한다 — 별도 <code>barRectEl</code> 인자 없이.</p>
+  <pre><span class="c">// public/app.js — chartBars 내부, model.bars.forEach((b) => { ... }) 안의 showTip</span>
+<span class="c">// svgEl·tip·wrap 은 chartBars 스코프 변수(이미 존재). b·rect 는 forEach 클로저 캡처.</span>
+<span class="k">const</span> showTip = () =&gt; {
+  rect.setAttribute(<span class="s">'fill'</span>, CHART_PALETTE.barHover);                 <span class="c">// 강조(기존 동작 보존)</span>
+  tip.textContent = (b.label || <span class="s">'·'</span>) + <span class="s">' · '</span> + b.count + <span class="s">' 커밋'</span>; <span class="c">// [M-2/L-1] textContent 만</span>
+  tip.style.display = <span class="s">'block'</span>;                                      <span class="c">// offsetWidth 측정 위해 먼저 표시</span>
+
+  <span class="c">// 1. 막대 중심 비율 (SVG viewBox 기준, 0~1)</span>
+  <span class="k">const</span> centerRatio = (b.x + b.w / 2) / model.viewW;
+  <span class="c">// 2. 실제 렌더 치수(px). 표시 직후라 offsetWidth 실측 가능(0이면 80 추정).</span>
+  <span class="k">const</span> svgRect = svgEl.getBoundingClientRect();
+  <span class="k">const</span> wrapRect = wrap.getBoundingClientRect();
+  <span class="k">const</span> tipWidth = tip.offsetWidth || 80;
+  <span class="c">// 3. wrap 기준 left + 4. 경계 클램핑 [0, wrapWidth - tipWidth]</span>
+  <span class="k">const</span> rawLeft = (svgRect.left - wrapRect.left) + centerRatio * svgRect.width - tipWidth / 2;
+  <span class="k">const</span> maxLeft = Math.max(0, wrapRect.width - tipWidth);
+  <span class="k">const</span> left = Math.max(0, Math.min(rawLeft, maxLeft));
+  <span class="c">// 5. [F-3b] 가로 위치만 left 픽셀로. 세로 띄움 translateY(-100%)는 transform 으로 유지.</span>
+  tip.style.left = String(Math.round(left)) + <span class="s">'px'</span>;
+  tip.style.transform = <span class="s">'translateY(-100%)'</span>; <span class="c">// 막대 위로 띄움 — 절대 'none' 으로 덮지 않는다</span>
+};
+<span class="k">const</span> hideTip = () =&gt; {
+  rect.setAttribute(<span class="s">'fill'</span>, baseFill); <span class="c">// 막대별 baseFill 클로저 복원(기존 동작 보존)</span>
+  tip.style.display = <span class="s">'none'</span>;
+};
+on(rect, <span class="s">'mouseenter'</span>, showTip); on(rect, <span class="s">'mouseleave'</span>, hideTip);
+on(rect, <span class="s">'focus'</span>, showTip);      on(rect, <span class="s">'blur'</span>, hideTip);</pre>
+
+  <div class="secbox"><b>[F-3b 반영 · 회귀 방지] 세로 띄움 보존.</b> 기존 CSS는 툴팁을 막대 위로 띄우기 위해 <code>transform</code>(또는 top 오프셋)으로 세로 위치를 잡는다. JS에서 가로 위치를 바꾸려고 <code>transform:'none'</code>으로 덮으면 <b>세로 띄움까지 제거돼 툴팁이 막대와 겹친다</b>(F-3b 버그). 따라서 <b>가로는 <code>style.left</code>(픽셀)로, 세로 띄움은 <code>transform:'translateY(-100%)'</code>로 분리</b>해 가로만 바꾸고 세로는 항상 유지한다. left/translateX를 transform에 섞지 않는다.</div>
+
+  <h3>5.2 CSS 변경 사항 (F-3b 정합)</h3>
+  <pre><span class="c">/* public/styles.css — 툴팁 포지셔닝 수정 */</span>
+.commit-chart__tip {
+  position: absolute;
+  <span class="c">/* left: 50%;  → 제거(JS가 left 픽셀로 직접 설정) */</span>
+  <span class="c">/* transform: translateX(-50%); → 제거. 세로 띄움은 JS가 translateY(-100%)로 설정 */</span>
+  top: 0;                  <span class="c">/* 막대 상단 기준. 실제 띄움은 transform: translateY(-100%) */</span>
+  pointer-events: none;
+  white-space: nowrap;
+  <span class="c">/* 나머지 스타일(배경·패딩·폰트) 기존 유지 */</span>
+}
+<span class="c">/* .commit-chart__wrap에 position:relative 확인(기존 없으면 추가) */</span>
+.commit-chart__wrap {
+  position: relative;
+  <span class="c">/* 기존 스타일 유지 */</span>
+}</pre>
+  <div class="note"><b>세로 기준 정합:</b> 기존 CSS가 <code>top:-32px</code>처럼 픽셀 오프셋으로 띄우고 있었다면, JS의 <code>translateY(-100%)</code>와 중복되지 않도록 <b>둘 중 하나로 통일</b>한다(권장: CSS top은 막대 상단 기준 0, 띄움은 JS transform <code>translateY(-100%)</code> 단독). 구현 시 실제 styles.css의 기존 top/transform 값을 확인해 한쪽만 남긴다.</div>
+
+  <h3>5.3 경계 처리 — 7칸 양끝 막대</h3>
+  <div class="svg-wrap">
+  <svg viewBox="0 0 700 140" width="100%" role="img" aria-label="툴팁 경계 클램핑 예시">
+    <rect x="10" y="10" width="680" height="120" rx="8" fill="#0b1220" stroke="#334155"/>
+    <text x="350" y="30" text-anchor="middle" fill="#94a3b8" font-size="11">wrap (position:relative 기준)</text>
+    <!-- 막대 7개 -->
+    <rect x="20" y="50" width="28" height="60" rx="2" fill="#c7d2fe"/>
+    <rect x="115" y="60" width="28" height="50" rx="2" fill="#c7d2fe"/>
+    <rect x="210" y="40" width="28" height="70" rx="2" fill="#4f46e5"/>
+    <rect x="305" y="55" width="28" height="55" rx="2" fill="#c7d2fe"/>
+    <rect x="400" y="70" width="28" height="40" rx="2" fill="#c7d2fe"/>
+    <rect x="495" y="45" width="28" height="65" rx="2" fill="#c7d2fe"/>
+    <rect x="590" y="65" width="28" height="45" rx="2" fill="#c7d2fe"/>
+    <!-- 왼쪽 끝 툴팁(클램핑) -->
+    <rect x="20" y="18" width="72" height="22" rx="4" fill="#1c1917" stroke="#a8a29e"/>
+    <text x="56" y="33" text-anchor="middle" fill="#e7e5e4" font-size="10">월 · 3 커밋</text>
+    <line x1="34" y1="40" x2="34" y2="50" stroke="#a8a29e" stroke-width="1" stroke-dasharray="3,2"/>
+    <text x="56" y="128" text-anchor="middle" fill="#34d399" font-size="10">left=0 (클램핑됨)</text>
+    <!-- 오른쪽 끝 툴팁(클램핑) -->
+    <rect x="546" y="18" width="72" height="22" rx="4" fill="#1c1917" stroke="#a8a29e"/>
+    <text x="582" y="33" text-anchor="middle" fill="#e7e5e4" font-size="10">일 · 5 커밋</text>
+    <line x1="604" y1="40" x2="604" y2="65" stroke="#a8a29e" stroke-width="1" stroke-dasharray="3,2"/>
+    <text x="582" y="128" text-anchor="middle" fill="#34d399" font-size="10">left=max (클램핑됨)</text>
+    <!-- 중앙 막대 정상 -->
+    <rect x="188" y="18" width="72" height="22" rx="4" fill="#1c1917" stroke="#a8a29e"/>
+    <text x="224" y="33" text-anchor="middle" fill="#e7e5e4" font-size="10">수 · 12 커밋</text>
+    <line x1="224" y1="40" x2="224" y2="50" stroke="#34d399" stroke-width="1" stroke-dasharray="3,2"/>
+    <text x="224" y="128" text-anchor="middle" fill="#94a3b8" font-size="10">정상 중앙 정렬</text>
+  </svg>
+  </div>
+
+  <h3>5.4 getBoundingClientRect 호출 빈도 고려</h3>
+  <p><code>getBoundingClientRect</code>는 레이아웃 강제 리플로우를 발생시킨다. 이를 최소화하기 위해:</p>
+  <ul>
+    <li>showTip은 mouseenter/focus 시만 호출(사용자 상호작용 이벤트). 애니메이션 루프에서 호출하지 않는다.</li>
+    <li><code>wrap.getBoundingClientRect()</code>는 <b>캐시하지 않는다</b>: 창 리사이즈·스크롤 후 틀릴 수 있어 매 호버마다 최신값이 필요하다. 호버는 사용자 상호작용 빈도라 성능 문제 없다.</li>
+    <li><b>[P2 경미] 첫 호버 정확도:</b> §5.1 설계는 <code>tip.textContent</code> 설정 + <code>tip.style.display='block'</code>을 <b>좌표 계산보다 먼저</b> 수행한다. 따라서 첫 호버에서도 <code>tip.offsetWidth</code>가 실측값을 반환해 <code>|| 80</code> 폴백에 의존하지 않는다(display:none 상태에서 측정하던 종전 우려 해소). 만약 폰트 로딩 지연 등으로 0이면 80px 추정으로 graceful — 두 번째 호버부터 정확.</li>
+  </ul>
+  <div class="secbox"><b>L-1 확인:</b> <code>tipEl.textContent</code>에만 데이터가 흐른다. <code>tipEl.style.left</code>에는 <code>Math.round(left) + 'px'</code>(정수 + 리터럴 문자열)만 들어간다. 스캔/커밋 데이터 문자열이 스타일 속성에 진입하지 않는다.</div>
+</section>
+
+<!-- ===================== 6. 폴링 무재시도 보강 ===================== -->
+<section id="poll-retry">
+  <h2>6. 커밋 폴링 무재시도 보강 설계</h2>
+  <p>m9_p6 코드 리뷰 개선 항목: 폴링 틱에 <code>RG.deferred()</code>가 true이면 틱을 통째로 건너뛴다. 메일은 60초 주기라 최대 지연이 짧지만 커밋은 300초 주기라 한 번 건너뛰면 최대 ~600초(10분)까지 차트가 늦을 수 있다.</p>
+
+  <h3>6.1 현재 동작 분석</h3>
+  <pre><span class="c">// 현재 maybeAutoRefreshCommit (M9 구현)</span>
+<span class="k">function</span> <span class="f">maybeAutoRefreshCommit</span>() {
+  <span class="k">if</span> (store.state.view !== <span class="s">'home'</span> || !bridgeHas(<span class="s">'getCommitActivity'</span>)) <span class="k">return</span>;
+  <span class="k">if</span> (store.busyCommitActivity) <span class="k">return</span>;
+  <span class="k">if</span> (RG.deferred()) <span class="k">return</span>; <span class="c">// ← 문제: 보류 시 틱 통째 건너뜀, 다음 틱까지 최대 300초 대기</span>
+  refreshCommitActivity();
+}</pre>
+
+  <h3>6.2 대안 비교</h3>
+  <table>
+    <tr><th style="width:200px">접근</th><th>장점</th><th>단점</th><th>권고</th></tr>
+    <tr>
+      <td><b>A. deferred 해제 훅에 커밋 요청 연결</b><br>(coalesce flushIfPending/release 경로 활용)</td>
+      <td>보류 해제 직후 자동으로 따라감. 추가 상태 없음. 메일 release 패턴과 유사.</td>
+      <td>coalesce 해제가 render를 트리거하는 경로와 커밋 fetch를 트리거하는 경로가 다름 — 별도 플래그 필요.</td>
+      <td class="pick">권장</td>
+    </tr>
+    <tr>
+      <td><b>B. 폴링 주기 단축</b><br>(300s → 60s)</td>
+      <td>구현 0.</td>
+      <td>git 호출 비용 증가(ADR-M9-4 근거 파기). 근거 없는 주기 변경.</td>
+      <td>기각</td>
+    </tr>
+    <tr>
+      <td><b>C. 보류 틱에서 pending 플래그 설정 → 해제 시 즉시 1회 실행</b></td>
+      <td>간단. 명시적 상태 추적.</td>
+      <td>코드리뷰 A와 동일 효과지만 flushIfPending 패턴 재사용이 더 자연스러움. A에 포함.</td>
+      <td>A에 통합</td>
+    </tr>
+  </table>
+
+  <h3>6.3 설계 — pendingCommitRefresh 플래그 + silent 분기</h3>
+  <p><code>refreshCommitActivity</code>는 <b>진입부에서 로딩 표시용 전체 render</b>(app.js:2205)를 한다. 폴링/재시도 경로에서는 이 진입 render가 깜빡임을 만들므로(§4.1 F-1), <code>{ silent }</code> 인자로 진입 render를 분기한다.</p>
+  <pre><span class="c">// public/app.js — refreshCommitActivity 진입부 분기(F-1 정합)</span>
+<span class="k">async function</span> <span class="f">refreshCommitActivity</span>(opts) {
+  opts = opts || {};
+  <span class="k">if</span> (!bridgeHas(<span class="s">'getCommitActivity'</span>) || store.busyCommitActivity) <span class="k">return</span>;
+  store.busyCommitActivity = <span class="k">true</span>;
+  <span class="c">// [F-1] silent(폴링/재시도)면 진입 로딩 render 생략 — 이전 차트를 fetch 동안 유지(깜빡임 0).</span>
+  <span class="k">if</span> (!opts.silent &amp;&amp; store.state.view === <span class="s">'home'</span>) render();
+  <span class="c">// ... await ipc('getCommitActivity') ... 완료 후 onCommitActivityFetched()(§4.2) ...</span>
+}
+
+<span class="c">// public/app.js — 커밋 폴링 보류 재시도 보강</span>
+<span class="k">let</span> _pendingCommitRefresh = <span class="k">false</span>; <span class="c">// 보류로 건너뛴 틱이 있음을 추적</span>
+
+<span class="k">function</span> <span class="f">maybeAutoRefreshCommit</span>() {
+  <span class="k">if</span> (store.state.view !== <span class="s">'home'</span> || !bridgeHas(<span class="s">'getCommitActivity'</span>)) <span class="k">return</span>;
+  <span class="k">if</span> (store.busyCommitActivity) <span class="k">return</span>;
+  <span class="k">if</span> (RG.deferred()) {
+    _pendingCommitRefresh = <span class="k">true</span>; <span class="c">// ← 변경: 건너뜀을 기록</span>
+    <span class="k">return</span>;
+  }
+  _pendingCommitRefresh = <span class="k">false</span>;
+  refreshCommitActivity({ silent: <span class="k">true</span> }); <span class="c">// [F-1] 폴링은 silent — 진입 로딩 render 생략</span>
+}
+
+<span class="c">/** 보류 해제 지점에서 호출. 건너뛴 폴링 틱이 있으면 즉시 1회 커밋 갱신 시도. */</span>
+<span class="k">function</span> <span class="f">maybeFlushCommitRefresh</span>() {
+  <span class="k">if</span> (!_pendingCommitRefresh) <span class="k">return</span>;
+  <span class="k">if</span> (store.state.view !== <span class="s">'home'</span>) { _pendingCommitRefresh = <span class="k">false</span>; <span class="k">return</span>; }
+  <span class="k">if</span> (store.busyCommitActivity || RG.deferred()) <span class="k">return</span>; <span class="c">// 아직 보류 중이면 대기(다음 해제 지점에서 재시도)</span>
+  _pendingCommitRefresh = <span class="k">false</span>;
+  refreshCommitActivity({ silent: <span class="k">true</span> }); <span class="c">// 즉시 1회 실행(폴링 보강이므로 silent)</span>
+}</pre>
+
+  <h3>6.4 maybeFlushCommitRefresh 호출 지점 — 모든 보류 해제 지점 (F-3d 정정)</h3>
+  <div class="secbox"><b>[F-3d 반영] 일부 해제 지점만 덮으면 지연이 남는다.</b> <code>RG.deferred()</code>의 보류 사유는 6종(composing·dragging·overlayOpen·busyMail·busyCommit·editing)이다. compositionend·드래그 onEnd·모달 닫힘만 다루면 <b>busyMail 해제·todoAdding(editing) 해제</b>로 마지막 보류가 풀리는 경우 폴링 재시도가 누락된다. 따라서 코드에서 <b><code>RG.coalesce.release()</code> 또는 <code>flushIfPending()</code>을 호출하는 <u>모든</u> 지점(현 8곳)</b>에 <code>maybeFlushCommitRefresh()</code>를 동반한다. release/flushIfPending이 이미 "보류 해제 시점"의 단일 표지이므로, 그 옆에 한 줄 추가하는 규칙으로 누락을 구조적으로 막는다.</div>
+  <table>
+    <tr><th style="width:240px">보류 해제 지점 (app.js)</th><th style="width:130px">해제되는 사유</th><th>기존 코드 / 추가</th></tr>
+    <tr><td>compositionend (RG.composition.bind)</td><td>composing</td><td><code>flushIfPending()</code> + <code>maybeFlushCommitRefresh()</code></td></tr>
+    <tr><td>카드 Sortable onEnd (마이크로태스크, 5183)</td><td>dragging</td><td><code>flushIfPending()</code> + <code>maybeFlushCommitRefresh()</code></td></tr>
+    <tr><td>홈섹션 Sortable onEnd (마이크로태스크, 5234)</td><td>dragging</td><td><code>flushIfPending()</code> + <code>maybeFlushCommitRefresh()</code></td></tr>
+    <tr><td>closeSettings (2300)</td><td>overlayOpen</td><td><code>release()</code> + <code>maybeFlushCommitRefresh()</code></td></tr>
+    <tr><td>closeDrawer (4352)</td><td>overlayOpen</td><td><code>release()</code> + <code>maybeFlushCommitRefresh()</code></td></tr>
+    <tr><td>closeHelp (4923)</td><td>overlayOpen</td><td><code>release()</code> + <code>maybeFlushCommitRefresh()</code></td></tr>
+    <tr><td>maybeAutoRefreshMail 완료 (2187)</td><td>busyMail</td><td><code>release()</code> + <code>maybeFlushCommitRefresh()</code></td></tr>
+    <tr><td>addTodo 완료 (2064)</td><td>editing(todoAdding)</td><td><code>release()</code> + <code>maybeFlushCommitRefresh()</code></td></tr>
+    <tr><td><i>refreshCommitActivity 완료 (2211)</i></td><td>busyCommit(자기 자신)</td><td>제외 — 자기 완료는 재시도 대상 아님(busyCommit는 그 fetch 자체).</td></tr>
+  </table>
+  <div class="warnbox"><b>이중 발화 방지:</b> <code>maybeFlushCommitRefresh()</code>는 진입부에서 <code>if (!_pendingCommitRefresh) return;</code>로 가드한다. pending이 없으면(건너뛴 틱이 없으면) 즉시 반환하므로, 8곳에서 매번 불려도 실제 fetch는 <b>플래그가 선 경우에만 1회</b> 일어난다. 또한 <code>busyCommitActivity</code> 재진입 가드(refreshCommitActivity 진입부 app.js:2203)가 중복 fetch를 한 번 더 막는다.</div>
+  <div class="note"><b>coalesce와의 정합:</b> <code>maybeFlushCommitRefresh</code>는 <code>RG.coalesce.release()/flushIfPending()</code>와 <b>독립적으로</b> 동작한다(render 트리거 vs git fetch 트리거). fetch 완료 후 <code>refreshCommitActivity</code> 완료부가 diff 가드를 통과하면 <code>patchCommitChart()</code>(P4) 또는 <code>release()</code>(P1)로 데이터를 반영하므로 렌더 경로는 정상이다.</div>
+
+  <h3>6.5 최대 지연 개선 효과</h3>
+  <table>
+    <tr><th>상황</th><th>M9 기존 최대 지연</th><th>M10 최대 지연</th></tr>
+    <tr><td>IME 조합 중 폴링 틱 건너뜀</td><td>~600s (직전 틱 보류 + 다음 틱)</td><td>조합 시간 (compositionend 직후 fetch)</td></tr>
+    <tr><td>드래그 중 폴링 틱 건너뜀</td><td>~600s</td><td>드래그 시간 (onEnd 직후 fetch)</td></tr>
+    <tr><td>설정 모달 열린 중 폴링 틱 건너뜀</td><td>~600s</td><td>모달 체류 (closeSettings 직후 fetch)</td></tr>
+    <tr><td>메일 fetch(busyMail) 중 폴링 틱 건너뜀</td><td>~600s</td><td>메일 fetch 시간 (maybeAutoRefreshMail 완료 직후 fetch)</td></tr>
+    <tr><td>할 일 입력(editing) 중 폴링 틱 건너뜀</td><td>~600s</td><td>입력 시간 (addTodo 완료 직후 fetch)</td></tr>
+  </table>
+</section>
+
+<!-- ===================== 7. 호출처 지도 ===================== -->
+<section id="callsite-map">
+  <h2>7. 적용 호출처 지도 — patchRegion 적용 vs 전체 render 유지</h2>
+  <p>patchRegion은 모든 호출처에 적용하지 않는다. 아래 기준으로 분류한다:</p>
+  <ul>
+    <li><b>patchRegion 적합:</b> 고빈도 갱신(폴링) + 영역 명확(단일 컨테이너) + 영역 외 DOM에 사이드이펙트 없음 + 위젯 범위 국소.</li>
+    <li><b>전체 render 유지:</b> 뷰 전환, 오버레이 열림/닫힘, 사용자 명시 액션(재스캔·폴더 추가), 초기 로딩, 스캔 결과 push(변경 항목이 여러 카드에 걸침).</li>
+  </ul>
+
+  <div class="svg-wrap">
+  <svg viewBox="0 0 960 380" width="100%" role="img" aria-label="patchRegion 적용 호출처 지도">
+    <defs>
+      <marker id="ap" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#34d399"/></marker>
+      <marker id="af" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#94a3b8"/></marker>
+    </defs>
+    <text x="14" y="22" fill="#94a3b8" font-size="12">갱신 트리거 → 경로 분류 → render 방식</text>
+
+    <!-- 트리거들 -->
+    <rect x="14" y="36" width="200" height="36" rx="7" fill="#172339" stroke="#38bdf8"/>
+    <text x="114" y="58" text-anchor="middle" fill="#7dd3fc" font-size="12">커밋 5분 폴링 (refreshCommitActivity)</text>
+
+    <rect x="14" y="82" width="200" height="36" rx="7" fill="#172339" stroke="#38bdf8"/>
+    <text x="114" y="104" text-anchor="middle" fill="#7dd3fc" font-size="12">메일 60s 폴링 (applyMailSummary)</text>
+
+    <rect x="14" y="128" width="200" height="36" rx="7" fill="#172339" stroke="#38bdf8"/>
+    <text x="114" y="150" text-anchor="middle" fill="#7dd3fc" font-size="12">projectsUpdated push (applyProjectsUpdate)</text>
+
+    <rect x="14" y="174" width="200" height="36" rx="7" fill="#172339" stroke="#94a3b8"/>
+    <text x="114" y="196" text-anchor="middle" fill="#cbd5e1" font-size="12">뷰 전환 (store.state.view 변경)</text>
+
+    <rect x="14" y="220" width="200" height="36" rx="7" fill="#172339" stroke="#94a3b8"/>
+    <text x="114" y="242" text-anchor="middle" fill="#cbd5e1" font-size="12">재스캔 / 폴더 추가 / 초기 로딩</text>
+
+    <rect x="14" y="266" width="200" height="36" rx="7" fill="#172339" stroke="#94a3b8"/>
+    <text x="114" y="288" text-anchor="middle" fill="#cbd5e1" font-size="12">오버레이 열림/닫힘 (설정·드로어·도움말)</text>
+
+    <rect x="14" y="312" width="200" height="36" rx="7" fill="#172339" stroke="#94a3b8"/>
+    <text x="114" y="334" text-anchor="middle" fill="#cbd5e1" font-size="12">설정 탭 전환 (renderSettings 내부)</text>
+
+    <!-- patchRegion 경로 -->
+    <rect x="440" y="36" width="220" height="60" rx="9" fill="#0f261e" stroke="#34d399" stroke-width="2"/>
+    <text x="550" y="60" text-anchor="middle" fill="#6ee7b7" font-size="13" font-weight="700">patchRegion 적용</text>
+    <text x="550" y="78" text-anchor="middle" fill="#94a3b8" font-size="10.5">영역만 교체, render() 미호출</text>
+
+    <!-- 전체 render 경로 -->
+    <rect x="440" y="220" width="220" height="52" rx="9" fill="#172339" stroke="#94a3b8" stroke-width="1.5"/>
+    <text x="550" y="244" text-anchor="middle" fill="#cbd5e1" font-size="13" font-weight="700">전체 render() 유지</text>
+    <text x="550" y="262" text-anchor="middle" fill="#94a3b8" font-size="10.5">RG.widget.destroyAll/mountAll</text>
+
+    <!-- 커밋 폴링 → patchRegion -->
+    <path d="M214,54 L438,66" fill="none" stroke="#34d399" stroke-width="2" marker-end="url(#ap)"/>
+    <text x="320" y="50" fill="#34d399" font-size="10.5">M10 P4 이후</text>
+
+    <!-- 메일 폴링 화살표 (조건부) -->
+    <path d="M214,100 C330,100 360,220 438,246" fill="none" stroke="#94a3b8" stroke-width="1.3" stroke-dasharray="5,3" marker-end="url(#af)"/>
+    <text x="290" y="175" fill="#94a3b8" font-size="10.5">현재 전체 render 유지</text>
+    <text x="290" y="190" fill="#64748b" font-size="10">(향후 고려 가능)</text>
+
+    <!-- projectsUpdated → 전체 render -->
+    <path d="M214,146 L438,246" fill="none" stroke="#94a3b8" stroke-width="1.3" marker-end="url(#af)"/>
+
+    <!-- 나머지 → 전체 render -->
+    <path d="M214,192 L438,258" fill="none" stroke="#94a3b8" stroke-width="1.3" marker-end="url(#af)"/>
+    <path d="M214,238 L438,262" fill="none" stroke="#94a3b8" stroke-width="1.3" marker-end="url(#af)"/>
+    <path d="M214,284 L438,266" fill="none" stroke="#94a3b8" stroke-width="1.3" marker-end="url(#af)"/>
+    <path d="M214,330 L438,272" fill="none" stroke="#94a3b8" stroke-width="1.3" marker-end="url(#af)"/>
+
+    <!-- 최종 DOM -->
+    <rect x="700" y="110" width="240" height="160" rx="10" fill="#172339" stroke="#334155"/>
+    <text x="820" y="134" text-anchor="middle" fill="#94a3b8" font-size="12" font-weight="700">최종 DOM 상태</text>
+    <text x="720" y="158" fill="#6ee7b7" font-size="11.5">• commitChart 영역만 교체</text>
+    <text x="720" y="178" fill="#6ee7b7" font-size="11.5">• 홈 카드 스크롤 불변</text>
+    <text x="720" y="200" fill="#cbd5e1" font-size="11.5">• 뷰 전환 시 전체 교체</text>
+    <text x="720" y="220" fill="#cbd5e1" font-size="11.5">• 재스캔 시 전체 교체</text>
+    <text x="720" y="252" fill="#64748b" font-size="10.5">P1~P2: 전체 render (깜빡임 잔존)</text>
+    <text x="720" y="266" fill="#64748b" font-size="10.5">P4 이후: 차트 patchRegion(깜빡임 0)</text>
+
+    <path d="M660,66 L698,155" fill="none" stroke="#34d399" stroke-width="1.5" marker-end="url(#ap)"/>
+    <path d="M660,246 L698,200" fill="none" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#af)"/>
+  </svg>
+  </div>
+
+  <h3>7.1 호출처별 결정 근거</h3>
+  <table class="callsite">
+    <tr><th style="width:220px">호출처</th><th style="width:120px">방식</th><th>근거</th></tr>
+    <tr><td>refreshCommitActivity 완료 (silent 폴링)</td><td><span style="color:#34d399">patchRegion</span> (M10 P4)</td><td>폴링 고빈도 + 차트 영역(.commit-chart-region) 단일 컨테이너 + commitChart 위젯만 영향. 깜빡임 완화의 핵심 대상. P4에서 진입 로딩 render(silent)·완료 patchRegion 함께 전환해야 깜빡임 0.</td></tr>
+    <tr><td>applyProjectsUpdate</td><td>전체 render 유지</td><td>변경 프로젝트가 dashboard 카드 여러 개에 걸침. 영역 특정 불가.</td></tr>
+    <tr><td>maybeAutoRefreshMail</td><td>전체 render 유지</td><td>메일 섹션이 홈 내 독립 카드지만 현재 render 경로가 안정적. 향후 mail 섹션 patchRegion 후보(M11+).</td></tr>
+    <tr><td>뷰 전환 / 재스캔 / 초기 로딩</td><td>전체 render 유지</td><td>전체 뷰 교체 의미 — patchRegion 적용 불가.</td></tr>
+    <tr><td>설정 탭 전환</td><td>전체 render 유지</td><td>설정은 모달 전체를 재빌드하는 구조. 향후 설정 우측 패널만 patchRegion 후보(M11+).</td></tr>
+    <tr><td>오버레이 열림/닫힘</td><td>전체 render + release()</td><td>보류 중 누적분을 1회 소비. 기존 M9 패턴 유지.</td></tr>
+  </table>
+</section>
+
+<!-- ===================== 8. 점진 도입 순서 ===================== -->
+<section id="incremental">
+  <h2>8. 점진 도입 순서</h2>
+  <ol>
+    <li><b>M10-P1 — 툴팁 막대 추적 + 폴링 재시도 보강 (단독 PR, 회귀 0 우선)</b><br>
+      변경: <code>chartBars</code> 막대 클로저 <code>showTip</code> 개선(getBoundingClientRect 기반 left 계산, 세로 <code>translateY(-100%)</code> 유지 — F-3a/F-3b) + CSS <code>.commit-chart__tip</code> left:50%·translateX(-50%) 제거. <code>maybeAutoRefreshCommit</code>에 <code>_pendingCommitRefresh</code> 플래그 + <code>maybeFlushCommitRefresh()</code> 신설, <b>보류 해제 지점 8곳 전부</b>(release/flushIfPending 호출처)에 동반 삽입(F-3d). <code>refreshCommitActivity({silent})</code> 인자 추가(폴링/재시도는 silent — 진입 render 생략). patchRegion 구현 없음. 기존 render() 경로 완전 보존.</li>
+    <li><b>M10-P2 — diff 가드 (데이터·날짜창 무변경 시 불필요 갱신 skip)</b><br>
+      변경: <code>_lastCommitActivityKey</code> 상태 + <code>commitActivityKey()</code> 순수 함수(<b>epoch-day prefix + count 시퀀스</b> — Q-M10-1 확정) + <code>refreshCommitActivity</code> 완료부 <code>onCommitActivityFetched()</code> 비교 분기. <b>효과는 "무변경 시 skip"이지 "깜빡임 0"이 아니다</b>(데이터 변경 시 여전히 전체 render). 헤드리스 테스트 추가(commitActivityKey: 동일 키, count 변경 시 다른 키, 날짜창 이동 시 다른 키, NaN/음수 정규화).</li>
+    <li><b>M10-P3 — patchRegion 기반 구현 (RG.preserve 확장)</b><br>
+      변경: <code>RG.preserve.patchRegion</code> 메서드 신설 + <code>RG.widget._destroyById/_mountById</code> 내부 메서드. <b>이 단계는 전체 render 경로를 전혀 건드리지 않는다</b>. 신규 메서드만 추가. 테스트: patchRegion 계약(deferred 시 보류, containerEl 부재 시 fallback, builderFn 예외 시 fallback, 정상 시 _destroyById → 영역 교체 → _mountById 순서).</li>
+    <li><b>M10-P4 — 차트 영역에 patchRegion 전환 (옵트인, 깜빡임 0 달성)</b><br>
+      변경: (1) <code>renderHomeProductivity()</code>를 <code>.commit-chart-region &gt; .commit-chart-host</code> 2단 구조로 변경(F-2 노드 소유권). (2) <code>patchCommitChart()</code> 신설 — builderFn은 <b>빈 호스트만</b> 반환, 차트 노드는 <code>commitChart</code> 위젯이 _destroyById/_mountById로 단독 소유(F-2). (3) <code>onCommitActivityFetched()</code>가 데이터 변경 시 <code>release()</code> 대신 <code>patchCommitChart()</code> 호출. (4) 폴링 진입 로딩 render는 이미 P1 silent로 생략됨. <b>이 단계에서 진입 render 생략 + 완료 영역 교체가 함께 적용돼 차트 깜빡임·스크롤 흔들림이 실제로 0이 된다.</b> 통합 스모크: 폴링 발화 중 홈 스크롤·호버·드래그 정상 + 노드 이중 삽입·핸들러 누수 0 확인.</li>
+  </ol>
+  <div class="warnbox"><b>빅뱅 금지 확인:</b> P1~P3은 각각 독립적으로 rollback 가능하다. P4가 patchRegion을 실제 적용하는 유일한 단계이며, P4에서 문제가 생기면 <code>patchCommitChart()</code> 내부의 <code>opts.fallback: () => render()</code>가 자동으로 전체 render로 폴백한다. 코드 변경 없이 안전망이 동작한다.</div>
+</section>
+
+<!-- ===================== 9. R-25 정합 ===================== -->
+<section id="m9-compat">
+  <h2>9. R-25 기존 계약과의 정합 · 회귀 방지</h2>
+
+  <h3>9.1 M9 계약과의 정합 확인</h3>
+  <table>
+    <tr><th style="width:160px">M9 계약</th><th>M10 patchRegion의 정합</th></tr>
+    <tr><td>RG.preserve.capture/restore</td><td>patchRegion 내부에서 호출(재사용). 별도 수정 없음.</td></tr>
+    <tr><td>RG.widget.destroyAll/mountAll</td><td>patchRegion은 id 단위 내부 메서드를 추가할 뿐, 기존 destroyAll/mountAll 시그니처 불변. render()의 destroyAll/mountAll 호출 순서 불변.</td></tr>
+    <tr><td>RG.deferred() 게이트</td><td>patchRegion 진입 시 동일하게 RG.deferred() 검사. M9 §3.2 매핑표의 6플래그 그대로.</td></tr>
+    <tr><td>RG.coalesce.request/flushIfPending</td><td>patchRegion이 deferred 시 request() 호출. 전체 render 폴백 시 coalesce 경로는 변화 없음.</td></tr>
+    <tr><td>동형 구현 원칙 (ADR-M9-1)</td><td>patchRegion은 app.js RG.preserve 내부에만 존재(DOM 접근 있음). lib/common/renderGuard.js에는 추가하지 않는다(DOM 미접근 원칙 유지). deferred 판정 로직은 기존 renderGuard.js 정본 불변.</td></tr>
+    <tr><td>R5 1차 제외 결정</td><td>M9 §3.3이 "후속 마일스톤"으로 위임한 patchRegion을 M10에서 구현 — 회귀 아닌 예고된 확장.</td></tr>
+  </table>
+
+  <h3>9.2 회귀 방지 체크리스트</h3>
+  <ul>
+    <li>render() 함수 시그니처 변경 없음.</li>
+    <li>RG.preserve.capture/restore 시그니처 변경 없음.</li>
+    <li>RG.widget.define/destroyAll/mountAll 시그니처 변경 없음.</li>
+    <li>RG.coalesce.request/flushIfPending/release/cancel 시그니처 변경 없음.</li>
+    <li>lib/common/renderGuard.js shouldDeferRender/createCoalescer 변경 없음.</li>
+    <li>보류 조건 6플래그(composing·dragging·overlayOpen·busyMail·busyCommit·editing) 변경 없음.</li>
+    <li>patchRegion이 적용되지 않은 모든 호출처는 기존 render() 경로를 그대로 탄다.</li>
+  </ul>
+  <div class="note">M10 각 단계(P1~P4) 머지 후 <code>node --test</code> 전체 그린 게이트를 유지한다. P3(patchRegion 기반 구현) 이후에는 폴링 발화 중 드래그·IME·모달 열림 시나리오를 수동 스모크로 확인한다.</div>
+</section>
+
+<!-- ===================== 10. 파일 변경 지도 ===================== -->
+<section id="filemap">
+  <h2>10. 파일 변경 지도</h2>
+  <table class="filemap">
+    <tr><th style="width:280px">파일</th><th style="width:60px">동작</th><th>변경 내용 · 단계</th></tr>
+    <tr><td>public/app.js</td><td>수정</td><td>
+      <b>P1:</b> chartBars 막대 클로저 showTip — getBoundingClientRect 기반 left 계산 + translateY(-100%) 유지(F-3a/F-3b). <code>_pendingCommitRefresh</code> 플래그 + <code>maybeFlushCommitRefresh()</code> + <b>보류 해제 지점 8곳</b>(addTodo·maybeAutoRefreshMail·closeSettings·closeDrawer·closeHelp·카드 onEnd·홈섹션 onEnd·compositionend)에 동반 삽입(F-3d). <code>refreshCommitActivity({silent})</code> 인자 추가(F-1).<br>
+      <b>P2:</b> <code>_lastCommitActivityKey</code> + <code>commitActivityKey()</code>(epoch-day prefix, Q-M10-1) + <code>onCommitActivityFetched()</code> 완료부 비교 분기.<br>
+      <b>P3:</b> RG.preserve에 <code>patchRegion(containerEl, builderFn, opts)</code> 메서드 추가. RG.widget에 <code>_destroyById(id)</code>, <code>_mountById(id, rootEl)</code> 내부 메서드 추가.<br>
+      <b>P4:</b> <code>renderHomeProductivity()</code> 차트 영역을 <code>.commit-chart-region &gt; .commit-chart-host</code> 2단 구조로(F-2). <code>patchCommitChart()</code> 신설(builderFn은 빈 호스트만, 차트는 위젯 소유). <code>commitChart</code> 위젯 init은 전달받은 root 사용. onCommitActivityFetched가 데이터 변경 시 patchCommitChart() 호출.
+    </td></tr>
+    <tr><td>public/styles.css</td><td>수정</td><td><b>P1:</b> <code>.commit-chart__tip</code> — <code>left:50%</code>·<code>transform:translateX(-50%)</code> 제거. <b>세로 띄움은 JS의 <code>translateY(-100%)</code>로 단일화</b>(CSS top 오프셋과 중복 금지 — F-3b). <code>.commit-chart__wrap</code>에 <code>position:relative</code> 확인. <b>P4:</b> <code>.commit-chart-region</code> 래퍼 스타일(차트 호스트 감쌈).</td></tr>
+    <tr><td>lib/common/renderGuard.js</td><td>변경 없음</td><td>patchRegion은 DOM 접근이 필요해 이 파일에 추가하지 않는다. shouldDeferRender/createCoalescer 불변.</td></tr>
+    <tr><td>test/commitChart.test.js</td><td>수정</td><td><b>P1:</b> showTip 좌표 계산 단위 테스트(left 범위 검증, 경계 클램핑 — 순수 계산부 분리 시). <b>P2:</b> commitActivityKey 순수 함수 테스트(동일 키, count 변경 시 다른 키, <b>날짜창 이동(epoch-day) 변경 시 다른 키</b>, NaN/음수 정규화, Date.parse 실패 시 0).</td></tr>
+    <tr><td>test/commitPolling.test.js</td><td>수정</td><td><b>P1:</b> <code>_pendingCommitRefresh</code> 플래그 동작 테스트 — deferred 시 플래그 설정, 해제 후 maybeFlushCommitRefresh 발화(8지점), 이중 발화 방지(pending 가드), 비-home 시 플래그만 해제.</td></tr>
+    <tr><td>test/renderGuard.test.js</td><td>수정</td><td><b>P3:</b> patchRegion 계약 테스트 — deferred=true 시 보류만, containerEl=null 시 fallback 호출, builderFn throw 시 fallback 호출, 정상 시 영역 교체 + widget lifecycle 순서.</td></tr>
+  </table>
+  <div class="note">index.html, electron/, lib/scan/, lib/server/, lib/common/(renderGuard.js 제외)는 변경 없음. 새 IPC 채널 0. preload 변경 0.</div>
+</section>
+
+<!-- ===================== 11. 테스트 전략 ===================== -->
+<section id="test">
+  <h2>11. 테스트 전략</h2>
+
+  <h3>11.1 단위 테스트 (헤드리스, node --test)</h3>
+  <table>
+    <tr><th style="width:200px">대상</th><th style="width:120px">마커</th><th>검증 내용</th></tr>
+    <tr><td>commitActivityKey()</td><td>M10-DG-1</td><td>동일 count·동일 마지막날짜 → 동일 키. count 1개 변경 → 다른 키. <b>count 동일·마지막날짜 1일 이동(epoch-day) → 다른 키</b>. NaN/음수 → 0 정규화. Date.parse 실패(잘못된 date) → epochDay=0. 빈 배열 → 빈 문자열.</td></tr>
+    <tr><td>_pendingCommitRefresh 플래그</td><td>M10-PR-1</td><td>deferred=true 시 maybeAutoRefreshCommit → 플래그 true. deferred=false → maybeFlushCommitRefresh → refreshCommitActivity(silent) 1회. pending 없으면 flush no-op(이중 발화 방지). 뷰=home 아닌 상태에서 flush → 플래그 false + fetch 0.</td></tr>
+    <tr><td>patchRegion 계약</td><td>M10-PG-1</td><td>deferred=true → builderFn 미호출, fallback 미호출, coalesce.request 1회. containerEl=null → fallback 1회. builderFn throw → fallback 1회. 정상 → 영역 교체 + _destroyById 전 / _mountById 후 순서. <b>opts.widgets 미지정/빈배열 → 위젯 destroy/mount 0(영역 교체만)</b>.</td></tr>
+    <tr><td>툴팁 좌표 순수 계산부<br>(tipLeft(centerRatio, svgLeft, svgWidth, wrapLeft, wrapWidth, tipWidth))</td><td>M10-TT-1</td><td>막대 인덱스 0(leftmost) → left = 0(클램핑). 인덱스 6(rightmost) → left = maxLeft(클램핑). 중앙 막대 → |rawLeft - clamped| = 0. tipWidth ≥ wrapWidth → maxLeft=0 가드. (getBoundingClientRect 값을 인자로 주입해 헤드리스 검증 — DOM 무접근.)</td></tr>
+    <tr><td>RG.widget _destroyById/_mountById</td><td>M10-WG-1</td><td>존재하는 id → destroy 1회, instances[id]=null. 없는 id → no-op. mountById 이미 살아있음 → skip. mountById init throw → instances[id]=null(회복 가능).</td></tr>
+  </table>
+
+  <h3>11.2 통합 스모크 (수동, 사용자 PC)</h3>
+  <ul>
+    <li><b>M10-P4 이후:</b> 홈 화면 체류 + 5분 대기(또는 COMMIT_POLL_MS 임시 단축) → 커밋 데이터 변경 시 차트만 업데이트되고 홈 카드 스크롤 위치 불변·깜빡임 없음 확인.</li>
+    <li><b>툴팁 추적:</b> 7칸 막대 양끝/중앙 호버 → 툴팁이 해당 막대 위에 위치(중앙 고정 아님) 확인.</li>
+    <li><b>폴링 재시도:</b> 설정 모달 열린 상태에서 COMMIT_POLL_MS 경과 → 모달 닫은 직후 차트 갱신 시도 확인(Network 탭 또는 로그).</li>
+    <li><b>회귀:</b> P3 이후 기존 전체 render 경로(뷰 전환·재스캔·드래그) 동작 변화 0 확인.</li>
+  </ul>
+
+  <h3>11.3 DoD 게이트</h3>
+  <ul>
+    <li>각 단계(P1~P4) node --test 전체 그린.</li>
+    <li>P3: patchRegion 계약 테스트(M10-PG-1) 통과.</li>
+    <li>P4: 통합 스모크 차트 깜빡임 0 확인.</li>
+    <li>P1~P4 어느 단계에서도 기존 보안 마커(L-1·H-1·H-2) 위반 0.</li>
+  </ul>
+</section>
+
+<!-- ===================== 12. 보안 유지 ===================== -->
+<section id="security">
+  <h2>12. 보안 유지</h2>
+  <table>
+    <tr><th style="width:130px">불변식</th><th>M10에서의 준수 방안</th></tr>
+    <tr><td>L-1 textContent</td><td>patchRegion이 빌더가 반환한 노드를 containerEl.replaceChildren으로 삽입한다. builderFn은 빈 호스트(el()) 또는 기존 el() 경로만 사용 — innerHTML 0(차트 노드는 위젯이 chartBars로 생성, 역시 textContent). commitActivityKey는 epoch-day·count 정수만 사용. showTip은 <code>tip.textContent = label + Number</code> 결합만. <code>tip.style.left</code>에는 정수+'px' 리터럴만, <code>tip.style.transform</code>에는 <code>'translateY(-100%)'</code> 리터럴만 진입.</td></tr>
+    <tr><td>새 IPC / 신뢰 경계</td><td>M10 전 항목이 렌더러 내부(app.js)에서만 처리된다. 새 IPC 채널 0. preload 변경 0. electron/main.js 변경 0. 신뢰 경계 변화 없음.</td></tr>
+    <tr><td>외부 의존성</td><td>툴팁 좌표 계산은 표준 DOM API(getBoundingClientRect)만. patchRegion은 표준 DOM(replaceChildren). 새 npm 패키지 0.</td></tr>
+    <tr><td>CSP</td><td>innerHTML/insertAdjacentHTML/eval/new Function 미사용. 인라인 스크립트 0. 외부 fetch 0. index.html 불변.</td></tr>
+    <tr><td>patchRegion 보존 노드 채널</td><td>adopt 경로에 진입하는 값은 캐럿 위치(정수)·scrollTop(정수)·셀렉터(하드코딩 상수 FOCUS_SEL/SCROLL_SEL)뿐. 스캔/커밋 데이터 문자열은 adopt 경로에 진입하지 않는다.</td></tr>
+    <tr><td>patchRegion 폴백 안전</td><td>builderFn 예외 시 fallback으로 전체 render. 전체 render는 M9 보안 검증을 이미 통과한 경로. 예외 흡수는 렌더러 내부(보안 경계 없음).</td></tr>
+  </table>
+  <div class="secbox"><b>Security reviewer 입력 안내:</b> M10에서 신뢰 경계 변화 0, 새 IPC 0, 새 외부 의존성 0. 신규 위협 모델 항목 없음. 기존 신뢰 경계 다이어그램(m9-design.html §12) 유효. 검토 초점: patchRegion builderFn 내부에서 텍스트 데이터가 innerHTML 경로로 흐르지 않는지 코드 리뷰 체크리스트 항목 추가.</div>
+</section>
+
+<!-- ===================== 13. ADR ===================== -->
+<section id="adr">
+  <h2>13. ADR (M10)</h2>
+
+  <div class="adr">
+    <h4>ADR-M10-1 — patchRegion을 RG.preserve 메서드로 추가 (vs 독립 함수 vs 별도 모듈)</h4>
+    <p><b>상태:</b> 승인 · <b>관련:</b> M10 전 항목</p>
+    <p><b>맥락:</b> M9 §3.3이 patchRegion을 RG.preserve의 메서드로 예정했다. 번들러 없음, app.js IIFE 구조, DOM 접근 필요.</p>
+    <p><b>고려한 대안:</b><br>
+    (a) <b>독립 함수 patchRegion(el, fn, opts)</b> — app.js 내 독립 선언. 단순하나 RG 네임스페이스 일관성 깨짐.<br>
+    (b) <b>lib/common/에 신규 파일</b> — DOM 접근 불가 원칙 위반(renderGuard.js는 순수 함수 전용).<br>
+    (c) <span class="pick">RG.preserve.patchRegion 메서드</span> — M9 설계 예고 충족. capture/restore와 자연스러운 동거. RG 네임스페이스 일관성 유지.</p>
+    <p><b>결정:</b> (c). M9 §3.3 계약 정합, lib/common 순수 원칙 불변.</p>
+    <p><b>결과:</b> <span class="good">+</span> M9 계약과 자연스러운 연속성. <span class="good">+</span> lib/common 오염 없음. <span class="bad">−</span> RG.preserve가 capture/restore/patchRegion 3가지 책임을 가짐(단, 모두 "보존 관련" 응집도 높음).</p>
+  </div>
+
+  <div class="adr">
+    <h4>ADR-M10-2 — 차트 깜빡임 완화: patchRegion + diff 가드 병합 채택 (vs diff 가드 단독)</h4>
+    <p><b>상태:</b> 승인 · <b>관련:</b> §4</p>
+    <p><b>맥락:</b> diff 가드만으로는 데이터 변경 시 전체 render → 깜빡임이 여전하다. patchRegion 단독은 구현 비용이 있으나 스크롤 흔들림까지 해결한다.</p>
+    <p><b>고려한 대안:</b><br>
+    (a) <b>diff 가드 단독</b> — 동일 데이터 skip만. 변경 시 깜빡임 잔존.<br>
+    (b) <span class="pick">patchRegion + diff 가드 병합</span> — 동일 → skip, 변경 → patchRegion. 모든 경우 깜빡임 0.<br>
+    (c) <b>CSS transition으로 깜빡임 마스킹</b> — 근본 해결 아님.</p>
+    <p><b>결정:</b> (b). P1에서 diff 가드 먼저, P4에서 patchRegion 완성. 점진 도입으로 각 단계 독립 회귀 검증 가능.</p>
+    <p><b>결과:</b> <span class="good">+</span> 깜빡임·스크롤 흔들림 동시 해결. <span class="good">+</span> patchRegion이 향후 다른 영역 확장 기반이 됨. <span class="bad">−</span> P4까지 단계가 있어 완전 해소에 시간 필요.</p>
+  </div>
+
+  <div class="adr">
+    <h4>ADR-M10-3 — 폴링 재시도: pendingCommitRefresh 플래그 + 해제 훅 연결 (vs 폴링 주기 단축)</h4>
+    <p><b>상태:</b> 승인 · <b>관련:</b> §6</p>
+    <p><b>맥락:</b> deferred 보류로 건너뛴 폴링 틱이 최대 ~600초 지연될 수 있다. ADR-M9-4(5분 폴링 근거)를 파기하지 않으면서 개선이 필요하다.</p>
+    <p><b>고려한 대안:</b><br>
+    (a) <b>폴링 주기 단축(300s → 60s)</b> — git 호출 비용 5× 증가. ADR-M9-4 근거 파기.<br>
+    (b) <span class="pick">_pendingCommitRefresh 플래그 + 보류 해제 훅 3곳에 maybeFlushCommitRefresh() 연결</span> — ADR-M9-4 불변. 보류 해제 직후 즉시 1회 fetch.<br>
+    (c) <b>coalesce 내부에 커밋 fetch 콜백 등록</b> — coalesce가 render 이외의 부수효과를 담당하게 돼 단일 책임 위반.</p>
+    <p><b>결정:</b> (b). ADR-M9-4 정합, 구현 최소, 기존 보류 해제 지점 재사용.</p>
+    <p><b>결과:</b> <span class="good">+</span> 최대 지연을 폴링 주기 → 보류 지속 시간으로 단축. <span class="good">+</span> git 호출 빈도 불변. <span class="bad">−</span> 보류 해제 지점 3곳에 호출 추가(코드 산포, 단 지역적).</p>
+  </div>
+
+  <div class="adr">
+    <h4>ADR-M10-4 — 툴팁 좌표: getBoundingClientRect 기반 동적 계산 (vs 막대 인덱스 기반 비율)</h4>
+    <p><b>상태:</b> 승인 · <b>관련:</b> §5</p>
+    <p><b>맥락:</b> SVG viewBox 비율로 left를 계산하려면 실제 렌더 크기가 필요하다. SVG는 width:100%라 고정 픽셀 계산 불가.</p>
+    <p><b>고려한 대안:</b><br>
+    (a) <b>막대 인덱스 기반 CSS nth 매핑</b> — CSS로 해결하나 index ↔ DOM 순서 의존. 경계 클램핑 CSS 어려움.<br>
+    (b) <b>막대 인덱스 × (100/n)% 방식</b> — 간단하나 막대 간격/패딩을 무시. 양끝 오차 큼.<br>
+    (c) <span class="pick">getBoundingClientRect(svgEl) + viewBox 비율 × svgWidth + wrapEl 기준 offset + 클램핑</span> — 정확. 사용자 상호작용 빈도(hover)라 리플로우 비용 허용.</p>
+    <p><b>결정:</b> (c). 정확성과 경계 처리 완성도가 (a)·(b)보다 우수. hover 빈도라 성능 이슈 없음.</p>
+    <p><b>결과:</b> <span class="good">+</span> 7칸 양끝 막대에서도 정확 포지셔닝. <span class="bad">−</span> hover마다 getBoundingClientRect(2회) — hover 빈도라 무시 가능.</p>
+  </div>
+</section>
+
+<!-- ===================== 14. 리스크 ===================== -->
+<section id="risk">
+  <h2>14. 리스크 · 가정 · 미해결 질문</h2>
+
+  <h3>14.1 리스크 / 완화</h3>
+  <table>
+    <tr><th style="width:300px">리스크</th><th>완화</th></tr>
+    <tr><td>patchRegion(P3~P4) 도중 컨테이너 노드가 전체 render에 의해 교체돼 containerEl 참조가 stale됨</td><td>patchRegion 진입 시 deferred() 검사가 true이면 즉시 반환. 전체 render는 deferred 해제 후에만 발화하므로 patchRegion 실행 중에 전체 render가 동시에 돌지 않는다(단일 스레드 JS). 다만 patchRegion 자체가 비동기(예: builderFn이 Promise) 경우는 M10에서 금지 — builderFn은 반드시 동기 함수.</td></tr>
+    <tr><td>툴팁 첫 호버 시 offsetWidth 부정확</td><td>§5.1 설계가 <code>tip.textContent</code> 설정 + <code>display='block'</code>을 좌표 계산보다 <b>먼저</b> 하므로 첫 호버에서도 실측 offsetWidth를 얻는다. 폰트 로딩 지연 등으로 0이면 80px 추정 graceful, 두 번째 호버부터 정확.</td></tr>
+    <tr><td>maybeFlushCommitRefresh가 보류 해제 직후 fetch를 트리거하는데, render()도 동시에 coalesce.flushIfPending으로 발화 → 두 비동기가 겹침</td><td>두 호출은 독립(fetch는 비동기 IPC, render는 sync DOM). fetch 완료 후 onCommitActivityFetched가 patchCommitChart/release로 1회 반영하는 것이 정상 설계. busyCommitActivity 재진입 가드로 중복 fetch 방지.</td></tr>
+    <tr><td>P4 차트 patchRegion에서 RG.widget._destroyById 호출 후 render()가 전체 destroyAll을 부르면 _instances[commitChart]가 이미 null인 상태에서 destroy 호출 → no-op(정상)</td><td>_destroyById는 null 체크 후 destroy. destroyAll도 null 체크 후 destroy. 이중 null 안전 설계.</td></tr>
+    <tr><td>commitActivityKey의 count 동일·날짜창 이동 시 차트 갱신 누락 (구 리스크 — Q-M10-1)</td><td><b>해소.</b> §4.2에서 키에 <b>마지막 날짜 epoch-day 정수 prefix</b>를 P2부터 포함한다. 자정 경계로 7일 창이 밀리면 count가 같아도 epoch-day가 달라져 키가 변경됨 → 갱신 누락 0. 날짜 문자열이 아닌 정수만 키에 넣어 L-1/M-2 불변식 유지.</td></tr>
+  </table>
+
+  <h3>14.2 가정</h3>
+  <ul>
+    <li>builderFn은 동기 함수여야 한다. M10에서는 비동기 builderFn을 지원하지 않는다.</li>
+    <li>patchRegion은 단일 컨테이너 노드를 대상으로 한다. 다중 컨테이너 동시 갱신은 M10 범위 밖.</li>
+    <li>차트 영역(.commit-chart-region)과 그 안의 호스트(.commit-chart-host)는 홈 뷰에서 항상 단일 인스턴스다(P4 2단 구조).</li>
+    <li>차트 노드의 생성·삽입·파괴는 오직 commitChart 위젯이 소유한다(builderFn은 빈 호스트만 생성 — F-2).</li>
+    <li>SVG preserveAspectRatio="none"·width:100% 구조는 M9에서 확정됐으며 변경하지 않는다.</li>
+  </ul>
+
+  <h3>14.3 미해결 질문</h3>
+  <table>
+    <tr><th style="width:60px">번호</th><th>질문</th><th>현재 기본 결정</th></tr>
+    <tr><td>Q-M10-1</td><td>commitActivityKey에 날짜 정보를 포함해 날짜창 이동 누락을 막을지?</td><td><b>확정(해소).</b> <b>P2 구현 시 처음부터</b> 마지막 날짜의 epoch-day 정수(<code>Math.floor(Date.parse(lastDate)/86400000)</code>, NaN이면 0)를 키에 prefix한다(§4.2). 날짜 문자열이 아닌 정수만 키에 넣어 L-1/M-2 불변식을 유지하면서, 자정 경계로 7일 창이 밀리면 키가 달라져 갱신 누락 0. "후속 재검토"가 아니라 P2 확정 설계.</td></tr>
+    <tr><td>Q-M10-2</td><td>메일 섹션도 patchRegion으로 전환할지?</td><td>M10 범위 밖. 메일은 60초 주기라 깜빡임 체감이 낮고 현재 전체 render 안정. M11 후보.</td></tr>
+    <tr><td>Q-M10-3</td><td>설정 우측 패널을 patchRegion으로 전환할지?</td><td>M10 범위 밖. 설정은 모달 위에 있고 사용 빈도·체감 낮음. M11+ 후보.</td></tr>
+  </table>
+</section>
+
+<footer>
+  Project-SPIP · M10 설계 정본 · patchRegion + 차트 깜빡임 완화 + 툴팁 막대 추적 + 폴링 재시도 보강 · 작성 2026-06-24 · 수석 아키텍트 · 코드 미작성(설계 표현까지) · 입력: m9-design.html / code_review_m9_p8_1.html / code_review_m9_p6_1.html / app.js / renderGuard.js
+</footer>
+
+</main>
+</body>
+</html>
