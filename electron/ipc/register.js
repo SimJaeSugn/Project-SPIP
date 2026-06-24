@@ -22,6 +22,7 @@ const foldersIpc = require('./folders');
 const clipboardIpc = require('./clipboard');
 const toolsIpc = require('./tools');
 const mailAccountsIpc = require('./mailAccounts');
+const insightsIpc = require('./insights');
 const uiStateIpc = require('./uiState');
 const autoUpdate = require('../autoUpdate');
 // [P3-4] 신뢰 origin 단일 원천(security.js). 리터럴 이중정의 제거.
@@ -173,6 +174,9 @@ function registerIpcHandlers(deps) {
   guard('spip:removeMailAccount', (args) => mailAccountsIpc.removeMailAccount(args, ctx));
   guard('spip:testMailAccount', (args) => mailAccountsIpc.testMailAccount(args, ctx));
   guard('spip:getMailSummary', () => mailAccountsIpc.getMailSummary(ctx));
+
+  // 홈 인사이트 — 최근 14일 커밋 빈도(등록 프로젝트 합산, git -C safeExec).
+  guard('spip:getCommitActivity', () => insightsIpc.getCommitActivity(ctx));
 
   // [M7 SEC-M2] 즐겨찾기 변경 broadcast(단방향 push) — setFavorite 성공 시 메인 wc + 위젯 wc 양쪽에 동기화.
   //   payload 스키마 = { favorites:string[] }만(경로/실행 인자/내부 상태 금지). 대상 wc는 메인·위젯 2개로

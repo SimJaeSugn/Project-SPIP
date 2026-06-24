@@ -1032,6 +1032,10 @@ function initBrowser() {
     mailSummary: [],             // [{id,label,host,user,unseen,items:[{subject,from,date}],ok,code}]
     busyMailSummary: false,      // getMailSummary in-flight
     mailSummaryLoaded: false,    // 최초 1회 자동 로드 가드
+    // 생산성(홈 브리핑) — 최근 14일 커밋 빈도(getCommitActivity). 수동 새로고침(git 호출 비용).
+    commitActivity: null,        // {days:[{date,count}],total,repos,scanned}
+    busyCommitActivity: false,   // getCommitActivity in-flight
+    commitActivityLoaded: false, // 1회 로드 표식
     // 메일 알림 계정(복수 IMAP) — 공개 뷰 목록 + 입력 폼(비밀번호는 응답에 없음)
     mailAccounts: [],            // getMailAccounts 응답(공개 뷰: id,label,host,port,user,hasPassword)
     mailForm: { label: '', host: '', port: '', user: '', pass: '' }, // 추가/수정 폼(컨트롤드)
@@ -1482,7 +1486,7 @@ function initBrowser() {
     grid.appendChild(renderHomeActivity());
     grid.appendChild(renderHomeMail());
     grid.appendChild(renderHomeTodos());
-    grid.appendChild(renderHomePlaceholder('주간 생산성', '커밋 빈도·언어 추세 차트는 곧 제공됩니다.'));
+    grid.appendChild(renderHomeProductivity());
     main.appendChild(grid);
 
     root.appendChild(main);
@@ -1676,6 +1680,98 @@ function initBrowser() {
     store.busyTodos = false;
     if (!applyTodoResult(res)) toast('할 일 삭제에 실패했습니다.', true);
     render();
+  }
+
+  /* 주간 생산성 — 커밋 빈도(백엔드, 수동 새로고침) + 언어 분포(클라이언트, 즉시). */
+  function renderHomeProductivity() {
+    let prodAction = null;
+    const body = [];
+
+    if (bridgeHas('getCommitActivity')) {
+      prodAction = el('button', {
+        cls: 'link-btn', text: store.busyCommitActivity ? '집계 중…' : '새로고침',
+        attrs: { type: 'button', 'aria-label': '커밋 활동 새로고침' }, on: { click: () => refreshCommitActivity() },
+      });
+      if (store.busyCommitActivity) prodAction.disabled = true;
+      body.push(el('div', { cls: 'home-prod__label', text: '최근 14일 커밋' }));
+      if (!store.commitActivityLoaded && !store.busyCommitActivity) {
+        body.push(el('div', { cls: 'home-card__empty', text: '“새로고침”을 눌러 커밋 활동을 집계하세요.' }));
+      } else if (store.busyCommitActivity && !store.commitActivityLoaded) {
+        body.push(el('div', { cls: 'home-card__empty', text: '저장소를 집계하는 중…' }));
+      } else {
+        const ca = store.commitActivity || { days: [], total: 0, repos: 0 };
+        if (Array.isArray(ca.days) && ca.days.length) body.push(commitBars(ca.days));
+        body.push(el('div', { cls: 'home-prod__sub muted', text: '총 ' + (ca.total || 0) + '커밋 · 저장소 ' + (ca.repos || 0) + '개' }));
+      }
+    }
+
+    // 언어 분포(스냅샷 보유 데이터 — 즉시).
+    const facets = languageFacets(store.viewModels || []);
+    const totalProj = facets.reduce((s, f) => s + f.count, 0);
+    if (totalProj > 0) {
+      body.push(el('div', { cls: 'home-prod__label', text: '언어 분포' }));
+      const bar = el('div', { cls: 'home-langbar' });
+      for (const f of facets) {
+        const seg = el('span', { cls: 'home-langbar__seg', title: f.lang + ' ' + f.count + '개' });
+        seg.style.width = (f.count / totalProj * 100) + '%';
+        seg.style.background = langColor(f.lang);
+        bar.appendChild(seg);
+      }
+      body.push(bar);
+      const legend = el('div', { cls: 'home-langlegend' });
+      for (const f of facets.slice(0, 6)) {
+        const item = el('span', { cls: 'home-langlegend__item' });
+        item.appendChild(dot(f.lang));
+        item.appendChild(el('span', { text: f.lang + ' ' + Math.round(f.count / totalProj * 100) + '%' }));
+        legend.appendChild(item);
+      }
+      body.push(legend);
+    }
+
+    if (body.length === 0) body.push(el('div', { cls: 'home-card__empty', text: '표시할 생산성 데이터가 없습니다.' }));
+    return homeCard('주간 생산성', body, { action: prodAction });
+  }
+
+  /** 커밋 빈도 막대 차트(자작 SVG, 외부 라이브러리 없음). */
+  function commitBars(series) {
+    const w = 300, h = 56, gap = 2;
+    const n = Math.max(1, series.length);
+    const bw = (w - gap * (n - 1)) / n;
+    let max = 1;
+    for (const s of series) if (s.count > max) max = s.count;
+    const svgEl = document.createElementNS(SVG_NS, 'svg');
+    svgEl.setAttribute('viewBox', '0 0 ' + w + ' ' + h);
+    svgEl.setAttribute('width', '100%');
+    svgEl.setAttribute('height', String(h));
+    svgEl.setAttribute('class', 'home-chart');
+    svgEl.setAttribute('preserveAspectRatio', 'none');
+    svgEl.setAttribute('aria-hidden', 'true');
+    series.forEach((s, i) => {
+      const bh = Math.round((s.count / max) * (h - 4));
+      const rect = document.createElementNS(SVG_NS, 'rect');
+      rect.setAttribute('x', String(Math.round(i * (bw + gap))));
+      rect.setAttribute('y', String(h - Math.max(2, bh)));
+      rect.setAttribute('width', String(Math.max(1, Math.floor(bw))));
+      rect.setAttribute('height', String(Math.max(2, bh)));
+      rect.setAttribute('rx', '1');
+      rect.setAttribute('class', s.count > 0 ? 'home-bar is-on' : 'home-bar'); // fill은 CSS(var 해석)
+      const title = document.createElementNS(SVG_NS, 'title');
+      title.textContent = s.date + ' · ' + s.count + '커밋';
+      rect.appendChild(title);
+      svgEl.appendChild(rect);
+    });
+    return svgEl;
+  }
+
+  async function refreshCommitActivity() {
+    if (!bridgeHas('getCommitActivity') || store.busyCommitActivity) return;
+    store.busyCommitActivity = true;
+    if (store.state.view === 'home') render();
+    const res = await ipc('getCommitActivity');
+    store.busyCommitActivity = false;
+    store.commitActivityLoaded = true;
+    store.commitActivity = (res && res.ok) ? res : { days: [], total: 0, repos: 0 };
+    if (store.state.view === 'home') render();
   }
 
   function renderHomeActivity() {
