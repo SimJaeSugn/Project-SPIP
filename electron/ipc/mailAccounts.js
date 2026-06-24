@@ -23,6 +23,9 @@
 const reg = require('../../lib/mail/mailAccounts');
 const config = require('../../lib/common/config');
 const { ImapClient } = require('../../lib/mail/imapClient');
+const { clampString } = require('../../lib/common/logger');
+
+const MAIL_DIGEST_LIMIT = 5; // 계정당 미리보기 개수
 
 /** ctx 의존성 해석(주입 우선). */
 function deps(ctx) {
@@ -107,10 +110,38 @@ async function testMailAccount(args, ctx) {
   }
 }
 
+/**
+ * spip:getMailSummary — 계정별 안 읽은 메일 수 + 최근 미리보기(제목·발신자). 홈 브리핑용.
+ *   계정마다 1회 IMAP 세션(EXAMINE read-only — 읽음표시 영향 없음). 병렬 수행, 실패는 계정 단위 격리.
+ *   제목/발신자는 clampString으로 제어문자 제거·길이 절단(L-3) 후 노출(렌더는 textContent, L-1).
+ * @returns {Promise<{ok:true, accounts:Array}>}
+ */
+async function getMailSummary(ctx) {
+  const d = deps(ctx);
+  const accounts = currentAccounts(ctx);
+  const results = await Promise.all(accounts.map(async (a) => {
+    const view = reg.toPublicView(a);
+    try {
+      const client = d.clientFactory({ host: a.host, port: a.port, user: a.user, pass: a.pass });
+      const digest = await client.fetchUnseenDigest('INBOX', MAIL_DIGEST_LIMIT);
+      const items = (Array.isArray(digest.items) ? digest.items : []).map((m) => ({
+        subject: m.subject ? clampString(String(m.subject), 200) : null,
+        from: m.from ? clampString(String(m.from), 120) : null,
+        date: m.date ? clampString(String(m.date), 64) : null,
+      }));
+      return Object.assign({}, view, { ok: true, unseen: Number.isFinite(digest.unseen) ? digest.unseen : items.length, items });
+    } catch (err) {
+      return Object.assign({}, view, { ok: false, code: (err && err.authFailed) ? 'AUTH' : 'NETWORK', unseen: null, items: [] });
+    }
+  }));
+  return { ok: true, accounts: results };
+}
+
 module.exports = {
   getMailAccounts,
   addMailAccount,
   updateMailAccount,
   removeMailAccount,
   testMailAccount,
+  getMailSummary,
 };

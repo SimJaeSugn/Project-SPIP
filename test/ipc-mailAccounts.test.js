@@ -105,3 +105,36 @@ test('testMailAccount — 검증 실패 코드', async () => {
   const res = await ipc.testMailAccount({ host: 'h', user: 'u', pass: '' }, ctx);
   assert.strictEqual(res.code, 'INVALID_PASS');
 });
+
+// ── M3: getMailSummary ──
+test('getMailSummary — 계정별 unseen+items, 비번 미노출', async () => {
+  const { ctx } = makeCtx();
+  ipc.addMailAccount(VALID, ctx);
+  ctx.mailClientFactory = () => ({ fetchUnseenDigest: async () => ({ unseen: 3, items: [{ uid: 9, subject: '제목', from: '보낸이', date: 'd' }] }) });
+  const res = await ipc.getMailSummary(ctx);
+  assert.ok(res.ok);
+  assert.strictEqual(res.accounts.length, 1);
+  assert.strictEqual(res.accounts[0].ok, true);
+  assert.strictEqual(res.accounts[0].unseen, 3);
+  assert.strictEqual(res.accounts[0].items[0].subject, '제목');
+  assert.strictEqual(res.accounts[0].items[0].from, '보낸이');
+  assert.ok(!('pass' in res.accounts[0]));
+});
+
+test('getMailSummary — 계정 실패 격리(AUTH/NETWORK)', async () => {
+  const { ctx } = makeCtx();
+  ipc.addMailAccount(VALID, ctx);
+  ctx.mailClientFactory = () => ({ fetchUnseenDigest: async () => { const e = new Error('no'); e.authFailed = true; throw e; } });
+  let res = await ipc.getMailSummary(ctx);
+  assert.strictEqual(res.accounts[0].ok, false);
+  assert.strictEqual(res.accounts[0].code, 'AUTH');
+  ctx.mailClientFactory = () => ({ fetchUnseenDigest: async () => { throw new Error('ECONNREFUSED'); } });
+  res = await ipc.getMailSummary(ctx);
+  assert.strictEqual(res.accounts[0].code, 'NETWORK');
+});
+
+test('getMailSummary — 계정 없으면 빈 목록', async () => {
+  const { ctx } = makeCtx();
+  const res = await ipc.getMailSummary(ctx);
+  assert.deepStrictEqual(res, { ok: true, accounts: [] });
+});

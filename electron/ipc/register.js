@@ -172,6 +172,7 @@ function registerIpcHandlers(deps) {
   guard('spip:updateMailAccount', (args) => mailAccountsIpc.updateMailAccount(args, ctx));
   guard('spip:removeMailAccount', (args) => mailAccountsIpc.removeMailAccount(args, ctx));
   guard('spip:testMailAccount', (args) => mailAccountsIpc.testMailAccount(args, ctx));
+  guard('spip:getMailSummary', () => mailAccountsIpc.getMailSummary(ctx));
 
   // [M7 SEC-M2] 즐겨찾기 변경 broadcast(단방향 push) — setFavorite 성공 시 메인 wc + 위젯 wc 양쪽에 동기화.
   //   payload 스키마 = { favorites:string[] }만(경로/실행 인자/내부 상태 금지). 대상 wc는 메인·위젯 2개로

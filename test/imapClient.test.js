@@ -81,3 +81,47 @@ test('status — UIDNEXT 없는 응답은 빈 항목', async () => {
   const st = await client.fetchInboxStatus('INBOX');
   assert.deepStrictEqual(st, { messages: 1 });
 });
+
+// ── M3: 리터럴 인지 리더 + fetchUnseenDigest ──
+function digestSocket() {
+  const s = new EventEmitter();
+  s.written = [];
+  s.setTimeout = () => {}; s.end = () => {}; s.destroy = () => {};
+  s.feedRaw = (str) => s.emit('data', Buffer.from(str, 'utf8'));
+  s.feed = (line) => s.feedRaw(line + '\r\n');
+  s.write = (data) => {
+    s.written.push(data);
+    const tag = String(data).split(' ')[0];
+    process.nextTick(() => {
+      if (/\bLOGIN\b/i.test(data)) s.feed(tag + ' OK LOGIN');
+      else if (/\bSTATUS\b/i.test(data)) { s.feed('* STATUS "INBOX" (MESSAGES 10 UNSEEN 2 UIDNEXT 50)'); s.feed(tag + ' OK'); }
+      else if (/\bEXAMINE\b/i.test(data)) { s.feed('* OK [READ-ONLY] ok'); s.feed(tag + ' OK [READ-ONLY]'); }
+      else if (/UID\s+SEARCH/i.test(data)) { s.feed('* SEARCH 48 49'); s.feed(tag + ' OK'); }
+      else if (/UID\s+FETCH/i.test(data)) {
+        s.feed('* 1 FETCH (UID 48 ENVELOPE ("Mon, 01 Jan 2026" "Hello" (("Sender One" NIL "s1" "ex.com")) NIL NIL NIL NIL NIL NIL NIL))');
+        // UID 49: 제목을 리터럴({3})로 전송 — 리더가 따옴표로 정규화해야 파싱됨
+        s.feedRaw('* 2 FETCH (UID 49 ENVELOPE ("Tue, 02 Jan 2026" {3}\r\nabc (("Sender Two" NIL "s2" "ex.com")) NIL NIL NIL NIL NIL NIL NIL))\r\n');
+        s.feed(tag + ' OK');
+      }
+      else if (/\bLOGOUT\b/i.test(data)) { s.feed('* BYE'); s.feed(tag + ' OK'); }
+    });
+    return true;
+  };
+  return s;
+}
+
+test('fetchUnseenDigest — EXAMINE+SEARCH+ENVELOPE(리터럴 제목 포함) 파싱', async () => {
+  const sock = digestSocket();
+  const client = new ImapClient({ host: 'h', port: 993, user: 'u', pass: 'p',
+    connect: () => { process.nextTick(() => sock.feed('* OK ready')); return sock; } });
+  const d = await client.fetchUnseenDigest('INBOX', 5);
+  assert.strictEqual(d.unseen, 2);
+  assert.strictEqual(d.items.length, 2);
+  // top = [49,48] (최신 우선)
+  assert.strictEqual(d.items[0].uid, 49);
+  assert.strictEqual(d.items[0].subject, 'abc', '리터럴 제목 정규화');
+  assert.strictEqual(d.items[0].from, 'Sender Two');
+  assert.strictEqual(d.items[1].uid, 48);
+  assert.strictEqual(d.items[1].subject, 'Hello');
+  assert.ok(sock.written.some((c) => /EXAMINE/.test(c)), 'EXAMINE(read-only) 사용');
+});

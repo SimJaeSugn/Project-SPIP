@@ -47,3 +47,37 @@ test('parseStatusItems — 괄호/내용 부재 시 빈 객체', () => {
 test('parseStatusItems — 숫자 아닌 값은 건너뜀', () => {
   assert.deepStrictEqual(parseStatusItems('* STATUS "X" (UIDNEXT 9 FOO bar)'), { uidnext: 9 });
 });
+
+// ── M3: SEARCH / ENVELOPE / RFC2047 ──
+test('parseSearchUids — UID 배열 / 미일치 빈 배열', () => {
+  const { parseSearchUids } = require('../lib/mail/imapProtocol');
+  assert.deepStrictEqual(parseSearchUids('* SEARCH 5 9 12'), [5, 9, 12]);
+  assert.deepStrictEqual(parseSearchUids('* SEARCH'), []);
+  assert.deepStrictEqual(parseSearchUids('* OK nope'), []);
+});
+
+test('parseSexp — 중첩/NIL/따옴표 이스케이프', () => {
+  const { parseSexp } = require('../lib/mail/imapProtocol');
+  assert.deepStrictEqual(parseSexp('("a" NIL ("b" "c"))'), ['a', null, ['b', 'c']]);
+  assert.strictEqual(parseSexp('"he\\"llo"'), 'he"llo');
+  assert.strictEqual(parseSexp('NIL'), null);
+});
+
+test('decodeMimeHeader — B/Q 인코딩 + 평문', () => {
+  const { decodeMimeHeader } = require('../lib/mail/imapProtocol');
+  assert.strictEqual(decodeMimeHeader('=?UTF-8?B?7JWI64WV?='), '안녕');
+  assert.strictEqual(decodeMimeHeader('=?UTF-8?Q?hi=20there?='), 'hi there');
+  assert.strictEqual(decodeMimeHeader('plain text'), 'plain text');
+  assert.strictEqual(decodeMimeHeader(null), null);
+});
+
+test('parseFetchEnvelope — uid/subject(디코드)/from(이름 우선)', () => {
+  const { parseFetchEnvelope } = require('../lib/mail/imapProtocol');
+  const line = '* 1 FETCH (UID 34 ENVELOPE ("Wed, 01 Jan 2026" "=?UTF-8?B?7YWM7Iqk7Yq4?=" (("John Doe" NIL "john" "ex.com")) NIL NIL NIL NIL NIL NIL "<id>"))';
+  assert.deepStrictEqual(parseFetchEnvelope(line), { uid: 34, date: 'Wed, 01 Jan 2026', subject: '테스트', from: 'John Doe' });
+  // from 이름 없으면 mailbox@host
+  const line2 = '* 2 FETCH (UID 7 ENVELOPE ("d" "s" ((NIL NIL "me" "ex.com")) NIL NIL NIL NIL NIL NIL NIL))';
+  assert.strictEqual(parseFetchEnvelope(line2).from, 'me@ex.com');
+  // ENVELOPE 부재 → null
+  assert.strictEqual(parseFetchEnvelope('* 1 FETCH (UID 7 FLAGS (\Seen))'), null);
+});

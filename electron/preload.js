@@ -84,6 +84,8 @@ contextBridge.exposeInMainWorld('spip', {
   removeMailAccount: (id) => ipcRenderer.invoke('spip:removeMailAccount', { id: String(id) }),
   testMailAccount: (a) => ipcRenderer.invoke('spip:testMailAccount', Object.assign(
     (a && a.id != null) ? { id: String(a.id) } : {}, _mailArgs(a))),
+  // 홈 브리핑용 — 계정별 안 읽은 메일 수 + 제목·발신자 미리보기(인자 없음).
+  getMailSummary: () => ipcRenderer.invoke('spip:getMailSummary'),
 
   // 자동 업데이트(사용자 주도) — 확인/다운로드/설치 트리거 + 상태 스냅샷. 인자 없음(main이 검증).
   //   진행 상황은 onUpdateStatus(cb) 구독으로 받는다. 채널명 하드코딩(MUST).

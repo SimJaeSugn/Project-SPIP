@@ -1028,6 +1028,10 @@ function initBrowser() {
     todos: [],                   // [{id,text,done,createdAt}]
     todoInput: '',               // 추가 입력(컨트롤드)
     busyTodos: false,            // 추가/토글/삭제 in-flight
+    // 메일 다이제스트(홈 브리핑) — getMailSummary 응답(계정별 unseen + 제목/발신자 미리보기)
+    mailSummary: [],             // [{id,label,host,user,unseen,items:[{subject,from,date}],ok,code}]
+    busyMailSummary: false,      // getMailSummary in-flight
+    mailSummaryLoaded: false,    // 최초 1회 자동 로드 가드
     // 메일 알림 계정(복수 IMAP) — 공개 뷰 목록 + 입력 폼(비밀번호는 응답에 없음)
     mailAccounts: [],            // getMailAccounts 응답(공개 뷰: id,label,host,port,user,hasPassword)
     mailForm: { label: '', host: '', port: '', user: '', pass: '' }, // 추가/수정 폼(컨트롤드)
@@ -1476,7 +1480,7 @@ function initBrowser() {
     const grid = el('div', { cls: 'home__grid' });
     grid.appendChild(renderHomeAttention());
     grid.appendChild(renderHomeActivity());
-    grid.appendChild(renderHomePlaceholder('안 읽은 메일', '메일 다이제스트는 곧 제공됩니다. 설정 → 메일 알림 계정에서 계정을 추가하세요.'));
+    grid.appendChild(renderHomeMail());
     grid.appendChild(renderHomeTodos());
     grid.appendChild(renderHomePlaceholder('주간 생산성', '커밋 빈도·언어 추세 차트는 곧 제공됩니다.'));
     main.appendChild(grid);
@@ -1533,6 +1537,68 @@ function initBrowser() {
       ul.appendChild(li);
     }
     return homeCard('주의가 필요한 프로젝트', [ul], { action: more });
+  }
+
+  function renderHomeMail() {
+    if (!bridgeHas('getMailSummary')) {
+      return renderHomePlaceholder('안 읽은 메일', '이 환경에서는 메일을 사용할 수 없습니다.');
+    }
+    const refresh = el('button', {
+      cls: 'link-btn', text: store.busyMailSummary ? '확인 중…' : '새로고침',
+      attrs: { type: 'button', 'aria-label': '메일 새로고침' }, on: { click: () => refreshMailSummary() },
+    });
+    if (store.busyMailSummary) refresh.disabled = true;
+
+    const accounts = Array.isArray(store.mailSummary) ? store.mailSummary : [];
+    const body = [];
+    if (!store.mailSummaryLoaded && !store.busyMailSummary) {
+      body.push(el('div', { cls: 'home-card__empty', text: '“새로고침”을 눌러 메일을 확인하세요.' }));
+    } else if (store.busyMailSummary && accounts.length === 0) {
+      body.push(el('div', { cls: 'home-card__empty', text: '메일을 확인하는 중…' }));
+    } else if (accounts.length === 0) {
+      body.push(el('div', { cls: 'home-card__empty', text: '등록된 메일 계정이 없습니다. 설정 → 메일 알림 계정에서 추가하세요.' }));
+    } else {
+      for (const a of accounts) {
+        const acct = el('div', { cls: 'home-mail__acct' });
+        const head = el('div', { cls: 'home-mail__head' });
+        head.appendChild(el('span', { cls: 'home-mail__label', text: a.label || a.user || a.host || '' }));
+        if (a.ok === false) {
+          head.appendChild(badge('badge--stale', a.code === 'AUTH' ? '로그인 실패' : '연결 실패'));
+        } else {
+          head.appendChild(el('span', { cls: 'home-mail__count', text: '안 읽음 ' + (Number.isFinite(a.unseen) ? a.unseen : 0) }));
+        }
+        acct.appendChild(head);
+        if (a.ok !== false && Array.isArray(a.items) && a.items.length) {
+          const ul = el('ul', { cls: 'home-list', attrs: { role: 'list' } });
+          for (const m of a.items) {
+            const li = el('li', { cls: 'home-mail__item' });
+            li.appendChild(el('span', { cls: 'home-mail__from', text: m.from || '(발신자 없음)', title: m.from || '' })); // L-1
+            li.appendChild(el('span', { cls: 'home-mail__subj', text: m.subject || '(제목 없음)', title: m.subject || '' })); // L-1
+            ul.appendChild(li);
+          }
+          acct.appendChild(ul);
+        } else if (a.ok !== false) {
+          acct.appendChild(el('div', { cls: 'home-card__empty', text: '안 읽은 메일이 없습니다.' }));
+        }
+        body.push(acct);
+      }
+    }
+    return homeCard('안 읽은 메일', body, { action: refresh });
+  }
+
+  /** 홈 진입 시 1회 자동 로드(이후는 수동 새로고침). */
+  function maybeLoadMailSummary() {
+    if (bridgeHas('getMailSummary') && !store.mailSummaryLoaded && !store.busyMailSummary) refreshMailSummary();
+  }
+  async function refreshMailSummary() {
+    if (!bridgeHas('getMailSummary') || store.busyMailSummary) return;
+    store.busyMailSummary = true;
+    if (store.state.view === 'home') render();
+    const res = await ipc('getMailSummary');
+    store.busyMailSummary = false;
+    store.mailSummaryLoaded = true;
+    store.mailSummary = (res && res.ok && Array.isArray(res.accounts)) ? res.accounts : [];
+    if (store.state.view === 'home') render();
   }
 
   function renderHomeTodos() {
@@ -3098,7 +3164,7 @@ function initBrowser() {
         cls: 'topnav__tab' + (active ? ' is-active' : ''),
         text: label,
         attrs: { type: 'button', 'aria-current': active ? 'page' : 'false', 'aria-label': label + ' 화면' },
-        on: { click: () => { if (store.state.view !== view) { store.state.view = view; render(); } } },
+        on: { click: () => { if (store.state.view !== view) { store.state.view = view; render(); if (view === 'home') maybeLoadMailSummary(); } } },
       }));
     });
     header.appendChild(nav);
@@ -4814,6 +4880,8 @@ function initBrowser() {
       // R-19/20/21: UI 상태(favorites/order/sortMode) 적재 후 재렌더(비블로킹)
       loadUiState().then(() => { if (store.state.view === 'home' || store.state.view === 'dashboard') render(); });
       render();
+      // 홈 진입 시 메일 다이제스트 1회 자동 로드(비블로킹 — 카드만 로딩 표시).
+      maybeLoadMailSummary();
     } catch (err) {
       store._errorMsg = '데이터를 불러오지 못했습니다. (' + (err && err.message ? err.message : '오류') + ')';
       store.state.view = 'error';
