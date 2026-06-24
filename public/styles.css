@@ -380,6 +380,8 @@ input, button, select { font-family: inherit; }
 /* [R-33] 커밋 SVG 차트(자작·외부 0). 막대 강조/툴팁은 chartBars 가 setAttribute/textContent 로 제어. */
 /* [M10-P4] patchRegion 교체 대상 영역(차트 호스트를 감쌈). 레이아웃 영향 없는 단순 래퍼. */
 .commit-chart-region { display: block; }
+/* [M11] 메일 섹션 patchRegion 교체 대상 영역(메일 카드를 감쌈). 단순 래퍼. */
+.mail-region { display: block; }
 .commit-chart { display: flex; flex-direction: column; gap: 7px; }
 .commit-chart__wrap { position: relative; }
 .commit-chart__svg { display: block; width: 100%; overflow: visible; }

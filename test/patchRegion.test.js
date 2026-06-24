@@ -30,12 +30,14 @@ test('M10-PG-1 — deferred=false + container 존재 → patch(영역 교체)', 
 function patchRegionBody() {
   const start = APP_SRC.indexOf('patchRegion(containerEl, builderFn, opts)');
   assert.ok(start >= 0, 'patchRegion 메서드가 있어야 한다');
-  return APP_SRC.slice(start, start + 1600);
+  return APP_SRC.slice(start, start + 2100);
 }
 
 test('M10-P3 — patchRegion: deferred 보류·fallback·5단계 순서', () => {
   const b = patchRegionBody();
-  assert.ok(/patchRegionPlan\(present,\s*deferred\(\)\)/.test(b), '순수 분기 사용');
+  // [M11] isDeferred = bypassDefer ? false : deferred() — patchRegionPlan(present, isDeferred).
+  assert.ok(/patchRegionPlan\(present,\s*isDeferred\)/.test(b), '순수 분기 사용');
+  assert.ok(/bypassDefer\s*\?\s*false\s*:\s*deferred\(\)/.test(b), 'bypassDefer 분기');
   assert.ok(/coalesce\.request\(\)/.test(b), 'defer 시 coalesce.request');
   assert.ok(/fallback\(\)/.test(b), 'fallback 호출');
   // 순서: _destroyById(②) → capture(③) → replaceChildren(④) → restore(⑤) → _mountById(⑤)

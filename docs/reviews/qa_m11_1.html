@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QA 검증 보고 — M11 patchRegion 확장(메일·설정)</title>
+<style>
+  :root{--bg:#0f172a;--panel:#1e293b;--t1:#e2e8f0;--t2:#94a3b8;--ok:#34d399;--ref:#38bdf8;--warn:#fbbf24;--fail:#f87171;}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--t1);font-family:-apple-system,"Segoe UI",Roboto,"Malgun Gothic",sans-serif;line-height:1.65;padding:32px 20px}
+  .wrap{max-width:960px;margin:0 auto}
+  h1{font-size:24px;margin:0 0 4px}
+  .sub{color:var(--t2);font-size:13px;margin-bottom:24px}
+  .verdict{background:var(--panel);border:1px solid #334155;border-left:4px solid var(--ok);border-radius:10px;padding:18px 20px;margin-bottom:24px}
+  .verdict b{color:var(--ok)}
+  h2{font-size:17px;margin:28px 0 10px;border-bottom:1px solid #334155;padding-bottom:6px}
+  .card{background:var(--panel);border:1px solid #334155;border-radius:10px;padding:16px 18px;margin-bottom:14px}
+  .pill{display:inline-block;font-size:11px;font-weight:700;padding:2px 9px;border-radius:20px;margin-right:8px;vertical-align:middle}
+  .p-pass{background:rgba(52,211,153,.15);color:var(--ok);border:1px solid rgba(52,211,153,.4)}
+  .p-warn{background:rgba(251,191,36,.15);color:var(--warn);border:1px solid rgba(251,191,36,.4)}
+  .p-fail{background:rgba(248,113,113,.15);color:var(--fail);border:1px solid rgba(248,113,113,.4)}
+  .ttl{font-size:14.5px;font-weight:600;margin-bottom:8px}
+  ul{margin:6px 0;padding-left:20px}
+  li{margin:4px 0;font-size:13.5px;color:var(--t1)}
+  code{background:#0b1220;border:1px solid #334155;border-radius:4px;padding:1px 5px;font-size:12.5px;color:var(--ref);font-family:"Consolas",monospace}
+  .ref{color:var(--ref)}
+  .muted{color:var(--t2);font-size:12.5px}
+  table{width:100%;border-collapse:collapse;font-size:13px;margin-top:6px}
+  th,td{text-align:left;padding:7px 10px;border-bottom:1px solid #334155}
+  th{color:var(--t2);font-weight:600}
+  .smoke{background:#0b1220;border-radius:8px;padding:12px 16px;font-size:13px}
+  .smoke li{color:var(--t2)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>QA 검증 보고 — M11 patchRegion 확장</h1>
+  <div class="sub">대상: 메일 섹션 + 설정 우측 패널 부분 갱신 / 패턴 출처 <span class="ref">docs/architecture/m10-design.html</span> / 검증일 2026-06-25</div>
+
+  <div class="verdict">
+    <b>종합 판정: PASS</b> — 전체 <b>748 통과 / 0 실패</b> 재확인. M11 신규 16건 포함 관련 스위트(patchRegion·commitPolling·mail·home) 전부 그린.
+    회귀 발견 0. 경계면(메일 fetch→diff→patch, 설정 nav→switchSettingsTab→pane patch, patchRegion bypassDefer 분기) 양측 교차 확인 결과 계약 일치.
+    실 DOM 동작(깜빡임·포커스·스크롤)은 헤드리스 0-의존 설계라 수동 스모크 권고(하단).
+  </div>
+
+  <h2>1. 회귀 0 (최우선)</h2>
+  <div class="card">
+    <div class="ttl"><span class="pill p-pass">PASS</span>render()/RG 공개 API·renderGuard.js 시그니처 불변</div>
+    <ul>
+      <li><code>RG = { composition, deferred, preserve, widget, coalesce }</code> 반환 형태 불변(app.js:5921). <code>lib/common/renderGuard.js</code>에 <code>patchRegion</code>/<code>mailSummaryKey</code> 미추가 확인(테스트 강제, m11:124).</li>
+      <li><code>patchRegion(containerEl, builderFn, opts)</code>에 <code>bypassDefer</code>만 추가. 기본값 false → <code>isDeferred = opts.bypassDefer ? false : deferred()</code>(app.js:5809). 미지정 경로는 M10과 동일하게 <code>deferred()</code> 평가.</li>
+      <li>M10 차트 경로 <code>patchCommitChart</code>는 opts에 bypassDefer 미전달 → 기존 동작 그대로(app.js:5960). commitPolling/patchRegion 테스트 그린으로 동작 보존 확인.</li>
+      <li>전체 render 경로(뷰전환·재스캔·applyProjectsUpdate·오버레이·초기 로드), 메일 본문 팝업 <code>openMailMessage</code>(app.js:2214, render() 직접 호출 유지), 설정 항목 저장 로직 미변경.</li>
+      <li>기존 메일/설정/홈 테스트(mailBody·mailWatcher·imapClient·home-dashboard·homeLayout-front) 전부 통과.</li>
+    </ul>
+  </div>
+
+  <h2>2. 메일 patchRegion</h2>
+  <div class="card">
+    <div class="ttl"><span class="pill p-pass">PASS</span>폴링/push silent + diff 가드 + 영역 교체</div>
+    <ul>
+      <li>60초 폴링·onMailUpdated push 모두 <code>maybeAutoRefreshMail()</code>→<code>refreshMailSummary({ silent:true })</code>(app.js:4954,4973,4962). silent면 진입 로딩 render 생략(app.js:2268) → fetch 동안 이전 목록 유지.</li>
+      <li>완료부 <code>onMailSummaryFetched()</code>가 <code>mailSummaryKey(store.mailSummary)</code>를 직전 키와 비교, 동일 시 <code>flushIfPending()</code>만 하고 skip; 변경 시 <code>patchMailSection()</code>으로 <code>.mail-region</code>만 교체(app.js:2278-2283).</li>
+      <li>최초/수동 로드는 <code>!opts.silent</code> 경로로 로딩 표시 render 유지(app.js:2266-2268). <code>maybeLoadMailSummary</code>는 opts 없이 호출 → 로딩 표시 정상.</li>
+      <li>deferred(조합·드래그·다른 오버레이·busyCommit·todo편집) 중 patch 호출 시 <code>plan='defer'</code>로 <code>coalesce.request()</code> 보류, 해제 지점에서 반영(app.js:5812). 폴링 진입 가드(<code>showSettings/showHelp/todoAdding</code>)도 별도 차단(app.js:4956).</li>
+      <li>busyMail 자기보류 회피: <code>busyMailSummary=false</code>를 patch 호출 전에 설정(app.js:2270→2274)해 <code>deferred()</code>의 busyMail이 patch를 막지 않음.</li>
+    </ul>
+    <div class="muted">참고: 폴링이 deferred로 보류된 동안 새 폴링이 또 들어와도 coalesce는 단일 pending/타이머라 잉여 render 없음. 다만 보류 해제는 전체 <code>render()</code>로 반영되므로(coalesce.release/flush) "보류 해제 시 영역만 교체"가 아니라 전체 재렌더 — 깜빡임 0 목표는 정상 흐름(미보류)에서 충족, 보류 해제 1프레임은 기존 M9/M10과 동일한 trade-off.</div>
+  </div>
+
+  <h2>3. 설정 우측 패널</h2>
+  <div class="card">
+    <div class="ttl"><span class="pill p-pass">PASS</span>nav class 토글 + pane patchRegion + bypassDefer</div>
+    <ul>
+      <li>nav 버튼 클릭 → <code>switchSettingsTab(cat.id)</code>(app.js:2499). 좌측 nav는 <code>classList.toggle('is-active')</code>+<code>aria-selected</code>만 동기화(app.js:2536-2541) — 모달 골격·nav DOM 보존.</li>
+      <li>우측 <code>.settings-pane</code>만 <code>patchRegion(pane, …, { bypassDefer:true, preserveFocus:true, fallback:render })</code>로 교체(app.js:2543-2553). builderFn은 임시 frag에 <code>buildSettingsPaneInto</code> 채운 뒤 childNodes 이동.</li>
+      <li><b>bypassDefer:true 타당성 확인됨</b>: 설정 오버레이는 <code>overlayOpen→deferred()=true</code>이지만 탭 전환은 사용자 명시 액션이라 보류 대상 아님. 우회 안 하면 클릭이 coalesce로 보류되어 즉시 전환 안 됨 → 우회가 정확.</li>
+      <li>포커스 트랩: <code>getTabbables(dialog)</code>가 dialog 전체를 동적 querySelectorAll(app.js:4504-4507) → 좌측 nav 버튼 + 우측 새 pane 입력 모두 포함. pane 교체 후에도 재계산되어 트랩 유지.</li>
+      <li>같은 탭 재클릭 <code>store.settingsTab === next</code> no-op(app.js:2533). <code>buildSettingsPaneInto</code>는 renderSettings(app.js:2506)·switchSettingsTab 공용(2회 호출).</li>
+    </ul>
+    <div class="muted">관찰(버그 아님): patch 대상 container가 <code>.settings-pane</code> 자신인데 <code>preserve.capture</code>의 SCROLL_SEL은 <code>rootEl.querySelector('.settings-pane')</code>로 <i>자손</i>을 찾아 자기 자신은 캡처 대상이 아님. 즉 탭 전환 시 우측 스크롤은 0으로 리셋된다. 다른 탭으로 전환하면 콘텐츠가 달라 스크롤 톱 시작이 자연스러우므로 의도된 동작으로 판단. preserveFocus:true는 pane 내부 입력(예: 포커스된 텍스트 입력) 캐럿 보존용으로 정상 동작. <span class="ref">심각도: 낮음(설계 의도 일치, 회귀 아님)</span></div>
+  </div>
+
+  <h2>4. 폴백 · 보안</h2>
+  <div class="card">
+    <div class="ttl"><span class="pill p-pass">PASS</span>container 부재/예외 폴백 + L-1/M-2 불변식</div>
+    <ul>
+      <li><code>plan='fallback'</code>(container 부재) 및 builderFn 예외 시 <code>fallback()</code>=전체 <code>render()</code>(app.js:5813,5828). patchMailSection·switchSettingsTab·patchCommitChart 모두 <code>document</code> 부재 시 즉시 render 폴백.</li>
+      <li>렌더는 전부 <code>el(...{text})</code>=textContent 경로, <code>renderHomeMailCard</code>·본문 <code>&lt;pre&gt;</code> 모두 textContent(L-1).</li>
+      <li><code>mailSummaryKey</code>: id(hex 문자열)·unseen(정수)·uid(정수)·date(epoch-ms 정수)만 키에 진입. 제목·발신자 문자열 미진입(app.js:746-763). 테스트가 <code>^[a-f0-9]*#[0-9]+#[0-9:,]*$</code> 형식 + <code>&lt;script&gt;</code>/이메일 미포함 강제(m11:34-39).</li>
+    </ul>
+  </div>
+
+  <h2>5. 빌드 · 테스트 실행</h2>
+  <div class="card">
+    <div class="ttl"><span class="pill p-pass">PASS</span>npm test 748 통과 + app.js 구문 OK</div>
+    <table>
+      <tr><th>실행</th><th>결과</th></tr>
+      <tr><td><code>npm test</code> (node --test test/**/*.test.js)</td><td><b style="color:var(--ok)">pass 748 / fail 0 / cancelled 0</b> (duration ≈1.42s)</td></tr>
+      <tr><td>m11-patchregion + patchRegion + commitPolling</td><td><b style="color:var(--ok)">pass 36 / fail 0</b></td></tr>
+      <tr><td>mail·home 스위트(mailBody/mailWatcher/imapClient/home-dashboard/homeLayout-front)</td><td><b style="color:var(--ok)">pass 36 / fail 0</b></td></tr>
+      <tr><td><code>node -e require('./public/app.js')</code></td><td><b style="color:var(--ok)">구문 OK</b>, exports에 <code>mailSummaryKey</code>·<code>patchRegionPlan</code> 노출 확인</td></tr>
+    </table>
+  </div>
+
+  <h2>발견 버그</h2>
+  <div class="card">
+    <div class="ttl"><span class="pill p-pass">없음</span>블로커/높음/보통 등급 버그 0</div>
+    <ul>
+      <li>회귀·계약 위반 미발견. 3번의 스크롤 리셋 관찰은 설계 의도와 일치하는 정상 동작(심각도 낮음, 조치 불요).</li>
+    </ul>
+  </div>
+
+  <h2>수동 스모크 권고 (헤드리스 미커버 — 실 DOM 동작)</h2>
+  <div class="smoke">
+    <ul>
+      <li>홈 체류 중 60초 폴링/새 메일 도착 시 메일 카드만 갱신되고 페이지 전체 깜빡임 없는지.</li>
+      <li>메일 데이터 무변경 폴링이 화면을 건드리지 않는지(diff skip).</li>
+      <li>할 일 입력 포커스/IME 조합 중 메일 push가 도착해도 입력이 방해받지 않고, 입력 종료 후 반영되는지.</li>
+      <li>설정 모달에서 탭 전환 시 모달 깜빡임·재진입 애니메이션 없이 우측만 바뀌고 좌측 활성 표시가 즉시 동기화되는지.</li>
+      <li>설정 탭 전환 후 Tab 키 포커스 트랩이 새 우측 콘텐츠 + 좌측 nav를 순환하는지.</li>
+      <li>설정 입력에 포커스/캐럿 둔 상태에서 같은 탭 재클릭 시 no-op(아무 변화 없음).</li>
+      <li>메일 본문 팝업(openMailMessage) 열림/닫힘이 기존대로 동작하고, 팝업 중 폴링이 와도 정상인지.</li>
+    </ul>
+  </div>
+</div>
+</body>
+</html>

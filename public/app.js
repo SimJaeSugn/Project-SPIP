@@ -739,6 +739,30 @@ function commitActivityKey(ca) {
 }
 
 /**
+ * [M11] 메일 요약 동일성 키(순수, diff 가드). 계정별 id+unseen + 항목 uid·date(epoch-ms) 시퀀스.
+ *   [L-1/M-2] 제목·발신자 등 신뢰불가 문자열은 키에 넣지 않는다(uid 정수·unseen 정수·date→ms 정수만).
+ *   계정 id 는 hex 토큰(영속 키)이라 안전. 데이터·읽음 변동 시 키가 달라져 갱신 누락 0.
+ */
+function mailSummaryKey(summary) {
+  if (!Array.isArray(summary)) return '';
+  const parts = [];
+  for (const a of summary) {
+    if (!a || typeof a !== 'object') continue;
+    const id = (typeof a.id === 'string') ? a.id : '';
+    const un = Number(a.unseen);
+    const unseen = (Number.isFinite(un) && un >= 0) ? un : 0;
+    const items = Array.isArray(a.items) ? a.items : [];
+    const its = items.map((m) => {
+      const uid = Number(m && m.uid);
+      const ms = Date.parse(m && m.date);
+      return (Number.isFinite(uid) ? uid : 0) + ':' + (Number.isFinite(ms) ? ms : 0);
+    }).join(',');
+    parts.push(id + '#' + unseen + '#' + its);
+  }
+  return parts.join('|');
+}
+
+/**
  * [M10-P1] 툴팁 가로 위치(left px) 순수 계산 — DOM 미접근(getBoundingClientRect 값은 인자 주입).
  *   막대 중심을 wrap 기준 픽셀로 환산한 뒤 [0, wrapWidth-tipWidth] 로 클램핑.
  *   세로 띄움(translateY(-100%))은 호출측이 별도 유지 — 여기선 가로만 계산.
@@ -2132,7 +2156,14 @@ function initBrowser() {
     render();
   }
 
+  /** [M11] 메일 섹션 2단 구조: .mail-region(patchRegion 교체 대상) > 카드. 폴링 갱신 시 region 만 교체. */
   function renderHomeMail() {
+    var region = el('div', { cls: 'mail-region' });
+    region.appendChild(renderHomeMailCard());
+    return region;
+  }
+  /** 메일 카드 본문(patchMailSection 의 builderFn 이 재사용). 내용·동작은 기존과 동일. */
+  function renderHomeMailCard() {
     var card = el('div', { style: HOME_CARD + 'padding:21px 20px;' });
     var items = mailFlatItems(5);
     var replies = items.filter(function (m) { return homeIsReply(m.subject); }).length;
@@ -2227,17 +2258,28 @@ function initBrowser() {
   function maybeLoadMailSummary() {
     if (bridgeHas('getMailSummary') && !store.mailSummaryLoaded && !store.busyMailSummary) refreshMailSummary();
   }
-  async function refreshMailSummary() {
+  var _lastMailSummaryKey = '';
+  async function refreshMailSummary(opts) {
+    opts = opts || {};
     if (!bridgeHas('getMailSummary') || store.busyMailSummary) return;
     store.busyMailSummary = true;
-    if (store.state.view === 'home') render();
+    // [M11] silent(폴링/push)면 진입 로딩 render 생략 — fetch 동안 이전 메일 목록 유지(깜빡임 0).
+    //   최초/수동(silent 아님)은 기존대로 로딩 표시용 render.
+    if (!opts.silent && store.state.view === 'home') render();
     var res = await ipc('getMailSummary');
     store.busyMailSummary = false;
     store.mailSummaryLoaded = true;
     store.mailSummary = (res && res.ok && Array.isArray(res.accounts)) ? res.accounts : [];
-    // [F-1] busyMail 해제 지점 — 직접 render() 대신 coalesce.release()로 즉시 1회 반영 + 잔류 pending 소비.
-    if (store.state.view === 'home') RG.coalesce.release();
+    // [M11] 완료부 — 데이터 무변경이면 skip, 변경 시 메일 섹션 영역만 patchRegion 교체.
+    if (store.state.view === 'home') onMailSummaryFetched();
     maybeFlushCommitRefresh(); // [M10-P1] busyMail 해제 → 보류된 커밋 폴링 따라감
+  }
+  /** [M11] 메일 요약 fetch 완료부 — diff 키 동일 시 갱신 skip, 변경 시 영역만 patch. */
+  function onMailSummaryFetched() {
+    var newKey = mailSummaryKey(store.mailSummary);
+    if (newKey === _lastMailSummaryKey) { RG.coalesce.flushIfPending(); return; } // 무변경 → 보류분만 소비
+    _lastMailSummaryKey = newKey;
+    patchMailSection(); // 변경 → 메일 영역만 교체(깜빡임 0). 영역 부재 시 내부 fallback=render.
   }
   function maybeLoadCommitActivity() {
     if (bridgeHas('getCommitActivity') && !store.commitActivityLoaded && !store.busyCommitActivity) refreshCommitActivity();
@@ -2445,24 +2487,23 @@ function initBrowser() {
     const activeTab = resolveSettingsTab(store.settingsTab);
     store.settingsTab = activeTab;
 
-    // 좌측: 카테고리 목록(SETTINGS_CATEGORIES 단일 출처). 클릭 시 settingsTab 전환 + render()
-    //   (showSettings 는 유지되므로 모달은 닫히지 않고 우측만 교체된다 — RG.preserve 가 스크롤/포커스 복원).
+    // 좌측: 카테고리 목록(SETTINGS_CATEGORIES 단일 출처). 클릭 시 [M11] 우측 패널만 patchRegion 교체.
+    //   (모달 골격·좌측 nav 는 그대로 — is-active class 만 토글. 탭 전환 깜빡임·포커스 트랩 흔들림 0.)
     const nav = el('div', { cls: 'settings-nav', attrs: { role: 'tablist', 'aria-label': '설정 카테고리' } });
     SETTINGS_CATEGORIES.forEach((cat) => {
       const active = cat.id === activeTab;
       nav.appendChild(el('button', {
         cls: 'settings-nav__item' + (active ? ' is-active' : ''),
         text: cat.label,
-        attrs: { type: 'button', role: 'tab', 'aria-selected': active ? 'true' : 'false' },
-        on: { click: () => { if (store.settingsTab !== cat.id) { store.settingsTab = cat.id; render(); } } },
+        attrs: { type: 'button', role: 'tab', 'aria-selected': active ? 'true' : 'false', 'data-settings-tab': cat.id },
+        on: { click: () => { switchSettingsTab(cat.id); } },
       }));
     });
 
     // 우측: 활성 카테고리에 매핑된 섹션만 렌더(나머지 미렌더). .settings-pane 은 스크롤 컨테이너.
     //   activeTab 은 resolveSettingsTab 으로 항상 유효 id → find 는 항상 성공(폴백 가드 불요).
     const pane = el('div', { cls: 'settings-pane spip-scroll', attrs: { role: 'tabpanel' } });
-    const cat = SETTINGS_CATEGORIES.find((c) => c.id === activeTab);
-    cat.sections.forEach((key) => { const node = buildSettingsSection(key); if (node) pane.appendChild(node); });
+    buildSettingsPaneInto(pane, activeTab);
 
     const layout = el('div', { cls: 'settings-2pane', children: [nav, pane] });
 
@@ -2474,6 +2515,41 @@ function initBrowser() {
       wide: true,
       enter,
       bodyChildren: [layout],
+    });
+  }
+
+  /** [M11] 활성 탭의 섹션들을 pane 에 채운다(renderSettings·patchSettingsPane 공용). */
+  function buildSettingsPaneInto(pane, tabId) {
+    const cat = SETTINGS_CATEGORIES.find((c) => c.id === resolveSettingsTab(tabId));
+    cat.sections.forEach((key) => { const node = buildSettingsSection(key); if (node) pane.appendChild(node); });
+  }
+
+  /** [M11] 설정 카테고리 탭 전환 — 우측 .settings-pane 만 patchRegion 교체(좌측 nav·모달 골격 유지).
+   *   설정은 오버레이(showSettings)라 deferred=true 이지만, 탭 전환은 사용자 명시 액션이므로 bypassDefer.
+   *   좌측 nav 활성 표시는 class 토글만(전체 재빌드 없음). 포커스 트랩(getTabbables)은 DOM 구조 유지로 보존. */
+  function switchSettingsTab(tabId) {
+    if (typeof document === 'undefined') return;
+    const next = resolveSettingsTab(tabId);
+    if (store.settingsTab === next) return; // 동일 탭 — no-op
+    store.settingsTab = next;
+    // 좌측 nav 활성 표시 동기화(class·aria 토글만).
+    const items = document.querySelectorAll('.settings-nav__item[data-settings-tab]');
+    items.forEach((btn) => {
+      const on = btn.getAttribute('data-settings-tab') === next;
+      btn.classList.toggle('is-active', on);
+      btn.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+    // 우측 패널만 교체. deferred 우회(사용자 액션), 입력 포커스/스크롤 보존, 영역 부재 시 전체 render 폴백.
+    const pane = document.querySelector('.settings-pane');
+    RG.preserve.patchRegion(pane, function () {
+      const frag = el('div'); // 임시 컨테이너 — 자식만 영역으로 옮긴다.
+      buildSettingsPaneInto(frag, next);
+      return Array.prototype.slice.call(frag.childNodes);
+    }, {
+      widgets: [],
+      preserveFocus: true,         // 설정 입력 포커스·캐럿 보존
+      bypassDefer: true,           // [M11] 오버레이 내 사용자 액션 — deferred 게이트 우회
+      fallback: function () { render(); },
     });
   }
 
@@ -4878,7 +4954,7 @@ function initBrowser() {
   function maybeAutoRefreshMail() {
     if (store.state.view !== 'home' || !bridgeHas('getMailSummary')) return;
     if (store.busyMailSummary || store.showSettings || store.showHelp || store.todoAdding) return;
-    refreshMailSummary();
+    refreshMailSummary({ silent: true }); // [M11] 폴링/push 는 silent(진입 로딩 render 생략 → 깜빡임 0)
   }
   function subscribeMailUpdated() {
     unsubscribeMailUpdated();
@@ -5721,13 +5797,17 @@ function initBrowser() {
       /** [M10-P3] 특정 영역만 부분 갱신(전체 replaceChildren 대신). 5단계 계약(설계 §2.2).
        *   @param containerEl 교체 대상 DOM 요소. null/미발견이면 fallback(전체 render).
        *   @param builderFn () => Node|Node[]|null. 새 영역 콘텐츠(차트는 빈 호스트만 — 위젯 소유).
-       *   @param opts { widgets?:string[], preserveFocus?:boolean(기본 true), fallback?:()=>void(기본 render) } */
+       *   @param opts { widgets?:string[], preserveFocus?:boolean(기본 true), fallback?:()=>void(기본 render),
+       *                 bypassDefer?:boolean(기본 false) — 사용자 명시 액션(설정 탭 전환 등)은 deferred 게이트 우회 } */
       patchRegion(containerEl, builderFn, opts) {
         opts = opts || {};
         const fallback = (typeof opts.fallback === 'function') ? opts.fallback : render;
         const widgets = Array.isArray(opts.widgets) ? opts.widgets : [];
         const present = !!containerEl && !(typeof document !== 'undefined' && document.body && !document.body.contains(containerEl));
-        const plan = patchRegionPlan(present, deferred()); // 순수 분기 결정(테스트 동형)
+        // [M11] bypassDefer=true 면 deferred 무시(오버레이 내 사용자 액션=설정 탭 전환은 보류 대상 아님).
+        //   기본(false)은 M10 그대로 — 배경 갱신은 deferred 시 coalesce 보류.
+        const isDeferred = opts.bypassDefer ? false : deferred();
+        const plan = patchRegionPlan(present, isDeferred); // 순수 분기 결정(테스트 동형)
         // ① deferred → 부분 갱신 안 하고 coalesce 적재(M9 계약 정합). containerEl 부재 → 전체 render 폴백.
         if (plan === 'defer') { coalesce.request(); return; }
         if (plan === 'fallback') { try { fallback(); } catch (_) { /* ignore */ } return; }
@@ -5886,6 +5966,20 @@ function initBrowser() {
     }, {
       widgets: ['commitChart'],   // ②_destroyById → ⑤_mountById 가 차트 노드 단독 소유
       preserveFocus: false,       // 차트 영역엔 포커스 입력 없음 — 캡처/복원 생략
+      fallback: function () { render(); },
+    });
+  }
+
+  /** [M11] 메일 섹션 영역만 부분 갱신 — 60초 폴링/push 시 전체 render 대신 .mail-region 만 교체(깜빡임 0).
+   *   위젯 없음(메일 행은 클릭 핸들러뿐, 재생성 무해). 영역 부재/오류/deferred 시 patchRegion 내부 안전 처리. */
+  function patchMailSection() {
+    if (typeof document === 'undefined') { render(); return; }
+    const region = document.querySelector('.mail-region');
+    RG.preserve.patchRegion(region, function () {
+      return renderHomeMailCard(); // 카드 본문만 재빌드(textContent — L-1)
+    }, {
+      widgets: [],                 // 메일 영역엔 stateful 위젯 없음
+      preserveFocus: false,        // 메일 행엔 텍스트 입력 없음 — 캡처/복원 생략(불필요 reflow 절감)
       fallback: function () { render(); },
     });
   }
@@ -6077,6 +6171,8 @@ if (typeof module !== 'undefined' && module.exports) {
     commitActivityKey,
     tipLeft,
     patchRegionPlan,
+    // [M11] 메일 요약 동일성 키(diff 가드, 순수)
+    mailSummaryKey,
     resolveScanReloadView,
     nextScanAction,
     sanitizeRescanOpts,

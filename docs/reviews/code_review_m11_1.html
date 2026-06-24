@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>M11 코드 리뷰 — patchRegion 메일·설정 확장</title>
+<style>
+  :root { --bg:#0b0f14; --panel:#121821; --panel2:#0f141b; --border:#1f2937; --t1:#e5e7eb; --t2:#9ca3af; --t3:#6b7280;
+          --ok:#34d399; --ref:#38bdf8; --warn:#fbbf24; --bad:#f87171; --mono:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--t1); font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Malgun Gothic',sans-serif; line-height:1.6; font-size:14px; }
+  .wrap { max-width:1080px; margin:0 auto; padding:40px 28px 80px; }
+  h1 { font-size:24px; font-weight:700; margin:0 0 6px; letter-spacing:-0.02em; }
+  h2 { font-size:17px; font-weight:650; margin:34px 0 12px; color:var(--t1); border-left:3px solid var(--ref); padding-left:10px; }
+  .sub { color:var(--t2); font-size:13px; margin:0 0 4px; }
+  .verdict { display:inline-flex; align-items:center; gap:8px; font-size:15px; font-weight:700; padding:7px 16px; border-radius:8px; margin:14px 0 2px; }
+  .v-pass { background:rgba(52,211,153,.12); color:var(--ok); border:1px solid rgba(52,211,153,.35); }
+  .meta { color:var(--t3); font-size:12px; font-family:var(--mono); margin-top:8px; }
+  .pill { display:inline-block; font-size:11px; font-weight:700; padding:2px 9px; border-radius:20px; vertical-align:middle; }
+  .p-defect { background:rgba(248,113,113,.15); color:var(--bad); border:1px solid rgba(248,113,113,.4); }
+  .p-improve { background:rgba(251,191,36,.13); color:var(--warn); border:1px solid rgba(251,191,36,.38); }
+  .p-minor { background:rgba(156,163,175,.13); color:var(--t2); border:1px solid rgba(156,163,175,.34); }
+  .p-ok { background:rgba(56,189,248,.12); color:var(--ref); border:1px solid rgba(56,189,248,.36); }
+  table { width:100%; border-collapse:collapse; margin:10px 0 6px; font-size:13px; }
+  th, td { text-align:left; padding:9px 11px; border-bottom:1px solid var(--border); vertical-align:top; }
+  th { color:var(--t2); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.04em; background:var(--panel2); }
+  td.loc { font-family:var(--mono); font-size:12px; color:var(--ref); white-space:nowrap; }
+  tr:last-child td { border-bottom:none; }
+  .card { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:18px 20px; margin:12px 0; }
+  code { font-family:var(--mono); font-size:12.5px; background:rgba(148,163,184,.12); padding:1px 6px; border-radius:5px; color:#cbd5e1; }
+  .num { font-family:var(--mono); }
+  ul { margin:6px 0 6px; padding-left:20px; }
+  li { margin:4px 0; }
+  .legend { display:flex; gap:16px; flex-wrap:wrap; font-size:12px; color:var(--t2); margin:8px 0 0; }
+  .small { font-size:12px; color:var(--t3); }
+  svg text { font-family:-apple-system,'Segoe UI',sans-serif; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <p class="sub">코드 품질 리뷰 · Project-SPIP</p>
+  <h1>M11 — patchRegion 확장(메일 섹션 · 설정 우측 패널)</h1>
+  <div class="verdict v-pass">PASS — 정확성 결함 0</div>
+  <p class="meta">대상: public/app.js · public/styles.css · test/m11-patchregion.test.js(신규) · test/patchRegion.test.js<br>
+  기준: docs/architecture/m10-design.html 패턴 · 전체 테스트 748 + M11 36건 통과 · docs/Development 없음(주변 일관성 기준 적용)</p>
+
+  <div class="card">
+    <strong>요약.</strong> M11은 M10의 patchRegion 위젯-소유 패턴을 메일 섹션과 설정 우측 패널로 일관되게 확장했다.
+    <code>mailSummaryKey</code>는 <code>commitActivityKey</code>와 동형의 정수-키 패턴(L-1/M-2 불변식 준수)이고,
+    <code>bypassDefer</code> 분기는 기본 <code>false</code>로 기존 차트 경로를 건드리지 않는다. 메일/차트 silent·diff 가드,
+    설정 탭 전환의 좌측 class 토글 + 우측만 교체, <code>buildSettingsPaneInto</code> 공용 추출 모두 정확하다.
+    <strong>정확성 결함은 발견되지 않았다.</strong> 개선 1건(비대칭 문서화), 사소 2건(죽은 주석·방어성)만 남는다.
+    <div class="legend">
+      <span><span class="pill p-defect">결함</span> 정확성 — 통과 차단</span>
+      <span><span class="pill p-improve">개선</span> 품질 권고</span>
+      <span><span class="pill p-minor">사소</span> 취향·문서</span>
+      <span><span class="pill p-ok">검증</span> 확인 후 이상無</span>
+    </div>
+  </div>
+
+  <h2>1. 정확성 검증 (결함 0)</h2>
+  <table>
+    <tr><th style="width:30%">검증 항목</th><th>판정 / 근거</th></tr>
+    <tr>
+      <td><span class="pill p-ok">검증</span> bypassDefer 분기</td>
+      <td><code>isDeferred = opts.bypassDefer ? false : deferred()</code> (app.js:5809). 기본 <code>undefined/false</code>면
+      <code>deferred()</code> 그대로 → M10 차트·대시보드 경로 무영향. <code>patchRegionPlan(present, isDeferred)</code>로
+      순수 분기 위임(:5810). <code>patchRegionPlan(true,false)='patch'</code>, <code>(true,true)='defer'</code> 테스트 동형.</td>
+    </tr>
+    <tr>
+      <td><span class="pill p-ok">검증</span> mailSummaryKey 정수/hex·graceful</td>
+      <td>app.js:746-763. 비배열 → <code>''</code>, NaN unseen → 0, uid/date(ms) 정수만, 제목·발신자 등 신뢰불가
+      문자열 미진입(L-1/M-2). 계정 id는 hex 토큰만 통과(<code>typeof === 'string'</code>). 정규식
+      <code>^[a-f0-9]*#[0-9]+#[0-9:,]*$</code> 형식 강제 — 모두 통과.</td>
+    </tr>
+    <tr>
+      <td><span class="pill p-ok">검증</span> onMailSummaryFetched diff·skip</td>
+      <td>app.js:2278-2283. 완료 시점은 <code>busyMailSummary=false</code> 해제 후. 무변경 → <code>flushIfPending()</code>
+      (보류분만 소비, 잉여 render 없음), 변경 → <code>patchMailSection()</code>. <code>commitActivityKey</code> 패턴과 동형.</td>
+    </tr>
+    <tr>
+      <td><span class="pill p-ok">검증</span> release()→flushIfPending() 행동 변화</td>
+      <td>기존 완료부는 무조건 <code>coalesce.release()</code>(항상 render). M11은 무변경 시 <code>flushIfPending()</code>로
+      교체 — pending 없으면 no-op이라 무변경 시 잉여 render 1회 제거(깜빡임 0 목표 정합). <code>request()</code>는
+      <code>pending=true</code>일 때만 타이머 설정(:5897-5899)이라, pending=false인데 timer만 사는 상태가 없어 누수 없음.</td>
+    </tr>
+    <tr>
+      <td><span class="pill p-ok">검증</span> switchSettingsTab 좌/우 일관</td>
+      <td>app.js:2530-2554. 동일 탭 → no-op(:2533). 좌측은 <code>data-settings-tab</code> 셀렉터로 전 nav 순회하며
+      <code>is-active</code> class + <code>aria-selected</code> 동기 토글(:2536-2541) — render 경로(:2496-2498)와
+      활성 표시 규칙 일치. 우측만 <code>.settings-pane</code> patchRegion(<code>bypassDefer:true</code>,
+      <code>preserveFocus:true</code>, <code>fallback:render</code>).</td>
+    </tr>
+    <tr>
+      <td><span class="pill p-ok">검증</span> buildSettingsPaneInto 공용·무중복</td>
+      <td>app.js:2522-2525. <code>renderSettings</code>(:2506)·<code>switchSettingsTab</code>(:2546) 양쪽이 동일 헬퍼 사용 —
+      섹션 빌드 로직 중복 제거. 내부 <code>resolveSettingsTab(tabId)</code>로 항상 유효 id 보정 → <code>find</code> 항상 성공,
+      <code>cat</code> 무가드 접근 안전.</td>
+    </tr>
+    <tr>
+      <td><span class="pill p-ok">검증</span> 위젯-소유 패턴 일관</td>
+      <td><code>patchMailSection</code>(:5975, widgets:[]) vs <code>patchCommitChart</code>(:5960, widgets:['commitChart']).
+      메일은 stateful 위젯 없음(행은 클릭 핸들러뿐, 재생성 무해)이라 빈 widgets·<code>preserveFocus:false</code>가 타당.
+      builderFn이 <code>renderHomeMailCard()</code> 본문 재빌드, 차트는 빈 호스트만 반환 — 패턴 정합.</td>
+    </tr>
+    <tr>
+      <td><span class="pill p-ok">검증</span> renderGuard.js 불변</td>
+      <td>lib/common/renderGuard.js에 <code>patchRegion·mailSummaryKey</code> 미추가(테스트 강제). RG 본체 변경 없음.</td>
+    </tr>
+    <tr>
+      <td><span class="pill p-ok">검증</span> maybeAutoRefreshMail silent</td>
+      <td>app.js:4957 폴링/push는 <code>refreshMailSummary({silent:true})</code> → 진입 로딩 render 생략. 최초/수동은
+      비-silent로 기존 로딩 표시 유지(:2268).</td>
+    </tr>
+  </table>
+
+  <h2>2. 차트 vs 메일 완료부 비대칭 (흐름)</h2>
+  <p class="small">두 폴링이 무변경 처리에서 다른 이유 — 정당한 차이임을 확인.</p>
+  <svg width="100%" viewBox="0 0 980 220" role="img" aria-label="메일·커밋 폴링 게이트 구조 비교">
+    <rect x="0" y="0" width="980" height="220" fill="#0f141b" rx="10"/>
+    <!-- mail row -->
+    <text x="20" y="40" fill="#38bdf8" font-size="13" font-weight="700">메일 폴링</text>
+    <rect x="20" y="52" width="150" height="40" rx="7" fill="#162033" stroke="#1f2937"/>
+    <text x="95" y="70" fill="#e5e7eb" font-size="11" text-anchor="middle">maybeAutoRefreshMail</text>
+    <text x="95" y="84" fill="#9ca3af" font-size="9.5" text-anchor="middle">showSettings 등 직접 게이트</text>
+    <line x1="170" y1="72" x2="220" y2="72" stroke="#6b7280" stroke-width="1.5" marker-end="url(#a)"/>
+    <rect x="220" y="52" width="170" height="40" rx="7" fill="#162033" stroke="#1f2937"/>
+    <text x="305" y="70" fill="#e5e7eb" font-size="11" text-anchor="middle">refreshMailSummary</text>
+    <text x="305" y="84" fill="#9ca3af" font-size="9.5" text-anchor="middle">fetch중 busyMail=true → deferred</text>
+    <line x1="390" y1="72" x2="440" y2="72" stroke="#6b7280" stroke-width="1.5" marker-end="url(#a)"/>
+    <rect x="440" y="52" width="170" height="40" rx="7" fill="#1a2b22" stroke="#34d399"/>
+    <text x="525" y="70" fill="#e5e7eb" font-size="11" text-anchor="middle">onMailSummaryFetched</text>
+    <text x="525" y="84" fill="#34d399" font-size="9.5" text-anchor="middle">무변경 → flushIfPending()</text>
+    <text x="630" y="68" fill="#9ca3af" font-size="10">busyMail 동안 누적된 보류분</text>
+    <text x="630" y="82" fill="#9ca3af" font-size="10">소비 필요 → flush 정당</text>
+    <!-- commit row -->
+    <text x="20" y="140" fill="#38bdf8" font-size="13" font-weight="700">커밋 폴링</text>
+    <rect x="20" y="152" width="150" height="40" rx="7" fill="#162033" stroke="#1f2937"/>
+    <text x="95" y="170" fill="#e5e7eb" font-size="11" text-anchor="middle">maybeAutoRefreshCommit</text>
+    <text x="95" y="184" fill="#9ca3af" font-size="9.5" text-anchor="middle">RG.deferred() 선게이트</text>
+    <line x1="170" y1="172" x2="220" y2="172" stroke="#6b7280" stroke-width="1.5" marker-end="url(#a)"/>
+    <rect x="220" y="152" width="170" height="40" rx="7" fill="#162033" stroke="#1f2937"/>
+    <text x="305" y="170" fill="#e5e7eb" font-size="11" text-anchor="middle">deferred면 fetch 안 함</text>
+    <text x="305" y="184" fill="#9ca3af" font-size="9.5" text-anchor="middle">_pendingCommitRefresh=true</text>
+    <line x1="390" y1="172" x2="440" y2="172" stroke="#6b7280" stroke-width="1.5" marker-end="url(#a)"/>
+    <rect x="440" y="152" width="170" height="40" rx="7" fill="#241f16" stroke="#fbbf24"/>
+    <text x="525" y="170" fill="#e5e7eb" font-size="11" text-anchor="middle">onCommitActivityFetched</text>
+    <text x="525" y="184" fill="#fbbf24" font-size="9.5" text-anchor="middle">무변경 → 그냥 return</text>
+    <text x="630" y="168" fill="#9ca3af" font-size="10">보류 추적은 maybeFlush-</text>
+    <text x="630" y="182" fill="#9ca3af" font-size="10">CommitRefresh가 따로 담당</text>
+    <defs><marker id="a" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#6b7280"/></marker></defs>
+  </svg>
+  <p class="small">결론: 메일은 fetch <em>중</em> busyMail로 보류가 쌓이므로 완료부에서 flush가 필요하고, 커밋은 fetch <em>전</em> deferred로
+  게이트되어 별도 pending 추적으로 따라가므로 완료부 flush가 불필요하다. 비대칭은 의도적이며 정확하다(개선 #1로 문서화만 권고).</p>
+
+  <h2>3. 개선 / 사소 항목</h2>
+  <table>
+    <tr><th style="width:9%">심각도</th><th style="width:26%">무엇 / 위치</th><th style="width:33%">왜</th><th>권고</th></tr>
+    <tr>
+      <td><span class="pill p-improve">개선</span></td>
+      <td>메일/커밋 완료부 비대칭<br><span class="loc">app.js:2280 · 2316</span></td>
+      <td><code>onMailSummaryFetched</code>는 무변경 시 <code>flushIfPending()</code>를 부르고
+      <code>onCommitActivityFetched</code>는 단순 <code>return</code>한다. 위 분석대로 둘 다 옳지만,
+      나란히 둔 두 함수의 한쪽만 flush해 향후 독자가 "커밋도 flush 빠진 버그 아닌가" 오해할 소지가 있다.</td>
+      <td><code>onCommitActivityFetched</code>의 무변경 return 옆에 "보류 추적은 maybeFlushCommitRefresh가 담당
+      (메일은 fetch중 busyMail 보류 → 여기서 flush)"는 한 줄 주석을 추가해 비대칭 의도를 명시.</td>
+    </tr>
+    <tr>
+      <td><span class="pill p-minor">사소</span></td>
+      <td>오래된 주석 이름 <code>patchSettingsPane</code><br><span class="loc">app.js:2521</span></td>
+      <td>JSDoc에 "renderSettings·<strong>patchSettingsPane</strong> 공용"이라 적혔으나 그런 함수는 없다(실제 공용자는
+      <code>switchSettingsTab</code>). 죽은 이름이 코드 탐색·grep을 흐린다.</td>
+      <td><code>patchSettingsPane</code> → <code>switchSettingsTab</code>으로 주석 수정.</td>
+    </tr>
+    <tr>
+      <td><span class="pill p-minor">사소</span></td>
+      <td>buildSettingsPaneInto의 <code>cat</code> 무가드<br><span class="loc">app.js:2523-2524</span></td>
+      <td><code>resolveSettingsTab</code>이 항상 유효 id를 주므로 <code>find</code>는 현재 안전하다. 단,
+      <code>SETTINGS_CATEGORIES</code>에서 <code>'scan'</code>(폴백 id)을 제거/개명하면 <code>cat</code>이 undefined가 되어
+      <code>cat.sections</code>에서 throw → patchRegion 내부 fallback=render로 흡수되긴 하나 무한 재진입 위험은 없다.</td>
+      <td>변경 빈도 낮아 현행 수용 가능. 방어하려면 <code>(cat &amp;&amp; cat.sections || []).forEach(...)</code> 한 줄.
+      필수 아님 — 단일 출처 가정의 일관성으로 둬도 무방.</td>
+    </tr>
+  </table>
+
+  <h2>4. 단순화 · 중복 · 죽은 코드</h2>
+  <ul>
+    <li><span class="pill p-ok">검증</span> 메일/차트/설정 3곳의 patch 호출(<code>patchMailSection</code>·<code>patchCommitChart</code>·
+      <code>switchSettingsTab</code>)은 모두 공용 <code>RG.preserve.patchRegion</code>으로 수렴 — 표면 형태는 닮았으나
+      각자 widgets·preserveFocus·bypassDefer 옵션이 다르다(차트는 위젯 소유, 설정은 포커스 보존+defer 우회, 메일은 무위젯).
+      추가 공통 래퍼는 의미 손실/조기 추상화로 보여 <strong>현행 병렬 유지가 적절</strong>하다.</li>
+    <li><span class="pill p-ok">검증</span> <code>renderHomeMail</code>/<code>renderHomeMailCard</code> 분리는 차트의
+      region/host 2단 분리와 동형. 카드 본문이 patch builderFn에서 재사용되어 중복 없음.</li>
+    <li><span class="pill p-ok">검증</span> mailSummaryKey export 추가(app.js:6175) 외 export 표면 정상. styles.css는
+      <code>.mail-region { display:block }</code> 단순 래퍼 1줄만 추가 — <code>.commit-chart-region</code>과 대칭.</li>
+    <li>죽은 코드: 항목 #2(주석 내 가짜 이름) 외 실행 죽은 코드 없음.</li>
+  </ul>
+
+  <h2>5. 테스트</h2>
+  <p>M11 신규 12건 + patchRegion 기존(bypassDefer 반영) 갱신 포함 <span class="num">36</span>건 전부 통과.
+  순수 함수(<code>mailSummaryKey</code>·<code>patchRegionPlan</code>)는 단위 동형 검증, DOM 배선은 소스 계약(정규식)으로 강제 —
+  jsdom 0-의존 정책 유지. 전체 스위트 <span class="num">748</span>건 통과 보고와 정합.</p>
+  <p class="small">권고: M11이 메일 fetch 무변경 경로를 <code>release()</code>→<code>flushIfPending()</code>로 바꾼 행동 변화는
+  현재 소스-계약 테스트로만 간접 커버된다. 가능하면 <code>onMailSummaryFetched</code>의 무변경 시 patch 미호출(skip)을
+  분기 단위로 1건 추가하면 회귀 안전망이 단단해진다(필수 아님).</p>
+
+  <p class="meta">리뷰어: code-reviewer · 판정 PASS · 결함 0 / 개선 1 / 사소 2 · 코드 미수정(권고만)</p>
+
+</div>
+</body>
+</html>
