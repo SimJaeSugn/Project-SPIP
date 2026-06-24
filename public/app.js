@@ -1024,6 +1024,10 @@ function initBrowser() {
     detectDefaults: [],          // 기본값(복원 안내용)
     detectInput: '',             // 직접 입력(컨트롤드)
     busyDetect: false,           // 추가/삭제/복원 in-flight
+    // 할 일(홈 브리핑) — getUiState 응답의 todos
+    todos: [],                   // [{id,text,done,createdAt}]
+    todoInput: '',               // 추가 입력(컨트롤드)
+    busyTodos: false,            // 추가/토글/삭제 in-flight
     // 메일 알림 계정(복수 IMAP) — 공개 뷰 목록 + 입력 폼(비밀번호는 응답에 없음)
     mailAccounts: [],            // getMailAccounts 응답(공개 뷰: id,label,host,port,user,hasPassword)
     mailForm: { label: '', host: '', port: '', user: '', pass: '' }, // 추가/수정 폼(컨트롤드)
@@ -1473,7 +1477,7 @@ function initBrowser() {
     grid.appendChild(renderHomeAttention());
     grid.appendChild(renderHomeActivity());
     grid.appendChild(renderHomePlaceholder('안 읽은 메일', '메일 다이제스트는 곧 제공됩니다. 설정 → 메일 알림 계정에서 계정을 추가하세요.'));
-    grid.appendChild(renderHomePlaceholder('할 일', '할 일 체크리스트는 곧 제공됩니다.'));
+    grid.appendChild(renderHomeTodos());
     grid.appendChild(renderHomePlaceholder('주간 생산성', '커밋 빈도·언어 추세 차트는 곧 제공됩니다.'));
     main.appendChild(grid);
 
@@ -1529,6 +1533,83 @@ function initBrowser() {
       ul.appendChild(li);
     }
     return homeCard('주의가 필요한 프로젝트', [ul], { action: more });
+  }
+
+  function renderHomeTodos() {
+    if (!bridgeHas('addTodo')) {
+      return renderHomePlaceholder('할 일', '이 환경에서는 할 일을 사용할 수 없습니다.');
+    }
+    const todos = Array.isArray(store.todos) ? store.todos : [];
+    const open = todos.filter((t) => !t.done).length;
+    const countBadge = el('span', { cls: 'home-card__count', text: '남은 ' + open });
+
+    // 입력 + 추가
+    const inputRow = el('div', { cls: 'home-todo__inputrow' });
+    const input = el('input', {
+      cls: 'rootmgr__input', attrs: { type: 'text', placeholder: '할 일 추가…', 'aria-label': '할 일 추가', autocomplete: 'off', spellcheck: 'false' },
+    });
+    input.value = store.todoInput;
+    input.addEventListener('input', (e) => { store.todoInput = e.target.value || ''; });
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); onAddTodo(); } });
+    const addBtn = el('button', { cls: 'btn', text: '추가', attrs: { type: 'button', 'aria-label': '할 일 추가' }, on: { click: onAddTodo } });
+    if (store.busyTodos) { input.disabled = true; addBtn.disabled = true; }
+    inputRow.appendChild(input);
+    inputRow.appendChild(addBtn);
+
+    const body = [inputRow];
+    if (todos.length === 0) {
+      body.push(el('div', { cls: 'home-card__empty', text: '할 일이 없습니다. 위에 입력해 추가하세요.' }));
+    } else {
+      const ul = el('ul', { cls: 'home-list', attrs: { role: 'list' } });
+      for (const t of todos) {
+        const li = el('li', { cls: 'home-todo__item' + (t.done ? ' is-done' : '') });
+        const cb = el('input', { cls: 'home-todo__check', attrs: { type: 'checkbox', 'aria-label': '완료: ' + t.text } });
+        cb.checked = t.done === true;
+        cb.addEventListener('change', () => onToggleTodo(t.id, cb.checked));
+        const text = el('span', { cls: 'home-todo__text', text: t.text, title: t.text }); // L-1
+        const rm = el('button', {
+          cls: 'rootmgr__remove', text: '삭제',
+          attrs: { type: 'button', 'aria-label': '할 일 삭제: ' + t.text }, on: { click: () => onRemoveTodo(t.id) },
+        });
+        if (store.busyTodos) { cb.disabled = true; rm.disabled = true; }
+        li.appendChild(cb); li.appendChild(text); li.appendChild(rm);
+        ul.appendChild(li);
+      }
+      body.push(ul);
+    }
+    return homeCard('할 일', body, { action: countBadge });
+  }
+
+  function applyTodoResult(res) {
+    if (res && res.ok && Array.isArray(res.todos)) { store.todos = res.todos; return true; }
+    return false;
+  }
+  async function onAddTodo() {
+    const v = (store.todoInput || '').trim();
+    if (!v) { toast('할 일 내용을 입력하세요.', true); return; }
+    if (store.busyTodos || !bridgeHas('addTodo')) return;
+    store.busyTodos = true; render();
+    const res = await ipc('addTodo', v);
+    store.busyTodos = false;
+    if (applyTodoResult(res)) { store.todoInput = ''; }
+    else toast(res && res.code === 'LIMIT' ? '할 일이 너무 많습니다.' : '할 일 추가에 실패했습니다.', true);
+    render();
+  }
+  async function onToggleTodo(id, done) {
+    if (store.busyTodos || !bridgeHas('toggleTodo')) return;
+    store.busyTodos = true; render();
+    const res = await ipc('toggleTodo', id, done);
+    store.busyTodos = false;
+    if (!applyTodoResult(res)) toast('할 일 상태 변경에 실패했습니다.', true);
+    render();
+  }
+  async function onRemoveTodo(id) {
+    if (store.busyTodos || !bridgeHas('removeTodo')) return;
+    store.busyTodos = true; render();
+    const res = await ipc('removeTodo', id);
+    store.busyTodos = false;
+    if (!applyTodoResult(res)) toast('할 일 삭제에 실패했습니다.', true);
+    render();
   }
 
   function renderHomeActivity() {
@@ -4405,6 +4486,8 @@ function initBrowser() {
     store.state.sortMode = uv.sortMode;
     store.projectNames = uv.names || {};
     store.theme = uv.theme || 'system';
+    // 할 일(홈 브리핑) — getUiState 응답에 포함. 형식 무효 시 빈 배열.
+    store.todos = (res && res.ok !== false && Array.isArray(res.todos)) ? res.todos.filter((t) => t && typeof t.id === 'string') : [];
     applyProjectNames();   // 별칭을 현재 viewModels에 반영
     applyTheme();          // 테마 적용(라이트/다크/시스템)
   }

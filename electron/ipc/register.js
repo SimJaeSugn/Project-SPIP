@@ -199,6 +199,10 @@ function registerIpcHandlers(deps) {
   // 프로젝트 표시 별칭 + 테마(라이트/다크/시스템).
   guard('spip:setProjectName', (args) => uiStateIpc.setProjectName(args, ctx));
   guard('spip:setTheme', (args) => uiStateIpc.setTheme(args, ctx));
+  // 할 일(홈 브리핑) — 추가/완료토글/삭제. 읽기는 getUiState 응답의 todos로.
+  guard('spip:addTodo', (args) => uiStateIpc.addTodo(args, ctx));
+  guard('spip:toggleTodo', (args) => uiStateIpc.toggleTodo(args, ctx));
+  guard('spip:removeTodo', (args) => uiStateIpc.removeTodo(args, ctx));
 
   // 자동 업데이트(사용자 주도) — 제어는 autoUpdate.js(electron-updater). 진행 상황은 단방향 push
   //   'spip:update:status'(initAutoUpdate 가 getWebContents 로 메인창에 send). 미패키징은 NOT_PACKAGED.

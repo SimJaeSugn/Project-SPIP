@@ -71,3 +71,53 @@ test('setSortMode — 화이트리스트 외 → auto', () => {
   assert.strictEqual(uiState.setSortMode({ mode: 'weird' }, ctx).sortMode, 'auto');
   assert.strictEqual(uiState.setSortMode({ mode: 'manual' }, ctx).sortMode, 'manual');
 });
+
+// ── 할 일(todos) 핸들러 ──
+function todoCtx(store) {
+  let n = 0;
+  return { uiStateStore: store, genTodoId: () => 't' + (0x100000 + (n++)).toString(16), nowMs: () => 1700000000000 };
+}
+
+test('addTodo — 추가(id·createdAt 스탬프 주입)·trim·todos 반환', () => {
+  const ctx = todoCtx(memStore());
+  const r = uiState.addTodo({ text: '  배포 확인  ' }, ctx);
+  assert.ok(r.ok);
+  assert.strictEqual(r.todos.length, 1);
+  assert.strictEqual(r.todos[0].text, '배포 확인');
+  assert.strictEqual(r.todos[0].done, false);
+  assert.strictEqual(r.todos[0].createdAt, 1700000000000);
+  assert.ok(/^t[0-9a-f]{6,}$/.test(r.todos[0].id));
+});
+
+test('addTodo — 빈 텍스트 → INVALID_TEXT', () => {
+  assert.strictEqual(uiState.addTodo({ text: '   ' }, todoCtx(memStore())).code, 'INVALID_TEXT');
+  assert.strictEqual(uiState.addTodo({}, todoCtx(memStore())).code, 'INVALID_TEXT');
+});
+
+test('toggleTodo — 완료 토글 / 없는 id / 잘못된 id', () => {
+  const ctx = todoCtx(memStore());
+  const id = uiState.addTodo({ text: 'x' }, ctx).todos[0].id;
+  let r = uiState.toggleTodo({ id, done: true }, ctx);
+  assert.ok(r.ok); assert.strictEqual(r.todos[0].done, true);
+  r = uiState.toggleTodo({ id, done: false }, ctx);
+  assert.strictEqual(r.todos[0].done, false);
+  assert.strictEqual(uiState.toggleTodo({ id: 'tffffff', done: true }, ctx).code, 'NOT_FOUND');
+  assert.strictEqual(uiState.toggleTodo({ id: 'BAD' }, ctx).code, 'INVALID_ID');
+});
+
+test('removeTodo — 삭제 / 없는 id', () => {
+  const ctx = todoCtx(memStore());
+  const id = uiState.addTodo({ text: 'x' }, ctx).todos[0].id;
+  const r = uiState.removeTodo({ id }, ctx);
+  assert.ok(r.ok); assert.strictEqual(r.todos.length, 0);
+  assert.strictEqual(uiState.removeTodo({ id: 'tabcabc' }, ctx).code, 'NOT_FOUND');
+  assert.strictEqual(uiState.removeTodo({ id: 'BAD' }, ctx).code, 'INVALID_ID');
+});
+
+test('getUiState — todos 포함', () => {
+  const ctx = todoCtx(memStore());
+  uiState.addTodo({ text: 'a' }, ctx);
+  const r = uiState.getUiState(ctx);
+  assert.ok(Array.isArray(r.todos));
+  assert.strictEqual(r.todos.length, 1);
+});

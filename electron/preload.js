@@ -102,6 +102,11 @@ contextBridge.exposeInMainWorld('spip', {
   setProjectName: (id, name) => ipcRenderer.invoke('spip:setProjectName', { id: String(id), name: name == null ? '' : String(name) }),
   setTheme: (theme) => ipcRenderer.invoke('spip:setTheme', { theme: String(theme) }),
 
+  // 할 일(홈 브리핑) — 추가/완료토글/삭제. 읽기는 getUiState 응답의 todos.
+  addTodo: (text) => ipcRenderer.invoke('spip:addTodo', { text: String(text) }),
+  toggleTodo: (id, done) => ipcRenderer.invoke('spip:toggleTodo', { id: String(id), done: !!done }),
+  removeTodo: (id) => ipcRenderer.invoke('spip:removeTodo', { id: String(id) }),
+
   // 이벤트 구독(on/send) — 콜백만 받고 ipcRenderer 원본은 노출하지 않음(보안).
   onScanProgress: (cb) => {
     if (typeof cb !== 'function') return () => {};

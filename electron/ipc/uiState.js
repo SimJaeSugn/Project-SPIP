@@ -15,6 +15,7 @@
  * 외부 의존성 0 — Electron API 미import.
  */
 
+const crypto = require('crypto');
 const uiStateStore = require('../../lib/common/uiStateStore');
 
 /** ctx에서 store/storeCtx 해석. */
@@ -26,7 +27,19 @@ function resolveStore(ctx) {
 }
 
 function toResponse(state) {
-  return { favorites: state.favorites, order: state.order, sortMode: state.sortMode, names: state.names, theme: state.theme };
+  return { favorites: state.favorites, order: state.order, sortMode: state.sortMode, names: state.names, theme: state.theme, todos: state.todos };
+}
+
+/** 할 일 id 생성(메인 권한). genTodoId 주입 가능(테스트). */
+function genTodoId(ctx) {
+  if (ctx && typeof ctx.genTodoId === 'function') return ctx.genTodoId();
+  return 't' + crypto.randomBytes(6).toString('hex');
+}
+
+/** 생성 시각(ms). 주입 가능(테스트 결정성). */
+function nowMs(ctx) {
+  if (ctx && typeof ctx.nowMs === 'function') return ctx.nowMs();
+  return Date.now();
 }
 
 /**
@@ -139,4 +152,58 @@ function setTheme(args, ctx) {
   return { ok: true, theme: written.theme };
 }
 
-module.exports = { getUiState, setFavorite, setOrder, setSortMode, setProjectName, setTheme };
+/**
+ * spip:addTodo — 할 일 추가(메인이 id·createdAt 스탬프). 빈 텍스트 거부, 개수 상한.
+ * @param {object} args { text }
+ * @returns {{ok:true,todos} | {ok:false,code:'INVALID_TEXT'|'LIMIT'}}
+ */
+function addTodo(args, ctx) {
+  const raw = (args && typeof args === 'object' && typeof args.text === 'string') ? args.text : '';
+  const text = uiStateStore.sanitizeTodoText(raw);
+  if (!text) return { ok: false, code: 'INVALID_TEXT' };
+  const { store, storeCtx } = resolveStore(ctx);
+  const state = store.read(storeCtx);
+  if (state.todos.length >= uiStateStore.MAX_TODOS) return { ok: false, code: 'LIMIT' };
+  const todo = { id: genTodoId(ctx), text, done: false, createdAt: nowMs(ctx) };
+  const next = store.write(Object.assign({}, state, { todos: state.todos.concat([todo]) }), storeCtx);
+  return { ok: true, todos: next.todos };
+}
+
+/**
+ * spip:toggleTodo — id의 완료 상태 설정.
+ * @param {object} args { id, done }
+ * @returns {{ok:true,todos} | {ok:false,code:'INVALID_ID'|'NOT_FOUND'}}
+ */
+function toggleTodo(args, ctx) {
+  const id = (args && typeof args === 'object') ? args.id : undefined;
+  if (typeof id !== 'string' || !uiStateStore.TODO_ID_RE.test(id)) return { ok: false, code: 'INVALID_ID' };
+  const done = !!(args && args.done);
+  const { store, storeCtx } = resolveStore(ctx);
+  const state = store.read(storeCtx);
+  let found = false;
+  const todos = state.todos.map((t) => {
+    if (t.id === id) { found = true; return Object.assign({}, t, { done }); }
+    return t;
+  });
+  if (!found) return { ok: false, code: 'NOT_FOUND' };
+  const next = store.write(Object.assign({}, state, { todos }), storeCtx);
+  return { ok: true, todos: next.todos };
+}
+
+/**
+ * spip:removeTodo — id 삭제.
+ * @param {object} args { id }
+ * @returns {{ok:true,todos} | {ok:false,code:'INVALID_ID'|'NOT_FOUND'}}
+ */
+function removeTodo(args, ctx) {
+  const id = (args && typeof args === 'object') ? args.id : undefined;
+  if (typeof id !== 'string' || !uiStateStore.TODO_ID_RE.test(id)) return { ok: false, code: 'INVALID_ID' };
+  const { store, storeCtx } = resolveStore(ctx);
+  const state = store.read(storeCtx);
+  const todos = state.todos.filter((t) => t.id !== id);
+  if (todos.length === state.todos.length) return { ok: false, code: 'NOT_FOUND' };
+  const next = store.write(Object.assign({}, state, { todos }), storeCtx);
+  return { ok: true, todos: next.todos };
+}
+
+module.exports = { getUiState, setFavorite, setOrder, setSortMode, setProjectName, setTheme, addTodo, toggleTodo, removeTodo };

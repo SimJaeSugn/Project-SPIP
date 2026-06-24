@@ -100,3 +100,30 @@ test('write — 정규화 적용(잘못된 id/sortMode 제거)', () => {
   assert.deepStrictEqual(written.favorites, ['abc123']); // 'BAD!'·비hex 제거
   assert.strictEqual(written.sortMode, 'auto');
 });
+
+// ── normalizeTodos (할 일 정규화) ──
+test('normalizeTodos — 유효 항목·빈텍스트/비hex id/중복/비객체 폐기', () => {
+  const out = store.normalizeTodos([
+    { id: 't0a1b2c', text: '  배포 확인 ', done: true, createdAt: 123 }, // 유효
+    { id: 'tabcdef', text: '   ' },     // 빈 텍스트 → 폐기
+    { id: 'txyz999', text: 'z' },        // 'xyz' 비hex id → 폐기
+    { id: 't0a1b2c', text: '중복' },     // 중복 id → 폐기
+    'nope',                              // 비객체 → 폐기
+    { id: 'tbeef01', text: 'ok' },       // 유효
+  ]);
+  assert.strictEqual(out.length, 2);
+  assert.deepStrictEqual(out[0], { id: 't0a1b2c', text: '배포 확인', done: true, createdAt: 123 });
+  assert.strictEqual(out[1].id, 'tbeef01');
+  assert.strictEqual(out[1].done, false);
+  assert.strictEqual(out[1].createdAt, null);
+});
+
+test('normalizeTodos — 개수 상한(MAX_TODOS)', () => {
+  const many = Array.from({ length: store.MAX_TODOS + 5 }, (_, i) => ({ id: 't' + (0x100000 + i).toString(16), text: 'x' }));
+  assert.strictEqual(store.normalizeTodos(many).length, store.MAX_TODOS);
+});
+
+test('normalizeState — todos 포함(기본 빈 배열)', () => {
+  assert.deepStrictEqual(store.normalizeState({}).todos, []);
+  assert.deepStrictEqual(store.defaultState().todos, []);
+});
