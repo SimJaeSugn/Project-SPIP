@@ -121,3 +121,17 @@ test('getUiState — todos 포함', () => {
   assert.ok(Array.isArray(r.todos));
   assert.strictEqual(r.todos.length, 1);
 });
+
+// ── 언어 추세 baseline 갱신 ──
+test('updateLangTrend — 새 스캔이면 cur→prev 이동, 같은 스캔이면 baseline 유지', () => {
+  const s = memStore();
+  const ctx = { uiStateStore: s };
+  let r = uiState.updateLangTrend({ generatedAt: 'g1', counts: { TS: 3 } }, ctx);
+  assert.deepStrictEqual(r.prev, {});
+  assert.deepStrictEqual(r.cur, { TS: 3 });
+  r = uiState.updateLangTrend({ generatedAt: 'g1', counts: { TS: 5 } }, ctx); // 같은 스캔
+  assert.deepStrictEqual(r.prev, {}, 'baseline 유지');
+  r = uiState.updateLangTrend({ generatedAt: 'g2', counts: { TS: 4 } }, ctx); // 새 스캔
+  assert.deepStrictEqual(r.prev, { TS: 3 }, '직전 cur가 prev로');
+  assert.deepStrictEqual(r.cur, { TS: 4 });
+});

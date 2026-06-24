@@ -208,6 +208,8 @@ function registerIpcHandlers(deps) {
   guard('spip:addTodo', (args) => uiStateIpc.addTodo(args, ctx));
   guard('spip:toggleTodo', (args) => uiStateIpc.toggleTodo(args, ctx));
   guard('spip:removeTodo', (args) => uiStateIpc.removeTodo(args, ctx));
+  // 홈 언어 분포 추세 baseline(스캔 간 비교) — getUiState 응답의 langTrend로 읽기.
+  guard('spip:updateLangTrend', (args) => uiStateIpc.updateLangTrend(args, ctx));
 
   // 자동 업데이트(사용자 주도) — 제어는 autoUpdate.js(electron-updater). 진행 상황은 단방향 push
   //   'spip:update:status'(initAutoUpdate 가 getWebContents 로 메인창에 send). 미패키징은 NOT_PACKAGED.

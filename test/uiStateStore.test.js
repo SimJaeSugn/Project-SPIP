@@ -127,3 +127,15 @@ test('normalizeState — todos 포함(기본 빈 배열)', () => {
   assert.deepStrictEqual(store.normalizeState({}).todos, []);
   assert.deepStrictEqual(store.defaultState().todos, []);
 });
+
+// ── 언어 추세(langTrend) 정규화 ──
+test('normalizeLangCounts — 음수/비숫자/빈키 폐기·정수화', () => {
+  assert.deepStrictEqual(store.normalizeLangCounts({ TS: 3, Bad: -1, X: 'n', '': 5, F: 2.9 }), { TS: 3, F: 2 });
+  assert.deepStrictEqual(store.normalizeLangCounts(null), {});
+});
+test('normalizeLangTrend — generatedAt/prev/cur 정규화', () => {
+  assert.deepStrictEqual(store.normalizeLangTrend({ generatedAt: 'g1', prev: { A: 2 }, cur: { B: 1.7 } }),
+    { generatedAt: 'g1', prev: { A: 2 }, cur: { B: 1 } });
+  assert.deepStrictEqual(store.normalizeLangTrend(null), { generatedAt: null, prev: {}, cur: {} });
+  assert.deepStrictEqual(store.defaultState().langTrend, { generatedAt: null, prev: {}, cur: {} });
+});

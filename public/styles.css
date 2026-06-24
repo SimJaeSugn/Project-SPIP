@@ -18,6 +18,21 @@
        url('./fonts/PretendardVariable.woff2') format('woff2-variations'),
        url('./fonts/PretendardVariable.woff2') format('woff2');
 }
+/* 홈(브리핑) 템플릿 폰트(Geist / Geist Mono) — 가변폰트 1파일 로컬 번들(CSP font-src 'self'). */
+@font-face {
+  font-family: 'Geist';
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+  src: local('Geist'), url('./fonts/Geist.woff2') format('woff2-variations'), url('./fonts/Geist.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Geist Mono';
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+  src: local('Geist Mono'), url('./fonts/GeistMono.woff2') format('woff2-variations'), url('./fonts/GeistMono.woff2') format('woff2');
+}
 
 :root {
   --bg: #f6f6f5;

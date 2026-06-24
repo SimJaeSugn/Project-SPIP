@@ -27,7 +27,7 @@ function resolveStore(ctx) {
 }
 
 function toResponse(state) {
-  return { favorites: state.favorites, order: state.order, sortMode: state.sortMode, names: state.names, theme: state.theme, todos: state.todos };
+  return { favorites: state.favorites, order: state.order, sortMode: state.sortMode, names: state.names, theme: state.theme, todos: state.todos, langTrend: state.langTrend };
 }
 
 /** 할 일 id 생성(메인 권한). genTodoId 주입 가능(테스트). */
@@ -206,4 +206,26 @@ function removeTodo(args, ctx) {
   return { ok: true, todos: next.todos };
 }
 
-module.exports = { getUiState, setFavorite, setOrder, setSortMode, setProjectName, setTheme, addTodo, toggleTodo, removeTodo };
+/**
+ * spip:updateLangTrend — 언어 분포 추세 baseline 갱신. 같은 스캔(generatedAt 동일)이면 갱신 없이
+ *   직전 baseline(prev)을 돌려주고, 새 스캔이면 직전 cur를 prev로 이동·cur 갱신해 영속한다.
+ *   렌더러는 prev와 현재 counts를 비교해 ▲▼를 계산한다.
+ * @param {object} args { generatedAt, counts:{lang:n} }
+ * @returns {{ok:true, prev:object, cur:object}}
+ */
+function updateLangTrend(args, ctx) {
+  args = (args && typeof args === 'object') ? args : {};
+  const generatedAt = (typeof args.generatedAt === 'string' && args.generatedAt) ? args.generatedAt : null;
+  const counts = uiStateStore.normalizeLangCounts(args.counts);
+  const { store, storeCtx } = resolveStore(ctx);
+  const state = store.read(storeCtx);
+  const lt = state.langTrend || { generatedAt: null, prev: {}, cur: {} };
+  if (lt.generatedAt && generatedAt && lt.generatedAt === generatedAt) {
+    return { ok: true, prev: lt.prev || {}, cur: counts }; // 같은 스캔 — baseline 유지
+  }
+  const next = { generatedAt: generatedAt, prev: lt.cur || {}, cur: counts };
+  const written = store.write(Object.assign({}, state, { langTrend: next }), storeCtx);
+  return { ok: true, prev: written.langTrend.prev, cur: written.langTrend.cur };
+}
+
+module.exports = { getUiState, setFavorite, setOrder, setSortMode, setProjectName, setTheme, addTodo, toggleTodo, removeTodo, updateLangTrend };

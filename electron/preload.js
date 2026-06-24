@@ -110,6 +110,11 @@ contextBridge.exposeInMainWorld('spip', {
   addTodo: (text) => ipcRenderer.invoke('spip:addTodo', { text: String(text) }),
   toggleTodo: (id, done) => ipcRenderer.invoke('spip:toggleTodo', { id: String(id), done: !!done }),
   removeTodo: (id) => ipcRenderer.invoke('spip:removeTodo', { id: String(id) }),
+  // 언어 추세 baseline 갱신(스캔 간 ▲▼ 비교용). counts={lang:n}.
+  updateLangTrend: (generatedAt, counts) => ipcRenderer.invoke('spip:updateLangTrend', {
+    generatedAt: generatedAt == null ? '' : String(generatedAt),
+    counts: (counts && typeof counts === 'object') ? counts : {},
+  }),
 
   // 이벤트 구독(on/send) — 콜백만 받고 ipcRenderer 원본은 노출하지 않음(보안).
   onScanProgress: (cb) => {

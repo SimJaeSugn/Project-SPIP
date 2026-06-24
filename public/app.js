@@ -1038,6 +1038,7 @@ function initBrowser() {
     commitActivity: null,        // {days:[{date,count}],total,repos,scanned}
     busyCommitActivity: false,   // getCommitActivity in-flight
     commitActivityLoaded: false, // 1회 로드 표식
+    langPrev: {},                // 직전 스캔 언어 카운트(추세 ▲▼ 비교용)
     // 메일 알림 계정(복수 IMAP) — 공개 뷰 목록 + 입력 폼(비밀번호는 응답에 없음)
     mailAccounts: [],            // getMailAccounts 응답(공개 뷰: id,label,host,port,user,hasPassword)
     mailForm: { label: '', host: '', port: '', user: '', pass: '' }, // 추가/수정 폼(컨트롤드)
@@ -1683,6 +1684,12 @@ function initBrowser() {
       row.appendChild(el('span', { style: 'width:9px;height:9px;border-radius:2px;flex:0 0 auto;display:inline-block;background:' + langColor(f.lang) + ';' }));
       row.appendChild(el('span', { text: f.lang, style: 'flex:1 1 0%;color:#57534e;' }));
       row.appendChild(el('span', { text: String(f.count), style: HOME_MONO + 'color:#a8a29e;' }));
+      var prevC = (store.langPrev || {})[f.lang];
+      var diff = (typeof prevC === 'number') ? (f.count - prevC) : 0;
+      row.appendChild(el('span', {
+        text: diff > 0 ? '▲' : (diff < 0 ? '▼' : ''),
+        style: HOME_MONO + 'font-size:10px;width:14px;text-align:right;color:' + (diff > 0 ? '#15803d' : (diff < 0 ? '#b45309' : '#d6d3d1')) + ';',
+      }));
       legend.appendChild(row);
     });
     rightCol.appendChild(legend);
@@ -1864,6 +1871,16 @@ function initBrowser() {
   }
   function maybeLoadCommitActivity() {
     if (bridgeHas('getCommitActivity') && !store.commitActivityLoaded && !store.busyCommitActivity) refreshCommitActivity();
+  }
+  /** 언어 분포 추세 baseline 갱신 → store.langPrev(직전 스캔 카운트). */
+  async function refreshLangTrend() {
+    if (!bridgeHas('updateLangTrend')) return;
+    var facets = languageFacets(store.viewModels || []);
+    var counts = {};
+    facets.forEach(function (f) { counts[f.lang] = f.count; });
+    var res = await ipc('updateLangTrend', store._generatedAt || '', counts);
+    store.langPrev = (res && res.ok && res.prev && typeof res.prev === 'object') ? res.prev : {};
+    if (store.state.view === 'home') render();
   }
   async function refreshCommitActivity() {
     if (!bridgeHas('getCommitActivity') || store.busyCommitActivity) return;
@@ -5101,6 +5118,7 @@ function initBrowser() {
 
       store.raw = payload.projects;
       store.viewModels = payload.projects.map(toViewModel);
+      store._generatedAt = (payload && payload.generatedAt) ? String(payload.generatedAt) : '';
       captureDetectedNames(); // 감지명 캡처(별칭은 loadUiState 후 applyProjectNames)
       store.state.view = 'home'; // 기본 랜딩 = 홈(브리핑). 프로젝트 목록은 '프로젝트' 탭으로.
       // 설정 패널/재스캔에서 쓸 config 를 비동기로 미리 적재(렌더 비블로킹)
@@ -5115,6 +5133,8 @@ function initBrowser() {
       render();
       // 홈 진입 시 메일 다이제스트 1회 자동 로드(비블로킹 — 카드만 로딩 표시).
       maybeLoadMailSummary();
+      // 언어 추세 baseline 갱신(스캔 간 ▲▼ 비교). 비블로킹 — 끝나면 홈 재렌더.
+      refreshLangTrend();
     } catch (err) {
       store._errorMsg = '데이터를 불러오지 못했습니다. (' + (err && err.message ? err.message : '오류') + ')';
       store.state.view = 'error';
