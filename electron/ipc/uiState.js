@@ -35,6 +35,8 @@ function toResponse(state) {
     favorites: state.favorites, order: state.order, sortMode: state.sortMode, names: state.names,
     theme: state.theme, todos: state.todos, langTrend: state.langTrend, homeLayout: state.homeLayout,
     briefing: { items: openItems, counters: briefing.counters },
+    // [항목3] 연결된 LLM 모델 토큰 사용량 누적(표시·집계 전용 수치만). 정규화된 값 그대로 노출.
+    aiUsage: state.aiUsage || uiStateStore.defaultAiUsage(),
   };
 }
 
@@ -185,11 +187,36 @@ function addTodo(args, ctx) {
   const raw = (args && typeof args === 'object' && typeof args.text === 'string') ? args.text : '';
   const text = uiStateStore.sanitizeTodoText(raw);
   if (!text) return { ok: false, code: 'INVALID_TEXT' };
+  // [백로그2-4] 선택 마감 일시(ms). 유한·양수만 허용, 그 외엔 미설정(null).
+  const rawDue = (args && typeof args === 'object') ? args.dueAt : undefined;
+  const dueAt = (typeof rawDue === 'number' && Number.isFinite(rawDue) && rawDue > 0) ? Math.floor(rawDue) : null;
   const { store, storeCtx } = resolveStore(ctx);
   const state = store.read(storeCtx);
   if (state.todos.length >= uiStateStore.MAX_TODOS) return { ok: false, code: 'LIMIT' };
-  const todo = { id: genTodoId(ctx), text, done: false, createdAt: nowMs(ctx) };
+  const todo = { id: genTodoId(ctx), text, done: false, createdAt: nowMs(ctx), dueAt };
   const next = store.write(Object.assign({}, state, { todos: state.todos.concat([todo]) }), storeCtx);
+  return { ok: true, todos: next.todos };
+}
+
+/**
+ * [백로그2-4] spip:setTodoDue — 기존 할 일의 마감 일시 설정/해제(dueAt=null=해제).
+ * @param {object} args { id, dueAt:number|null }
+ * @returns {{ok:true,todos} | {ok:false,code:'INVALID_ID'|'NOT_FOUND'}}
+ */
+function setTodoDue(args, ctx) {
+  const id = (args && typeof args === 'object') ? args.id : undefined;
+  if (typeof id !== 'string' || !uiStateStore.TODO_ID_RE.test(id)) return { ok: false, code: 'INVALID_ID' };
+  const rawDue = (args && typeof args === 'object') ? args.dueAt : undefined;
+  const dueAt = (typeof rawDue === 'number' && Number.isFinite(rawDue) && rawDue > 0) ? Math.floor(rawDue) : null;
+  const { store, storeCtx } = resolveStore(ctx);
+  const state = store.read(storeCtx);
+  let found = false;
+  const todos = state.todos.map((t) => {
+    if (t.id === id) { found = true; return Object.assign({}, t, { dueAt }); }
+    return t;
+  });
+  if (!found) return { ok: false, code: 'NOT_FOUND' };
+  const next = store.write(Object.assign({}, state, { todos }), storeCtx);
   return { ok: true, todos: next.todos };
 }
 
@@ -252,4 +279,4 @@ function updateLangTrend(args, ctx) {
   return { ok: true, prev: written.langTrend.prev, cur: written.langTrend.cur };
 }
 
-module.exports = { getUiState, setFavorite, setOrder, setSortMode, setHomeLayout, setProjectName, setTheme, addTodo, toggleTodo, removeTodo, updateLangTrend };
+module.exports = { getUiState, setFavorite, setOrder, setSortMode, setHomeLayout, setProjectName, setTheme, addTodo, toggleTodo, removeTodo, setTodoDue, updateLangTrend };

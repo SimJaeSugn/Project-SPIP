@@ -112,7 +112,7 @@ test('normalizeTodos — 유효 항목·빈텍스트/비hex id/중복/비객체 
     { id: 'tbeef01', text: 'ok' },       // 유효
   ]);
   assert.strictEqual(out.length, 2);
-  assert.deepStrictEqual(out[0], { id: 't0a1b2c', text: '배포 확인', done: true, createdAt: 123 });
+  assert.deepStrictEqual(out[0], { id: 't0a1b2c', text: '배포 확인', done: true, createdAt: 123, dueAt: null });
   assert.strictEqual(out[1].id, 'tbeef01');
   assert.strictEqual(out[1].done, false);
   assert.strictEqual(out[1].createdAt, null);
@@ -151,8 +151,8 @@ test('normalizeHomeLayout — 비배열/손상 → 기본 순서 전체 복원',
 test('normalizeHomeLayout — 화이트리스트 외/중복 제거 + 누락 보충(끝)', () => {
   const r = store.normalizeHomeLayout(['mail', 'attention', 'mail', 'bogus', 42, 'mail']);
   // 유효 순서 보존(mail, attention) → 중복·미지·비문자열 제거 → 누락 섹션 기본 순서로 끝에 보충
-  assert.deepStrictEqual(r, ['mail', 'attention', 'productivity', 'activity', 'todos', 'disk', 'featureAdd']);
-  // 항상 화이트리스트 전체(7개)의 순열
+  assert.deepStrictEqual(r, ['mail', 'attention', 'productivity', 'activity', 'todos', 'disk', 'aiusage', 'featureAdd']);
+  // 항상 화이트리스트 전체(8개)의 순열
   assert.strictEqual(r.length, store.HOME_SECTION_IDS.length);
   assert.deepStrictEqual(r.slice().sort(), store.HOME_SECTION_IDS.slice().sort());
 });
@@ -170,7 +170,7 @@ test('normalizeState/defaultState — homeLayout 기본 순서 포함', () => {
 // [C-M-1 게이트] write→read 라운드트립 보존 — homeLayout 키가 normalizeState에서 조용히 버려지지 않음.
 test('write/read — homeLayout 라운드트립 보존 (C-M-1)', () => {
   const file = tmpFile();
-  const custom = ['mail', 'attention', 'productivity', 'activity', 'todos', 'disk', 'featureAdd'];
+  const custom = ['mail', 'attention', 'productivity', 'activity', 'todos', 'disk', 'aiusage', 'featureAdd'];
   const written = store.write({ homeLayout: custom }, { uiStatePath: file });
   assert.deepStrictEqual(written.homeLayout, custom, 'write 반환에 정규화된 homeLayout 보존');
   const back = store.read({ uiStatePath: file });

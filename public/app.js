@@ -643,7 +643,7 @@ function shouldPollCommit(view, visible) {
  *   배열 순서 = 기본 순서. renderHome 7섹션과 1:1. 보안 단일 신뢰 경계는 메인 normalizeHomeLayout —
  *   여기 검증은 UX 편의(드래그 DOM에서 읽은 data-id 필터링)일 뿐, 보안 의존 금지.
  */
-const HOME_SECTION_IDS = ['attention', 'productivity', 'activity', 'todos', 'mail', 'disk', 'featureAdd'];
+const HOME_SECTION_IDS = ['attention', 'productivity', 'activity', 'todos', 'mail', 'disk', 'aiusage', 'featureAdd'];
 
 /**
  * [R-32] 저장된 homeLayout → 렌더 순서로 정규화(순수). 메인 normalizeHomeLayout 과 동일 규칙:
@@ -1309,6 +1309,12 @@ function initBrowser() {
     todoAdding: false,           // '+ 할 일 추가' 인라인 입력 표시
     _composing: false,           // [R-25 RG-1] IME 조합 중 — 조합 중 재렌더 보류(자모 분리 방지)
     busyTodos: false,            // 추가/토글/삭제 in-flight
+    // [백로그2-4] 할 일 마감 일시 — 추가/편집 입력(datetime-local 문자열), 편집 대상 id, 알림 발화 dedupe.
+    todoDueInput: '',            // 추가 폼의 마감 입력
+    todoDueEditId: null,         // 인라인 마감 편집 중인 할 일 id
+    todoDueEditInput: '',        // 편집 폼의 마감 입력
+    notifiedDue: new Set(),      // 이미 토스트 발화한 할 일 id(세션 내 1회)
+    _dueTimer: null,             // 마감 도래 감시 타이머
     // 메일 다이제스트(홈 브리핑) — getMailSummary 응답(계정별 unseen + 제목/발신자 미리보기)
     mailSummary: [],             // [{id,label,host,user,unseen,items:[{subject,from,date}],ok,code}]
     busyMailSummary: false,      // getMailSummary in-flight
@@ -1319,6 +1325,12 @@ function initBrowser() {
     busyCommitActivity: false,   // getCommitActivity in-flight
     commitActivityLoaded: false, // 1회 로드 표식
     langPrev: {},                // 직전 스캔 언어 카운트(추세 ▲▼ 비교용)
+    // [항목3] 연결된 LLM 모델 토큰 사용량(getUiState.aiUsage 적재 — 브리핑 생성 시 누적).
+    aiUsage: null,               // {calls,promptTokens,completionTokens,totalTokens,lastModel,lastAt}
+    // [항목2] Claude Code 로컬 로그 토큰 사용량(getClaudeUsage — 무거운 스캔, 수동/지연 로드).
+    claudeUsage: null,           // {available,totals,today,byModel,lastAt,scannedFiles}
+    busyClaudeUsage: false,      // getClaudeUsage in-flight
+    claudeUsageLoaded: false,    // 1회 로드 표식
     // 메일 알림 계정(복수 IMAP) — 공개 뷰 목록 + 입력 폼(비밀번호는 응답에 없음)
     mailAccounts: [],            // getMailAccounts 응답(공개 뷰: id,label,host,port,user,hasPassword)
     mailForm: { label: '', host: '', port: '', user: '', pass: '' }, // 추가/수정 폼(컨트롤드)
@@ -2028,6 +2040,7 @@ function initBrowser() {
     maybeInitBriefing();
     maybeLoadMailSummary();
     maybeLoadCommitActivity();
+    maybeLoadClaudeUsage();
     var vms = store.viewModels || [];
     var g = homeGreeting(store.now);
     var kpis = homeKpis(vms);
@@ -2111,6 +2124,7 @@ function initBrowser() {
       case 'todos':        return renderHomeTodos();
       case 'mail':         return renderHomeMail();
       case 'disk':         return renderHomeDisk(reclaim);
+      case 'aiusage':      return renderHomeAiUsage();
       case 'featureAdd':   return renderHomeFeatureAdd();
       default:             return null;
     }
@@ -2303,6 +2317,26 @@ function initBrowser() {
     return card;
   }
 
+  /** [백로그2-4] 할 일 마감 일시 → 표시 라벨·상태(overdue/near/soon/normal)·색. dueAt 없으면 null. */
+  function todoDueInfo(dueAt, nowMs) {
+    if (typeof dueAt !== 'number' || !isFinite(dueAt) || dueAt <= 0) return null;
+    var now = (typeof nowMs === 'number') ? nowMs : ((store.now instanceof Date) ? store.now.getTime() : Date.now());
+    var diff = dueAt - now;
+    var d = new Date(dueAt);
+    var hh = ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
+    var dayMs = 86400000;
+    var startToday = new Date(now); startToday.setHours(0, 0, 0, 0);
+    var dayDelta = Math.floor((new Date(dueAt).setHours(0, 0, 0, 0) - startToday.getTime()) / dayMs);
+    var dayLabel = (dayDelta === 0) ? '오늘' : (dayDelta === 1 ? '내일' : (dayDelta === -1 ? '어제' : (d.getMonth() + 1) + '/' + d.getDate()));
+    var state, color;
+    if (diff <= 0) { state = 'overdue'; color = '#dc2626'; }
+    else if (diff <= 3600000) { state = 'near'; color = '#b45309'; }     // 1시간 이내
+    else if (diff <= dayMs) { state = 'soon'; color = '#1d4ed8'; }       // 24시간 이내
+    else { state = 'normal'; color = '#78716c'; }
+    var label = (state === 'overdue' ? '지남 · ' : '') + dayLabel + ' ' + hh;
+    return { state: state, color: color, label: label };
+  }
+
   function renderHomeTodos() {
     var todos = Array.isArray(store.todos) ? store.todos : [];
     var open = todos.filter(function (t) { return !t.done; }).length;
@@ -2315,9 +2349,11 @@ function initBrowser() {
     head.appendChild(cnt);
     card.appendChild(head);
 
-    var list = el('div', { style: 'display:flex;flex-direction:column;gap:2px;' });
+    // [백로그2-3] 행간 축소: 행 패딩·간격·줄높이 축소(8px/2px/1.4 → 5px/1px/1.3).
+    var list = el('div', { style: 'display:flex;flex-direction:column;gap:1px;' });
     todos.forEach(function (t) {
-      var row = el('div', { cls: 'home-todo-row', style: 'display:flex;align-items:flex-start;gap:11px;padding:8px 4px;border-radius:8px;' });
+      var due = t.done ? null : todoDueInfo(t.dueAt); // 완료 항목은 마감 강조 안 함
+      var row = el('div', { cls: 'home-todo-row', style: 'display:flex;align-items:flex-start;gap:11px;padding:5px 4px;border-radius:8px;' });
       var box = el('span', {
         attrs: { role: 'checkbox', 'aria-checked': t.done ? 'true' : 'false', 'aria-label': '완료: ' + t.text, tabindex: '0' },
         style: 'width:18px;height:18px;border-radius:6px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;margin-top:1px;cursor:pointer;' + (t.done ? 'border:1.5px solid #4f46e5;background:#4f46e5;' : 'border:1.5px solid #d6d3d1;background:#fff;'),
@@ -2326,30 +2362,59 @@ function initBrowser() {
       if (t.done) box.appendChild(svg([{ t: 'path', d: 'M5 12l4 4 10-10' }], { size: 11, stroke: '#fff', sw: 3 }));
       row.appendChild(box);
       var txt = el('div', { style: 'flex:1 1 0%;min-width:0;' });
-      txt.appendChild(el('div', { text: t.text, style: 'font-size:13px;line-height:1.4;' + (t.done ? 'color:#a8a29e;text-decoration:line-through;' : 'color:#1c1917;') }));
+      var txtRow = el('div', { style: 'display:flex;align-items:baseline;gap:8px;' });
+      txtRow.appendChild(el('div', { text: t.text, style: 'flex:1 1 0%;min-width:0;font-size:13px;line-height:1.3;' + (t.done ? 'color:#a8a29e;text-decoration:line-through;' : 'color:#1c1917;') }));
+      // [백로그2-4] 마감 일시 배지(임박/경과 색 강조). 클릭하면 일시 변경(미설정 시 "+ 마감").
+      var dueBadge = el('span', {
+        cls: 'home-todo-due',
+        text: due ? due.label : '+ 마감',
+        attrs: { role: 'button', tabindex: '0', 'aria-label': '마감 일시 설정' },
+        style: 'flex:0 0 auto;font-size:10.5px;font-weight:600;cursor:pointer;' + (due ? ('color:' + due.color + ';') : 'color:#c7c2bd;') + (due && due.state === 'overdue' ? 'text-decoration:underline;' : ''),
+        on: { click: function () { openTodoDueEditor(t); } },
+      });
+      txtRow.appendChild(dueBadge);
+      txt.appendChild(txtRow);
       txt.appendChild(el('button', {
         cls: 'home-todo-del', text: '삭제',
         attrs: { type: 'button', 'aria-label': '할 일 삭제: ' + t.text },
-        style: 'appearance:none;border:none;background:none;cursor:pointer;padding:0;margin-top:2px;font-size:10.5px;color:#a8a29e;',
+        style: 'appearance:none;border:none;background:none;cursor:pointer;padding:0;margin-top:1px;font-size:10.5px;color:#a8a29e;',
         on: { click: function () { onRemoveTodo(t.id); } },
       }));
       row.appendChild(txt);
-      row.appendChild(el('span', { style: 'width:7px;height:7px;border-radius:50%;flex:0 0 auto;margin-top:6px;background:' + (t.done ? '#d6d3d1' : '#b45309') + ';' }));
+      row.appendChild(el('span', { style: 'width:7px;height:7px;border-radius:50%;flex:0 0 auto;margin-top:6px;background:' + (t.done ? '#d6d3d1' : (due ? due.color : '#b45309')) + ';' }));
       list.appendChild(row);
     });
     card.appendChild(list);
 
+    // [백로그2-4] 인라인 마감 일시 편집기(특정 할 일 선택 시) — datetime-local 입력 + 설정/해제.
+    if (store.todoDueEditId) {
+      var editing = todos.filter(function (t) { return t.id === store.todoDueEditId; })[0];
+      if (editing) card.appendChild(renderTodoDueEditor(editing));
+      else store.todoDueEditId = null;
+    }
+
     // + 할 일 추가(클릭 시 인라인 입력)
     if (store.todoAdding) {
-      var addRow = el('div', { style: 'border-top:1px solid #f4f3f1;margin-top:10px;padding-top:12px;display:flex;gap:8px;' });
+      var addWrap = el('div', { style: 'border-top:1px solid #f4f3f1;margin-top:10px;padding-top:12px;display:flex;flex-direction:column;gap:8px;' });
+      var addRow = el('div', { style: 'display:flex;gap:8px;' });
       var input = el('input', { attrs: { type: 'text', placeholder: '할 일 입력 후 Enter', 'aria-label': '할 일 추가', autocomplete: 'off' }, style: 'flex:1;min-width:0;border:1px solid #e7e5e4;border-radius:8px;padding:7px 10px;font-size:12.5px;color:#1c1917;outline:none;' });
       input.value = store.todoInput;
       input.addEventListener('input', function (e) { store.todoInput = e.target.value || ''; });
-      input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); onAddTodo(); } if (e.key === 'Escape') { store.todoAdding = false; store.todoInput = ''; render(); } });
+      input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); onAddTodo(); } if (e.key === 'Escape') { store.todoAdding = false; store.todoInput = ''; store.todoDueInput = ''; render(); } });
       var b = el('button', { text: '추가', attrs: { type: 'button' }, style: 'border:none;background:#4f46e5;color:#fff;border-radius:8px;padding:0 14px;font-size:12.5px;font-weight:600;cursor:pointer;', on: { click: onAddTodo } });
       if (store.busyTodos) { input.disabled = true; b.disabled = true; }
       addRow.appendChild(input); addRow.appendChild(b);
-      card.appendChild(addRow);
+      addWrap.appendChild(addRow);
+      // [백로그2-4] 선택 마감 일시(datetime-local). 비우면 마감 없음.
+      var dueRow = el('div', { style: 'display:flex;align-items:center;gap:8px;' });
+      dueRow.appendChild(el('span', { text: '마감(선택)', style: 'font-size:11px;color:#a8a29e;flex:0 0 auto;' }));
+      var dueInput = el('input', { attrs: { type: 'datetime-local', 'aria-label': '마감 일시' }, style: 'flex:1;min-width:0;border:1px solid #e7e5e4;border-radius:8px;padding:6px 9px;font-size:12px;color:#57534e;outline:none;' });
+      dueInput.value = store.todoDueInput || '';
+      dueInput.addEventListener('input', function (e) { store.todoDueInput = e.target.value || ''; });
+      if (store.busyTodos) dueInput.disabled = true;
+      dueRow.appendChild(dueInput);
+      addWrap.appendChild(dueRow);
+      card.appendChild(addWrap);
       setTimeout(function () { try { input.focus(); } catch (_) { } }, 0);
     } else {
       var add = el('div', {
@@ -2368,18 +2433,62 @@ function initBrowser() {
     if (res && res.ok && Array.isArray(res.todos)) { store.todos = res.todos; return true; }
     return false;
   }
+  /** [백로그2-4] datetime-local 문자열('YYYY-MM-DDTHH:mm') → ms(로컬). 빈/무효는 null. */
+  function parseDueInput(v) {
+    if (typeof v !== 'string' || !v) return null;
+    var t = Date.parse(v); // datetime-local은 로컬 시간으로 해석
+    return (typeof t === 'number' && isFinite(t)) ? t : null;
+  }
+  /** ms → datetime-local 입력값('YYYY-MM-DDTHH:mm', 로컬). 없으면 ''. */
+  function toDueInput(ms) {
+    if (typeof ms !== 'number' || !isFinite(ms) || ms <= 0) return '';
+    var d = new Date(ms);
+    var p = function (n) { return ('0' + n).slice(-2); };
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + 'T' + p(d.getHours()) + ':' + p(d.getMinutes());
+  }
   async function onAddTodo() {
     var v = (store.todoInput || '').trim();
     if (!v) { toast('할 일 내용을 입력하세요.', true); return; }
     if (store.busyTodos || !bridgeHas('addTodo')) return;
+    var dueAt = parseDueInput(store.todoDueInput);
     store.busyTodos = true; render();
-    var res = await ipc('addTodo', v);
+    var res = await ipc('addTodo', v, dueAt);
     store.busyTodos = false;
-    if (applyTodoResult(res)) { store.todoInput = ''; store.todoAdding = false; }
+    if (applyTodoResult(res)) { store.todoInput = ''; store.todoDueInput = ''; store.todoAdding = false; }
     else toast(res && res.code === 'LIMIT' ? '할 일이 너무 많습니다.' : '할 일 추가에 실패했습니다.', true);
     // [F-1] todoAdding(editing) 해제 가능 지점 — release()로 즉시 1회 반영 + 잔류 pending 소비.
     RG.coalesce.release();
     maybeFlushCommitRefresh(); // [M10-P1] editing 해제 → 보류된 커밋 폴링 따라감
+  }
+  /** [백로그2-4] 특정 할 일의 마감 편집기 열기(인라인). */
+  function openTodoDueEditor(t) {
+    store.todoDueEditId = t.id;
+    store.todoDueEditInput = toDueInput(t.dueAt);
+    render();
+  }
+  /** [백로그2-4] 마감 일시 편집기 UI(설정/해제). */
+  function renderTodoDueEditor(t) {
+    var wrap = el('div', { style: 'border-top:1px solid #f4f3f1;margin-top:8px;padding-top:10px;display:flex;flex-direction:column;gap:8px;' });
+    wrap.appendChild(el('div', { text: '“' + t.text + '” 마감 일시', style: 'font-size:11.5px;color:#78716c;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;' }));
+    var row = el('div', { style: 'display:flex;gap:8px;align-items:center;' });
+    var inp = el('input', { attrs: { type: 'datetime-local', 'aria-label': '마감 일시 변경' }, style: 'flex:1;min-width:0;border:1px solid #e7e5e4;border-radius:8px;padding:6px 9px;font-size:12px;color:#57534e;outline:none;' });
+    inp.value = store.todoDueEditInput || '';
+    inp.addEventListener('input', function (e) { store.todoDueEditInput = e.target.value || ''; });
+    row.appendChild(inp);
+    row.appendChild(el('button', { text: '설정', attrs: { type: 'button' }, style: 'border:none;background:#4f46e5;color:#fff;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;flex:0 0 auto;', on: { click: function () { onSetTodoDue(t.id, parseDueInput(store.todoDueEditInput)); } } }));
+    if (t.dueAt) row.appendChild(el('button', { text: '해제', attrs: { type: 'button' }, style: 'border:1px solid #e7e5e4;background:#fff;color:#78716c;border-radius:8px;padding:6px 12px;font-size:12px;cursor:pointer;flex:0 0 auto;', on: { click: function () { onSetTodoDue(t.id, null); } } }));
+    row.appendChild(el('button', { text: '닫기', attrs: { type: 'button' }, style: 'border:none;background:none;color:#a8a29e;font-size:12px;cursor:pointer;flex:0 0 auto;', on: { click: function () { store.todoDueEditId = null; render(); } } }));
+    wrap.appendChild(row);
+    return wrap;
+  }
+  async function onSetTodoDue(id, dueAt) {
+    if (store.busyTodos || !bridgeHas('setTodoDue')) { store.todoDueEditId = null; render(); return; }
+    store.busyTodos = true; render();
+    var res = await ipc('setTodoDue', id, dueAt);
+    store.busyTodos = false;
+    if (applyTodoResult(res)) { store.todoDueEditId = null; store.notifiedDue.delete(id); } // 재설정 시 알림 재무장
+    else toast('마감 일시 설정에 실패했습니다.', true);
+    render();
   }
   async function onToggleTodo(id, done) {
     if (store.busyTodos || !bridgeHas('toggleTodo')) return;
@@ -2500,6 +2609,16 @@ function initBrowser() {
   function maybeLoadMailSummary() {
     if (bridgeHas('getMailSummary') && !store.mailSummaryLoaded && !store.busyMailSummary) refreshMailSummary();
   }
+  // [백로그2-2] 경량 위젯 이벤트 버스 — 위젯 간 상호작용의 단일 통지 지점(렌더러 내, 외부 egress 아님).
+  //   on(event, fn)→unsubscribe, emit(event, data). 구독자 예외는 격리(다른 구독자 영향 0).
+  var EV = (function () {
+    var map = {};
+    return {
+      on: function (ev, fn) { (map[ev] || (map[ev] = [])).push(fn); return function () { map[ev] = (map[ev] || []).filter(function (x) { return x !== fn; }); }; },
+      emit: function (ev, data) { (map[ev] || []).slice().forEach(function (fn) { try { fn(data); } catch (_) { /* 구독자 예외 격리 */ } }); },
+    };
+  })();
+
   var _lastMailSummaryKey = '';
   async function refreshMailSummary(opts) {
     opts = opts || {};
@@ -2521,10 +2640,25 @@ function initBrowser() {
     var newKey = mailSummaryKey(store.mailSummary);
     if (newKey === _lastMailSummaryKey) { RG.coalesce.flushIfPending(); return; } // 무변경 → 보류분만 소비
     _lastMailSummaryKey = newKey;
-    patchMailSection(); // 변경 → 메일 영역만 교체(깜빡임 0). 영역 부재 시 내부 fallback=render.
+    // [백로그2-2] 실제 변화만 위젯 이벤트 버스로 브로드캐스트 — 구독한 위젯(KPI·브리핑·메일)이 상호작용.
+    EV.emit('mail:changed', { unread: mailUnreadTotal() });
   }
   function maybeLoadCommitActivity() {
     if (bridgeHas('getCommitActivity') && !store.commitActivityLoaded && !store.busyCommitActivity) refreshCommitActivity();
+  }
+  // [항목2] Claude Code 로컬 로그 토큰 사용량 — 무거운 스캔이라 홈 진입 시 1회만 자동 로드(수동 새로고침 가능).
+  function maybeLoadClaudeUsage() {
+    if (bridgeHas('getClaudeUsage') && !store.claudeUsageLoaded && !store.busyClaudeUsage) refreshClaudeUsage();
+  }
+  async function refreshClaudeUsage() {
+    if (!bridgeHas('getClaudeUsage') || store.busyClaudeUsage) return;
+    store.busyClaudeUsage = true;
+    if (store.state.view === 'home') render();
+    var res = await ipc('getClaudeUsage');
+    store.busyClaudeUsage = false;
+    store.claudeUsageLoaded = true;
+    store.claudeUsage = (res && res.ok) ? res : { available: false, totals: null, today: null, byModel: [], lastAt: null, scannedFiles: 0 };
+    if (store.state.view === 'home') render();
   }
   /** 언어 분포 추세 baseline 갱신 → store.langPrev(직전 스캔 카운트). */
   async function refreshLangTrend() {
@@ -2584,6 +2718,119 @@ function initBrowser() {
       list.appendChild(box);
     });
     card.appendChild(list);
+    return card;
+  }
+
+  /** [항목2·3] 토큰 사용량 — 큰 수 압축 표기(1.2k·3.4M). 음수/비유한은 0. */
+  function fmtTokens(n) {
+    n = (typeof n === 'number' && isFinite(n) && n > 0) ? Math.floor(n) : 0;
+    if (n < 1000) return String(n);
+    if (n < 1000000) return (n / 1000).toFixed(n < 10000 ? 1 : 0) + 'k';
+    return (n / 1000000).toFixed(2) + 'M';
+  }
+  /** 라벨/값 스탯 한 줄. */
+  function usageStatRow(label, value, strong) {
+    var row = el('div', { style: 'display:flex;align-items:baseline;justify-content:space-between;gap:10px;padding:5px 0;' });
+    row.appendChild(el('span', { text: label, style: 'font-size:11.5px;color:#78716c;' }));
+    row.appendChild(el('span', { text: value, style: HOME_MONO + 'font-size:' + (strong ? '15px;font-weight:700;color:#1c1917' : '12.5px;color:#57534e') + ';font-variant-numeric:tabular-nums;' }));
+    return row;
+  }
+  /** [백로그2-1] 최근 N일 토큰 사용량 막대 차트(자작 SVG, 외부 라이브러리 0). 라벨·툴팁은 <title> textContent(L-1). */
+  function usageBarChart(daily) {
+    var days = Array.isArray(daily) ? daily : [];
+    var n = days.length || 1;
+    var max = 1;
+    for (var i = 0; i < days.length; i++) { var v = (days[i] && days[i].totalTokens) || 0; if (v > max) max = v; }
+    var W = 300, H = 46, gap = 1;
+    var bw = (W - gap * (n - 1)) / n;
+    var s = document.createElementNS(SVG_NS, 'svg');
+    s.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+    s.setAttribute('width', '100%'); s.setAttribute('height', String(H));
+    s.setAttribute('preserveAspectRatio', 'none');
+    s.setAttribute('role', 'img');
+    s.setAttribute('aria-label', '최근 ' + n + '일 토큰 사용량');
+    days.forEach(function (d, idx) {
+      var val = (d && d.totalTokens) || 0;
+      var h = val > 0 ? Math.max(2, Math.round(val / max * (H - 2))) : 1;
+      var x = idx * (bw + gap);
+      var rect = document.createElementNS(SVG_NS, 'rect');
+      rect.setAttribute('x', String(x));
+      rect.setAttribute('y', String(H - h));
+      rect.setAttribute('width', String(Math.max(0.5, bw)));
+      rect.setAttribute('height', String(h));
+      rect.setAttribute('rx', '0.6');
+      rect.setAttribute('fill', idx === days.length - 1 ? '#4f46e5' : (val > 0 ? '#c7d2fe' : '#ece9e6'));
+      var title = document.createElementNS(SVG_NS, 'title');
+      title.textContent = (d && d.date ? d.date : '') + ' · ' + fmtTokens(val) + ' 토큰'; // L-1 textContent
+      rect.appendChild(title);
+      s.appendChild(rect);
+    });
+    var wrap = el('div', { style: 'margin:8px 0 4px;' });
+    wrap.appendChild(s);
+    return wrap;
+  }
+
+  /** [항목2·3] 토큰 사용량 인사이트 섹션 — 상단: Claude Code(로컬 로그), 하단: 연결된 모델(브리핑). */
+  function renderHomeAiUsage() {
+    var card = el('div', { style: HOME_CARD + 'padding:21px 22px;' });
+
+    // 헤더 + Claude Code 수동 새로고침.
+    var refresh = el('span', {
+      style: 'font-size:12px;font-weight:600;color:#4f46e5;cursor:pointer;' + (store.busyClaudeUsage ? 'opacity:.5;pointer-events:none;' : ''),
+      attrs: { role: 'button', tabindex: '0', 'aria-label': 'Claude Code 사용량 새로고침' },
+      on: {
+        click: function () { store.claudeUsageLoaded = false; refreshClaudeUsage(); },
+        keydown: function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); store.claudeUsageLoaded = false; refreshClaudeUsage(); } },
+      },
+    });
+    refresh.appendChild(el('span', { text: store.busyClaudeUsage ? '집계 중…' : '새로고침' }));
+    card.appendChild(homeCardHead(homeTitle('토큰 사용량'), refresh, 6));
+    card.appendChild(el('div', { text: 'Claude Code 로컬 로그와 연결된 AI 모델의 토큰 소비량입니다.', style: 'font-size:11.5px;color:#a8a29e;margin-bottom:16px;' }));
+
+    // ── Claude Code(항목2) ──
+    var cu = store.claudeUsage;
+    card.appendChild(el('div', { text: 'Claude Code', style: 'font-size:12.5px;font-weight:600;color:#1c1917;margin-bottom:4px;' }));
+    if (store.busyClaudeUsage && !cu) {
+      card.appendChild(el('div', { text: '로컬 로그 집계 중…', style: 'font-size:11.5px;color:#a8a29e;padding:4px 0 14px;' }));
+    } else if (!cu || !cu.available) {
+      card.appendChild(el('div', { text: '이 PC에서 Claude Code 사용 기록을 찾지 못했습니다.', style: 'font-size:11.5px;color:#a8a29e;padding:4px 0 14px;line-height:1.6;' }));
+    } else {
+      var tot = cu.totals || {}; var tod = cu.today || {};
+      card.appendChild(usageStatRow('총 토큰', fmtTokens(tot.totalTokens), true));
+      card.appendChild(usageStatRow('오늘', fmtTokens(tod.totalTokens) + ' 토큰 · ' + (tod.messages || 0) + '회'));
+      card.appendChild(usageStatRow('입력 / 출력', fmtTokens(tot.inputTokens) + ' / ' + fmtTokens(tot.outputTokens)));
+      card.appendChild(usageStatRow('캐시 읽기', fmtTokens(tot.cacheReadTokens)));
+      // [백로그2-1] 최근 30일 일별 사용량 시각화.
+      var daily = Array.isArray(cu.daily) ? cu.daily : [];
+      if (daily.length) {
+        var sum30 = daily.reduce(function (a, d) { return a + ((d && d.totalTokens) || 0); }, 0);
+        var dchead = el('div', { style: 'display:flex;align-items:baseline;justify-content:space-between;margin-top:10px;' });
+        dchead.appendChild(el('span', { text: '최근 ' + daily.length + '일', style: 'font-size:11px;color:#a8a29e;' }));
+        dchead.appendChild(el('span', { text: fmtTokens(sum30) + ' 토큰', style: HOME_MONO + 'font-size:11px;color:#78716c;' }));
+        card.appendChild(dchead);
+        card.appendChild(usageBarChart(daily));
+      }
+      // 상위 모델(최대 3).
+      var models = Array.isArray(cu.byModel) ? cu.byModel.slice(0, 3) : [];
+      models.forEach(function (m) {
+        card.appendChild(usageStatRow(String(m.model || '알 수 없음'), fmtTokens(m.totalTokens)));
+      });
+      card.appendChild(el('div', { text: cu.scannedFiles + '개 세션 로그 기준', style: 'font-size:10.5px;color:#c7c2bd;margin-top:4px;' }));
+    }
+
+    card.appendChild(el('div', { style: 'height:1px;background:#f0efed;margin:14px 0;' }));
+
+    // ── 연결된 모델(항목3) — 브리핑 생성 시 누적 ──
+    var au = store.aiUsage;
+    card.appendChild(el('div', { text: '연결된 모델 (브리핑)', style: 'font-size:12.5px;font-weight:600;color:#1c1917;margin-bottom:4px;' }));
+    if (!au || !(au.calls > 0)) {
+      card.appendChild(el('div', { text: '설정의 AI 브리핑을 켜고 생성하면 토큰 사용량이 집계됩니다.', style: 'font-size:11.5px;color:#a8a29e;padding:4px 0;line-height:1.6;' }));
+    } else {
+      card.appendChild(usageStatRow('총 토큰', fmtTokens(au.totalTokens), true));
+      card.appendChild(usageStatRow('생성 횟수', String(au.calls || 0) + '회'));
+      card.appendChild(usageStatRow('입력 / 출력', fmtTokens(au.promptTokens) + ' / ' + fmtTokens(au.completionTokens)));
+      if (au.lastModel) card.appendChild(usageStatRow('모델', String(au.lastModel)));
+    }
     return card;
   }
 
@@ -2947,8 +3194,40 @@ function initBrowser() {
     block.appendChild(spField);
     block.appendChild(el('p', {
       cls: 'settings__opt-sub',
-      text: '브리핑의 출력 언어·형식·어조 등을 바꿉니다. 비우면 기본 프롬프트를 사용합니다(최대 8000자). 데이터(프로젝트명·메일 등)는 항상 안전하게 분리 처리됩니다.',
+      text: '브리핑의 출력 언어·형식·어조 등을 바꿉니다. 비우면 기본 프롬프트를 사용합니다(최대 8000자). 기본 내용을 바탕으로 일부만 고치려면 아래 “기본 프롬프트 불러와 편집”을 누르세요.',
     }));
+
+    // [항목1] AI에 컨텍스트로 전달되는 사용자 DATA 설명 — 무엇을 활용할 수 있는지/무엇이 보호되는지 안내.
+    //   접이식(details). 모든 텍스트는 textContent(el)로만 — L-1 유지.
+    const liText = (t) => el('li', { text: t });
+    const ctx = el('details', { cls: 'briefing-context' });
+    ctx.appendChild(el('summary', { cls: 'briefing-context__summary', text: 'AI에 전달되는 데이터 보기 — 무엇을 활용할 수 있나요?' }));
+    ctx.appendChild(el('p', { cls: 'settings__opt-sub', text: '프롬프트를 작성할 때 AI는 SPIP가 감지한 아래 항목들을 컨텍스트(DATA)로 받습니다. 모두 신뢰 불가 데이터로 격리되어, 그 안의 지시는 실행되지 않고 요약·설명 대상으로만 쓰입니다.' }));
+    ctx.appendChild(el('ul', { cls: 'briefing-context__list', children: [
+      liText('항목 이름(label): 프로젝트명·메일 제목 등 사람이 읽는 이름'),
+      liText('신호 유형(type): 미커밋(dirty)·미푸시(ahead)·받을 커밋(behind)·새 메일(mail)·마감 임박 할 일 등'),
+      liText('중요도(category): must·good·urgent — 시스템이 결정하며 AI가 바꾸지 못합니다'),
+      liText('맥락(context): 메일 제목·본문 일부(최대 2000자), 커밋 메시지(최대 500자) 등'),
+      liText('미처리 항목(carry-over): 이전 브리핑에서 아직 처리되지 않은 항목'),
+    ] }));
+    ctx.appendChild(el('p', { cls: 'settings__opt-sub', text: '전달되지 않는 것: API 키·서버 주소·파일 경로·환경변수·내부 해시 식별자(개인정보·자격증명은 프롬프트에 절대 포함되지 않습니다).' }));
+    ctx.appendChild(el('p', { cls: 'settings__opt-sub briefing-context__note', text: '출력 형식(JSON 구조)·분류 소유권·표시 전용 안전 규칙은 시스템이 항상 프롬프트 뒤에 자동으로 덧붙이며, 시스템 프롬프트를 어떻게 바꿔도 제거되지 않습니다.' }));
+    block.appendChild(ctx);
+
+    // 기본 프롬프트를 편집 칸에 실제 텍스트로 불러온다 — placeholder(흐린 안내)는 입력 시 사라지므로,
+    //   "기본에서 일부만 수정" 하려면 먼저 본문을 채워야 한다. 편집 칸이 비어 있을 때만 노출(작성 중 덮어쓰기 방지).
+    if (typeof v.defaultSystemPrompt === 'string' && v.defaultSystemPrompt && !store.briefing.form.systemPrompt) {
+      block.appendChild(el('button', {
+        cls: 'btn btn--sm briefing-systemprompt__load',
+        text: '기본 프롬프트 불러와 편집',
+        attrs: { type: 'button', 'aria-label': '기본 프롬프트를 편집 칸에 불러오기' },
+        on: { click: function () {
+          // 시드 텍스트를 폼에 채운 뒤 다시 그려 textarea value 로 표시(이후 일부만 수정 가능).
+          store.briefing.form.systemPrompt = v.defaultSystemPrompt;
+          render();
+        } },
+      }));
+    }
 
     // apiKey (쓰기 전용 — 평문 미표시. "설정됨/미설정" + 입력 시 저장 / 비우고 해제)
     const keyField = el('label', { cls: 'mailform__field' });
@@ -5425,6 +5704,39 @@ function initBrowser() {
     if (store.mailRefreshTimer) { try { clearInterval(store.mailRefreshTimer); } catch (_) { /* ignore */ } store.mailRefreshTimer = null; }
   }
 
+  /* [백로그2-4] 할 일 마감 도래 감시 — 30초 주기. 마감 시각 경과 시 윈도우 토스트 1회(세션 dedupe),
+   *   임박/경과 상태가 바뀌면 홈에서 할 일 위젯 색을 갱신(과도 렌더 방지로 상태 시그니처 비교). 뷰 무관 동작(알림은 항상). */
+  var _lastDueSig = '';
+  function tickTodoDue() {
+    var todos = Array.isArray(store.todos) ? store.todos : [];
+    var now = Date.now();
+    var sig = [];
+    for (var i = 0; i < todos.length; i++) {
+      var t = todos[i];
+      if (!t || t.done || typeof t.dueAt !== 'number' || !isFinite(t.dueAt) || t.dueAt <= 0) continue;
+      var info = todoDueInfo(t.dueAt, now);
+      if (info) sig.push(t.id + ':' + info.state);
+      // 마감 경과 + 미발화 → 토스트 1회.
+      if (now >= t.dueAt && !store.notifiedDue.has(t.id)) {
+        store.notifiedDue.add(t.id);
+        if (bridgeHas('notify')) { try { ipc('notify', '할 일 마감', t.text); } catch (_) { /* graceful */ } }
+      }
+    }
+    var newSig = sig.join('|');
+    if (newSig !== _lastDueSig) {
+      _lastDueSig = newSig;
+      if (store.state.view === 'home') render(); // 임박/경과 색 갱신
+    }
+  }
+  function startTodoDueWatch() {
+    if (store._dueTimer) return;
+    tickTodoDue();
+    store._dueTimer = setInterval(tickTodoDue, 30000);
+  }
+  function stopTodoDueWatch() {
+    if (store._dueTimer) { try { clearInterval(store._dueTimer); } catch (_) { /* ignore */ } store._dueTimer = null; }
+  }
+
   /* [R-31] 커밋 차트 5분 폴링 — 홈 체류 + 창 가시 상태에서만 git 조회. 홈 이탈/비가시 시 타이머 정지(git 호출 0).
    *   메일 60초 폴링 패턴 복제(주기만 300초). 갱신은 refreshCommitActivity(완료 시 RG.coalesce.release 경유).
    *   조합/드래그/오버레이/재진입 중에는 RG.deferred()로 폴링 1회 건너뜀(다음 틱에 반영) — R-25/R-26 정합. */
@@ -5939,6 +6251,8 @@ function initBrowser() {
     store.todos = (res && res.ok !== false && Array.isArray(res.todos)) ? res.todos.filter((t) => t && typeof t.id === 'string') : [];
     // [R-32] 홈 섹션 순서 — getUiState 응답의 homeLayout 적재(부재/손상 시 동형 정규화로 기본 순서 보충).
     store.homeLayout = applyHomeLayout(res && res.ok !== false ? res.homeLayout : null);
+    // [항목3] 연결된 LLM 모델 토큰 사용량 누적 적재(브리핑 생성 시 메인이 누적·영속).
+    store.aiUsage = (res && res.ok !== false && res.aiUsage && typeof res.aiUsage === 'object') ? res.aiUsage : null;
     // [M13] 브리핑 carry-over 항목(open) 적재 — 영속 단일 출처. 실시간 생성상태는 push 로 갱신.
     var bf = (res && res.ok !== false && res.briefing && typeof res.briefing === 'object') ? res.briefing : null;
     if (bf) {
@@ -6592,6 +6906,14 @@ function initBrowser() {
   // 메일 실시간 갱신: 새 메일 push 구독 + 홈 주기 갱신(앱 1회).
   subscribeMailUpdated();
   startMailAutoRefresh();
+  startTodoDueWatch(); // [백로그2-4] 할 일 마감 도래 토스트·시각 알림 감시(앱 1회).
+  // [백로그2-2] 메일 변화 이벤트 구독 — 의존 위젯(히어로 KPI '안 읽은 메일'·브리핑)이 즉시 반응.
+  //   스트리밍 중엔 스트림을 끊지 않도록 메일·브리핑 영역만 부분 교체, 그 외엔 전체 재구성으로 KPI까지 동시 반영.
+  EV.on('mail:changed', function () {
+    if (store.state.view !== 'home') { patchMailSection(); return; }
+    var streaming = store.briefing && (store.briefing.status === 'streaming' || store.briefing.status === 'generating');
+    if (streaming) { patchMailSection(); patchBriefing(); } else { render(); }
+  });
   // [R-31] 커밋 차트 폴링 — 창 가시성 변화 시 폴링 시작/정지 동기화(홈 비가시 시 git 0). 뷰 전환은 render()가 동기화.
   if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
     document.addEventListener('visibilitychange', () => { try { syncHomePolling(); } catch (_) { /* graceful */ } });
@@ -6611,6 +6933,7 @@ function initBrowser() {
     unsubscribeProjectsUpdated();
     unsubscribeMailUpdated();
     stopMailAutoRefresh();
+    stopTodoDueWatch(); // [백로그2-4] 마감 감시 타이머 정리
     stopCommitAutoRefresh(); // [R-31] 커밋 폴링 타이머 정리
     unsubscribeBriefing();   // [M13] 브리핑 push 구독 해제
     unsubscribeUpdateStatus();

@@ -228,7 +228,22 @@ function makeCarryOverStore(ctx) {
         lastSnapshot: (next.lastSnapshot !== undefined) ? next.lastSnapshot : prevB.lastSnapshot,
         counters,
       };
-      const written = store.write(Object.assign({}, state, { briefing }), storeCtx());
+      // [항목3] LLM 토큰 사용량 누적(usageDelta가 오면 더한다). 표시·집계 전용 수치만.
+      const patch = { briefing };
+      const ud = (next.usageDelta && typeof next.usageDelta === 'object') ? next.usageDelta : null;
+      if (ud) {
+        const prevU = state.aiUsage || uiStateStore.defaultAiUsage();
+        const add = (a, b) => (a || 0) + (Number(b) > 0 ? Math.floor(b) : 0);
+        patch.aiUsage = {
+          calls: (prevU.calls || 0) + 1,
+          promptTokens: add(prevU.promptTokens, ud.promptTokens),
+          completionTokens: add(prevU.completionTokens, ud.completionTokens),
+          totalTokens: add(prevU.totalTokens, ud.totalTokens),
+          lastModel: (typeof ud.model === 'string' && ud.model) ? ud.model : (prevU.lastModel || ''),
+          lastAt: Date.now(),
+        };
+      }
+      const written = store.write(Object.assign({}, state, patch), storeCtx());
       return written.briefing;
     },
   };

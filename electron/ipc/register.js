@@ -25,6 +25,7 @@ const mailAccountsIpc = require('./mailAccounts');
 const insightsIpc = require('./insights');
 const uiStateIpc = require('./uiState');
 const briefingIpc = require('./briefing');
+const notifyIpc = require('./notify');
 const autoUpdate = require('../autoUpdate');
 // [P3-4] 신뢰 origin 단일 원천(security.js). 리터럴 이중정의 제거.
 const { TRUSTED_ORIGIN } = require('../security');
@@ -179,6 +180,8 @@ function registerIpcHandlers(deps) {
 
   // 홈 인사이트 — 최근 14일 커밋 빈도(등록 프로젝트 합산, git -C safeExec).
   guard('spip:getCommitActivity', () => insightsIpc.getCommitActivity(ctx));
+  // [항목2] 홈 인사이트 — Claude Code 로컬 로그 토큰 사용량 집계(읽기 전용·수치만).
+  guard('spip:getClaudeUsage', () => insightsIpc.getClaudeUsage(ctx));
 
   // [M7 SEC-M2] 즐겨찾기 변경 broadcast(단방향 push) — setFavorite 성공 시 메인 wc + 위젯 wc 양쪽에 동기화.
   //   payload 스키마 = { favorites:string[] }만(경로/실행 인자/내부 상태 금지). 대상 wc는 메인·위젯 2개로
@@ -212,6 +215,9 @@ function registerIpcHandlers(deps) {
   guard('spip:addTodo', (args) => uiStateIpc.addTodo(args, ctx));
   guard('spip:toggleTodo', (args) => uiStateIpc.toggleTodo(args, ctx));
   guard('spip:removeTodo', (args) => uiStateIpc.removeTodo(args, ctx));
+  // [백로그2-4] 할 일 마감 일시 설정/해제 + 마감 도래 시 OS 토스트 알림.
+  guard('spip:setTodoDue', (args) => uiStateIpc.setTodoDue(args, ctx));
+  guard('spip:notify', (args) => notifyIpc.notify(args, ctx));
   // 홈 언어 분포 추세 baseline(스캔 간 비교) — getUiState 응답의 langTrend로 읽기.
   guard('spip:updateLangTrend', (args) => uiStateIpc.updateLangTrend(args, ctx));
 

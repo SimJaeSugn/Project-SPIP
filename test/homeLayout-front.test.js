@@ -14,9 +14,9 @@ const APP_SRC = fs.readFileSync(path.join(__dirname, '..', 'public', 'app.js'), 
 const STORE_SRC = fs.readFileSync(path.join(__dirname, '..', 'lib', 'common', 'uiStateStore.js'), 'utf8');
 
 // ── HOME_SECTION_IDS 계약 동형 ────────────────────────────────────────────
-test('R-32 — HOME_SECTION_IDS: 7섹션 enum(배열 순서 = 기본 순서)', () => {
+test('R-32 — HOME_SECTION_IDS: 8섹션 enum(배열 순서 = 기본 순서)', () => {
   assert.deepStrictEqual(HOME_SECTION_IDS,
-    ['attention', 'productivity', 'activity', 'todos', 'mail', 'disk', 'featureAdd']);
+    ['attention', 'productivity', 'activity', 'todos', 'mail', 'disk', 'aiusage', 'featureAdd']);
 });
 
 test('R-32 — 렌더러 HOME_SECTION_IDS 가 메인 uiStateStore 와 동일 집합·순서', () => {
@@ -28,23 +28,23 @@ test('R-32 — 렌더러 HOME_SECTION_IDS 가 메인 uiStateStore 와 동일 집
 
 // ── applyHomeLayout (순서 정규화, 메인 normalizeHomeLayout 과 동일 규칙) ──
 test('R-32 — applyHomeLayout: 유효 순열은 그대로 유지', () => {
-  const input = ['mail', 'attention', 'disk', 'todos', 'activity', 'productivity', 'featureAdd'];
+  const input = ['mail', 'attention', 'disk', 'todos', 'activity', 'productivity', 'aiusage', 'featureAdd'];
   assert.deepStrictEqual(applyHomeLayout(input), input);
 });
 
-test('R-32 — applyHomeLayout: 부분 순서는 나머지를 기본 순서로 끝에 보충(항상 7개)', () => {
+test('R-32 — applyHomeLayout: 부분 순서는 나머지를 기본 순서로 끝에 보충(항상 8개)', () => {
   const out = applyHomeLayout(['mail', 'todos']);
-  assert.strictEqual(out.length, 7);
+  assert.strictEqual(out.length, 8);
   assert.deepStrictEqual(out.slice(0, 2), ['mail', 'todos']);
   // 나머지는 기본 순서 유지(중복 없이).
-  assert.deepStrictEqual(out, ['mail', 'todos', 'attention', 'productivity', 'activity', 'disk', 'featureAdd']);
+  assert.deepStrictEqual(out, ['mail', 'todos', 'attention', 'productivity', 'activity', 'disk', 'aiusage', 'featureAdd']);
 });
 
 test('R-32 — applyHomeLayout: 화이트리스트 외·중복·비문자열 제거', () => {
   const out = applyHomeLayout(['mail', 'mail', 'bogus', 123, null, 'attention']);
   assert.deepStrictEqual(out.slice(0, 2), ['mail', 'attention']);
-  assert.strictEqual(out.length, 7);
-  assert.strictEqual(new Set(out).size, 7, '중복 없음');
+  assert.strictEqual(out.length, 8);
+  assert.strictEqual(new Set(out).size, 8, '중복 없음');
   for (const id of out) assert.ok(HOME_SECTION_IDS.includes(id), '화이트리스트 내: ' + id);
 });
 

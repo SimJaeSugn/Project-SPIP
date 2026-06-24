@@ -23,7 +23,7 @@ if (process.env.ELECTRON_RUN_AS_NODE) {
 
 const path = require('path');
 const fs = require('fs');
-const { app, BrowserWindow, Menu, dialog, ipcMain, protocol, shell, clipboard, screen } = require('electron');
+const { app, BrowserWindow, Menu, dialog, ipcMain, protocol, shell, clipboard, screen, Notification } = require('electron');
 
 const { buildContext, deriveSnapshot } = require('./context');
 const { registerIpcHandlers } = require('./ipc/register');
@@ -250,6 +250,15 @@ function onReady() {
 
   // composition root 승계.
   ctx = buildContext({ logger });
+
+  // [백로그2-4] OS 토스트 알림 표시자 주입 — notify IPC가 위임(렌더러는 Electron 미접근).
+  //   미지원 환경이면 graceful(throw 없이 무동작). 본문은 사용자 소유 할 일 텍스트뿐(외부 egress 아님).
+  ctx.showNotification = ({ title, body }) => {
+    try {
+      if (!Notification || typeof Notification.isSupported === 'function' && !Notification.isSupported()) return;
+      new Notification({ title: String(title || '알림'), body: String(body || '') }).show();
+    } catch (err) { logger.warn('토스트 알림 표시 실패'); }
+  };
 
   // 보안 webPreferences.
   win = new BrowserWindow({

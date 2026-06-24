@@ -78,13 +78,18 @@ test('M11 — maybeAutoRefreshMail(폴링/push)은 silent', () => {
   assert.ok(/refreshMailSummary\(\{\s*silent:\s*true\s*\}\)/.test(b), '폴링은 silent');
 });
 
-test('M11 — onMailSummaryFetched: 무변경 skip, 변경 시 patchMailSection', () => {
+test('M11/백로그2-2 — onMailSummaryFetched: 무변경 skip, 변경 시 이벤트 버스 브로드캐스트', () => {
   const start = APP_SRC.indexOf('function onMailSummaryFetched()');
   assert.ok(start >= 0, 'onMailSummaryFetched 함수');
   const b = APP_SRC.slice(start, start + 400);
   assert.ok(/mailSummaryKey\(store\.mailSummary\)/.test(b), 'diff 키 비교');
   assert.ok(/=== _lastMailSummaryKey/.test(b), '직전 키와 비교');
-  assert.ok(/patchMailSection\(\)/.test(b), '변경 시 영역만 교체');
+  assert.ok(/EV\.emit\('mail:changed'/.test(b), '변경 시 위젯 이벤트 버스로 브로드캐스트');
+  // 구독자(위젯 상호작용)가 메일 영역/브리핑을 갱신한다.
+  assert.ok(/EV\.on\('mail:changed'/.test(APP_SRC), 'mail:changed 구독자 존재');
+  const onIdx = APP_SRC.indexOf("EV.on('mail:changed'");
+  const ob = APP_SRC.slice(onIdx, onIdx + 300);
+  assert.ok(/patchMailSection\(\)/.test(ob), '구독자가 메일 영역 갱신');
 });
 
 test('M11 — patchMailSection: .mail-region 교체, builderFn=renderHomeMailCard, fallback=render', () => {

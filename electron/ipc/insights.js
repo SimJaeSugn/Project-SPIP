@@ -16,6 +16,7 @@
 
 const commitActivity = require('../../lib/scan/collectors/commitActivity');
 const pathGuard = require('../../lib/common/pathGuard');
+const claudeUsage = require('../../lib/ai/claudeUsage');
 
 const MAX_REPOS = 100;
 const DEFAULT_DAYS = 14;
@@ -59,4 +60,26 @@ async function getCommitActivity(ctx) {
   };
 }
 
-module.exports = { getCommitActivity, MAX_REPOS, DEFAULT_DAYS };
+/**
+ * [항목2] spip:getClaudeUsage — Claude Code 로컬 로그(~/.claude/projects/**.jsonl)의 토큰 사용량 집계.
+ *   읽기 전용·집계 수치/모델명만 반환(메시지 본문 비노출). 무거운 디스크 스캔이라 렌더러가 수동/지연 호출.
+ *   claudeUsage 모듈이 파일수·바이트·줄길이 상한과 줄/파일 단위 오류 격리를 담당. summarize는 throw 안 함.
+ * @param {object} ctx { logger, homeDir?, nowMs? }  (테스트용 주입)
+ * @returns {{ok:true, available, totals, today, byModel, lastAt, scannedFiles}}
+ */
+function getClaudeUsage(ctx) {
+  ctx = ctx || {};
+  const opts = { logger: ctx.logger };
+  if (ctx.homeDir) opts.homeDir = ctx.homeDir;
+  if (typeof ctx.nowMs === 'function') opts.now = ctx.nowMs;
+  let res;
+  try {
+    res = claudeUsage.summarizeClaudeUsage(opts);
+  } catch (_) {
+    // 방어적 — summarize는 자체 격리하지만 만일을 대비해 graceful 빈 집계.
+    res = { available: false, totals: null, today: null, byModel: [], lastAt: null, scannedFiles: 0 };
+  }
+  return Object.assign({ ok: true }, res);
+}
+
+module.exports = { getCommitActivity, getClaudeUsage, MAX_REPOS, DEFAULT_DAYS };

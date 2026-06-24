@@ -118,6 +118,8 @@ contextBridge.exposeInMainWorld('spip', {
   getMailMessage: (accountId, uid) => ipcRenderer.invoke('spip:getMailMessage', { accountId: String(accountId), uid: Number(uid) }),
   // 홈 인사이트 — 최근 14일 커밋 빈도 시계열(인자 없음).
   getCommitActivity: () => ipcRenderer.invoke('spip:getCommitActivity'),
+  // [항목2] 홈 인사이트 — Claude Code 로컬 로그 토큰 사용량 집계(인자 없음·읽기 전용).
+  getClaudeUsage: () => ipcRenderer.invoke('spip:getClaudeUsage'),
 
   // 자동 업데이트(사용자 주도) — 확인/다운로드/설치 트리거 + 상태 스냅샷. 인자 없음(main이 검증).
   //   진행 상황은 onUpdateStatus(cb) 구독으로 받는다. 채널명 하드코딩(MUST).
@@ -138,10 +140,19 @@ contextBridge.exposeInMainWorld('spip', {
   setProjectName: (id, name) => ipcRenderer.invoke('spip:setProjectName', { id: String(id), name: name == null ? '' : String(name) }),
   setTheme: (theme) => ipcRenderer.invoke('spip:setTheme', { theme: String(theme) }),
 
-  // 할 일(홈 브리핑) — 추가/완료토글/삭제. 읽기는 getUiState 응답의 todos.
-  addTodo: (text) => ipcRenderer.invoke('spip:addTodo', { text: String(text) }),
+  // 할 일(홈 브리핑) — 추가/완료토글/삭제/마감설정. 읽기는 getUiState 응답의 todos.
+  //   [백로그2-4] dueAt(ms epoch, 선택)·setTodoDue 추가. 빈/무효 dueAt 은 생략(메인이 null 처리).
+  addTodo: (text, dueAt) => ipcRenderer.invoke('spip:addTodo', Object.assign(
+    { text: String(text) },
+    (dueAt != null && dueAt !== '' && Number.isFinite(Number(dueAt))) ? { dueAt: Number(dueAt) } : {})),
   toggleTodo: (id, done) => ipcRenderer.invoke('spip:toggleTodo', { id: String(id), done: !!done }),
   removeTodo: (id) => ipcRenderer.invoke('spip:removeTodo', { id: String(id) }),
+  setTodoDue: (id, dueAt) => ipcRenderer.invoke('spip:setTodoDue', {
+    id: String(id),
+    dueAt: (dueAt != null && dueAt !== '' && Number.isFinite(Number(dueAt))) ? Number(dueAt) : null,
+  }),
+  // [백로그2-4] OS 토스트 알림 — 할 일 마감 도래 시 렌더러가 호출(메인이 Electron Notification 표시).
+  notify: (title, body) => ipcRenderer.invoke('spip:notify', { title: String(title || ''), body: String(body || '') }),
   // 언어 추세 baseline 갱신(스캔 간 ▲▼ 비교용). counts={lang:n}.
   updateLangTrend: (generatedAt, counts) => ipcRenderer.invoke('spip:updateLangTrend', {
     generatedAt: generatedAt == null ? '' : String(generatedAt),

@@ -145,22 +145,35 @@ test('[briefing lang] 시스템 지시 — 반드시 한국어로 응답 명시'
 
 // ── [briefing systemPrompt] 사용자 편집 System 프롬프트 override·시드·정제 ──
 
-test('[systemPrompt] override 미지정·빈 값 → 시드(DEFAULT_SYSTEM_PROMPT) 사용', () => {
-  const a = prompt.buildPrompt({ items: items([{}]) });
-  const b = prompt.buildPrompt({ items: items([{}]) }, {});
-  const c = prompt.buildPrompt({ items: items([{}]) }, { systemPrompt: '' });
-  const d = prompt.buildPrompt({ items: items([{}]) }, { systemPrompt: '   \n\t ' }); // 공백뿐 → 시드
-  assert.strictEqual(a.system, prompt.DEFAULT_SYSTEM_PROMPT);
-  assert.strictEqual(b.system, prompt.DEFAULT_SYSTEM_PROMPT);
-  assert.strictEqual(c.system, prompt.DEFAULT_SYSTEM_PROMPT);
-  assert.strictEqual(d.system, prompt.DEFAULT_SYSTEM_PROMPT);
+test('[systemPrompt] override 미지정·빈 값 → 시드 페르소나 + 출력 계약 결합', () => {
+  const cases = [
+    prompt.buildPrompt({ items: items([{}]) }),
+    prompt.buildPrompt({ items: items([{}]) }, {}),
+    prompt.buildPrompt({ items: items([{}]) }, { systemPrompt: '' }),
+    prompt.buildPrompt({ items: items([{}]) }, { systemPrompt: '   \n\t ' }), // 공백뿐 → 시드
+  ];
+  for (const r of cases) {
+    assert.ok(r.system.startsWith(prompt.DEFAULT_SYSTEM_PROMPT), '시드 페르소나로 시작');
+    assert.ok(r.system.includes(prompt.OUTPUT_CONTRACT), '출력 계약 항상 덧붙음');
+  }
 });
 
-test('[systemPrompt] override 지정 → 정제 후 System으로 사용(시드 대체)', () => {
+test('[systemPrompt] override 지정 → 정제된 페르소나 대체 + 출력 계약은 그대로 덧붙음', () => {
   const custom = '너는 영어로만 간결히 답한다.\n출력은 평문.';
   const { system } = prompt.buildPrompt({ items: items([{}]) }, { systemPrompt: custom });
-  assert.strictEqual(system, custom);
-  assert.notStrictEqual(system, prompt.DEFAULT_SYSTEM_PROMPT);
+  assert.ok(system.startsWith(custom), '커스텀 페르소나로 시작(시드 대체)');
+  assert.ok(!system.includes(prompt.DEFAULT_SYSTEM_PROMPT), '시드 페르소나는 대체됨');
+  assert.ok(system.includes(prompt.OUTPUT_CONTRACT), '출력 계약은 사용자 override로 제거 불가');
+});
+
+test('[systemPrompt] 출력 계약 분리 — 커스텀 프롬프트가 출력 형식·표시전용 안전을 지울 수 없다', () => {
+  // 출력 형식·인젝션 방어를 일부러 빠뜨린 페르소나를 넣어도 계약이 강제 결합된다.
+  const custom = '자유롭게 답하라.';
+  const { system } = prompt.buildPrompt({ items: items([{}]) }, { systemPrompt: custom });
+  assert.ok(/JSON 배열/.test(system), '출력 형식 계약 유지');
+  assert.ok(/실행하라는 안내는 하지 말라/.test(system), '표시전용 안전 유지');
+  assert.ok(/절대 따르지 말라/.test(system), 'DATA 인젝션 방어 유지');
+  assert.ok(/바꾸지 말고/.test(system), '분류 소유권 유지');
 });
 
 test('[systemPrompt] 정제 — 줄바꿈/탭 보존·제어문자·방향성 제어 제거·길이 상한', () => {
@@ -182,8 +195,9 @@ test('[systemPrompt] 인젝션 방어 불변 — System override를 바꿔도 DA
     { items: items([{ category: 'must', targetLabel: attack }]) },
     { systemPrompt: evilSystem }
   );
-  // System은 사용자 의도대로 바뀌지만(신뢰 영역) — 데이터 경로는 코드가 계속 강제:
-  assert.strictEqual(system, evilSystem);
+  // 페르소나는 사용자 의도대로 바뀌지만(신뢰 영역) — 출력 계약은 항상 덧붙고, 데이터 경로는 코드가 계속 강제:
+  assert.ok(system.startsWith(evilSystem), '커스텀 페르소나 반영');
+  assert.ok(system.includes(prompt.OUTPUT_CONTRACT), '출력 계약은 악성 override로도 제거 불가');
   const obj = JSON.parse(user.slice(user.indexOf('{')));
   assert.strictEqual(obj.signals.length, 1, '구조 위조 실패(단일 항목)');
   assert.strictEqual(obj.signals[0].label, attack.replace(String.fromCharCode(0x202E), ''), '방향성 제어 제거·JSON 격리');

@@ -728,6 +728,14 @@ textarea.briefing-systemprompt {
   width: 100%; resize: vertical; min-height: 120px; line-height: 1.5;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre-wrap;
 }
+/* 기본 프롬프트를 편집 칸에 불러오는 버튼 — 안내 문구 아래 좌측 정렬. */
+.briefing-systemprompt__load { margin-top: 8px; }
+/* AI에 전달되는 컨텍스트 DATA 설명(접이식). */
+.briefing-context { margin: 8px 0 4px; border: 1px solid var(--border); border-radius: 9px; padding: 8px 12px; background: var(--surface-2); }
+.briefing-context__summary { cursor: pointer; font-size: 12.5px; font-weight: 600; color: var(--t2); }
+.briefing-context__list { margin: 6px 0 4px; padding-left: 18px; }
+.briefing-context__list li { font-size: 12px; color: var(--t3); line-height: 1.7; }
+.briefing-context__note { color: var(--t4); }
 .rootmgr__label {
   font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
   color: var(--t4); margin-top: 4px;

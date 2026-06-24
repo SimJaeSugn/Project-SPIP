@@ -9,6 +9,7 @@ const os = require('os');
 const path = require('path');
 const uiStateStore = require('../../lib/common/uiStateStore');
 const uiStateIpc = require('../../electron/ipc/uiState');
+const briefingIpc = require('../../electron/ipc/briefing');
 const { Logger } = require('../../lib/common/logger');
 const elevationState = require('../../lib/common/elevationState');
 
@@ -76,6 +77,53 @@ test('R-38 — 항목 키 형식·status/category 화이트리스트·개수 상
   assert.strictEqual(b.items.length, 1);
   assert.strictEqual(b.items[0].status, 'open');
   assert.strictEqual(b.items[0].category, 'good');
+});
+
+// ── [항목3] 연결된 LLM 모델 토큰 사용량 누적 ──
+
+test('[항목3] defaultState/normalizeState에 aiUsage 기본값', () => {
+  const d = uiStateStore.defaultState();
+  assert.deepStrictEqual(d.aiUsage, { calls: 0, promptTokens: 0, completionTokens: 0, totalTokens: 0, lastModel: '', lastAt: null });
+  // 음수·비유한·비문자열은 정규화로 흡수.
+  const n = uiStateStore.normalizeAiUsage({ calls: -3, promptTokens: 1.9, totalTokens: NaN, lastModel: 42 });
+  assert.strictEqual(n.calls, 0);
+  assert.strictEqual(n.promptTokens, 1);
+  assert.strictEqual(n.totalTokens, 0);
+  assert.strictEqual(n.lastModel, '');
+});
+
+test('[항목3] aiUsage write→read 라운드트립 보존(C-M-1 게이트)', () => {
+  const p = tmpPath();
+  const ctx = { logger: quiet(), uiStatePath: p };
+  uiStateStore.write({ aiUsage: { calls: 2, promptTokens: 100, completionTokens: 40, totalTokens: 140, lastModel: 'm1', lastAt: 123 } }, ctx);
+  const back = uiStateStore.read(ctx);
+  assert.strictEqual(back.aiUsage.calls, 2);
+  assert.strictEqual(back.aiUsage.totalTokens, 140);
+  assert.strictEqual(back.aiUsage.lastModel, 'm1');
+});
+
+test('[항목3] getUiState 응답에 aiUsage 포함', () => {
+  const p = tmpPath();
+  uiStateStore.write({ aiUsage: { calls: 1, totalTokens: 50 } }, { logger: quiet(), uiStatePath: p });
+  const res = uiStateIpc.getUiState({ logger: quiet(), uiStatePath: p });
+  assert.ok(res.aiUsage, 'aiUsage 필드 존재');
+  assert.strictEqual(res.aiUsage.totalTokens, 50);
+});
+
+test('[항목3] makeCarryOverStore.saveItems — usageDelta 누적(calls++ 합산)', () => {
+  const p = tmpPath();
+  const store = briefingIpc.makeCarryOverStore({ logger: quiet(), uiStatePath: p });
+  store.saveItems({ items: [], usageDelta: { model: 'm1', promptTokens: 10, completionTokens: 4, totalTokens: 14 } });
+  store.saveItems({ items: [], usageDelta: { model: 'm2', promptTokens: 6, completionTokens: 2, totalTokens: 8 } });
+  const back = uiStateStore.read({ logger: quiet(), uiStatePath: p });
+  assert.strictEqual(back.aiUsage.calls, 2);
+  assert.strictEqual(back.aiUsage.promptTokens, 16);
+  assert.strictEqual(back.aiUsage.totalTokens, 22);
+  assert.strictEqual(back.aiUsage.lastModel, 'm2', '최근 모델 표시');
+  // usageDelta 없이 저장하면 누적 변화 없음.
+  store.saveItems({ items: [] });
+  const back2 = uiStateStore.read({ logger: quiet(), uiStatePath: p });
+  assert.strictEqual(back2.aiUsage.calls, 2, 'usageDelta 없으면 calls 불변');
 });
 
 test('m12 — 상승 세션이면 write no-op(메모리 유지)', () => {

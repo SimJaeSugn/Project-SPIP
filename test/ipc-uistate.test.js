@@ -79,7 +79,7 @@ test('setHomeLayout — 정규화·영속·응답(중복/미지/비배열 흡수
   // 유효 재정렬 + 중복 + 미지 id + 비문자열 → 정규화가 흡수, 누락 섹션 기본 순서 보충.
   const r = uiState.setHomeLayout({ ids: ['mail', 'attention', 'mail', 'bogus', 7] }, ctx);
   assert.strictEqual(r.ok, true);
-  assert.deepStrictEqual(r.homeLayout, ['mail', 'attention', 'productivity', 'activity', 'todos', 'disk', 'featureAdd']);
+  assert.deepStrictEqual(r.homeLayout, ['mail', 'attention', 'productivity', 'activity', 'todos', 'disk', 'aiusage', 'featureAdd']);
   // 영속 반영 확인(write를 거친 store 상태와 일치).
   assert.deepStrictEqual(s._get().homeLayout, r.homeLayout);
 });
@@ -140,6 +140,27 @@ test('removeTodo — 삭제 / 없는 id', () => {
   assert.ok(r.ok); assert.strictEqual(r.todos.length, 0);
   assert.strictEqual(uiState.removeTodo({ id: 'tabcabc' }, ctx).code, 'NOT_FOUND');
   assert.strictEqual(uiState.removeTodo({ id: 'BAD' }, ctx).code, 'INVALID_ID');
+});
+
+// ── [백로그2-4] 할 일 마감 일시(dueAt) ──
+
+test('addTodo — dueAt 설정/무효값 graceful(null)', () => {
+  const ctx = todoCtx(memStore());
+  assert.strictEqual(uiState.addTodo({ text: 'a', dueAt: 1800000000000 }, ctx).todos[0].dueAt, 1800000000000);
+  assert.strictEqual(uiState.addTodo({ text: 'b' }, ctx).todos[1].dueAt, null, '미지정 → null');
+  assert.strictEqual(uiState.addTodo({ text: 'c', dueAt: -5 }, ctx).todos[2].dueAt, null, '음수 → null');
+  assert.strictEqual(uiState.addTodo({ text: 'd', dueAt: 'x' }, ctx).todos[3].dueAt, null, '비수치 → null');
+});
+
+test('setTodoDue — 기존 할 일 마감 설정·해제·검증', () => {
+  const ctx = todoCtx(memStore());
+  const id = uiState.addTodo({ text: 'x' }, ctx).todos[0].id;
+  let r = uiState.setTodoDue({ id, dueAt: 1800000000000 }, ctx);
+  assert.ok(r.ok); assert.strictEqual(r.todos[0].dueAt, 1800000000000);
+  r = uiState.setTodoDue({ id, dueAt: null }, ctx); // 해제
+  assert.strictEqual(r.todos[0].dueAt, null);
+  assert.strictEqual(uiState.setTodoDue({ id: 'tffffff', dueAt: 1 }, ctx).code, 'NOT_FOUND');
+  assert.strictEqual(uiState.setTodoDue({ id: 'BAD' }, ctx).code, 'INVALID_ID');
 });
 
 test('getUiState — todos 포함', () => {

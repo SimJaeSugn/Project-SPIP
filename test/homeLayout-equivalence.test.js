@@ -33,7 +33,7 @@ for (const [desc, input] of CASES) {
     const front = applyHomeLayout(input);
     const back = normalizeHomeLayout(input);
     assert.deepStrictEqual(front, back, '프런트·백엔드 정규화 출력이 동일해야 한다');
-    // 두 결과 모두 항상 7섹션 순열(불변식)도 함께 확인.
+    // 두 결과 모두 항상 전체 섹션 순열(불변식)도 함께 확인.
     assert.strictEqual(front.length, HOME_SECTION_IDS.length);
     assert.strictEqual(new Set(front).size, HOME_SECTION_IDS.length);
   });

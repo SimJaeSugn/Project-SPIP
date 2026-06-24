@@ -110,3 +110,40 @@ test('R-39 — testConnection 성공 시 model·latency 반환', async () => {
   assert.strictEqual(r.model, 'm1');
   assert.ok(typeof r.latencyMs === 'number');
 });
+
+// ── [항목3] 토큰 usage 캡처 ──
+
+/** 텍스트 청크들 + 마지막에 usage_metadata만 실린(텍스트 없는) 청크를 yield. */
+function fakeChatWithUsage(textChunks, usageMeta) {
+  return () => ({
+    async stream() {
+      return (async function* () {
+        for (const c of textChunks) yield { content: c };
+        yield { content: '', usage_metadata: usageMeta }; // 마지막 청크(텍스트 없음)
+      })();
+    },
+  });
+}
+
+test('[항목3] 스트림 usage_metadata → r.usage(input/output/total 정규화)', async () => {
+  const client = createLlmClient({
+    getConfig: () => CFG,
+    chatFactory: fakeChatWithUsage(['He', 'llo'], { input_tokens: 12, output_tokens: 8, total_tokens: 20 }),
+  });
+  const r = await client.streamBriefing({ system: 's', user: 'u' });
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(r.text, 'Hello', '텍스트는 그대로 누적(빈 usage 청크는 본문에 영향 없음)');
+  assert.deepStrictEqual(r.usage, { promptTokens: 12, completionTokens: 8, totalTokens: 20 });
+});
+
+test('[항목3] usage 없으면 r.usage=null, total 누락 시 input+output로 보정', async () => {
+  const noUsage = createLlmClient({ getConfig: () => CFG, chatFactory: fakeChat(['x']) });
+  assert.strictEqual((await noUsage.streamBriefing({})).usage, null);
+
+  const partial = createLlmClient({
+    getConfig: () => CFG,
+    chatFactory: fakeChatWithUsage(['y'], { input_tokens: 5, output_tokens: 7 }), // total 누락
+  });
+  const r = await partial.streamBriefing({});
+  assert.deepStrictEqual(r.usage, { promptTokens: 5, completionTokens: 7, totalTokens: 12 });
+});
