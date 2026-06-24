@@ -43,6 +43,7 @@ function toViewModel(p) {
     dirty: gitStatus === 'na' ? null : (git.dirty === true),
     ahead,
     behind,
+    changes: gitStatus === 'na' ? null : (typeof git.changes === 'number' ? git.changes : null),
     // size: MVP에서 status==='skipped' & 전부 null → "미측정"
     sizeStatus: typeof size.status === 'string' ? size.status : 'skipped',
     totalBytes: typeof size.totalBytes === 'number' ? size.totalBytes : null,
@@ -1630,7 +1631,7 @@ function initBrowser() {
       nm.appendChild(el('div', { text: vm.name, style: 'font-size:13px;font-weight:600;color:#1c1917;' }));
       nm.appendChild(el('div', { text: vm.path, style: HOME_MONO + 'font-size:10.5px;color:#a8a29e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;' }));
       row.appendChild(nm);
-      if (vm.gitStatus === 'dirty') row.appendChild(homeBadge('미커밋', 'amber'));
+      if (vm.gitStatus === 'dirty') row.appendChild(homeBadge('미커밋' + ((vm.changes || 0) > 0 ? ' ' + vm.changes : ''), 'amber'));
       if ((vm.ahead || 0) > 0) row.appendChild(homeBadge('미푸시 ' + vm.ahead, 'blue'));
       row.appendChild(el('span', { text: vm.isStale ? rel(vm.lastModified) : rel(vm.lastModified), style: HOME_MONO + 'font-size:11px;color:#a8a29e;width:52px;text-align:right;flex:0 0 auto;' }));
       listWrap.appendChild(row);
@@ -1709,7 +1710,9 @@ function initBrowser() {
       top.appendChild(el('span', { text: ev.name, style: 'font-size:13px;font-weight:600;color:#1c1917;' }));
       top.appendChild(el('span', { text: rel(ev.when), style: HOME_MONO + 'font-size:10.5px;color:#a8a29e;' }));
       body.appendChild(top);
-      body.appendChild(el('div', { text: (vm.language || '알 수 없음') + ' · 파일 수정', style: 'font-size:11.5px;color:#78716c;margin-top:2px;' }));
+      var sub = (vm.gitStatus === 'dirty' && (vm.changes || 0) > 0) ? ('미커밋 변경 ' + vm.changes + '건')
+        : ((vm.ahead || 0) > 0 ? ('미푸시 커밋 ' + vm.ahead + '개') : '파일 수정');
+      body.appendChild(el('div', { text: (vm.language || '알 수 없음') + ' · ' + sub, style: 'font-size:11.5px;color:#78716c;margin-top:2px;' }));
       row.appendChild(body);
       list.appendChild(row);
     });
@@ -3407,6 +3410,16 @@ function initBrowser() {
     if (showSearch) header.appendChild(searchWrap);
 
     header.appendChild(el('div', { cls: 'spacer' }));
+
+    // 홈은 템플릿처럼 미니멀 헤더 — 우측에 "마지막 스캔" 표기만(설정·도구는 프로젝트 화면/홈 카드에서).
+    if (store.state.view === 'home') {
+      const label = store._snapshotLabel ? String(store._snapshotLabel).replace(/^스냅샷\s*/, '') : '';
+      const ls = el('div', { style: 'font-family:"Geist Mono",monospace;font-size:11.5px;color:#a8a29e;' });
+      ls.appendChild(el('span', { text: '마지막 스캔 ' }));
+      ls.appendChild(el('span', { text: label || '—' }));
+      header.appendChild(ls);
+      return header;
+    }
 
     const actions = el('div', { cls: 'topbar__actions' });
     if (store._snapshotLabel) {

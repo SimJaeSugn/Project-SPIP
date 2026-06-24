@@ -21,7 +21,7 @@ const quiet = { error() {}, warn() {}, info() {} };
 function proj(id, path, gitOver, freshOver) {
   return {
     id, path, name: id, language: { primary: 'Go' }, size: { status: 'ok', totalBytes: 1 },
-    git: Object.assign({ status: 'ok', isRepo: true, branch: 'main', dirty: false, ahead: 0, behind: 0 }, gitOver),
+    git: Object.assign({ status: 'ok', isRepo: true, branch: 'main', dirty: false, ahead: 0, behind: 0, changes: 0 }, gitOver),
     freshness: Object.assign({ lastModified: '2026-01-01T00:00:00.000Z', lastCommit: null, isStale: false }, freshOver),
   };
 }
@@ -46,7 +46,7 @@ function gitStub(dirtyByPath, aheadByPath) {
         status: 'ok', isRepo: true, branch: 'main',
         dirty: !!(dirtyByPath && dirtyByPath[path]),
         ahead: (aheadByPath && aheadByPath[path]) || 0,
-        behind: 0, lastCommit: null,
+        behind: 0, changes: (dirtyByPath && dirtyByPath[path]) ? 1 : 0, lastCommit: null,
       },
     }),
   };
@@ -59,11 +59,11 @@ const idCanon = (p) => (p === 'GONE' ? null : p);
 /* ───────────── 순수 계약 ───────────── */
 test('normalizeGit — ok shape / na 폴백', () => {
   assert.deepStrictEqual(
-    normalizeGit({ status: 'ok', isRepo: true, branch: 'm', dirty: true, ahead: 2, behind: 1 }),
-    { status: 'ok', isRepo: true, branch: 'm', dirty: true, ahead: 2, behind: 1 });
+    normalizeGit({ status: 'ok', isRepo: true, branch: 'm', dirty: true, ahead: 2, behind: 1, changes: 3 }),
+    { status: 'ok', isRepo: true, branch: 'm', dirty: true, ahead: 2, behind: 1, changes: 3 });
   assert.deepStrictEqual(
     normalizeGit({ status: 'na' }),
-    { status: 'na', isRepo: false, branch: null, dirty: null, ahead: null, behind: null });
+    { status: 'na', isRepo: false, branch: null, dirty: null, ahead: null, behind: null, changes: null });
 });
 
 test('normalizeFreshness — shape + isStale 불리언화', () => {
