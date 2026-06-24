@@ -1027,6 +1027,7 @@ function initBrowser() {
     // 할 일(홈 브리핑) — getUiState 응답의 todos
     todos: [],                   // [{id,text,done,createdAt}]
     todoInput: '',               // 추가 입력(컨트롤드)
+    todoAdding: false,           // '+ 할 일 추가' 인라인 입력 표시
     busyTodos: false,            // 추가/토글/삭제 in-flight
     // 메일 다이제스트(홈 브리핑) — getMailSummary 응답(계정별 unseen + 제목/발신자 미리보기)
     mailSummary: [],             // [{id,label,host,user,unseen,items:[{subject,from,date}],ok,code}]
@@ -1088,6 +1089,7 @@ function initBrowser() {
     opts = opts || {};
     if (opts.cls) node.className = opts.cls;
     if (opts.text != null) node.textContent = opts.text; // L-1
+    if (opts.style) node.style.cssText = opts.style; // 인라인 스타일(템플릿 충실 복제용)
     if (opts.attrs) for (const k in opts.attrs) node.setAttribute(k, opts.attrs[k]);
     if (opts.title != null) node.title = opts.title;
     if (opts.on) for (const ev in opts.on) node.addEventListener(ev, opts.on[ev]);
@@ -1448,206 +1450,332 @@ function initBrowser() {
    * 홈(브리핑) 화면 — 헤더(공유) + 인사말/KPI + 인사이트 카드 그리드.
    *   M1: 보유 데이터(주의 필요 프로젝트·최근 활동)만. 메일/할일/차트는 후속 마일스톤.
    * ===================================================================== */
+  /* =====================================================================
+   * 홈(브리핑) 화면 — docs/temp/홈 대시보드 B.html 템플릿을 인라인 스타일로 충실 복제.
+   *   데이터는 실데이터로 와이어링(없는 항목은 graceful). 렌더 텍스트는 textContent(L-1).
+   * ===================================================================== */
+  // 템플릿 팔레트(하드코딩 rgb — 템플릿 자체완결, 라이트 전용).
+  var HOME_MONO = 'font-family:"Geist Mono",monospace;';
+  var HOME_CARD = 'background:#fff;border:1px solid #e7e5e4;border-radius:16px;';
+
+  function homeWeekday(dateStr) {
+    var WD = ['일', '월', '화', '수', '목', '금', '토'];
+    var d = new Date(String(dateStr) + 'T00:00:00');
+    return isNaN(d) ? '' : WD[d.getDay()];
+  }
+  function homeAvatarColors(i) {
+    var pal = [
+      { bg: '#eef2ff', fg: '#4338ca' }, { bg: '#1c1917', fg: '#ffffff' },
+      { bg: '#dcfce7', fg: '#15803d' }, { bg: '#fef3c7', fg: '#b45309' },
+      { bg: '#f5f5f4', fg: '#78716c' },
+    ];
+    return pal[i % pal.length];
+  }
+  function homeIsReply(subject) {
+    return /\b(re:|fwd:)|회신|요청|부탁/i.test(String(subject || ''));
+  }
+
   function renderHome() {
-    const root = el('div', { cls: 'dash home' });
+    maybeLoadMailSummary();
+    maybeLoadCommitActivity();
+    var vms = store.viewModels || [];
+    var g = homeGreeting(store.now);
+    var kpis = homeKpis(vms);
+    var todosOpen = (store.todos || []).filter(function (t) { return !t.done; }).length;
+    var unread = mailUnreadTotal();
+    var reclaim = diskReclaim(vms);
+
+    var root = el('div', { cls: 'dash home' });
     root.appendChild(renderHeader());
 
-    const main = el('main', { cls: 'dash__main spip-scroll home__main', attrs: { id: 'main' } });
-    const vms = store.viewModels || [];
-    const g = homeGreeting(store.now);
-    const kpis = homeKpis(vms);
+    var main = el('main', { cls: 'dash__main spip-scroll', attrs: { id: 'main' }, style: 'background:#f6f6f5;color:#1c1917;font-family:Geist,Pretendard,system-ui,sans-serif;' });
+    var wrap = el('div', { style: 'max-width:1480px;margin:0 auto;' });
 
-    // 히어로: 인사말 + 날짜
-    const hero = el('section', { cls: 'home__hero' });
-    hero.appendChild(el('div', { cls: 'home__greeting', text: g.greeting }));
-    hero.appendChild(el('div', { cls: 'home__date muted', text: fmtDate(store.now ? store.now.toISOString() : null) }));
-    main.appendChild(hero);
+    // ── 히어로(오늘의 브리핑 + KPI 4) ──
+    var heroPad = el('div', { style: 'padding:26px 30px 6px;' });
+    var hero = el('div', { style: HOME_CARD + 'padding:26px 28px;display:flex;align-items:center;gap:30px;' });
+    var heroL = el('div', { style: 'flex:1 1 0%;min-width:0;' });
+    heroL.appendChild(el('div', { text: '오늘의 브리핑', style: HOME_MONO + 'font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:#4f46e5;' }));
+    heroL.appendChild(el('h1', { text: g.greeting, style: 'margin:9px 0 7px;font-size:29px;font-weight:700;letter-spacing:-0.022em;line-height:1.12;' }));
+    heroL.appendChild(el('p', {
+      text: fmtDate(store.now ? store.now.toISOString() : null) + ' · 주의가 필요한 프로젝트 ' + kpis.attention + '개, 안 읽은 메일 ' + unread + '건, 남은 할 일 ' + todosOpen + '건이 있어요.',
+      style: 'margin:0;font-size:13.5px;color:#78716c;line-height:1.55;',
+    }));
+    hero.appendChild(heroL);
+    var heroR = el('div', { style: 'display:flex;gap:0;flex:0 0 auto;' });
+    var kpi = function (val, label, color) {
+      var c = el('div', { style: 'padding:0 22px;border-left:1px solid #f0efed;' });
+      c.appendChild(el('div', { text: String(val), style: 'font-size:30px;font-weight:700;letter-spacing:-0.02em;color:' + color + ';font-variant-numeric:tabular-nums;line-height:1;' }));
+      c.appendChild(el('div', { text: label, style: 'font-size:11.5px;color:#78716c;margin-top:7px;' }));
+      return c;
+    };
+    heroR.appendChild(kpi(kpis.attention, '주의 필요', '#b45309'));
+    heroR.appendChild(kpi(unread, '안 읽은 메일', '#1d4ed8'));
+    heroR.appendChild(kpi(todosOpen, '남은 할 일', '#4338ca'));
+    heroR.appendChild(kpi(reclaim.label, '회수 가능', '#15803d'));
+    hero.appendChild(heroR);
+    heroPad.appendChild(hero);
+    wrap.appendChild(heroPad);
 
-    // 브리핑 KPI(클릭 시 프로젝트 화면)
-    const kpiRow = el('div', { cls: 'home__kpis' });
-    const kpiCard = (label, value, accent) => el('button', {
-      cls: 'home__kpi' + (accent ? ' home__kpi--accent' : ''),
-      attrs: { type: 'button', 'aria-label': label + ' ' + value + ' — 프로젝트 화면 열기' },
-      on: { click: () => { store.state.view = 'dashboard'; render(); } },
-      children: [
-        el('div', { cls: 'home__kpi-value', text: String(value) }),
-        el('div', { cls: 'home__kpi-label', text: label }),
-      ],
-    });
-    kpiRow.appendChild(kpiCard('주의 필요 프로젝트', kpis.attention, kpis.attention > 0));
-    kpiRow.appendChild(kpiCard('전체 프로젝트', kpis.total));
-    kpiRow.appendChild(kpiCard('방치', kpis.stale));
-    kpiRow.appendChild(kpiCard('미커밋', kpis.dirty));
-    main.appendChild(kpiRow);
+    // ── 2-컬럼 ──
+    var cols = el('div', { style: 'display:flex;gap:20px;padding:20px 30px 36px;align-items:flex-start;' });
+    var left = el('div', { style: 'flex:1.65 1 0%;min-width:0;display:flex;flex-direction:column;gap:20px;' });
+    left.appendChild(renderHomeAttention());
+    left.appendChild(renderHomeProductivity());
+    left.appendChild(renderHomeActivity());
+    cols.appendChild(left);
+    var right = el('div', { style: 'flex:1 1 0%;min-width:0;display:flex;flex-direction:column;gap:20px;' });
+    right.appendChild(renderHomeTodos());
+    right.appendChild(renderHomeMail());
+    right.appendChild(renderHomeDisk(reclaim));
+    right.appendChild(renderHomeFeatureAdd());
+    cols.appendChild(right);
+    wrap.appendChild(cols);
 
-    // 인사이트 카드 그리드
-    const grid = el('div', { cls: 'home__grid' });
-    grid.appendChild(renderHomeAttention());
-    grid.appendChild(renderHomeActivity());
-    grid.appendChild(renderHomeMail());
-    grid.appendChild(renderHomeTodos());
-    grid.appendChild(renderHomeProductivity());
-    main.appendChild(grid);
-
+    main.appendChild(wrap);
     root.appendChild(main);
     if (store.state.selectedId) root.appendChild(renderDrawer());
     return root;
   }
 
-  /** 홈 카드 컨테이너(제목 + 본문 + 선택적 헤더 액션). */
-  function homeCard(title, bodyNodes, opts) {
-    opts = opts || {};
-    const card = el('section', { cls: 'home-card' });
-    const head = el('div', { cls: 'home-card__head' });
-    head.appendChild(el('div', { cls: 'home-card__title', text: title }));
-    if (opts.action) head.appendChild(opts.action);
-    card.appendChild(head);
-    const body = el('div', { cls: 'home-card__body' });
-    for (const n of (bodyNodes || [])) if (n) body.appendChild(n);
-    card.appendChild(body);
-    return card;
+  /** 메일 안 읽은 합계(요약 로드 전이면 0). */
+  function mailUnreadTotal() {
+    var a = store.mailSummary || [];
+    var n = 0;
+    for (var i = 0; i < a.length; i++) if (a[i] && a[i].ok !== false && Number.isFinite(a[i].unseen)) n += a[i].unseen;
+    return n;
+  }
+  /** 메일 항목 평탄화(계정 가로질러, 최신순 근사) — 홈 메일 카드용. */
+  function mailFlatItems(limit) {
+    var out = [];
+    var a = store.mailSummary || [];
+    for (var i = 0; i < a.length; i++) {
+      if (!a[i] || a[i].ok === false || !Array.isArray(a[i].items)) continue;
+      for (var j = 0; j < a[i].items.length; j++) out.push(a[i].items[j]);
+    }
+    out.sort(function (x, y) { return (Date.parse(y && y.date) || 0) - (Date.parse(x && x.date) || 0); });
+    return out.slice(0, limit || 5);
+  }
+  /** 메일용 상대시각(분/시간 단위 포함). 하루 이상은 rel()로 위임. */
+  function relMail(dateStr) {
+    var t = Date.parse(dateStr);
+    if (!t) return '';
+    var nowMs = (store.now instanceof Date) ? store.now.getTime() : Date.now();
+    var diff = nowMs - t; if (diff < 0) diff = 0;
+    var min = Math.floor(diff / 60000);
+    if (min < 1) return '방금';
+    if (min < 60) return min + '분 전';
+    var hr = Math.floor(min / 60);
+    if (hr < 24) return hr + '시간 전';
+    return rel(new Date(t).toISOString());
+  }
+  /** 방치 프로젝트 node_modules 회수 가능 용량(size 수집 켜진 경우만). */
+  function diskReclaim(vms) {
+    var items = [];
+    var total = 0;
+    for (var i = 0; i < vms.length; i++) {
+      var v = vms[i];
+      if (!v || !v.isStale) continue;
+      var b = (typeof v.nodeModulesBytes === 'number' && v.nodeModulesBytes > 0) ? v.nodeModulesBytes : 0;
+      if (b <= 0) continue;
+      items.push({ name: v.name, bytes: b });
+      total += b;
+    }
+    items.sort(function (a, b) { return b.bytes - a.bytes; });
+    var mb = Math.round(total / 1048576);
+    return { items: items.slice(0, 5), total: total, label: mb > 0 ? (mb + ' MB') : '0 MB', max: items.length ? items[0].bytes : 1 };
   }
 
-  function renderHomePlaceholder(title, msg) {
-    return homeCard(title, [el('div', { cls: 'home-card__empty', text: msg })]);
+  /** 흰 카드 + 헤더(제목/우측 액션) 헬퍼. */
+  function homeCardHead(titleNode, rightNode, mb) {
+    var head = el('div', { style: 'display:flex;align-items:center;gap:10px;margin-bottom:' + (mb == null ? 15 : mb) + 'px;' });
+    head.appendChild(titleNode);
+    if (rightNode) head.appendChild(rightNode);
+    return head;
+  }
+  function homeTitle(text) {
+    return el('div', { text: text, style: 'font-size:15px;font-weight:600;letter-spacing:-0.01em;flex:1 1 0%;' });
+  }
+  function homeBadge(text, kind) {
+    var c = { amber: 'background:#fef3c7;color:#b45309;border:1px solid #fde68a;', blue: 'background:#dbeafe;color:#1d4ed8;border:1px solid #bfdbfe;' }[kind] || '';
+    return el('span', { text: text, style: 'font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:6px;' + c });
   }
 
   function renderHomeAttention() {
-    const items = homeAttention(store.viewModels || [], 6);
-    const more = el('button', {
-      cls: 'link-btn', text: '전체 보기', attrs: { type: 'button', 'aria-label': '프로젝트 전체 보기' },
-      on: { click: () => { store.state.view = 'dashboard'; render(); } },
+    var items = homeAttention(store.viewModels || [], 6);
+    var card = el('div', {
+      cls: 'home-hoverable', style: HOME_CARD + 'padding:21px 22px;cursor:pointer;',
+      on: { click: function () { store.state.view = 'dashboard'; render(); } },
     });
+    var icon = el('div', { style: 'width:30px;height:30px;border-radius:8px;background:#fef3c7;display:flex;align-items:center;justify-content:center;flex:0 0 auto;' });
+    icon.appendChild(svg([{ t: 'path', d: 'M12 9v4M12 17h.01' }, { t: 'path', d: 'M10.3 3.86l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3.14l-8-14a2 2 0 0 0-3.4 0z' }], { size: 16, stroke: '#b45309' }));
+    var titleWrap = el('div', { style: 'flex:1 1 0%;' });
+    titleWrap.appendChild(el('div', { text: '주의가 필요한 프로젝트', style: 'font-size:15px;font-weight:600;letter-spacing:-0.01em;' }));
+    titleWrap.appendChild(el('div', { text: '미커밋 · 미푸시 · 방치 ' + items.length + '건', style: 'font-size:11.5px;color:#a8a29e;margin-top:1px;' }));
+    var open = el('span', { style: 'font-size:12.5px;font-weight:600;color:#4f46e5;display:inline-flex;align-items:center;gap:4px;' });
+    open.appendChild(el('span', { text: '열기' }));
+    open.appendChild(el('span', { text: '→', style: 'font-size:14px;' }));
+    var head = el('div', { style: 'display:flex;align-items:center;gap:10px;margin-bottom:15px;' });
+    head.appendChild(icon); head.appendChild(titleWrap); head.appendChild(open);
+    card.appendChild(head);
+
+    var listWrap = el('div', { style: 'display:flex;flex-direction:column;gap:2px;' });
     if (items.length === 0) {
-      return homeCard('주의가 필요한 프로젝트',
-        [el('div', { cls: 'home-card__empty', text: '모든 프로젝트가 깔끔합니다. 미커밋·방치 항목이 없습니다.' })],
-        { action: more });
+      listWrap.appendChild(el('div', { text: '모든 프로젝트가 깔끔합니다.', style: 'font-size:12.5px;color:#a8a29e;padding:8px 6px;' }));
     }
-    const ul = el('ul', { cls: 'home-list', attrs: { role: 'list' } });
-    for (const vm of items) {
-      const li = el('li', { cls: 'home-list__item' });
-      li.appendChild(dot(vm.language));
-      li.appendChild(el('button', {
-        cls: 'home-list__name', text: vm.name, title: vm.path,
-        attrs: { type: 'button', 'aria-label': '상세 보기: ' + vm.name },
-        on: { click: () => { store.state.selectedId = vm.id; store.state.view = 'dashboard'; render(); } },
-      }));
-      const tags = el('span', { cls: 'home-list__tags' });
-      if (vm.gitStatus === 'dirty') tags.appendChild(badge('badge--git-dirty', '미커밋'));
-      if ((vm.ahead || 0) > 0) tags.appendChild(badge('badge--lang mono', '↑' + vm.ahead));
-      if ((vm.behind || 0) > 0) tags.appendChild(badge('badge--lang mono', '↓' + vm.behind));
-      if (vm.isStale) tags.appendChild(badge('badge--stale', '방치'));
-      li.appendChild(tags);
-      ul.appendChild(li);
-    }
-    return homeCard('주의가 필요한 프로젝트', [ul], { action: more });
-  }
-
-  function renderHomeMail() {
-    if (!bridgeHas('getMailSummary')) {
-      return renderHomePlaceholder('안 읽은 메일', '이 환경에서는 메일을 사용할 수 없습니다.');
-    }
-    const refresh = el('button', {
-      cls: 'link-btn', text: store.busyMailSummary ? '확인 중…' : '새로고침',
-      attrs: { type: 'button', 'aria-label': '메일 새로고침' }, on: { click: () => refreshMailSummary() },
+    items.forEach(function (vm, idx) {
+      var row = el('div', { style: 'display:flex;align-items:center;gap:11px;padding:9px 6px;border-radius:9px;' + (idx > 0 ? 'border-top:1px solid #f4f3f1;' : '') });
+      row.appendChild(el('span', { style: 'width:9px;height:9px;border-radius:2px;flex:0 0 auto;display:inline-block;background:' + langColor(vm.language) + ';' }));
+      var nm = el('div', { style: 'flex:1 1 0%;min-width:0;' });
+      nm.appendChild(el('div', { text: vm.name, style: 'font-size:13px;font-weight:600;color:#1c1917;' }));
+      nm.appendChild(el('div', { text: vm.path, style: HOME_MONO + 'font-size:10.5px;color:#a8a29e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;' }));
+      row.appendChild(nm);
+      if (vm.gitStatus === 'dirty') row.appendChild(homeBadge('미커밋', 'amber'));
+      if ((vm.ahead || 0) > 0) row.appendChild(homeBadge('미푸시 ' + vm.ahead, 'blue'));
+      row.appendChild(el('span', { text: vm.isStale ? rel(vm.lastModified) : rel(vm.lastModified), style: HOME_MONO + 'font-size:11px;color:#a8a29e;width:52px;text-align:right;flex:0 0 auto;' }));
+      listWrap.appendChild(row);
     });
-    if (store.busyMailSummary) refresh.disabled = true;
+    card.appendChild(listWrap);
+    return card;
+  }
 
-    const accounts = Array.isArray(store.mailSummary) ? store.mailSummary : [];
-    const body = [];
-    if (!store.mailSummaryLoaded && !store.busyMailSummary) {
-      body.push(el('div', { cls: 'home-card__empty', text: '“새로고침”을 눌러 메일을 확인하세요.' }));
-    } else if (store.busyMailSummary && accounts.length === 0) {
-      body.push(el('div', { cls: 'home-card__empty', text: '메일을 확인하는 중…' }));
-    } else if (accounts.length === 0) {
-      body.push(el('div', { cls: 'home-card__empty', text: '등록된 메일 계정이 없습니다. 설정 → 메일 알림 계정에서 추가하세요.' }));
-    } else {
-      for (const a of accounts) {
-        const acct = el('div', { cls: 'home-mail__acct' });
-        const head = el('div', { cls: 'home-mail__head' });
-        head.appendChild(el('span', { cls: 'home-mail__label', text: a.label || a.user || a.host || '' }));
-        if (a.ok === false) {
-          head.appendChild(badge('badge--stale', a.code === 'AUTH' ? '로그인 실패' : '연결 실패'));
-        } else {
-          head.appendChild(el('span', { cls: 'home-mail__count', text: '안 읽음 ' + (Number.isFinite(a.unseen) ? a.unseen : 0) }));
-        }
-        acct.appendChild(head);
-        if (a.ok !== false && Array.isArray(a.items) && a.items.length) {
-          const ul = el('ul', { cls: 'home-list', attrs: { role: 'list' } });
-          for (const m of a.items) {
-            const li = el('li', { cls: 'home-mail__item' });
-            li.appendChild(el('span', { cls: 'home-mail__from', text: m.from || '(발신자 없음)', title: m.from || '' })); // L-1
-            li.appendChild(el('span', { cls: 'home-mail__subj', text: m.subject || '(제목 없음)', title: m.subject || '' })); // L-1
-            ul.appendChild(li);
-          }
-          acct.appendChild(ul);
-        } else if (a.ok !== false) {
-          acct.appendChild(el('div', { cls: 'home-card__empty', text: '안 읽은 메일이 없습니다.' }));
-        }
-        body.push(acct);
-      }
+  function renderHomeProductivity() {
+    var card = el('div', { style: HOME_CARD + 'padding:21px 22px;display:flex;gap:26px;' });
+    // 좌: 주간 생산성(최근 7일 커밋)
+    var leftCol = el('div', { style: 'flex:1.2 1 0%;min-width:0;' });
+    var ca = store.commitActivity || { days: [] };
+    var days = Array.isArray(ca.days) ? ca.days.slice(-7) : [];
+    var total7 = days.reduce(function (s, d) { return s + (d.count || 0); }, 0);
+    var hd = el('div', { style: 'display:flex;align-items:baseline;gap:9px;margin-bottom:3px;' });
+    hd.appendChild(el('div', { text: '주간 생산성', style: 'font-size:15px;font-weight:600;flex:1 1 0%;' }));
+    hd.appendChild(el('span', { text: total7 + ' 커밋', style: HOME_MONO + 'font-size:12.5px;font-weight:600;color:#1c1917;' }));
+    leftCol.appendChild(hd);
+    leftCol.appendChild(el('div', { text: store.commitActivityLoaded ? '최근 7일 커밋 빈도' : '집계하려면 새로고침…', style: 'font-size:11.5px;color:#a8a29e;margin-bottom:18px;' }));
+    var bars = el('div', { style: 'display:flex;align-items:flex-end;justify-content:space-between;gap:9px;min-height:80px;' });
+    var max = 1; days.forEach(function (d) { if (d.count > max) max = d.count; });
+    if (days.length === 0) {
+      for (var k = 0; k < 7; k++) days.push({ date: '', count: 0 });
     }
-    return homeCard('안 읽은 메일', body, { action: refresh });
+    days.forEach(function (d, i) {
+      var col = el('div', { style: 'display:flex;flex-direction:column;align-items:center;gap:7px;flex:1 1 0%;' });
+      var hgt = d.count > 0 ? Math.max(6, (d.count / max) * 80) : 4;
+      var isToday = i === days.length - 1;
+      col.appendChild(el('div', { style: 'width:100%;max-width:26px;height:' + hgt + 'px;border-radius:4px 4px 2px 2px;background:' + (isToday ? '#4f46e5' : '#c7d2fe') + ';' }));
+      col.appendChild(el('span', { text: d.date ? homeWeekday(d.date) : '·', style: 'font-size:10.5px;color:#a8a29e;' }));
+      bars.appendChild(col);
+    });
+    leftCol.appendChild(bars);
+    card.appendChild(leftCol);
+    card.appendChild(el('div', { style: 'width:1px;background:#f0efed;flex:0 0 auto;' }));
+    // 우: 언어 · 스택 추세
+    var rightCol = el('div', { style: 'flex:1 1 0%;min-width:0;' });
+    rightCol.appendChild(el('div', { text: '언어 · 스택 추세', style: 'font-size:15px;font-weight:600;margin-bottom:3px;' }));
+    var facets = languageFacets(store.viewModels || []);
+    var totalProj = facets.reduce(function (s, f) { return s + f.count; }, 0) || 1;
+    rightCol.appendChild(el('div', { text: '전체 ' + (store.viewModels || []).length + '개 기준', style: 'font-size:11.5px;color:#a8a29e;margin-bottom:18px;' }));
+    var stack = el('div', { style: 'display:flex;height:8px;border-radius:5px;overflow:hidden;background:#f0efed;margin-bottom:14px;' });
+    facets.forEach(function (f) { stack.appendChild(el('div', { style: 'width:' + (f.count / totalProj * 100) + '%;height:100%;background:' + langColor(f.lang) + ';' })); });
+    rightCol.appendChild(stack);
+    var legend = el('div', { style: 'display:flex;flex-direction:column;gap:9px;' });
+    facets.slice(0, 5).forEach(function (f) {
+      var row = el('div', { style: 'display:flex;align-items:center;gap:8px;font-size:12.5px;' });
+      row.appendChild(el('span', { style: 'width:9px;height:9px;border-radius:2px;flex:0 0 auto;display:inline-block;background:' + langColor(f.lang) + ';' }));
+      row.appendChild(el('span', { text: f.lang, style: 'flex:1 1 0%;color:#57534e;' }));
+      row.appendChild(el('span', { text: String(f.count), style: HOME_MONO + 'color:#a8a29e;' }));
+      legend.appendChild(row);
+    });
+    rightCol.appendChild(legend);
+    card.appendChild(rightCol);
+    return card;
   }
 
-  /** 홈 진입 시 1회 자동 로드(이후는 수동 새로고침). */
-  function maybeLoadMailSummary() {
-    if (bridgeHas('getMailSummary') && !store.mailSummaryLoaded && !store.busyMailSummary) refreshMailSummary();
-  }
-  async function refreshMailSummary() {
-    if (!bridgeHas('getMailSummary') || store.busyMailSummary) return;
-    store.busyMailSummary = true;
-    if (store.state.view === 'home') render();
-    const res = await ipc('getMailSummary');
-    store.busyMailSummary = false;
-    store.mailSummaryLoaded = true;
-    store.mailSummary = (res && res.ok && Array.isArray(res.accounts)) ? res.accounts : [];
-    if (store.state.view === 'home') render();
+  function renderHomeActivity() {
+    var events = homeRecentActivity(store.viewModels || [], 6);
+    var card = el('div', { style: HOME_CARD + 'padding:21px 22px;' });
+    card.appendChild(el('div', { text: '최근 활동 타임라인', style: 'font-size:15px;font-weight:600;margin-bottom:16px;' }));
+    var list = el('div', { style: 'display:flex;flex-direction:column;' });
+    if (events.length === 0) {
+      list.appendChild(el('div', { text: '최근 수정 기록이 없습니다.', style: 'font-size:12.5px;color:#a8a29e;' }));
+    }
+    events.forEach(function (ev, i) {
+      var vm = (store.viewModels || []).find(function (v) { return v.id === ev.id; }) || {};
+      var row = el('div', { style: 'display:flex;gap:13px;' });
+      var rail = el('div', { style: 'display:flex;flex-direction:column;align-items:center;flex:0 0 auto;' });
+      rail.appendChild(el('span', { style: 'width:9px;height:9px;border-radius:2px;flex:0 0 auto;display:inline-block;background:' + langColor(vm.language || ev.name) + ';' }));
+      if (i < events.length - 1) rail.appendChild(el('span', { style: 'width:1.5px;flex:1 1 0%;min-height:18px;background:#e7e5e4;margin-top:3px;' }));
+      row.appendChild(rail);
+      var body = el('div', { style: 'flex:1 1 0%;min-width:0;padding-bottom:15px;' });
+      var top = el('div', { style: 'display:flex;align-items:center;gap:9px;' });
+      top.appendChild(el('span', { text: ev.name, style: 'font-size:13px;font-weight:600;color:#1c1917;' }));
+      top.appendChild(el('span', { text: rel(ev.when), style: HOME_MONO + 'font-size:10.5px;color:#a8a29e;' }));
+      body.appendChild(top);
+      body.appendChild(el('div', { text: (vm.language || '알 수 없음') + ' · 파일 수정', style: 'font-size:11.5px;color:#78716c;margin-top:2px;' }));
+      row.appendChild(body);
+      list.appendChild(row);
+    });
+    card.appendChild(list);
+    return card;
   }
 
   function renderHomeTodos() {
-    if (!bridgeHas('addTodo')) {
-      return renderHomePlaceholder('할 일', '이 환경에서는 할 일을 사용할 수 없습니다.');
-    }
-    const todos = Array.isArray(store.todos) ? store.todos : [];
-    const open = todos.filter((t) => !t.done).length;
-    const countBadge = el('span', { cls: 'home-card__count', text: '남은 ' + open });
+    var todos = Array.isArray(store.todos) ? store.todos : [];
+    var open = todos.filter(function (t) { return !t.done; }).length;
+    var card = el('div', { style: HOME_CARD + 'padding:21px 20px;' });
+    var head = el('div', { style: 'display:flex;align-items:center;gap:10px;margin-bottom:15px;' });
+    head.appendChild(el('div', { text: '할 일', style: 'font-size:15px;font-weight:600;flex:1 1 0%;' }));
+    var cnt = el('span', { style: HOME_MONO + 'font-size:12px;font-weight:600;color:#1c1917;' });
+    cnt.appendChild(el('span', { text: String(open) }));
+    cnt.appendChild(el('span', { text: '/' + todos.length, style: 'color:#a8a29e;' }));
+    head.appendChild(cnt);
+    card.appendChild(head);
 
-    // 입력 + 추가
-    const inputRow = el('div', { cls: 'home-todo__inputrow' });
-    const input = el('input', {
-      cls: 'rootmgr__input', attrs: { type: 'text', placeholder: '할 일 추가…', 'aria-label': '할 일 추가', autocomplete: 'off', spellcheck: 'false' },
+    var list = el('div', { style: 'display:flex;flex-direction:column;gap:2px;' });
+    todos.forEach(function (t) {
+      var row = el('div', { cls: 'home-todo-row', style: 'display:flex;align-items:flex-start;gap:11px;padding:8px 4px;border-radius:8px;' });
+      var box = el('span', {
+        attrs: { role: 'checkbox', 'aria-checked': t.done ? 'true' : 'false', 'aria-label': '완료: ' + t.text, tabindex: '0' },
+        style: 'width:18px;height:18px;border-radius:6px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;margin-top:1px;cursor:pointer;' + (t.done ? 'border:1.5px solid #4f46e5;background:#4f46e5;' : 'border:1.5px solid #d6d3d1;background:#fff;'),
+        on: { click: function () { onToggleTodo(t.id, !t.done); } },
+      });
+      if (t.done) box.appendChild(svg([{ t: 'path', d: 'M5 12l4 4 10-10' }], { size: 11, stroke: '#fff', sw: 3 }));
+      row.appendChild(box);
+      var txt = el('div', { style: 'flex:1 1 0%;min-width:0;' });
+      txt.appendChild(el('div', { text: t.text, style: 'font-size:13px;line-height:1.4;' + (t.done ? 'color:#a8a29e;text-decoration:line-through;' : 'color:#1c1917;') }));
+      txt.appendChild(el('button', {
+        cls: 'home-todo-del', text: '삭제',
+        attrs: { type: 'button', 'aria-label': '할 일 삭제: ' + t.text },
+        style: 'appearance:none;border:none;background:none;cursor:pointer;padding:0;margin-top:2px;font-size:10.5px;color:#a8a29e;',
+        on: { click: function () { onRemoveTodo(t.id); } },
+      }));
+      row.appendChild(txt);
+      row.appendChild(el('span', { style: 'width:7px;height:7px;border-radius:50%;flex:0 0 auto;margin-top:6px;background:' + (t.done ? '#d6d3d1' : '#b45309') + ';' }));
+      list.appendChild(row);
     });
-    input.value = store.todoInput;
-    input.addEventListener('input', (e) => { store.todoInput = e.target.value || ''; });
-    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); onAddTodo(); } });
-    const addBtn = el('button', { cls: 'btn', text: '추가', attrs: { type: 'button', 'aria-label': '할 일 추가' }, on: { click: onAddTodo } });
-    if (store.busyTodos) { input.disabled = true; addBtn.disabled = true; }
-    inputRow.appendChild(input);
-    inputRow.appendChild(addBtn);
+    card.appendChild(list);
 
-    const body = [inputRow];
-    if (todos.length === 0) {
-      body.push(el('div', { cls: 'home-card__empty', text: '할 일이 없습니다. 위에 입력해 추가하세요.' }));
+    // + 할 일 추가(클릭 시 인라인 입력)
+    if (store.todoAdding) {
+      var addRow = el('div', { style: 'border-top:1px solid #f4f3f1;margin-top:10px;padding-top:12px;display:flex;gap:8px;' });
+      var input = el('input', { attrs: { type: 'text', placeholder: '할 일 입력 후 Enter', 'aria-label': '할 일 추가', autocomplete: 'off' }, style: 'flex:1;min-width:0;border:1px solid #e7e5e4;border-radius:8px;padding:7px 10px;font-size:12.5px;color:#1c1917;outline:none;' });
+      input.value = store.todoInput;
+      input.addEventListener('input', function (e) { store.todoInput = e.target.value || ''; });
+      input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); onAddTodo(); } if (e.key === 'Escape') { store.todoAdding = false; store.todoInput = ''; render(); } });
+      var b = el('button', { text: '추가', attrs: { type: 'button' }, style: 'border:none;background:#4f46e5;color:#fff;border-radius:8px;padding:0 14px;font-size:12.5px;font-weight:600;cursor:pointer;', on: { click: onAddTodo } });
+      if (store.busyTodos) { input.disabled = true; b.disabled = true; }
+      addRow.appendChild(input); addRow.appendChild(b);
+      card.appendChild(addRow);
+      setTimeout(function () { try { input.focus(); } catch (_) { } }, 0);
     } else {
-      const ul = el('ul', { cls: 'home-list', attrs: { role: 'list' } });
-      for (const t of todos) {
-        const li = el('li', { cls: 'home-todo__item' + (t.done ? ' is-done' : '') });
-        const cb = el('input', { cls: 'home-todo__check', attrs: { type: 'checkbox', 'aria-label': '완료: ' + t.text } });
-        cb.checked = t.done === true;
-        cb.addEventListener('change', () => onToggleTodo(t.id, cb.checked));
-        const text = el('span', { cls: 'home-todo__text', text: t.text, title: t.text }); // L-1
-        const rm = el('button', {
-          cls: 'rootmgr__remove', text: '삭제',
-          attrs: { type: 'button', 'aria-label': '할 일 삭제: ' + t.text }, on: { click: () => onRemoveTodo(t.id) },
-        });
-        if (store.busyTodos) { cb.disabled = true; rm.disabled = true; }
-        li.appendChild(cb); li.appendChild(text); li.appendChild(rm);
-        ul.appendChild(li);
-      }
-      body.push(ul);
+      var add = el('div', {
+        style: 'border-top:1px solid #f4f3f1;margin-top:10px;padding-top:12px;display:flex;align-items:center;gap:7px;color:#a8a29e;font-size:12.5px;font-weight:600;cursor:pointer;',
+        attrs: { role: 'button', tabindex: '0', 'aria-label': '할 일 추가' },
+        on: { click: function () { store.todoAdding = true; render(); } },
+      });
+      add.appendChild(el('span', { text: '+', style: 'font-size:15px;line-height:1;' }));
+      add.appendChild(el('span', { text: ' 할 일 추가' }));
+      card.appendChild(add);
     }
-    return homeCard('할 일', body, { action: countBadge });
+    return card;
   }
 
   function applyTodoResult(res) {
@@ -1655,20 +1783,20 @@ function initBrowser() {
     return false;
   }
   async function onAddTodo() {
-    const v = (store.todoInput || '').trim();
+    var v = (store.todoInput || '').trim();
     if (!v) { toast('할 일 내용을 입력하세요.', true); return; }
     if (store.busyTodos || !bridgeHas('addTodo')) return;
     store.busyTodos = true; render();
-    const res = await ipc('addTodo', v);
+    var res = await ipc('addTodo', v);
     store.busyTodos = false;
-    if (applyTodoResult(res)) { store.todoInput = ''; }
+    if (applyTodoResult(res)) { store.todoInput = ''; store.todoAdding = false; }
     else toast(res && res.code === 'LIMIT' ? '할 일이 너무 많습니다.' : '할 일 추가에 실패했습니다.', true);
     render();
   }
   async function onToggleTodo(id, done) {
     if (store.busyTodos || !bridgeHas('toggleTodo')) return;
     store.busyTodos = true; render();
-    const res = await ipc('toggleTodo', id, done);
+    var res = await ipc('toggleTodo', id, done);
     store.busyTodos = false;
     if (!applyTodoResult(res)) toast('할 일 상태 변경에 실패했습니다.', true);
     render();
@@ -1676,117 +1804,113 @@ function initBrowser() {
   async function onRemoveTodo(id) {
     if (store.busyTodos || !bridgeHas('removeTodo')) return;
     store.busyTodos = true; render();
-    const res = await ipc('removeTodo', id);
+    var res = await ipc('removeTodo', id);
     store.busyTodos = false;
     if (!applyTodoResult(res)) toast('할 일 삭제에 실패했습니다.', true);
     render();
   }
 
-  /* 주간 생산성 — 커밋 빈도(백엔드, 수동 새로고침) + 언어 분포(클라이언트, 즉시). */
-  function renderHomeProductivity() {
-    let prodAction = null;
-    const body = [];
+  function renderHomeMail() {
+    var card = el('div', { cls: 'home-hoverable', style: HOME_CARD + 'padding:21px 20px;cursor:pointer;', on: { click: function () { openSettings(); } } });
+    var items = mailFlatItems(5);
+    var replies = items.filter(function (m) { return homeIsReply(m.subject); }).length;
+    var head = el('div', { style: 'display:flex;align-items:center;gap:10px;margin-bottom:14px;' });
+    head.appendChild(el('div', { text: '메일', style: 'font-size:15px;font-weight:600;flex:1 1 0%;' }));
+    if (replies > 0) head.appendChild(homeBadge(replies + ' 회신 필요', 'blue'));
+    head.appendChild(el('span', { text: '→', style: 'font-size:12px;font-weight:600;color:#4f46e5;' }));
+    card.appendChild(head);
 
-    if (bridgeHas('getCommitActivity')) {
-      prodAction = el('button', {
-        cls: 'link-btn', text: store.busyCommitActivity ? '집계 중…' : '새로고침',
-        attrs: { type: 'button', 'aria-label': '커밋 활동 새로고침' }, on: { click: () => refreshCommitActivity() },
-      });
-      if (store.busyCommitActivity) prodAction.disabled = true;
-      body.push(el('div', { cls: 'home-prod__label', text: '최근 14일 커밋' }));
-      if (!store.commitActivityLoaded && !store.busyCommitActivity) {
-        body.push(el('div', { cls: 'home-card__empty', text: '“새로고침”을 눌러 커밋 활동을 집계하세요.' }));
-      } else if (store.busyCommitActivity && !store.commitActivityLoaded) {
-        body.push(el('div', { cls: 'home-card__empty', text: '저장소를 집계하는 중…' }));
-      } else {
-        const ca = store.commitActivity || { days: [], total: 0, repos: 0 };
-        if (Array.isArray(ca.days) && ca.days.length) body.push(commitBars(ca.days));
-        body.push(el('div', { cls: 'home-prod__sub muted', text: '총 ' + (ca.total || 0) + '커밋 · 저장소 ' + (ca.repos || 0) + '개' }));
-      }
+    var list = el('div', { style: 'display:flex;flex-direction:column;' });
+    if (!store.mailSummaryLoaded && store.busyMailSummary) {
+      list.appendChild(el('div', { text: '메일을 확인하는 중…', style: 'font-size:12px;color:#a8a29e;padding:6px 0;' }));
+    } else if (items.length === 0) {
+      list.appendChild(el('div', { text: '안 읽은 메일이 없습니다. 설정에서 계정을 추가하세요.', style: 'font-size:12px;color:#a8a29e;padding:6px 0;' }));
     }
-
-    // 언어 분포(스냅샷 보유 데이터 — 즉시).
-    const facets = languageFacets(store.viewModels || []);
-    const totalProj = facets.reduce((s, f) => s + f.count, 0);
-    if (totalProj > 0) {
-      body.push(el('div', { cls: 'home-prod__label', text: '언어 분포' }));
-      const bar = el('div', { cls: 'home-langbar' });
-      for (const f of facets) {
-        const seg = el('span', { cls: 'home-langbar__seg', title: f.lang + ' ' + f.count + '개' });
-        seg.style.width = (f.count / totalProj * 100) + '%';
-        seg.style.background = langColor(f.lang);
-        bar.appendChild(seg);
-      }
-      body.push(bar);
-      const legend = el('div', { cls: 'home-langlegend' });
-      for (const f of facets.slice(0, 6)) {
-        const item = el('span', { cls: 'home-langlegend__item' });
-        item.appendChild(dot(f.lang));
-        item.appendChild(el('span', { text: f.lang + ' ' + Math.round(f.count / totalProj * 100) + '%' }));
-        legend.appendChild(item);
-      }
-      body.push(legend);
-    }
-
-    if (body.length === 0) body.push(el('div', { cls: 'home-card__empty', text: '표시할 생산성 데이터가 없습니다.' }));
-    return homeCard('주간 생산성', body, { action: prodAction });
-  }
-
-  /** 커밋 빈도 막대 차트(자작 SVG, 외부 라이브러리 없음). */
-  function commitBars(series) {
-    const w = 300, h = 56, gap = 2;
-    const n = Math.max(1, series.length);
-    const bw = (w - gap * (n - 1)) / n;
-    let max = 1;
-    for (const s of series) if (s.count > max) max = s.count;
-    const svgEl = document.createElementNS(SVG_NS, 'svg');
-    svgEl.setAttribute('viewBox', '0 0 ' + w + ' ' + h);
-    svgEl.setAttribute('width', '100%');
-    svgEl.setAttribute('height', String(h));
-    svgEl.setAttribute('class', 'home-chart');
-    svgEl.setAttribute('preserveAspectRatio', 'none');
-    svgEl.setAttribute('aria-hidden', 'true');
-    series.forEach((s, i) => {
-      const bh = Math.round((s.count / max) * (h - 4));
-      const rect = document.createElementNS(SVG_NS, 'rect');
-      rect.setAttribute('x', String(Math.round(i * (bw + gap))));
-      rect.setAttribute('y', String(h - Math.max(2, bh)));
-      rect.setAttribute('width', String(Math.max(1, Math.floor(bw))));
-      rect.setAttribute('height', String(Math.max(2, bh)));
-      rect.setAttribute('rx', '1');
-      rect.setAttribute('class', s.count > 0 ? 'home-bar is-on' : 'home-bar'); // fill은 CSS(var 해석)
-      const title = document.createElementNS(SVG_NS, 'title');
-      title.textContent = s.date + ' · ' + s.count + '커밋';
-      rect.appendChild(title);
-      svgEl.appendChild(rect);
+    items.forEach(function (m, i) {
+      var row = el('div', { style: 'display:flex;align-items:center;gap:11px;padding:9px 2px;' + (i > 0 ? 'border-top:1px solid #f4f3f1;' : '') });
+      var av = homeAvatarColors(i);
+      var name = m.from || '(발신자)';
+      row.appendChild(el('span', { text: (name[0] || '?'), style: 'width:30px;height:30px;border-radius:9px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;background:' + av.bg + ';color:' + av.fg + ';' }));
+      var mid = el('div', { style: 'flex:1 1 0%;min-width:0;' });
+      var nameRow = el('div', { style: 'display:flex;align-items:center;gap:7px;' });
+      nameRow.appendChild(el('span', { text: name, style: 'font-size:12.5px;font-weight:700;color:#1c1917;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;' }));
+      if (homeIsReply(m.subject)) nameRow.appendChild(el('span', { text: '회신', style: 'font-size:9.5px;font-weight:600;padding:1px 6px;border-radius:5px;background:#fef3c7;color:#b45309;flex:0 0 auto;' }));
+      mid.appendChild(nameRow);
+      mid.appendChild(el('div', { text: m.subject || '(제목 없음)', style: 'font-size:12px;color:#57534e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px;' }));
+      row.appendChild(mid);
+      row.appendChild(el('span', { text: relMail(m.date), style: HOME_MONO + 'font-size:10.5px;color:#a8a29e;flex:0 0 auto;' }));
+      list.appendChild(row);
     });
-    return svgEl;
+    card.appendChild(list);
+    return card;
   }
 
+  /** 홈 진입 시 1회 자동 로드(이후는 카드 클릭/설정에서 갱신). */
+  function maybeLoadMailSummary() {
+    if (bridgeHas('getMailSummary') && !store.mailSummaryLoaded && !store.busyMailSummary) refreshMailSummary();
+  }
+  async function refreshMailSummary() {
+    if (!bridgeHas('getMailSummary') || store.busyMailSummary) return;
+    store.busyMailSummary = true;
+    if (store.state.view === 'home') render();
+    var res = await ipc('getMailSummary');
+    store.busyMailSummary = false;
+    store.mailSummaryLoaded = true;
+    store.mailSummary = (res && res.ok && Array.isArray(res.accounts)) ? res.accounts : [];
+    if (store.state.view === 'home') render();
+  }
+  function maybeLoadCommitActivity() {
+    if (bridgeHas('getCommitActivity') && !store.commitActivityLoaded && !store.busyCommitActivity) refreshCommitActivity();
+  }
   async function refreshCommitActivity() {
     if (!bridgeHas('getCommitActivity') || store.busyCommitActivity) return;
     store.busyCommitActivity = true;
     if (store.state.view === 'home') render();
-    const res = await ipc('getCommitActivity');
+    var res = await ipc('getCommitActivity');
     store.busyCommitActivity = false;
     store.commitActivityLoaded = true;
     store.commitActivity = (res && res.ok) ? res : { days: [], total: 0, repos: 0 };
     if (store.state.view === 'home') render();
   }
 
-  function renderHomeActivity() {
-    const events = homeRecentActivity(store.viewModels || [], 8);
-    if (events.length === 0) {
-      return homeCard('최근 활동', [el('div', { cls: 'home-card__empty', text: '최근 수정 기록이 없습니다.' })]);
+  function renderHomeDisk(reclaim) {
+    var card = el('div', { style: HOME_CARD + 'padding:21px 20px;' });
+    var head = el('div', { style: 'display:flex;align-items:baseline;gap:9px;margin-bottom:3px;' });
+    head.appendChild(el('div', { text: '디스크 회수', style: 'font-size:15px;font-weight:600;flex:1 1 0%;' }));
+    head.appendChild(el('span', { text: reclaim.label, style: 'font-size:22px;font-weight:700;color:#15803d;font-variant-numeric:tabular-nums;letter-spacing:-0.02em;' }));
+    card.appendChild(head);
+    card.appendChild(el('div', { text: '방치 프로젝트 node_modules 정리 시', style: 'font-size:11.5px;color:#a8a29e;margin-bottom:16px;' }));
+    var list = el('div', { style: 'display:flex;flex-direction:column;gap:12px;' });
+    if (reclaim.items.length === 0) {
+      list.appendChild(el('div', { text: '설정 → 스캔 옵션에서 용량 수집을 켜면 표시됩니다.', style: 'font-size:11.5px;color:#a8a29e;line-height:1.6;' }));
     }
-    const ul = el('ul', { cls: 'home-list', attrs: { role: 'list' } });
-    for (const ev of events) {
-      const li = el('li', { cls: 'home-list__item' });
-      li.appendChild(el('span', { cls: 'home-list__name', text: ev.name, title: ev.name }));
-      li.appendChild(el('span', { cls: 'home-list__when muted', text: '파일 수정 · ' + rel(ev.when) }));
-      ul.appendChild(li);
-    }
-    return homeCard('최근 활동', [ul]);
+    reclaim.items.forEach(function (it) {
+      var box = el('div');
+      var r = el('div', { style: 'display:flex;justify-content:space-between;font-size:12px;margin-bottom:5px;' });
+      r.appendChild(el('span', { text: it.name, style: 'color:#1c1917;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;' }));
+      r.appendChild(el('span', { text: Math.round(it.bytes / 1048576) + ' MB', style: HOME_MONO + 'color:#78716c;flex:0 0 auto;margin-left:8px;' }));
+      box.appendChild(r);
+      var track = el('div', { style: 'height:6px;background:#f0efed;border-radius:4px;overflow:hidden;' });
+      track.appendChild(el('div', { style: 'width:' + (it.bytes / reclaim.max * 100) + '%;height:100%;background:#34d399;border-radius:4px;' }));
+      box.appendChild(track);
+      list.appendChild(box);
+    });
+    card.appendChild(list);
+    return card;
+  }
+
+  function renderHomeFeatureAdd() {
+    var card = el('div', {
+      style: 'background:#fafafa;border:1.5px dashed #d6d3d1;border-radius:16px;padding:20px;display:flex;align-items:center;gap:13px;cursor:pointer;',
+      attrs: { role: 'button', tabindex: '0', 'aria-label': '기능 추가' },
+      on: { click: function () { openSettings(); } },
+    });
+    card.appendChild(el('div', { text: '+', style: 'width:34px;height:34px;border-radius:9px;background:#fff;border:1px solid #e7e5e4;display:flex;align-items:center;justify-content:center;color:#a8a29e;font-size:22px;line-height:1;flex:0 0 auto;' }));
+    var t = el('div');
+    t.appendChild(el('div', { text: '기능 추가', style: 'font-size:13px;font-weight:600;color:#57534e;' }));
+    t.appendChild(el('div', { text: '스니펫 · 환경설정 동기화 · 배포 모니터링', style: 'font-size:11px;color:#a8a29e;margin-top:2px;' }));
+    card.appendChild(t);
+    return card;
   }
 
   function renderDashboard() {
