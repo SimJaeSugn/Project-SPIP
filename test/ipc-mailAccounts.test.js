@@ -138,3 +138,31 @@ test('getMailSummary — 계정 없으면 빈 목록', async () => {
   const res = await ipc.getMailSummary(ctx);
   assert.deepStrictEqual(res, { ok: true, accounts: [] });
 });
+
+// ── getMailMessage(본문 조회) ──
+test('getMailMessage — 성공 시 파싱된 본문 반환', async () => {
+  const { ctx } = makeCtx();
+  const added = ipc.addMailAccount(VALID, ctx);
+  ctx.mailClientFactory = () => ({ fetchMessage: async () => 'Subject: 제목\r\nFrom: s@x.com\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n본문입니다' });
+  const res = await ipc.getMailMessage({ accountId: added.account.id, uid: 5 }, ctx);
+  assert.ok(res.ok);
+  assert.strictEqual(res.subject, '제목');
+  assert.strictEqual(res.from, 's@x.com');
+  assert.strictEqual(res.text, '본문입니다');
+});
+
+test('getMailMessage — 잘못된 인자 / 없는 계정', async () => {
+  const { ctx } = makeCtx();
+  assert.strictEqual((await ipc.getMailMessage({ accountId: '', uid: 5 }, ctx)).code, 'INVALID');
+  assert.strictEqual((await ipc.getMailMessage({ accountId: 'x', uid: 0 }, ctx)).code, 'INVALID');
+  assert.strictEqual((await ipc.getMailMessage({ accountId: 'nope999', uid: 5 }, ctx)).code, 'NOT_FOUND');
+});
+
+test('getMailMessage — 인증/네트워크 실패 격리', async () => {
+  const { ctx } = makeCtx();
+  const added = ipc.addMailAccount(VALID, ctx);
+  ctx.mailClientFactory = () => ({ fetchMessage: async () => { const e = new Error('no'); e.authFailed = true; throw e; } });
+  assert.strictEqual((await ipc.getMailMessage({ accountId: added.account.id, uid: 5 }, ctx)).code, 'AUTH');
+  ctx.mailClientFactory = () => ({ fetchMessage: async () => { throw new Error('ECONNREFUSED'); } });
+  assert.strictEqual((await ipc.getMailMessage({ accountId: added.account.id, uid: 5 }, ctx)).code, 'NETWORK');
+});

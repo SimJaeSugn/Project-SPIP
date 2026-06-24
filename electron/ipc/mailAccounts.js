@@ -23,6 +23,7 @@
 const reg = require('../../lib/mail/mailAccounts');
 const config = require('../../lib/common/config');
 const { ImapClient } = require('../../lib/mail/imapClient');
+const mailBody = require('../../lib/mail/mailBody');
 const { clampString } = require('../../lib/common/logger');
 
 const MAIL_DIGEST_LIMIT = 5; // 계정당 미리보기 개수
@@ -125,6 +126,7 @@ async function getMailSummary(ctx) {
       const client = d.clientFactory({ host: a.host, port: a.port, user: a.user, pass: a.pass });
       const digest = await client.fetchUnseenDigest('INBOX', MAIL_DIGEST_LIMIT);
       const items = (Array.isArray(digest.items) ? digest.items : []).map((m) => ({
+        uid: Number.isInteger(m.uid) ? m.uid : null, // 본문 조회용
         subject: m.subject ? clampString(String(m.subject), 200) : null,
         from: m.from ? clampString(String(m.from), 120) : null,
         date: m.date ? clampString(String(m.date), 64) : null,
@@ -137,6 +139,35 @@ async function getMailSummary(ctx) {
   return { ok: true, accounts: results };
 }
 
+/**
+ * spip:getMailMessage — 단건 메일 본문 조회(읽음표시 영향 없음, EXAMINE+BODY.PEEK 부분 fetch).
+ * @param {object} args { accountId, uid }
+ * @returns {Promise<{ok:true, subject, from, date, text} | {ok:false, code}>}
+ */
+async function getMailMessage(args, ctx) {
+  const d = deps(ctx);
+  args = (args && typeof args === 'object') ? args : {};
+  const id = (typeof args.accountId === 'string' && args.accountId) ? args.accountId : '';
+  const uid = Number(args.uid);
+  if (!id || !Number.isInteger(uid) || uid <= 0) return { ok: false, code: 'INVALID' };
+  const acct = currentAccounts(ctx).find((a) => a && a.id === id);
+  if (!acct) return { ok: false, code: 'NOT_FOUND' };
+  try {
+    const client = d.clientFactory({ host: acct.host, port: acct.port, user: acct.user, pass: acct.pass });
+    const raw = await client.fetchMessage(uid, 'INBOX');
+    const msg = mailBody.parseMessage(raw);
+    return {
+      ok: true,
+      subject: msg.subject ? clampString(String(msg.subject), 300) : null,
+      from: msg.from ? clampString(String(msg.from), 200) : null,
+      date: msg.date ? clampString(String(msg.date), 64) : null,
+      text: typeof msg.text === 'string' ? msg.text : '', // mailBody가 이미 정제(개행 보존)
+    };
+  } catch (err) {
+    return { ok: false, code: (err && err.authFailed) ? 'AUTH' : 'NETWORK' };
+  }
+}
+
 module.exports = {
   getMailAccounts,
   addMailAccount,
@@ -144,4 +175,5 @@ module.exports = {
   removeMailAccount,
   testMailAccount,
   getMailSummary,
+  getMailMessage,
 };

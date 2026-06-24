@@ -174,6 +174,7 @@ function registerIpcHandlers(deps) {
   guard('spip:removeMailAccount', (args) => mailAccountsIpc.removeMailAccount(args, ctx));
   guard('spip:testMailAccount', (args) => mailAccountsIpc.testMailAccount(args, ctx));
   guard('spip:getMailSummary', () => mailAccountsIpc.getMailSummary(ctx));
+  guard('spip:getMailMessage', (args) => mailAccountsIpc.getMailMessage(args, ctx));
 
   // 홈 인사이트 — 최근 14일 커밋 빈도(등록 프로젝트 합산, git -C safeExec).
   guard('spip:getCommitActivity', () => insightsIpc.getCommitActivity(ctx));

@@ -404,6 +404,8 @@ button.home-list__name:hover { color: var(--accent); text-decoration: underline;
 .home-hoverable:hover { border-color: #d6d3d1 !important; box-shadow: 0 8px 28px rgba(28,25,23,0.08); }
 .home-todo-row .home-todo-del { opacity: 0; transition: opacity .12s ease; }
 .home-todo-row:hover .home-todo-del { opacity: 1; }
+.home-mail-row { border-radius: 8px; transition: background .12s ease; }
+.home-mail-row:hover { background: #fafafa; }
 
 /* 툴바 */
 .toolbar {

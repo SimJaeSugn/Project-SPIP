@@ -1035,6 +1035,7 @@ function initBrowser() {
     mailSummary: [],             // [{id,label,host,user,unseen,items:[{subject,from,date}],ok,code}]
     busyMailSummary: false,      // getMailSummary in-flight
     mailSummaryLoaded: false,    // 최초 1회 자동 로드 가드
+    mailView: { open: false, loading: false, accountId: null, uid: null, meta: null, code: null }, // 메일 본문 팝업
     // 생산성(홈 브리핑) — 최근 14일 커밋 빈도(getCommitActivity). 수동 새로고침(git 호출 비용).
     commitActivity: null,        // {days:[{date,count}],total,repos,scanned}
     busyCommitActivity: false,   // getCommitActivity in-flight
@@ -1188,6 +1189,8 @@ function initBrowser() {
     if (store.showHelp) app.appendChild(renderHelp());
     // 최초 스캔 팝업 — 홈 위에만 표시(스냅샷 없을 때). 닫기 가능(× / Esc / 오버레이).
     if (store.showFirstRun && store.state.view === 'home') app.appendChild(renderFirstRunModal());
+    // 메일 본문 팝업(항목 클릭).
+    if (store.mailView && store.mailView.open) app.appendChild(renderMailMessageModal());
     // 저장한 스크롤 위치를 새 컨테이너에 복원(버튼 클릭 등 재렌더 후에도 위치 유지).
     SCROLL_SEL.forEach((sel) => { if (savedScroll[sel] != null) { const e = app.querySelector(sel); if (e) e.scrollTop = savedScroll[sel]; } });
     // 검색 입력 포커스/캐럿 복원(타이핑 중 재렌더로 포커스가 풀리는 문제 해결).
@@ -1599,7 +1602,7 @@ function initBrowser() {
     var a = store.mailSummary || [];
     for (var i = 0; i < a.length; i++) {
       if (!a[i] || a[i].ok === false || !Array.isArray(a[i].items)) continue;
-      for (var j = 0; j < a[i].items.length; j++) out.push(a[i].items[j]);
+      for (var j = 0; j < a[i].items.length; j++) out.push(Object.assign({ accountId: a[i].id }, a[i].items[j]));
     }
     out.sort(function (x, y) { return (Date.parse(y && y.date) || 0) - (Date.parse(x && x.date) || 0); });
     return out.slice(0, limit || 5);
@@ -1869,13 +1872,19 @@ function initBrowser() {
   }
 
   function renderHomeMail() {
-    var card = el('div', { cls: 'home-hoverable', style: HOME_CARD + 'padding:21px 20px;cursor:pointer;', on: { click: function () { openSettings(); } } });
+    var card = el('div', { style: HOME_CARD + 'padding:21px 20px;' });
     var items = mailFlatItems(5);
     var replies = items.filter(function (m) { return homeIsReply(m.subject); }).length;
     var head = el('div', { style: 'display:flex;align-items:center;gap:10px;margin-bottom:14px;' });
     head.appendChild(el('div', { text: '메일', style: 'font-size:15px;font-weight:600;flex:1 1 0%;' }));
     if (replies > 0) head.appendChild(homeBadge(replies + ' 회신 필요', 'blue'));
-    head.appendChild(el('span', { text: '→', style: 'font-size:12px;font-weight:600;color:#4f46e5;' }));
+    // 헤더 → 메일 계정 설정 열기(항목 클릭은 본문 팝업).
+    head.appendChild(el('button', {
+      cls: 'home-mail-more', text: '→',
+      attrs: { type: 'button', 'aria-label': '메일 계정 설정 열기', title: '메일 계정 설정' },
+      style: 'appearance:none;border:none;background:none;cursor:pointer;font-size:12px;font-weight:600;color:#4f46e5;padding:0 2px;',
+      on: { click: function () { openSettings(); } },
+    }));
     card.appendChild(head);
 
     var list = el('div', { style: 'display:flex;flex-direction:column;' });
@@ -1885,7 +1894,13 @@ function initBrowser() {
       list.appendChild(el('div', { text: '안 읽은 메일이 없습니다. 설정에서 계정을 추가하세요.', style: 'font-size:12px;color:#a8a29e;padding:6px 0;' }));
     }
     items.forEach(function (m, i) {
-      var row = el('div', { style: 'display:flex;align-items:center;gap:11px;padding:9px 2px;' + (i > 0 ? 'border-top:1px solid #f4f3f1;' : '') });
+      var clickable = Number.isInteger(m.uid) && bridgeHas('getMailMessage');
+      var row = el('div', {
+        cls: clickable ? 'home-mail-row' : '',
+        attrs: clickable ? { role: 'button', tabindex: '0', 'aria-label': '메일 보기: ' + (m.subject || '') } : {},
+        style: 'display:flex;align-items:center;gap:11px;padding:9px 2px;' + (i > 0 ? 'border-top:1px solid #f4f3f1;' : '') + (clickable ? 'cursor:pointer;' : ''),
+        on: clickable ? { click: function () { openMailMessage(m.accountId, m.uid); } } : {},
+      });
       var av = homeAvatarColors(i);
       var name = m.from || '(발신자)';
       row.appendChild(el('span', { text: (name[0] || '?'), style: 'width:30px;height:30px;border-radius:9px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;background:' + av.bg + ';color:' + av.fg + ';' }));
@@ -1901,6 +1916,50 @@ function initBrowser() {
     });
     card.appendChild(list);
     return card;
+  }
+
+  /** 메일 본문 팝업 — 항목 클릭 시 단건 본문 조회(읽음표시 영향 없음). */
+  async function openMailMessage(accountId, uid) {
+    if (!bridgeHas('getMailMessage') || !Number.isInteger(uid)) return;
+    store.mailView = { open: true, loading: true, accountId: accountId, uid: uid, meta: null, code: null };
+    store._mailViewShown = false;
+    render();
+    var res = await ipc('getMailMessage', accountId, uid);
+    if (!store.mailView.open || store.mailView.uid !== uid) return; // 닫혔거나 다른 메일 — 무시
+    store.mailView.loading = false;
+    if (res && res.ok) store.mailView.meta = { subject: res.subject, from: res.from, date: res.date, text: res.text };
+    else store.mailView.code = (res && res.code) || 'NETWORK';
+    render();
+  }
+  function closeMailMessage() {
+    store.mailView = { open: false, loading: false, accountId: null, uid: null, meta: null, code: null };
+    store._mailViewShown = false;
+    render();
+  }
+  function renderMailMessageModal() {
+    var mv = store.mailView;
+    var enter = !store._mailViewShown; store._mailViewShown = true;
+    var body = [];
+    if (mv.loading) {
+      body.push(el('div', { cls: 'home-card__empty', text: '메일을 불러오는 중…' }));
+    } else if (mv.code) {
+      body.push(el('div', { cls: 'home-card__empty', text: describeMailError({ code: mv.code }) }));
+    } else if (mv.meta) {
+      var meta = el('div', { style: 'font-size:12px;color:#78716c;margin-bottom:12px;line-height:1.7;border-bottom:1px solid #f0efed;padding-bottom:10px;' });
+      if (mv.meta.from) meta.appendChild(el('div', { text: '보낸사람 · ' + mv.meta.from }));
+      if (mv.meta.date) meta.appendChild(el('div', { text: '날짜 · ' + mv.meta.date }));
+      body.push(meta);
+      body.push(el('pre', {
+        text: (mv.meta.text && mv.meta.text.length) ? mv.meta.text : '(본문 없음)',
+        style: 'white-space:pre-wrap;word-break:break-word;font-family:inherit;font-size:13px;line-height:1.65;color:#1c1917;margin:0;',
+      })); // L-1: textContent(pre). HTML은 mailBody가 태그 제거 후 평문화.
+    }
+    return buildModal({
+      titleId: 'mailmsg-title',
+      title: (mv.meta && mv.meta.subject) ? mv.meta.subject : '메일',
+      subtitle: '안 읽은 메일 본문 미리보기(읽음 표시 안 됨)',
+      onClose: closeMailMessage, wide: true, enter: enter, bodyChildren: body,
+    });
   }
 
   /** 홈 진입 시 1회 자동 로드(이후는 카드 클릭/설정에서 갱신). */
