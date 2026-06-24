@@ -56,6 +56,77 @@ function orName(v) {
   return (typeof v === 'string' && v.length) ? v : '(이름 없음)';
 }
 
+/* =====================================================================
+ * 홈(브리핑) 순수 뷰모델 — 보유 데이터(viewModels)만으로 산출(헤드리스 단위테스트, F-3).
+ *   메일 다이제스트·할 일·생산성 차트는 후속 마일스톤(백엔드 동반)에서 합류.
+ * ===================================================================== */
+
+/** 시간대별 인사말. now(Date) 기준 — 5~11 아침 / 12~17 오후 / 18~22 저녁 / 그 외 늦은 밤. */
+function homeGreeting(now) {
+  const d = (now instanceof Date && !isNaN(now)) ? now : new Date();
+  const h = d.getHours();
+  let greeting;
+  if (h >= 5 && h < 12) greeting = '좋은 아침이에요';
+  else if (h >= 12 && h < 18) greeting = '좋은 오후예요';
+  else if (h >= 18 && h < 23) greeting = '좋은 저녁이에요';
+  else greeting = '늦은 밤이에요';
+  return { greeting, hour: h };
+}
+
+/** 주의 필요 여부 — 미커밋(dirty)·방치(stale)·ahead/behind 중 하나라도. */
+function isAttentionVm(vm) {
+  if (!vm) return false;
+  return vm.gitStatus === 'dirty' || vm.isStale === true
+    || (typeof vm.ahead === 'number' && vm.ahead > 0)
+    || (typeof vm.behind === 'number' && vm.behind > 0);
+}
+
+/** 브리핑 KPI 집계 — { total, attention, stale, dirty }. */
+function homeKpis(viewModels) {
+  const list = Array.isArray(viewModels) ? viewModels : [];
+  let stale = 0, dirty = 0, attention = 0;
+  for (const vm of list) {
+    if (!vm) continue;
+    if (vm.isStale === true) stale += 1;
+    if (vm.gitStatus === 'dirty') dirty += 1;
+    if (isAttentionVm(vm)) attention += 1;
+  }
+  return { total: list.length, attention, stale, dirty };
+}
+
+/** 주의 필요 프로젝트 상위 N — dirty>변경분>stale 우선, 그 안에서 최근 수정 내림차순. */
+function homeAttention(viewModels, limit) {
+  const list = Array.isArray(viewModels) ? viewModels : [];
+  const flagged = list.filter(isAttentionVm);
+  const score = (vm) => (vm.gitStatus === 'dirty' ? 4 : 0)
+    + (((vm.ahead || 0) + (vm.behind || 0)) > 0 ? 2 : 0)
+    + (vm.isStale ? 1 : 0);
+  flagged.sort((a, b) => {
+    const s = score(b) - score(a);
+    if (s !== 0) return s;
+    const ta = a.lastModified ? Date.parse(a.lastModified) : 0;
+    const tb = b.lastModified ? Date.parse(b.lastModified) : 0;
+    return (tb || 0) - (ta || 0);
+  });
+  const n = (typeof limit === 'number' && limit > 0) ? limit : 6;
+  return flagged.slice(0, n);
+}
+
+/** 최근 활동(파일 수정) 타임라인 상위 N — lastModified 내림차순. */
+function homeRecentActivity(viewModels, limit) {
+  const list = Array.isArray(viewModels) ? viewModels : [];
+  const events = [];
+  for (const vm of list) {
+    if (!vm || !vm.lastModified) continue;
+    const ts = Date.parse(vm.lastModified);
+    if (!Number.isFinite(ts)) continue;
+    events.push({ id: vm.id, name: vm.name, when: vm.lastModified, ts, kind: 'modified' });
+  }
+  events.sort((a, b) => b.ts - a.ts);
+  const n = (typeof limit === 'number' && limit > 0) ? limit : 8;
+  return events.slice(0, n);
+}
+
 /**
  * IPC 액션 실패를 사용자 친화 한국어 메시지로 매핑(BUG-2).
  * `{ok:false, code}` 반환 객체를 호출처가 실패로 분기해 이 함수로 넘긴다.
@@ -1086,6 +1157,9 @@ function initBrowser() {
       app.appendChild(renderOrbit());
       if (store.state.selectedId) app.appendChild(renderDrawer()); // 노드 클릭 상세(기존 드로어 재사용)
     }
+    else if (v === 'home') {
+      app.appendChild(renderHome());
+    }
     else {
       app.appendChild(renderDashboard());
       initCardSortable();    // [M8] 카드뷰면 .cards 에 드래그 재정렬 부착(표/무결과면 no-op).
@@ -1358,6 +1432,120 @@ function initBrowser() {
   /* =====================================================================
    * 대시보드
    * ===================================================================== */
+  /* =====================================================================
+   * 홈(브리핑) 화면 — 헤더(공유) + 인사말/KPI + 인사이트 카드 그리드.
+   *   M1: 보유 데이터(주의 필요 프로젝트·최근 활동)만. 메일/할일/차트는 후속 마일스톤.
+   * ===================================================================== */
+  function renderHome() {
+    const root = el('div', { cls: 'dash home' });
+    root.appendChild(renderHeader());
+
+    const main = el('main', { cls: 'dash__main spip-scroll home__main', attrs: { id: 'main' } });
+    const vms = store.viewModels || [];
+    const g = homeGreeting(store.now);
+    const kpis = homeKpis(vms);
+
+    // 히어로: 인사말 + 날짜
+    const hero = el('section', { cls: 'home__hero' });
+    hero.appendChild(el('div', { cls: 'home__greeting', text: g.greeting }));
+    hero.appendChild(el('div', { cls: 'home__date muted', text: fmtDate(store.now ? store.now.toISOString() : null) }));
+    main.appendChild(hero);
+
+    // 브리핑 KPI(클릭 시 프로젝트 화면)
+    const kpiRow = el('div', { cls: 'home__kpis' });
+    const kpiCard = (label, value, accent) => el('button', {
+      cls: 'home__kpi' + (accent ? ' home__kpi--accent' : ''),
+      attrs: { type: 'button', 'aria-label': label + ' ' + value + ' — 프로젝트 화면 열기' },
+      on: { click: () => { store.state.view = 'dashboard'; render(); } },
+      children: [
+        el('div', { cls: 'home__kpi-value', text: String(value) }),
+        el('div', { cls: 'home__kpi-label', text: label }),
+      ],
+    });
+    kpiRow.appendChild(kpiCard('주의 필요 프로젝트', kpis.attention, kpis.attention > 0));
+    kpiRow.appendChild(kpiCard('전체 프로젝트', kpis.total));
+    kpiRow.appendChild(kpiCard('방치', kpis.stale));
+    kpiRow.appendChild(kpiCard('미커밋', kpis.dirty));
+    main.appendChild(kpiRow);
+
+    // 인사이트 카드 그리드
+    const grid = el('div', { cls: 'home__grid' });
+    grid.appendChild(renderHomeAttention());
+    grid.appendChild(renderHomeActivity());
+    grid.appendChild(renderHomePlaceholder('안 읽은 메일', '메일 다이제스트는 곧 제공됩니다. 설정 → 메일 알림 계정에서 계정을 추가하세요.'));
+    grid.appendChild(renderHomePlaceholder('할 일', '할 일 체크리스트는 곧 제공됩니다.'));
+    grid.appendChild(renderHomePlaceholder('주간 생산성', '커밋 빈도·언어 추세 차트는 곧 제공됩니다.'));
+    main.appendChild(grid);
+
+    root.appendChild(main);
+    if (store.state.selectedId) root.appendChild(renderDrawer());
+    return root;
+  }
+
+  /** 홈 카드 컨테이너(제목 + 본문 + 선택적 헤더 액션). */
+  function homeCard(title, bodyNodes, opts) {
+    opts = opts || {};
+    const card = el('section', { cls: 'home-card' });
+    const head = el('div', { cls: 'home-card__head' });
+    head.appendChild(el('div', { cls: 'home-card__title', text: title }));
+    if (opts.action) head.appendChild(opts.action);
+    card.appendChild(head);
+    const body = el('div', { cls: 'home-card__body' });
+    for (const n of (bodyNodes || [])) if (n) body.appendChild(n);
+    card.appendChild(body);
+    return card;
+  }
+
+  function renderHomePlaceholder(title, msg) {
+    return homeCard(title, [el('div', { cls: 'home-card__empty', text: msg })]);
+  }
+
+  function renderHomeAttention() {
+    const items = homeAttention(store.viewModels || [], 6);
+    const more = el('button', {
+      cls: 'link-btn', text: '전체 보기', attrs: { type: 'button', 'aria-label': '프로젝트 전체 보기' },
+      on: { click: () => { store.state.view = 'dashboard'; render(); } },
+    });
+    if (items.length === 0) {
+      return homeCard('주의가 필요한 프로젝트',
+        [el('div', { cls: 'home-card__empty', text: '모든 프로젝트가 깔끔합니다. 미커밋·방치 항목이 없습니다.' })],
+        { action: more });
+    }
+    const ul = el('ul', { cls: 'home-list', attrs: { role: 'list' } });
+    for (const vm of items) {
+      const li = el('li', { cls: 'home-list__item' });
+      li.appendChild(dot(vm.language));
+      li.appendChild(el('button', {
+        cls: 'home-list__name', text: vm.name, title: vm.path,
+        attrs: { type: 'button', 'aria-label': '상세 보기: ' + vm.name },
+        on: { click: () => { store.state.selectedId = vm.id; store.state.view = 'dashboard'; render(); } },
+      }));
+      const tags = el('span', { cls: 'home-list__tags' });
+      if (vm.gitStatus === 'dirty') tags.appendChild(badge('badge--git-dirty', '미커밋'));
+      if ((vm.ahead || 0) > 0) tags.appendChild(badge('badge--lang mono', '↑' + vm.ahead));
+      if ((vm.behind || 0) > 0) tags.appendChild(badge('badge--lang mono', '↓' + vm.behind));
+      if (vm.isStale) tags.appendChild(badge('badge--stale', '방치'));
+      li.appendChild(tags);
+      ul.appendChild(li);
+    }
+    return homeCard('주의가 필요한 프로젝트', [ul], { action: more });
+  }
+
+  function renderHomeActivity() {
+    const events = homeRecentActivity(store.viewModels || [], 8);
+    if (events.length === 0) {
+      return homeCard('최근 활동', [el('div', { cls: 'home-card__empty', text: '최근 수정 기록이 없습니다.' })]);
+    }
+    const ul = el('ul', { cls: 'home-list', attrs: { role: 'list' } });
+    for (const ev of events) {
+      const li = el('li', { cls: 'home-list__item' });
+      li.appendChild(el('span', { cls: 'home-list__name', text: ev.name, title: ev.name }));
+      li.appendChild(el('span', { cls: 'home-list__when muted', text: '파일 수정 · ' + rel(ev.when) }));
+      ul.appendChild(li);
+    }
+    return homeCard('최근 활동', [ul]);
+  }
+
   function renderDashboard() {
     const root = el('div', { cls: 'dash' });
     root.appendChild(renderHeader());
@@ -2821,6 +3009,21 @@ function initBrowser() {
     ]});
     header.appendChild(brand);
 
+    // 상단 네비 탭(홈/프로젝트) — 뷰 전환. 궤도 맵은 액션 버튼으로 유지.
+    const nav = el('nav', { cls: 'topnav', attrs: { 'aria-label': '주요 화면' } });
+    [['home', '홈'], ['dashboard', '프로젝트']].forEach(([view, label]) => {
+      const active = store.state.view === view;
+      nav.appendChild(el('button', {
+        cls: 'topnav__tab' + (active ? ' is-active' : ''),
+        text: label,
+        attrs: { type: 'button', 'aria-current': active ? 'page' : 'false', 'aria-label': label + ' 화면' },
+        on: { click: () => { if (store.state.view !== view) { store.state.view = view; render(); } } },
+      }));
+    });
+    header.appendChild(nav);
+
+    // 검색은 프로젝트(대시보드) 화면에서만 노출 — 홈에는 검색 없음.
+    const showSearch = store.state.view === 'dashboard';
     const searchWrap = el('div', { cls: 'topbar__search' });
     searchWrap.appendChild(svg(
       [{ t: 'circle', cx: '11', cy: '11', r: '7' }, { t: 'line', x1: '21', y1: '21', x2: '16.5', y2: '16.5' }],
@@ -2834,7 +3037,7 @@ function initBrowser() {
     const debounced = debounce(() => render(), 120);
     searchInput.addEventListener('input', (e) => { store.state.search = e.target.value || ''; debounced(); });
     searchWrap.appendChild(searchInput);
-    header.appendChild(searchWrap);
+    if (showSearch) header.appendChild(searchWrap);
 
     header.appendChild(el('div', { cls: 'spacer' }));
 
@@ -3893,7 +4096,8 @@ function initBrowser() {
     //   오버레이가 열려 있으면 데이터만 병합하고 렌더는 보류 — 모달 깜빡임/포커스·스크롤 손실 방지.
     //   (오버레이가 닫힐 때 자연 렌더로 최신 데이터 반영.)
     const overlayOpen = store.showSettings || store.showHelp || store.state.selectedId;
-    if (store.state.view === 'dashboard' && !store._dragging && !overlayOpen) render();
+    const liveView = store.state.view === 'dashboard' || store.state.view === 'home';
+    if (liveView && !store._dragging && !overlayOpen) render();
   }
   /** onTray 콜백 본체 — action 토큰 디스패치(매핑은 순수 dispatchTrayAction).
    *  [M7 §8.1·R4] 'favorites' 분기 제거 — 트레이 '즐겨찾기'는 main 이 위젯 창을 직접 열고
@@ -4516,7 +4720,7 @@ function initBrowser() {
       store.raw = payload.projects;
       store.viewModels = payload.projects.map(toViewModel);
       captureDetectedNames(); // 감지명 캡처(별칭은 loadUiState 후 applyProjectNames)
-      store.state.view = 'dashboard';
+      store.state.view = 'home'; // 기본 랜딩 = 홈(브리핑). 프로젝트 목록은 '프로젝트' 탭으로.
       // 설정 패널/재스캔에서 쓸 config 를 비동기로 미리 적재(렌더 비블로킹)
       ipc('getConfig').then((cfg) => {
         if (cfg && cfg.ok !== false) {
@@ -4525,7 +4729,7 @@ function initBrowser() {
         }
       });
       // R-19/20/21: UI 상태(favorites/order/sortMode) 적재 후 재렌더(비블로킹)
-      loadUiState().then(() => { if (store.state.view === 'dashboard') render(); });
+      loadUiState().then(() => { if (store.state.view === 'home' || store.state.view === 'dashboard') render(); });
       render();
     } catch (err) {
       store._errorMsg = '데이터를 불러오지 못했습니다. (' + (err && err.message ? err.message : '오류') + ')';
@@ -4579,6 +4783,12 @@ function initBrowser() {
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     toViewModel,
+    // 홈(브리핑) 순수 뷰모델
+    homeGreeting,
+    isAttentionVm,
+    homeKpis,
+    homeAttention,
+    homeRecentActivity,
     describeError,
     matchesSearch,
     matchesFilters,
