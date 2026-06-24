@@ -23,6 +23,32 @@ function _mailArgs(a) {
   return out;
 }
 
+// [M13] 브리핑 설정 인자 1차 고정. apiKey: 미전송=기존 유지(키 누락), null=해제, 문자열=설정(메일 pass 패턴).
+//   baseURL/model은 문자열로만 전달(빈 값 생략). main 핸들러가 M-1·shape 재검증.
+function _briefingArgs(s) {
+  s = (s && typeof s === 'object') ? s : {};
+  const out = {};
+  if (s.enabled != null) out.enabled = !!s.enabled;
+  if (s.baseURL != null) out.baseURL = String(s.baseURL);
+  if (s.model != null) out.model = String(s.model);
+  if ('apiKey' in s) out.apiKey = s.apiKey === null ? null : String(s.apiKey); // null=해제
+  if (s.advanced && typeof s.advanced === 'object') {
+    const adv = {};
+    if (s.advanced.coalesceMs != null && s.advanced.coalesceMs !== '') adv.coalesceMs = Number(s.advanced.coalesceMs);
+    if (s.advanced.deadlineH != null && s.advanced.deadlineH !== '') adv.deadlineH = Number(s.advanced.deadlineH);
+    out.advanced = adv;
+  }
+  return out;
+}
+
+// [M13] 단방향 push 구독 헬퍼 — 콜백만 받고 ipcRenderer 원본 비노출. unsubscribe 반환(기존 패턴).
+function _sub(channel, cb) {
+  if (typeof cb !== 'function') return () => {};
+  const h = (_evt, payload) => cb(payload);
+  ipcRenderer.on(channel, h);
+  return () => ipcRenderer.removeListener(channel, h);
+}
+
 contextBridge.exposeInMainWorld('spip', {
   // 읽기(invoke/handle)
   getProjects: () => ipcRenderer.invoke('spip:getProjects'),
@@ -119,6 +145,26 @@ contextBridge.exposeInMainWorld('spip', {
     generatedAt: generatedAt == null ? '' : String(generatedAt),
     counts: (counts && typeof counts === 'object') ? counts : {},
   }),
+
+  // [M13 R-34~R-41] 브리핑 AI — invoke(읽기·액션·설정·연결테스트) + 단방향 구독(onBriefing*).
+  //   키는 평문 회송 0(getSettings=hasApiKey). 인자 형태 1차 고정(main 핸들러가 재검증). 채널명 하드코딩.
+  briefing: {
+    getState: () => ipcRenderer.invoke('spip:briefing:getState'),
+    trigger: () => ipcRenderer.invoke('spip:briefing:trigger', { reason: 'manual' }),
+    abort: () => ipcRenderer.invoke('spip:briefing:abort'),
+    resolveItem: (key, action) => ipcRenderer.invoke('spip:briefing:resolveItem', {
+      key: String(key), action: String(action),
+    }),
+    getSettings: () => ipcRenderer.invoke('spip:briefing:getSettings'),
+    setSettings: (s) => ipcRenderer.invoke('spip:briefing:setSettings', _briefingArgs(s)),
+    testConnection: (s) => ipcRenderer.invoke('spip:briefing:testConnection', _briefingArgs(s)),
+
+    // 단방향 push 구독 — 콜백만 받고 ipcRenderer 원본 비노출. unsubscribe 반환.
+    onState: (cb) => _sub('spip:briefing:state', cb),
+    onDelta: (cb) => _sub('spip:briefing:delta', cb),
+    onDone: (cb) => _sub('spip:briefing:done', cb),
+    onError: (cb) => _sub('spip:briefing:error', cb),
+  },
 
   // 이벤트 구독(on/send) — 콜백만 받고 ipcRenderer 원본은 노출하지 않음(보안).
   onScanProgress: (cb) => {

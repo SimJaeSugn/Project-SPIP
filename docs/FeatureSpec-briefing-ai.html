@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project-SPIP — 기능명세: 브리핑 AI 연동</title>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#1e293b; --text:#e2e8f0; --sub:#94a3b8;
+    --accent:#34d399; --ref:#38bdf8; --line:#334155; --warn:#fbbf24; --danger:#f87171; --purple:#c4b5fd;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:"Segoe UI","Malgun Gothic",system-ui,sans-serif;line-height:1.7;}
+  header{padding:48px 32px 36px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#13203b,#0f172a);}
+  header h1{margin:0 0 10px;font-size:30px;letter-spacing:-0.01em;}
+  header .tag{display:inline-block;background:rgba(52,211,153,.12);color:var(--accent);
+    border:1px solid rgba(52,211,153,.4);border-radius:999px;padding:3px 12px;font-size:13px;margin-right:8px;margin-bottom:6px;}
+  header p{margin:14px 0 0;color:var(--sub);max-width:980px;}
+  .meta{margin-top:16px;font-size:13px;color:var(--sub);}
+  main{max-width:1280px;margin:0 auto;padding:32px;}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:24px 28px;margin:22px 0;}
+  h2{margin:0 0 16px;font-size:21px;color:var(--accent);border-left:4px solid var(--accent);padding-left:12px;}
+  h3{font-size:16px;color:var(--ref);margin:22px 0 10px;}
+  h4{font-size:14px;color:var(--text);margin:16px 0 8px;}
+  p{margin:8px 0;}
+  ul,ol{margin:8px 0;padding-left:22px;}
+  li{margin:5px 0;}
+  code{background:#0b1220;color:var(--ref);padding:1px 6px;border-radius:5px;font-size:12.5px;font-family:Consolas,monospace;}
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13px;}
+  th,td{border:1px solid var(--line);padding:9px 11px;text-align:left;vertical-align:top;}
+  th{background:#142035;color:var(--accent);}
+  tr:nth-child(even) td{background:rgba(255,255,255,.02);}
+  .rid{font-family:Consolas,monospace;color:var(--accent);font-weight:700;white-space:nowrap;}
+  .nid{font-family:Consolas,monospace;color:var(--warn);font-weight:700;white-space:nowrap;}
+  .pill{font-size:11px;font-weight:700;padding:2px 9px;border-radius:6px;white-space:nowrap;display:inline-block;}
+  .must{background:rgba(248,113,113,.16);color:#fca5a5;border:1px solid rgba(248,113,113,.5);}
+  .should{background:rgba(251,191,36,.16);color:#fcd34d;border:1px solid rgba(251,191,36,.5);}
+  .could{background:rgba(56,189,248,.16);color:#7dd3fc;border:1px solid rgba(56,189,248,.45);}
+  .wont{background:rgba(148,163,184,.16);color:#cbd5e1;border:1px solid rgba(148,163,184,.4);}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;}
+  .card{background:#0b1220;border:1px solid var(--line);border-radius:10px;padding:16px;}
+  .card .k{font-size:12px;color:var(--sub);text-transform:uppercase;letter-spacing:.5px;}
+  .card .v{font-size:14px;margin-top:6px;}
+  .kpi{font-size:26px;font-weight:800;color:var(--accent);}
+  .note{background:rgba(56,189,248,.08);border:1px solid rgba(56,189,248,.3);border-radius:8px;padding:12px 16px;font-size:13.5px;color:#bae6fd;margin:12px 0;}
+  .warn-box{background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.32);border-radius:8px;padding:12px 16px;font-size:13.5px;color:#fde68a;margin:12px 0;}
+  .danger-box{background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.35);border-radius:8px;padding:12px 16px;font-size:13.5px;color:#fecaca;margin:12px 0;}
+  .req{border:1px solid var(--line);border-radius:12px;padding:0;margin:20px 0;overflow:hidden;background:#0d1526;}
+  .req__head{background:#142035;padding:14px 20px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+  .req__head .id{font-family:Consolas,monospace;font-weight:800;font-size:16px;color:var(--accent);}
+  .req__head .title{font-size:16px;font-weight:700;}
+  .req__body{padding:18px 22px;}
+  .story{background:rgba(196,181,253,.07);border-left:3px solid var(--purple);padding:10px 14px;border-radius:0 8px 8px 0;color:#e9e3ff;font-size:13.5px;margin:6px 0 14px;}
+  .ac{list-style:none;padding-left:0;margin:8px 0;}
+  .ac li{padding-left:26px;position:relative;margin:7px 0;font-size:13.5px;}
+  .ac li:before{content:"\2610";position:absolute;left:0;top:0;color:var(--accent);font-size:15px;}
+  .dep{font-size:12.5px;color:var(--sub);}
+  .dep b{color:var(--ref);}
+  .legend{display:flex;gap:18px;flex-wrap:wrap;font-size:12.5px;color:var(--sub);margin-top:10px;}
+  .legend span{display:inline-flex;align-items:center;gap:6px;}
+  svg{max-width:100%;height:auto;display:block;margin:10px auto;}
+  footer{text-align:center;color:var(--sub);font-size:12.5px;padding:30px;border-top:1px solid var(--line);}
+  .mono{font-family:Consolas,monospace;font-size:12px;color:#cbd5e1;}
+</style>
+</head>
+<body>
+<header>
+  <span class="tag">기능명세 (Feature Spec)</span>
+  <span class="tag">배치: 브리핑 AI 연동</span>
+  <span class="tag">요구 R-34~R-41 · 비기능 N-08~N-10</span>
+  <h1>Project-SPIP — 오늘의 브리핑 AI 연동</h1>
+  <p>홈 대시보드 상단의 정적 요약 문장을, 로컬 LLM이 생성하는 <b>맥락 기반 능동 브리핑</b>으로 대체한다.
+  관리 데이터(스캔/프로젝트·메일·할 일·커밋활동)에 변화가 생기고 "사용자에게 알릴 가치가 있다"고 판단될 때,
+  알아야 할 것·알면 좋은 것·급한 것을 분류하고 <b>처리 방법 가이드</b>까지 곁들여 토큰 스트리밍으로 보여준다.
+  로컬·온프레미스 OpenAI 호환 엔드포인트를 쓰며, 모델 미구동 시에는 기존 정적 브리핑으로 안전하게 폴백한다.</p>
+  <div class="meta">문서 유형: 기능명세 · 작성: 제품 기획자(PM) · 작성일 2026-06-25 ·
+  입력: <code>docs/ref.md</code> / <code>docs/traceability.html</code>(R-33·N-07까지 사용) / <code>docs/pm/codebase-audit.html</code> /
+  <code>docs/architecture/m9-design.html</code>(RG coalesce) / <code>docs/architecture/m12-design.html</code>(보안) ·
+  기준 폴더(<code>docs/Planning/</code>·<code>docs/Templates/</code>) 부재 → 표준 스타일 적용</div>
+</header>
+
+<main>
+
+<!-- 개요 -->
+<section id="overview">
+  <h2>1. 배치 개요 · 목표 (왜)</h2>
+  <p>현재 "오늘의 브리핑"은 홈 상단의 <b>정적 요약 문장</b>으로, 데이터에서 단순 카운트를 끼워넣는 수준이다(예: "주의 필요 N건").
+  사용자는 무엇이 바뀌었는지·왜 중요한지·무엇부터 해야 하는지를 스스로 해석해야 한다. 본 배치는 이를 <b>능동적·맥락적 브리핑</b>으로 끌어올린다.</p>
+
+  <h3>해결하려는 사용자 문제</h3>
+  <ul>
+    <li><b>맥락 부재</b> — 카운트만으로는 "이번에 새로 생긴 것"과 "원래 있던 것"을 구분하기 어렵다.</li>
+    <li><b>판단 부담</b> — 미커밋·미푸시·마감 임박 할 일·새 메일 중 무엇이 급한지 사용자가 매번 직접 판단해야 한다.</li>
+    <li><b>행동 공백</b> — 무엇을 해야 하는지는 알아도 "어떻게"가 빠져 실행으로 이어지지 않는다.</li>
+    <li><b>망각</b> — 한 번 본 브리핑 항목을 처리하지 않으면 다음 갱신 때 사라져 누락된다.</li>
+  </ul>
+
+  <h3>비즈니스/제품 목표 · 대상 사용자 가치</h3>
+  <div class="grid">
+    <div class="card"><div class="k">대상 사용자</div><div class="v">로컬에 다수의 VS Code 프로젝트를 둔 단일 개발자(이미 SPIP를 데스크톱 앱으로 상주 사용).</div></div>
+    <div class="card"><div class="k">핵심 가치</div><div class="v">"지금 신경 쓸 것"을 앱이 먼저 골라 분류·가이드 → 사용자의 인지 부하·누락 감소.</div></div>
+    <div class="card"><div class="k">차별점</div><div class="v">클라우드 전송 없이 <b>로컬 LLM</b>으로 처리 → 프라이버시 유지(N-06 데이터 비오염 원칙 연속).</div></div>
+    <div class="card"><div class="k">opt-in</div><div class="v">로컬 모델이 필요한 기능 → 기본 비활성. 미설정/연결 실패 시 기존 정적 브리핑 유지(체감 무회귀).</div></div>
+  </div>
+
+  <h3>측정 가능한 성공 지표(제안)</h3>
+  <ul>
+    <li>브리핑 항목 <b>처리율(done/dismiss)</b> ≥ 40% (생성된 항목 대비, 단일 사용자 자체 텔레메트리 없이 로컬 카운터로 근사 — 선택).</li>
+    <li><b>반응성</b>(F-1): 이벤트 트리거 → "생성 중" 인디케이터 노출 <b>≤ 300ms</b>(결정적·환경 무관), "급함" 신호는 디바운스 우회 fast-path로 거의 즉시 생성. ref goal "거의 즉각 반응"의 핵심 지표.</li>
+    <li><b>추론 성능</b>: 이벤트 → 스트리밍 <b>첫 토큰까지 지연(TTFT)</b> 중앙값 ≤ 3초(로컬 7.8B·권장 사양 기준, 환경 의존 목표치 — 반응성과 분리).</li>
+    <li>모델 미구동 상태에서 홈 진입 시 <b>폴백 100%</b>(빈 화면·에러 다이얼로그·무한 로딩 0건).</li>
+    <li>같은 이벤트 폭주 시 LLM 호출 <b>coalesce 병합률</b> — 디바운스 창 내 다중 트리거가 정확히 1회 생성으로 수렴.</li>
+  </ul>
+</section>
+
+<!-- 범위 요약 -->
+<section id="scope">
+  <h2>2. 범위 · 우선순위 요약</h2>
+  <div class="grid">
+    <div class="card"><div class="k">신규 기능 요구</div><div class="kpi">8</div><div class="v">R-34 ~ R-41</div></div>
+    <div class="card"><div class="k">신규 비기능 요구</div><div class="kpi">3</div><div class="v">N-08 ~ N-10</div></div>
+    <div class="card"><div class="k">Must</div><div class="kpi" style="color:#fca5a5">5</div><div class="v">R-34·R-35·R-36·R-40 + N-08</div></div>
+    <div class="card"><div class="k">Should</div><div class="kpi" style="color:#fcd34d">4</div><div class="v">R-37·R-38·R-39 + N-09</div></div>
+    <div class="card"><div class="k">Could</div><div class="kpi" style="color:#7dd3fc">1</div><div class="v">N-10(텔레메트리 근사)</div></div>
+  </div>
+  <div class="note">요구 ID는 기존 추적성 매트릭스(R-33·N-07까지 사용)에 이어 <b>R-34부터·N-08부터</b> 부여했다. 신규 IPC·vendor 자산 추가 시 기존 보안 불변식(L-1 textContent·CSP·H-1·H-2·0600·N-06)을 0 약화로 유지한다.</div>
+  <div class="legend">
+    <span><span class="pill must">Must</span> 이번 배치 필수</span>
+    <span><span class="pill should">Should</span> 강력 권장(가치 큼)</span>
+    <span><span class="pill could">Could</span> 여유 시</span>
+    <span><span class="pill wont">Won't</span> 이번 배치 제외</span>
+  </div>
+</section>
+
+<!-- 의존성 다이어그램 -->
+<section id="deps">
+  <h2>3. 요구 간 의존성</h2>
+  <svg viewBox="0 0 920 520" role="img" aria-label="요구 의존성 다이어그램">
+    <defs>
+      <marker id="arrow" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="strokeWidth">
+        <path d="M0,0 L7,3 L0,6 Z" fill="#64748b"/>
+      </marker>
+    </defs>
+    <style>
+      .box{rx:10;stroke:#334155;stroke-width:1.5;}
+      .lbl{fill:#e2e8f0;font:700 13px 'Segoe UI',sans-serif;}
+      .sub{fill:#94a3b8;font:11px 'Segoe UI',sans-serif;}
+      .pri-must{fill:#1c1320;stroke:#f87171;}
+      .pri-should{fill:#1c1a10;stroke:#fbbf24;}
+      .pri-could{fill:#0e1a24;stroke:#38bdf8;}
+      .edge{stroke:#64748b;stroke-width:1.6;fill:none;marker-end:url(#arrow);}
+    </style>
+
+    <!-- R-34 LLM client (foundation) -->
+    <rect class="box pri-must" x="360" y="20" width="200" height="58"/>
+    <text class="lbl" x="372" y="44">R-34 LLM 클라이언트</text>
+    <text class="sub" x="372" y="62">Langchain·OpenAI호환·main egress</text>
+
+    <!-- N-08 security -->
+    <rect class="box pri-must" x="660" y="20" width="220" height="58"/>
+    <text class="lbl" x="672" y="44">N-08 보안(main egress·키0600)</text>
+    <text class="sub" x="672" y="62">프롬프트 인젝션 방어</text>
+
+    <!-- R-39 settings -->
+    <rect class="box pri-should" x="60" y="20" width="220" height="58"/>
+    <text class="lbl" x="72" y="44">R-39 설정 UI</text>
+    <text class="sub" x="72" y="62">엔드포인트/모델/키/토글</text>
+
+    <!-- R-36 trigger -->
+    <rect class="box pri-must" x="360" y="150" width="200" height="58"/>
+    <text class="lbl" x="372" y="174">R-36 이벤트 트리거</text>
+    <text class="sub" x="372" y="192">필요성 판단·coalesce</text>
+
+    <!-- R-38 carry-over -->
+    <rect class="box pri-should" x="640" y="150" width="220" height="58"/>
+    <text class="lbl" x="652" y="174">R-38 미처리 carry-over</text>
+    <text class="sub" x="652" y="192">done/dismiss 상태관리</text>
+
+    <!-- R-37 guide -->
+    <rect class="box pri-should" x="60" y="150" width="220" height="58"/>
+    <text class="lbl" x="72" y="174">R-37 처리 가이드 생성</text>
+    <text class="sub" x="72" y="192">분류 + how-to 프롬프트</text>
+
+    <!-- R-35 streaming render -->
+    <rect class="box pri-must" x="360" y="300" width="200" height="58"/>
+    <text class="lbl" x="372" y="324">R-35 스트리밍 렌더</text>
+    <text class="sub" x="372" y="342">토큰 스트림·RG 가드</text>
+
+    <!-- R-40 fallback -->
+    <rect class="box pri-must" x="640" y="300" width="220" height="58"/>
+    <text class="lbl" x="652" y="324">R-40 graceful 폴백</text>
+    <text class="sub" x="652" y="342">정적 브리핑·에러 안내</text>
+
+    <!-- R-41 dismiss UI -->
+    <rect class="box pri-should" x="60" y="300" width="220" height="58"/>
+    <text class="lbl" x="72" y="324">R-41 브리핑 항목 UI</text>
+    <text class="sub" x="72" y="342">항목별 done/dismiss·가이드 펼침</text>
+
+    <!-- N-09 / N-10 -->
+    <rect class="box pri-should" x="360" y="430" width="200" height="58"/>
+    <text class="lbl" x="372" y="454">N-09 성능·반응성</text>
+    <text class="sub" x="372" y="472">TTFT·coalesce·취소</text>
+    <rect class="box pri-could" x="640" y="430" width="220" height="58"/>
+    <text class="lbl" x="652" y="454">N-10 처리율 근사 계측</text>
+    <text class="sub" x="652" y="472">로컬 카운터(선택)</text>
+
+    <!-- edges -->
+    <path class="edge" d="M280,49 L360,49"/>            <!-- R39 -> R34 -->
+    <path class="edge" d="M660,49 L560,49"/>            <!-- N08 -> R34 -->
+    <path class="edge" d="M460,78 L460,150"/>           <!-- R34 -> R36 -->
+    <path class="edge" d="M170,78 L260,150"/>           <!-- R39 -> R37 (loose) -->
+    <path class="edge" d="M560,179 L640,179"/>          <!-- R36 -> R38 -->
+    <path class="edge" d="M360,179 L280,179"/>          <!-- R36 -> R37 -->
+    <path class="edge" d="M460,208 L460,300"/>          <!-- R36 -> R35 -->
+    <path class="edge" d="M640,208 L560,300"/>          <!-- R38 -> R35 -->
+    <path class="edge" d="M280,179 L380,300"/>          <!-- R37 -> R35 -->
+    <path class="edge" d="M560,329 L640,329"/>          <!-- R35 -> R40 -->
+    <path class="edge" d="M360,329 L280,329"/>          <!-- R35 -> R41 -->
+    <path class="edge" d="M280,330 L640,210"/>          <!-- R41 -> R38 상태API (단방향) -->
+    <text class="sub" x="430" y="262">R41 UI → R38 상태API</text>
+    <path class="edge" d="M460,358 L460,430"/>          <!-- R35 -> N09 -->
+  </svg>
+  <div class="legend">
+    <span><span class="pill must">Must</span></span>
+    <span><span class="pill should">Should</span></span>
+    <span><span class="pill could">Could</span></span>
+    <span>화살표 = "A → B" : B가 A에 의존</span>
+  </div>
+  <div class="note"><b>구현 순서 권장</b>: ① N-08 보안 골격 + R-34 클라이언트(기반) → ② R-39 설정 → ③ R-36 트리거+필요성 판단 → ④ R-37 가이드 프롬프트 → ⑤ R-38 carry-over 상태 → ⑥ R-35 스트리밍 렌더 + R-41 항목 UI → ⑦ R-40 폴백(전 구간 횡단) → ⑧ N-09/N-10 계측. R-40 폴백은 모든 단계에서 함께 검증한다(횡단 관심사).</div>
+</section>
+
+<!-- 사용자 플로우 -->
+<section id="flow">
+  <h2>4. 사용자 플로우 (정상 + 폴백)</h2>
+  <svg viewBox="0 0 900 360" role="img" aria-label="브리핑 생성 플로우">
+    <defs>
+      <marker id="arrow2" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="strokeWidth">
+        <path d="M0,0 L7,3 L0,6 Z" fill="#34d399"/>
+      </marker>
+      <marker id="arrowR" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="strokeWidth">
+        <path d="M0,0 L7,3 L0,6 Z" fill="#f87171"/>
+      </marker>
+    </defs>
+    <style>
+      .n{rx:9;fill:#0b1220;stroke:#334155;stroke-width:1.5;}
+      .nt{fill:#e2e8f0;font:600 12.5px 'Segoe UI',sans-serif;}
+      .nd{fill:#94a3b8;font:10.5px 'Segoe UI',sans-serif;}
+      .ok{stroke:#34d399;stroke-width:1.6;fill:none;marker-end:url(#arrow2);}
+      .bad{stroke:#f87171;stroke-width:1.6;fill:none;marker-end:url(#arrowR);stroke-dasharray:5 3;}
+      .deci{fill:#1c1a10;stroke:#fbbf24;}
+    </style>
+    <rect class="n" x="20" y="40" width="150" height="52"/>
+    <text class="nt" x="34" y="62">데이터 변경 이벤트</text>
+    <text class="nd" x="34" y="80">scan/git/mail/할일</text>
+
+    <rect class="n" x="210" y="40" width="150" height="52"/>
+    <text class="nt" x="224" y="62">coalesce 디바운스</text>
+    <text class="nd" x="224" y="80">폭주 1회로 병합</text>
+
+    <polygon class="n deci" points="400,66 470,40 540,66 470,92"/>
+    <text class="nt" x="430" y="64">필요?</text>
+    <text class="nd" x="424" y="80">판정 기준</text>
+
+    <rect class="n" x="580" y="40" width="150" height="52"/>
+    <text class="nt" x="594" y="62">carry-over 병합</text>
+    <text class="nd" x="594" y="80">미처리 항목 합류</text>
+
+    <rect class="n" x="580" y="160" width="150" height="60"/>
+    <text class="nt" x="594" y="184">프롬프트 조립</text>
+    <text class="nd" x="594" y="202">안전 주입·분류·가이드</text>
+
+    <rect class="n" x="360" y="160" width="160" height="60"/>
+    <text class="nt" x="374" y="184">로컬 LLM 호출</text>
+    <text class="nd" x="374" y="202">main egress·스트림</text>
+
+    <rect class="n" x="120" y="160" width="180" height="60"/>
+    <text class="nt" x="134" y="184">스트리밍 렌더</text>
+    <text class="nd" x="134" y="202">토큰→홈 브리핑(RG 가드)</text>
+
+    <rect class="n" x="120" y="270" width="180" height="56"/>
+    <text class="nt" x="134" y="294">항목 done/dismiss</text>
+    <text class="nd" x="134" y="312">처리 상태 저장→다음 carry-over</text>
+
+    <rect class="n" x="360" y="270" width="220" height="56" style="stroke:#f87171"/>
+    <text class="nt" x="374" y="294">폴백: 정적 브리핑 유지</text>
+    <text class="nd" x="374" y="312">미구동/연결실패/타임아웃 시</text>
+
+    <path class="ok" d="M170,66 L210,66"/>
+    <path class="ok" d="M360,66 L400,66"/>
+    <path class="ok" d="M540,66 L580,66"/>
+    <text class="nd" x="548" y="60" fill="#34d399">예</text>
+    <path class="ok" d="M655,92 L655,160"/>
+    <path class="ok" d="M580,190 L520,190"/>
+    <path class="ok" d="M360,190 L300,190"/>
+    <path class="ok" d="M210,220 L210,270"/>
+    <path class="ok" d="M300,298 L520,298" stroke="#475569" marker-end="none" stroke-dasharray="2 4"/>
+    <text class="nd" x="305" y="290" fill="#64748b">done→상태저장</text>
+    <!-- bad paths -->
+    <path class="bad" d="M470,92 L470,160" />
+    <text class="nd" x="478" y="130" fill="#f87171">아니오: 생성 안 함(기존 유지)</text>
+    <path class="bad" d="M440,200 L440,270"/>
+    <text class="nd" x="446" y="248" fill="#f87171">실패</text>
+  </svg>
+  <div class="note">필요성 판정이 "아니오"면 LLM을 호출하지 않고 직전 브리핑/정적 브리핑을 그대로 둔다(과도 호출 방지·ref goal). 호출 경로 어디서든 실패하면 R-40 폴백으로 수렴한다.</div>
+</section>
+
+<!-- 요구 상세 -->
+<section id="requirements">
+  <h2>5. 요구 상세 명세</h2>
+
+  <!-- R-34 -->
+  <div class="req">
+    <div class="req__head"><span class="id">R-34</span><span class="title">LLM 연동 클라이언트 (Langchain · OpenAI 호환 · 설정 가능)</span><span class="pill must">Must</span></div>
+    <div class="req__body">
+      <div class="story">개발자로서, 내 PC(또는 사내 온프레미스)에서 돌아가는 로컬 LLM에 SPIP가 안전하게 연결되어 브리핑을 생성받고 싶다. 클라우드에 데이터를 보내지 않기 위해서다.</div>
+      <h4>기능 명세</h4>
+      <ul>
+        <li>Electron <b>메인 프로세스</b>에서만 LLM 네트워크 호출을 수행한다(렌더러 CSP <code>connect-src 'none'</code> 불변, N-08).</li>
+        <li>Langchain(JS)을 사용해 <b>OpenAI 호환 chat completions</b> 인터페이스로 호출한다. 기본 엔드포인트 <code>http://127.0.0.1:1234/v1</code>, 기본 모델 <code>exaone-3.5-7.8b-instruct</code>(예: LM Studio).</li>
+        <li>엔드포인트 base URL·모델명·API 키는 <b>설정에서 변경 가능</b>(R-39). 온프레미스 OpenAI 호환 서버로 교체 가능해야 한다. 특정 클라우드 벤더(Anthropic 등) 고정 금지.</li>
+        <li>스트리밍(<code>stream:true</code>)을 지원하며, 부분 토큰을 렌더러로 단방향 push(R-35)한다.</li>
+        <li>호출 타임아웃·최대 토큰·동시호출 1개(이전 미완료 호출 취소) 가드를 둔다.</li>
+        <li>Langchain 도입은 신규 런타임 의존성 — CLAUDE.md "런타임 의존성 최소" 규약에 따라 <b>근거를 ADR로 문서화</b>(아키텍처 단계 위임). 의존성은 메인 프로세스에만 적재(렌더러 번들 없음).</li>
+      </ul>
+      <h4>수용 기준</h4>
+      <ul class="ac">
+        <li>기본 설정으로 LM Studio 등 로컬 서버 구동 시, 테스트 프롬프트에 대해 스트리밍 응답이 메인 프로세스에서 수신된다.</li>
+        <li>설정에서 base URL/모델/키를 바꾸면 재시작 없이 다음 호출부터 새 엔드포인트로 향한다.</li>
+        <li>렌더러에서 외부로 나가는 네트워크 요청은 0건이다(CSP 위반 0, 메인 egress만).</li>
+        <li>이전 호출이 진행 중에 새 트리거가 발생하면 이전 호출은 취소되고 중복 응답이 UI에 섞이지 않는다.</li>
+        <li>호출 모듈은 IPC/DOM과 분리된 단위로, 모킹된 HTTP로 헤드리스 <code>node --test</code> 검증이 가능하다.</li>
+      </ul>
+      <p class="dep"><b>의존</b>: 없음(기반). <b>피의존</b>: R-35·R-36·R-37·R-39·R-40·N-08·N-09.</p>
+    </div>
+  </div>
+
+  <!-- R-35 -->
+  <div class="req">
+    <div class="req__head"><span class="id">R-35</span><span class="title">스트리밍 브리핑 렌더</span><span class="pill must">Must</span></div>
+    <div class="req__body">
+      <div class="story">개발자로서, 브리핑이 생성되는 동안 토큰이 흘러나오는 것을 실시간으로 보고 싶다. 기다리는 체감을 줄이고 진행을 확인하기 위해서다.</div>
+      <h4>기능 명세</h4>
+      <ul>
+        <li>메인이 push하는 부분 토큰을 홈 상단 브리핑 영역에 점진 표시한다. 생성 중에는 진행 표시(스트리밍 인디케이터·중단 버튼).</li>
+        <li>렌더는 <b>L-1 불변식 준수</b> — 모든 모델 출력은 <code>textContent</code>로만 삽입(<code>innerHTML</code> 금지). 마크다운 강조는 토큰을 신뢰 텍스트로 취급해 안전 파싱(또는 평문) 후 <code>el()</code> 헬퍼로 노드 구성.</li>
+        <li>전체 재렌더가 스트림을 끊지 않도록 <b>RG(렌더 가드)의 patchRegion/preserve를 재사용</b>해 브리핑 영역만 부분 갱신한다(m9/m10 인프라). 검색 IME 조합 중·오버레이 열림·드래그 중에는 RG coalesce로 보류 후 1회 병합.</li>
+        <li>스트림 완료 시 최종 항목 목록(분류·가이드·carry-over)으로 안정화된다. 중단 버튼은 호출을 취소하고 마지막까지 받은 내용을 그대로 둔다.</li>
+      </ul>
+      <h4>수용 기준</h4>
+      <ul class="ac">
+        <li>토큰이 도착하는 대로 브리핑 텍스트가 증가하며, 첫 토큰 표시까지 지연이 N-09 목표 이내다.</li>
+        <li>스트리밍 중 홈 다른 섹션의 라이브 갱신(git/mail push)이 발생해도 브리핑 영역 부분 갱신만 일어나고 스트림이 끊기지 않는다.</li>
+        <li>검색창에서 한글을 조합 중일 때 브리핑 스트림이 도착해도 입력이 깨지지 않는다(IME 가드 유지).</li>
+        <li>모델 출력에 <code>&lt;script&gt;</code>·HTML 태그 문자열이 포함돼도 화면에 평문으로 표시되며 실행/주입되지 않는다(L-1).</li>
+        <li>중단 버튼 클릭 시 토큰 수신이 멈추고 부분 결과가 보존된다.</li>
+      </ul>
+      <p class="dep"><b>의존</b>: R-34, R-36, R-37, R-38. (RG: m9-design <code>RG.coalesce</code>/<code>preserve.patchRegion</code> 재사용)</p>
+    </div>
+  </div>
+
+  <!-- R-36 -->
+  <div class="req">
+    <div class="req__head"><span class="id">R-36</span><span class="title">이벤트 트리거 + 필요성 판단 + coalesce</span><span class="pill must">Must</span></div>
+    <div class="req__body">
+      <div class="story">개발자로서, 관리 데이터가 바뀌고 그게 내가 알아야 할 만한 변화일 때만 브리핑이 새로 생성되길 바란다. 사소한 변화마다 LLM이 호출되어 시끄럽거나 느려지는 것을 원치 않는다.</div>
+      <h4>기능 명세</h4>
+      <ul>
+        <li>기존 라이브 발신원(StateWatcher의 <code>spip:projectsUpdated</code>, MailWatcher의 <code>spip:mailUpdated</code>, 할 일·디스크 등 store 변경)을 브리핑 트리거의 입력으로 구독한다.</li>
+        <li><b>반응성(F-1) — 인디케이터 즉시 노출</b>: 이벤트가 트리거로 판정되면, 추론 지연과 무관하게 <b>≤ 300ms 이내에 "생성 중" 인디케이터</b>를 홈 브리핑 영역에 표시한다. ref goal "거의 즉각 반응"은 <b>인디케이터 지연·fast-path</b>로 충족하며, 첫 토큰(TTFT)은 별도 성능 지표(N-09)로 둔다.</li>
+        <li><b>일반 변경 — coalesce 디바운스(기본 2000ms 고정·설정 가변, F-2)</b>로 짧은 시간 다발 이벤트를 1회 생성으로 병합한다. m9의 <code>RG.coalesce</code> 큐 패턴/순수 판정 로직을 재사용·확장한다.</li>
+        <li><b>급함 fast-path(F-1)</b> — "급함"으로 분류되는 신호(아래 표 "급함" 행: 받을 커밋 발생 <code>behind</code> 0→양수, 마감 임박 ≤24h 진입/경과, 신규 dirty 대량 발생)는 <b>디바운스를 우회</b>해 거의 즉시 생성을 트리거한다. 단 동시 호출 1개·진행 중 호출 취소 가드는 유지(N-09).</li>
+        <li><b>필요성 판정(순수 함수)</b> — 직전 브리핑 생성 시점의 데이터 스냅샷과 현재 스냅샷을 비교해, 아래 "유의 변화" 중 하나라도 발생했을 때만 생성한다. 단순 카운트 무변동·노이즈(예: 같은 파일 mtime 흔들림)는 트리거하지 않는다.</li>
+      </ul>
+      <h4>필요성 판정 기준(제안 — 검증 가능하게 정의)</h4>
+      <table>
+        <tr><th>분류 신호</th><th>유의 변화 조건(트리거)</th><th>goal 분류 / 경로</th></tr>
+        <tr><td>주의 필요 프로젝트(stale/dirty)</td><td>주의 필요 집합에 <b>새 프로젝트 진입</b>, 또는 집합 크기 증가</td><td>알면 좋음 / 알아야 함 · 디바운스</td></tr>
+        <tr><td>미커밋 변경(git dirty)</td><td>이전엔 clean이던 repo가 dirty로 전환(신규 dirty 발생)</td><td>알아야 함 · 디바운스 (단 <b>대량 신규 dirty</b>는 급함·fast-path)</td></tr>
+        <tr><td>미푸시(ahead&gt;0)</td><td>ahead가 0→양수로 전환, 또는 ahead 증가</td><td>알아야 함 · 디바운스</td></tr>
+        <tr><td>받을 커밋(behind&gt;0)</td><td>behind가 0→양수로 전환(원격 갱신 도착)</td><td><b>급함 · fast-path</b></td></tr>
+        <tr><td>새 메일</td><td>읽지 않은 새 메일 도착(<code>onMailUpdated</code> 신규 항목)</td><td>알면 좋음 / 알아야 함 · 디바운스</td></tr>
+        <tr><td>마감 임박 할 일</td><td>마감이 <b>≤24h</b>로 새로 진입했거나 마감 경과 발생</td><td><b>급함 · fast-path</b></td></tr>
+        <tr><td>디스크 회수 후보</td><td>회수 가능 용량이 임계(기본 +1GB) 새로 발생</td><td>알면 좋음 · 디바운스</td></tr>
+        <tr><td>스캔 완료</td><td>재스캔으로 프로젝트 구성이 변동(추가/삭제)</td><td>알면 좋음 · 디바운스</td></tr>
+      </table>
+      <h4>기본 임계값(F-2 — 명세 수준 고정 · 설정 가변이되 기본 확정)</h4>
+      <table>
+        <tr><th>상수</th><th>기본값(고정)</th><th>설정 노출</th></tr>
+        <tr><td>coalesce 디바운스 창</td><td><b>2000ms</b></td><td>R-39 고급(선택)</td></tr>
+        <tr><td>마감 임박 "급함" 임계</td><td><b>24시간(또는 기한 경과)</b></td><td>R-39 고급(선택)</td></tr>
+        <tr><td>디스크 회수 신규 임계</td><td><b>1GB</b></td><td>고정(비노출)</td></tr>
+        <tr><td>대량 신규 dirty(fast-path) 임계</td><td><b>한 tick 신규 dirty repo ≥ 3개</b></td><td>고정(비노출)</td></tr>
+        <tr><td>인디케이터 노출 상한</td><td><b>300ms</b></td><td>고정(비노출)</td></tr>
+      </table>
+      <div class="note">상수는 단일 출처(상수 모듈)로 두고, 위 값을 <b>명세 수준 기본값으로 고정</b>한다. 설정 가변 항목도 기본값은 확정이며, 아키텍처/구현은 이 기본을 기준으로 경계 테스트를 작성한다.</div>
+      <h4>수용 기준</h4>
+      <ul class="ac">
+        <li>위 표의 "유의 변화" 중 하나가 발생하면(테스트 픽스처로 재현) 브리핑 생성이 정확히 1회 트리거된다.</li>
+        <li>트리거 판정 시 "생성 중" 인디케이터가 <b>300ms 이내</b> 표시된다(추론 지연과 무관, 별도 측정).</li>
+        <li>"급함" 신호(behind 0→양수·마감 ≤24h 진입·대량 신규 dirty)는 <b>디바운스를 거치지 않고</b> 즉시 생성이 트리거된다(픽스처로 검증).</li>
+        <li>유의 변화가 없는 이벤트(예: 동일 데이터 재푸시)는 LLM 호출 0건이다.</li>
+        <li>디바운스 창(기본 2000ms) 안에 몰린 일반 이벤트 N개는 LLM 호출 1회로 병합된다.</li>
+        <li>기본 임계값(2000ms·24h·1GB·dirty≥3) 경계 전후로 트리거/비트리거가 갈리는 경계 테스트가 통과한다.</li>
+        <li>필요성 판정·coalesce·fast-path 분기 로직은 DOM/타이머와 분리된 순수 함수로 헤드리스 단위테스트가 가능하다.</li>
+        <li>스캔 진행 중·앱 비포커스 등 가드 상황에서 무분별한 트리거가 발생하지 않는다(기존 phase/가시성 가드 존중).</li>
+      </ul>
+      <p class="dep"><b>의존</b>: R-34. <b>피의존</b>: R-35·R-37·R-38.</p>
+    </div>
+  </div>
+
+  <!-- R-37 -->
+  <div class="req">
+    <div class="req__head"><span class="id">R-37</span><span class="title">분류 + 처리 가이드 생성</span><span class="pill should">Should</span></div>
+    <div class="req__body">
+      <div class="story">개발자로서, 브리핑이 단순 목록이 아니라 "왜 중요한지와 어떻게 처리하는지"까지 알려주길 바란다. 무엇부터 어떻게 할지 바로 행동하기 위해서다.</div>
+      <h4>기능 명세</h4>
+      <ul>
+        <li>프롬프트는 모델에게 항목을 <b>3분류</b>(알아야 함 / 알면 좋음 / 급함)로 묶고, 각 항목에 <b>간결한 처리 가이드(how-to)</b>를 붙이도록 지시한다(ref goal·기능 요구).</li>
+        <li>출력은 렌더가 파싱 가능한 <b>구조화 형식</b>(예: 항목별 {분류, 제목, 한 줄 근거, 가이드, 출처참조})을 권장. 모델이 자유 텍스트로 응답해도 폴백 표시되도록 파서는 관대하게.</li>
+        <li>가이드는 SPIP가 실제 제공하는 액션과 연결될 때 이를 안내한다(예: "이 프로젝트 카드에서 외부 툴로 열기", "재스캔", "메일 본문 열기"). 가이드는 <b>표시 전용(display-only)</b> — 모델 출력은 어떤 경우에도 자동 실행·클릭 명령·코드/명령 실행에 쓰이지 않는다(N-08).</li>
+        <li>시스템 프롬프트는 SPIP 도메인 용어·앱 기능을 모델에 컨텍스트로 제공해 환각을 억제하되, <b>안전성은 출력의 정확성에 의존하지 않는다</b>(잘못 안내해도 자동 실행이 없어 안전 영향 0).</li>
+      </ul>
+      <h4>수용 기준</h4>
+      <ul class="ac">
+        <li>생성된 브리핑의 각 항목이 3분류 중 하나로 태깅되어 화면에 시각적으로 구분된다.</li>
+        <li>각 항목에 최소 1개의 처리 가이드 문장이 포함된다(가이드 없는 단순 나열 0건 목표).</li>
+        <li>모델 출력이 구조화 형식을 벗어나도 앱이 크래시 없이 평문 폴백으로 표시한다.</li>
+        <li><b>모델 출력으로 인한 자동 실행이 0건이다</b>(가이드·링크·명령 문자열은 textContent 표시 전용 — 환각 가이드가 와도 앱 동작·파일·프로세스에 영향이 없음을 테스트로 검증).</li>
+      </ul>
+      <p class="dep"><b>의존</b>: R-34, R-36. <b>피의존</b>: R-35(렌더), R-41(항목 UI).</p>
+    </div>
+  </div>
+
+  <!-- R-38 -->
+  <div class="req">
+    <div class="req__head"><span class="id">R-38</span><span class="title">미처리 항목 carry-over 상태관리</span><span class="pill should">Should</span></div>
+    <div class="req__body">
+      <div class="story">개발자로서, 지난 브리핑에서 아직 처리하지 않은 항목이 새 브리핑에도 계속 따라오길 바란다. 한 번 놓친 일을 잊지 않기 위해서다.</div>
+      <h4>기능 명세 · carry-over "처리됨" 정의</h4>
+      <ul>
+        <li>각 브리핑 항목은 안정적 <b>항목 키</b>(예: 신호유형 + 대상 식별자 해시)를 가진다. 같은 사안은 재생성돼도 같은 키로 식별된다.</li>
+        <li>항목 상태: <b>open</b>(미처리) → <b>done</b>(사용자가 처리완료 표시) / <b>dismissed</b>(사용자가 닫음·관심 없음). 상태는 로컬에 영속(<code>uiStateStore</code> 신규 키 또는 별도 상태 파일, 0600).</li>
+        <li><b>"처리됨" = 사용자가 항목별 done 또는 dismiss 액션을 한 경우</b>(R-41 UI). 단순히 브리핑을 다시 본 것만으로는 처리됨이 아니다.</li>
+        <li>재생성 시: 현재 유의 변화 항목 + <b>아직 open인 이전 항목</b>을 함께 프롬프트에 넣어 carry-over 브리핑을 만든다. done/dismissed 항목은 제외.</li>
+        <li>근본 데이터가 해소되면(예: dirty repo가 commit되어 clean) 해당 open 항목은 <b>자동 해소(auto-resolve)</b> 처리되어 carry-over에서 빠진다.</li>
+        <li>상태 저장소는 무한 증가하지 않도록 상한·만료(예: dismissed는 N일 후 정리)를 둔다.</li>
+        <li><b>m12 상승 세션(권한 상승) 결정(F-6)</b>: 관리자 상승 세션에서는 m12대로 영속 write가 보류되므로, 브리핑 carry-over·상태(done/dismiss)도 <b>해당 세션에서는 메모리에만 유지하고 디스크 영속을 보류</b>한다. 별도 경고 없이 기존 m12 경고 배너로 충분(중복 경고 금지).</li>
+      </ul>
+      <h4>수용 기준</h4>
+      <ul class="ac">
+        <li>이전 브리핑에서 open이던 항목이, 새 이벤트로 재생성된 브리핑에도 carry-over로 포함된다.</li>
+        <li>사용자가 done/dismiss한 항목은 다음 재생성 브리핑에 다시 나타나지 않는다.</li>
+        <li>항목의 근본 데이터가 해소되면(commit 완료 등) open 항목이 자동으로 carry-over에서 사라진다.</li>
+        <li>상태는 (비상승 세션에서) 앱 재시작 후에도 유지된다(영속·0600 권한).</li>
+        <li>상승 세션에서는 상태 변경이 메모리에만 적용되고 디스크 write가 보류된다(m12 일관·중복 경고 0).</li>
+        <li>항목 키 산출·상태 전이·carry-over 선별 로직은 순수 함수로 헤드리스 단위테스트가 가능하다.</li>
+      </ul>
+      <p class="dep"><b>의존</b>: R-36(트리거 입력). <b>상태 입력</b>: R-41 항목 UI → R-38 상태 API <b>단방향</b>(F-3 — R-38은 상태를 소유·제공하고, R-41은 상태 API의 호출자). <b>피의존</b>: R-35(carry-over 렌더).</p>
+    </div>
+  </div>
+
+  <!-- R-39 -->
+  <div class="req">
+    <div class="req__head"><span class="id">R-39</span><span class="title">설정 UI (엔드포인트 / 모델 / API 키 / 토글)</span><span class="pill should">Should</span></div>
+    <div class="req__body">
+      <div class="story">개발자로서, 브리핑 AI를 켜고 끄고, 어떤 로컬/온프레미스 모델에 연결할지 직접 지정하고 싶다. 내 환경에 맞게 쓰기 위해서다.</div>
+      <h4>기능 명세</h4>
+      <ul>
+        <li>기존 설정 모달(R-30 2-pane·5분류)에 <b>"브리핑 AI" 카테고리</b>를 추가한다.</li>
+        <li>설정 항목: 기능 <b>활성 토글</b>(기본 off, opt-in) · <b>base URL</b> · <b>모델명</b> · <b>API 키</b>(선택, 로컬은 보통 불필요) · 디바운스/타임아웃 등 고급(선택).</li>
+        <li><b>연결 테스트 버튼</b> — 현재 설정으로 모델에 핑/짧은 호출을 보내 성공/실패와 모델명을 표시.</li>
+        <li>API 키는 <b>0600 권한으로 저장</b>하며 UI에는 마스킹 표시(N-08). 키는 렌더러로 평문 회송하지 않는다.</li>
+        <li>설정 변경은 IPC로 메인에 반영(신규 invoke 채널 최소화·senderFrame 검증·페이로드 shape 화이트리스트, m12 보안 패턴 준수).</li>
+      </ul>
+      <h4>수용 기준</h4>
+      <ul class="ac">
+        <li>설정에서 토글을 끄면 브리핑 AI가 동작하지 않고 정적 브리핑이 유지된다.</li>
+        <li>base URL/모델/키 변경이 0600 권한 파일에 저장되고 다음 호출에 반영된다.</li>
+        <li>연결 테스트가 성공/실패를 명확히 표시하며, 실패 사유(연결 거부·타임아웃 등)를 사용자에게 안내한다.</li>
+        <li>API 키는 설정 UI에서 마스킹되고, 저장 파일 권한이 0600이다.</li>
+        <li>설정 표시·저장은 L-1(textContent)·CSP를 위반하지 않는다.</li>
+      </ul>
+      <p class="dep"><b>의존</b>: R-34, N-08. (R-30 설정 2-pane 인프라 재사용)</p>
+    </div>
+  </div>
+
+  <!-- R-40 -->
+  <div class="req">
+    <div class="req__head"><span class="id">R-40</span><span class="title">Graceful 폴백 · 에러 처리</span><span class="pill must">Must</span></div>
+    <div class="req__body">
+      <div class="story">개발자로서, 로컬 모델이 꺼져 있거나 연결이 실패해도 앱이 멀쩡히 동작하고 기존 브리핑이라도 보이길 바란다. AI 때문에 앱이 망가지는 것을 원치 않는다.</div>
+      <h4>기능 명세</h4>
+      <ul>
+        <li>기능 비활성·연결 실패·타임아웃·잘못된 응답 시 <b>기존 정적 브리핑으로 폴백</b>한다(무한 로딩·빈 화면·치명 에러 다이얼로그 금지).</li>
+        <li>폴백 시 사용자에게 비방해적 안내(예: "로컬 AI 미연결 — 설정에서 확인" 인라인 힌트 + 설정 바로가기)를 표시한다.</li>
+        <li>에러는 분류해 안내한다: 연결 거부(서버 미구동) / 타임아웃 / 인증 실패 / 모델 없음 / 응답 파싱 실패.</li>
+        <li>스트리밍 도중 끊기면 마지막까지 받은 부분 결과를 유지하고 재시도/폴백 옵션을 제공.</li>
+        <li>m12 상승 세션(권한 상승) 등 write 보류 상태에서는 상태 저장이 보류되더라도 브리핑 표시 자체는 동작(또는 명시 보류 안내)하도록 한다.</li>
+      </ul>
+      <h4>수용 기준</h4>
+      <ul class="ac">
+        <li>로컬 모델이 꺼진 상태로 홈에 진입해도 정적 브리핑이 표시되고 에러로 인한 화면 깨짐이 0건이다.</li>
+        <li>연결 실패·타임아웃 각각에 대해 사용자에게 구분된 안내가 표시된다.</li>
+        <li>스트리밍 중 강제 연결 종료 시 앱이 크래시하지 않고 부분 결과를 유지한다.</li>
+        <li>폴백/에러 경로가 자동 테스트(모킹된 실패 응답)로 검증된다.</li>
+      </ul>
+      <p class="dep"><b>의존</b>: R-34, R-35(횡단). 전 구간에서 함께 검증.</p>
+    </div>
+  </div>
+
+  <!-- R-41 -->
+  <div class="req">
+    <div class="req__head"><span class="id">R-41</span><span class="title">브리핑 항목 UI (done / dismiss · 가이드 펼침)</span><span class="pill should">Should</span></div>
+    <div class="req__body">
+      <div class="story">개발자로서, 브리핑의 각 항목을 처리완료로 표시하거나 닫고, 처리 가이드를 펼쳐 보고 싶다. 내가 챙긴 것과 안 챙긴 것을 구분하고 다음 브리핑을 깔끔하게 유지하기 위해서다.</div>
+      <h4>기능 명세</h4>
+      <ul>
+        <li>각 항목에 <b>완료(done)</b>·<b>닫기(dismiss)</b> 액션을 제공한다. 이 액션이 R-38의 "처리됨"을 정의한다.</li>
+        <li>분류(알아야 함/알면 좋음/급함)는 시각적으로 구분(색/배지)하고, "급함"은 시각적으로 강조.</li>
+        <li>처리 가이드는 기본 접힘/펼침 토글(공간 절약), 또는 항상 표시(설계 선택).</li>
+        <li>모든 항목 노드는 <code>el()</code>·<code>textContent</code>로 구성(L-1). 액션은 키보드 접근 가능(N-07 접근성 연속).</li>
+        <li>done/dismiss 시 항목이 즉시 UI에서 사라지거나 완료 표식이 붙고, 상태가 영속(R-38)된다.</li>
+      </ul>
+      <h4>수용 기준</h4>
+      <ul class="ac">
+        <li>각 항목에서 done/dismiss를 실행하면 항목 상태가 바뀌고 다음 브리핑 재생성 시 반영된다.</li>
+        <li>분류가 시각적으로 구분되고 "급함" 항목이 강조 표시된다.</li>
+        <li>가이드를 펼침/접힘 또는 표시할 수 있고, 키보드로 모든 액션에 접근 가능하다.</li>
+        <li>항목 렌더가 L-1(textContent)을 위반하지 않는다.</li>
+      </ul>
+      <p class="dep"><b>의존</b>: R-35(렌더), R-37(가이드), R-38(상태). R-41의 done/dismiss 액션은 <b>R-38 상태 API를 호출</b>한다(UI→상태 단방향, F-3 — 순환 아님).</p>
+    </div>
+  </div>
+
+  <h3 style="margin-top:34px;">비기능 요구</h3>
+
+  <!-- N-08 -->
+  <div class="req">
+    <div class="req__head"><span class="id">N-08</span><span class="title">보안 — main egress · API 키 0600 · 프롬프트 인젝션 방어</span><span class="pill must">Must</span></div>
+    <div class="req__body">
+      <h4>명세</h4>
+      <ul>
+        <li><b>네트워크 egress는 메인 프로세스 단독</b>. 렌더러 CSP(<code>connect-src 'none'</code>·<code>script-src 'self'</code>) 불변. LLM 응답은 IPC 단방향 push로만 렌더러에 도달.</li>
+        <li><b>API 키 0600</b> 저장(N-06 데이터 폴더 영속 패턴). 렌더러로 평문 회송 금지·로그 미기록.</li>
+        <li><b>입력은 신뢰 불가(F-4)</b> — 스캔/메일/외부 유래 데이터(프로젝트명·커밋 메시지·메일 제목/본문 등)는 잠재적 적대 입력으로 간주한다. <b>데이터 영역과 지시 영역을 구조적으로 분리</b>(역할 메시지·구분자 블록)해 데이터가 "지시"로 해석되지 않게 하고, 시스템 지시가 항상 우위를 갖도록 프롬프트를 구성한다.</li>
+        <li><b>입력 길이 상한(F-4)</b> — 메일 본문 등 가변 길이 입력은 <b>항목당 상한으로 truncate</b>(권장 기본: 메일 본문 항목당 ≤2000자, 커밋 메시지 ≤500자, 항목 총개수 상한). 프롬프트 폭주·비용·인젝션 표면을 동시에 제한.</li>
+        <li><b>출력 표시 전용 정책(F-4)</b> — 모델 출력은 <b>표시 전용</b>이다. 출력 내 링크·명령·코드 문자열은 <b>평문 textContent(L-1)로만</b> 렌더하며, 어떤 출력도 자동 실행·클릭 핸들러·코드/명령 실행·IPC 호출에 사용하지 않는다. (R-37·R-35와 일관)</li>
+        <li>신규 IPC 채널은 m12 보안 패턴(senderFrame 정확 일치·페이로드 shape 화이트리스트·invoke 최소화) 준수. H-1/H-2 0 약화.</li>
+      </ul>
+      <h4>수용 기준</h4>
+      <ul class="ac">
+        <li>렌더러에서 외부로 나가는 네트워크 요청 0건(보안 게이트 실측).</li>
+        <li>API 키 저장 파일 권한 0600·렌더러 평문 회송 0·로그 미기록.</li>
+        <li><b>프롬프트 인젝션 케이스 집합(F-4)</b>으로 적대 프로브를 통과한다 — ① <b>지시 덮어쓰기</b>("이전 지시 무시하고 …"가 시스템 지시를 못 바꿈) ② <b>악성 URL/명령 삽입</b>(출력에 와도 평문 표시·실행 0) ③ <b>분류 강제</b>(데이터가 자신을 "급함"으로 강제 분류시키려는 시도가 분류 로직을 좌우하지 못함) ④ <b>키/시스템정보 누출 유도</b>(API 키·경로·환경정보를 출력하게 유도해도 누출 0).</li>
+        <li>가변 입력이 항목당 상한으로 truncate되어 프롬프트에 들어간다(상한 초과 입력 픽스처로 검증).</li>
+        <li>모델 출력에 포함된 HTML/스크립트/명령 문자열이 실행되지 않고 평문으로만 표시된다(L-1·자동 실행 0).</li>
+        <li>신규 IPC가 senderFrame·shape 검증을 통과하고 죽은 채널이 남지 않는다.</li>
+      </ul>
+      <p class="dep"><b>적용</b>: R-34·R-35·R-37·R-39 전반. (m12-design 보안 패턴 준수)</p>
+    </div>
+  </div>
+
+  <!-- N-09 -->
+  <div class="req">
+    <div class="req__head"><span class="id">N-09</span><span class="title">성능 · 반응성</span><span class="pill should">Should</span></div>
+    <div class="req__body">
+      <h4>지표 분리(F-1) — 반응성 ≠ 추론 성능</h4>
+      <table>
+        <tr><th>구분</th><th>지표</th><th>목표</th><th>성격</th></tr>
+        <tr><td><b>반응성</b></td><td>이벤트 트리거 → "생성 중" 인디케이터 노출</td><td><b>≤ 300ms</b></td><td>결정적(환경 무관) · R-36이 책임</td></tr>
+        <tr><td><b>반응성</b></td><td>"급함" 신호 → 생성 트리거(디바운스 우회)</td><td>거의 즉시(fast-path)</td><td>결정적 · R-36이 책임</td></tr>
+        <tr><td><b>추론 성능</b></td><td>이벤트 → 첫 토큰 표시(TTFT) 중앙값</td><td>≤ 3초(목표치)</td><td>환경 의존(로컬 7.8B·사양)</td></tr>
+      </table>
+      <h4>수용 기준</h4>
+      <ul class="ac">
+        <li>ref goal "거의 즉각 반응"은 <b>인디케이터 ≤300ms + 급함 fast-path</b>로 충족함을 명시·검증한다(TTFT와 분리).</li>
+        <li>TTFT 중앙값 ≤ 3초(권장 사양 기준, 환경 의존 목표치 — 미달 시 회귀 아님).</li>
+        <li>coalesce 디바운스로 폭주 일반 이벤트가 1회 호출로 병합(중복 LLM 호출 0).</li>
+        <li>동시 호출 1개 — 새 트리거(fast-path 포함) 시 이전 미완료 호출 취소(자원 누수·UI 혼선 0).</li>
+        <li>브리핑 생성/스트리밍이 N-01(스캔 성능)·다른 홈 섹션 라이브 갱신을 저해하지 않음(부분 갱신으로 격리).</li>
+        <li>홈 이탈/앱 비포커스 시 불필요한 생성·폴링 억제(기존 가시성 가드 존중).</li>
+      </ul>
+      <p class="dep"><b>적용</b>: R-34·R-35·R-36.</p>
+    </div>
+  </div>
+
+  <!-- N-10 -->
+  <div class="req">
+    <div class="req__head"><span class="id">N-10</span><span class="title">처리율 근사 계측 (로컬 카운터)</span><span class="pill could">Could</span></div>
+    <div class="req__body">
+      <h4>명세 · 수용 기준</h4>
+      <ul class="ac">
+        <li>생성된 항목 수 / done·dismiss 수를 <b>로컬에만</b> 카운트(외부 전송 0)해 성공 지표(처리율) 근사 확인이 가능하다.</li>
+        <li>계측은 옵트인이거나 기본 무해(개인정보·외부 전송 없음)하며, 데이터는 0600 영속.</li>
+      </ul>
+      <p class="dep"><b>적용</b>: R-38·R-41. (여유 시 — 미구현이어도 배치 가치 유지)</p>
+    </div>
+  </div>
+</section>
+
+<!-- 비범위 -->
+<section id="oos">
+  <h2>6. 범위 밖 (Out of Scope)</h2>
+  <ul>
+    <li><b>클라우드 모델 기본 활성</b> — Anthropic/OpenAI 등 클라우드 벤더를 기본으로 켜지 않는다. OpenAI 호환 인터페이스로 사용자가 직접 지정하는 것만 지원.</li>
+    <li><b>다중 모델 동시 호출·앙상블</b> — 한 번에 한 모델만. 모델 비교/라우팅은 제외.</li>
+    <li><b>브리핑이 안내한 액션의 자동 실행</b> — 가이드는 안내(텍스트)까지. 재스캔·커밋·푸시 등 자동 수행은 제외(환각·안전 리스크).</li>
+    <li><b>대화형 챗/추가 질문</b> — 이번 배치는 단방향 브리핑 생성. 후속 채팅 인터페이스는 별도 배치.</li>
+    <li><b>RAG·임베딩·벡터DB·파일 본문 색인</b> — 프롬프트는 구조화 요약 데이터만 사용(파일 전체 본문 투입 안 함).</li>
+    <li><b>모델 자동 다운로드/설치 관리</b> — 로컬 모델 서버 구동은 사용자 책임(LM Studio 등). 앱은 연결만.</li>
+    <li><b>전면 가상 DOM 도입</b> — 기존 RG 부분 갱신 인프라 재사용. VDOM 전환은 비범위(m9 결정 연속).</li>
+    <li><b>외부 텔레메트리/분석 전송</b> — N-10은 로컬 카운터만. 외부 전송은 영구 제외(로컬 전용 원칙).</li>
+  </ul>
+</section>
+
+<!-- 가정 -->
+<section id="assumptions">
+  <h2>7. 가정</h2>
+  <ul>
+    <li>사용자가 OpenAI 호환 로컬 LLM 서버(LM Studio 등)를 별도로 구동할 수 있다(앱은 구동을 책임지지 않음).</li>
+    <li>권장 사양 PC에서 7.8B 모델이 수초 내 첫 토큰을 낼 수 있다(TTFT 목표는 환경 의존 목표치).</li>
+    <li>관리 데이터(프로젝트/메일/할일/커밋활동)는 이미 메인/store에서 구조화 접근 가능(기존 collectors·watchers 재사용).</li>
+    <li>Langchain JS를 메인 프로세스 런타임 의존성으로 추가하는 것이 허용된다(ADR로 근거 문서화 전제).</li>
+    <li>RG(렌더 가드)·patchRegion·설정 2-pane·StateWatcher/MailWatcher 인프라가 그대로 재사용 가능(m9~m12 구현 완료).</li>
+    <li>"오늘의 브리핑" 영역의 기존 정적 생성 로직이 폴백 소스로 그대로 보존된다.</li>
+  </ul>
+</section>
+
+<!-- 리스크 -->
+<section id="risks">
+  <h2>8. 리스크 및 미해결 질문</h2>
+  <div class="warn-box"><b>R1 — 런타임 의존성 증가.</b> Langchain은 무거운 의존성 트리를 가질 수 있어 "런타임 의존성 최소" 규약과 충돌. 메인 전용 적재·번들 크기 영향·ADR 근거 문서화로 완화. (대안: Langchain 없이 경량 OpenAI 호환 fetch 클라이언트 직접 구현 — ref는 Langchain 명시이므로 채택하되 무게가 문제면 아키텍처에서 재검토 여지.)</div>
+  <div class="warn-box"><b>R2 — 로컬 모델 응답 품질·환각.</b> 7.8B 로컬 모델이 잘못된 가이드/없는 기능을 안내할 수 있음. 프롬프트 제약·구조화 출력·자동 실행 금지(R-37/N-08)로 완화하되 완전 제거 불가.</div>
+  <div class="warn-box"><b>R3 — 성능·체감.</b> 저사양 PC에서 TTFT가 길면 체감 저하. 스트리밍·중단·폴백으로 완화. TTFT 목표는 환경 의존.</div>
+  <div class="warn-box"><b>R4 — 프롬프트 인젝션.</b> 신뢰 불가 스캔/메일 데이터가 프롬프트에 들어감. N-08 구분자 주입·출력 비신뢰 처리로 완화(보안 게이트 필수).</div>
+  <div class="warn-box"><b>R5 — carry-over 상태 저장 위치/마이그레이션.</b> 새 상태 스키마(uiStateStore 키 또는 별도 파일). m12 상승 세션 write 보류와의 상호작용 주의.</div>
+  <h3>미해결 질문 (PM 자율 결정 — 권장값 제시)</h3>
+  <table>
+    <tr><th>질문</th><th>권장값(PM 기본 채택)</th></tr>
+    <tr><td>coalesce 디바운스 창</td><td><b>~2초</b>(과도 호출 억제 vs "거의 즉각" 균형). 설정 노출은 고급 항목으로 선택.</td></tr>
+    <tr><td>마감 임박 "급함" 임계</td><td><b>≤24시간</b>(또는 기한 경과). 설정 가능 여부는 R-39 고급.</td></tr>
+    <tr><td>출력 형식(구조화 vs 자유)</td><td><b>관대한 구조화</b>(파서 실패 시 평문 폴백) — 모델 호환성·안전성 균형.</td></tr>
+    <tr><td>가이드 표시 기본</td><td><b>접힘 + 펼침 토글</b>(공간 절약, 급함은 펼친 상태 기본).</td></tr>
+    <tr><td>carry-over 상태 저장소</td><td><b>uiStateStore 신규 키</b> 우선(기존 0600·정규화 패턴 재사용), 규모 크면 별도 파일.</td></tr>
+    <tr><td>Langchain 채택</td><td>ref 요구이므로 <b>채택</b>. 단 무게 이슈 시 아키텍처에서 경량 대안 ADR 검토 여지 남김.</td></tr>
+  </table>
+</section>
+
+<!-- 마일스톤 -->
+<section id="milestones">
+  <h2>9. 단계 제안</h2>
+  <ol>
+    <li><b>P1 — 기반·보안</b>: N-08 보안 골격 + R-34 LLM 클라이언트(메인 egress·Langchain·스트림·취소). 헤드리스 모킹 테스트.</li>
+    <li><b>P2 — 설정</b>: R-39 브리핑 AI 설정 카테고리·연결 테스트·키 0600.</li>
+    <li><b>P3 — 트리거</b>: R-36 이벤트 구독·필요성 판정(순수 함수)·coalesce.</li>
+    <li><b>P4 — 생성 품질</b>: R-37 분류·가이드 프롬프트 + R-38 carry-over 상태/키.</li>
+    <li><b>P5 — 표시</b>: R-35 스트리밍 렌더(RG patchRegion) + R-41 항목 done/dismiss UI.</li>
+    <li><b>P6 — 견고성</b>: R-40 폴백·에러(전 구간 횡단 검증) + N-09 성능 + N-10(여유 시).</li>
+  </ol>
+</section>
+
+<footer>
+  Project-SPIP · 기능명세 "브리핑 AI 연동" · R-34~R-41 / N-08~N-10 · 2026-06-25 ·
+  기준 폴더 부재로 표준 다크 스타일 적용 · 구현·아키텍처 결정은 chief-architect 위임
+</footer>
+
+</main>
+</body>
+</html>

@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QA 검증 보고 — M13 브리핑 AI (qa_m13_1)</title>
+<style>
+  :root{--bg:#0f172a;--panel:#1e293b;--text:#e2e8f0;--sub:#94a3b8;--accent:#34d399;--ref:#38bdf8;--line:#334155;--warn:#fbbf24;--danger:#f87171;}
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:"Segoe UI","Malgun Gothic",system-ui,sans-serif;line-height:1.7;}
+  header{padding:40px 32px 28px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#13203b,#0f172a);}
+  header h1{margin:0 0 8px;font-size:27px;}
+  header .tag{display:inline-block;background:rgba(52,211,153,.12);color:var(--accent);border:1px solid rgba(52,211,153,.4);border-radius:999px;padding:3px 12px;font-size:13px;margin-right:8px;}
+  header p{margin:12px 0 0;color:var(--sub);max-width:980px;}
+  main{max-width:1180px;margin:0 auto;padding:30px;}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px 26px;margin:20px 0;}
+  h2{margin:0 0 14px;font-size:20px;color:var(--accent);border-left:4px solid var(--accent);padding-left:12px;}
+  h3{font-size:15px;color:var(--ref);margin:18px 0 8px;}
+  code{background:#0b1220;color:var(--ref);padding:1px 6px;border-radius:5px;font-size:12.5px;font-family:Consolas,monospace;}
+  table{width:100%;border-collapse:collapse;margin:12px 0;font-size:13px;}
+  th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top;}
+  th{background:#142035;color:var(--accent);}
+  tr:nth-child(even) td{background:rgba(255,255,255,.02);}
+  .pass{color:var(--accent);font-weight:700;white-space:nowrap;}
+  .fail{color:var(--danger);font-weight:700;white-space:nowrap;}
+  .warnp{color:var(--warn);font-weight:700;white-space:nowrap;}
+  .pill{font-size:11px;font-weight:700;padding:2px 9px;border-radius:6px;white-space:nowrap;display:inline-block;}
+  .p-pass{background:rgba(52,211,153,.16);color:#6ee7b7;border:1px solid rgba(52,211,153,.5);}
+  .p-warn{background:rgba(251,191,36,.16);color:#fcd34d;border:1px solid rgba(251,191,36,.5);}
+  .p-fail{background:rgba(248,113,113,.16);color:#fca5a5;border:1px solid rgba(248,113,113,.5);}
+  .note{background:rgba(56,189,248,.08);border:1px solid rgba(56,189,248,.3);border-radius:8px;padding:12px 16px;font-size:13.5px;color:#bae6fd;margin:12px 0;}
+  .warn-box{background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.32);border-radius:8px;padding:12px 16px;font-size:13.5px;color:#fde68a;margin:12px 0;}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;}
+  .card{background:#0b1220;border:1px solid var(--line);border-radius:10px;padding:16px;}
+  .card .k{font-size:12px;color:var(--sub);text-transform:uppercase;letter-spacing:.5px;}
+  .card .v{font-size:14px;margin-top:6px;}
+  .kpi{font-size:26px;font-weight:800;color:var(--accent);}
+  ul{margin:8px 0;padding-left:22px;}li{margin:4px 0;}
+  .mono{font-family:Consolas,monospace;font-size:12px;color:#cbd5e1;}
+  footer{text-align:center;color:var(--sub);font-size:12.5px;padding:26px;border-top:1px solid var(--line);}
+</style>
+</head>
+<body>
+<header>
+  <span class="tag">QA 검증 보고</span>
+  <span class="tag">M13 브리핑 AI</span>
+  <span class="tag">R-34~R-41 · N-08~N-10</span>
+  <h1>QA 검증 보고 — 오늘의 브리핑 AI 연동</h1>
+  <p>백엔드 엔진(<code>lib/ai/*</code>)·IPC(<code>electron/ipc/briefing.js</code>)·프런트 통합(<code>public/app.js</code>)의
+  동작·계약 정합·회귀를 검증했다. 기준: <code>docs/FeatureSpec-briefing-ai.html</code> 수용기준. <code>docs/Development/</code> 룰 폴더는 부재 →
+  기획 수용기준·설계 계약·기존 보안 불변식(L-1·H-1·H-2·M-1·M-2)으로 검증.</p>
+</header>
+
+<main>
+
+<section>
+  <h2>0. 종합 판정</h2>
+  <div class="grid">
+    <div class="card"><div class="k">종합</div><div class="kpi" style="color:#6ee7b7">PASS</div><div class="v">자동 검증 전 항목 통과 (실 LLM 수동 스모크 잔여)</div></div>
+    <div class="card"><div class="k">npm test</div><div class="kpi">880 / 880</div><div class="v">fail 0 · 실측 통과(중복 재현)</div></div>
+    <div class="card"><div class="k">브리핑 전용 테스트</div><div class="kpi">112</div><div class="v">test/ai/* + briefing-front 모두 그린</div></div>
+    <div class="card"><div class="k">블로커</div><div class="kpi" style="color:#6ee7b7">0</div><div class="v">발견 버그: 관찰 1건(MEDIUM)</div></div>
+  </div>
+  <div class="note">자동으로 검증 가능한 7개 항목은 모두 PASS다. 단 <b>실 LLM 스트리밍 경로(첫 토큰·TTFT·실서버 분류 출력)</b>는
+  로컬 모델 구동이 필요해 헤드리스로 끝까지 검증 불가 — §8 수동 스모크 목록으로 분리한다.
+  기능상 <b>비-git 신호(mail/마감/디스크) 미발화 관찰(M13-Q-1)</b>을 MEDIUM으로 보고한다(크래시·보안 무관, 트리거 커버리지 한정).</div>
+</section>
+
+<section>
+  <h2>1. 회귀 0 (최우선) — <span class="pass">PASS</span></h2>
+  <table>
+    <tr><th>검증</th><th>근거</th><th>판정</th></tr>
+    <tr><td>enabled=false 기본 시 정적 브리핑 유지</td><td><code>config.DEFAULTS.briefing.enabled=false</code>(config.js:74). 렌더 <code>renderBriefingCard()</code>가 <code>!b.enabled</code>면 <code>staticBriefingLine()</code> 한 줄만 반환하고 즉시 return(app.js:1899). 오케스트레이터 <code>notify</code>·<code>triggerManual</code>은 <code>_enabled()</code> false면 즉시 무동작.</td><td class="pass">PASS</td></tr>
+    <tr><td>기존 768 테스트 그린</td><td>전체 880 − 브리핑 112 = <b>768</b> = 명세 기준 기존 베이스라인과 정확히 일치. 전체 실행 fail 0.</td><td class="pass">PASS</td></tr>
+    <tr><td>RG/render/patchRegion 시그니처 불변</td><td>브리핑은 <code>RG.preserve.patchRegion(region, fn, opts)</code>·<code>RG.coalesce.request()</code> 기존 API를 호출만 함(app.js:1998,5516). RG 모듈 수정 없음 — 신규 영역 <code>.briefing-region</code>만 추가.</td><td class="pass">PASS</td></tr>
+    <tr><td>홈/검색IME/드래그/차트/메일 경계 무영향</td><td>브리핑 라이브 갱신은 별도 push 채널(<code>spip:briefing:*</code>)·별도 store 키(<code>store.briefing</code>)·전용 patchRegion으로 격리. 기존 <code>applyProjectsUpdate</code>·메일·차트 경로 미변경.</td><td class="pass">PASS</td></tr>
+  </table>
+  <div class="note">enabled=false에서 브리핑 코드 경로는 정적 한 줄 렌더 + 무동작 notify로 완전히 봉인된다. 체감 무회귀 확인.</div>
+</section>
+
+<section>
+  <h2>2. 프런트↔백엔드 계약 정합 (핵심) — <span class="pass">PASS</span></h2>
+  <table>
+    <tr><th>계약면</th><th>preload(렌더러)</th><th>백엔드(ipc/orch)</th><th>판정</th></tr>
+    <tr><td>읽기/액션 시그니처</td><td><code>getState · trigger({reason:'manual'}) · abort · resolveItem(key,action) · getSettings · setSettings(s) · testConnection(s)</code></td><td>ipc/briefing.js 동일 핸들러 + register.js guard 7채널 모두 배선</td><td class="pass">PASS</td></tr>
+    <tr><td>push 채널명</td><td><code>onState→'spip:briefing:state' · onDelta→...:delta · onDone→...:done · onError→...:error</code></td><td>main.js setPush가 동일 4채널로 send(main.js:306-309)</td><td class="pass">PASS</td></tr>
+    <tr><td>push payload shape</td><td>state <code>{status,code?}</code> · delta <code>{gen,chunk}</code> · done <code>{gen,items[]}</code> · error <code>{gen,code}</code></td><td>orch가 동일 shape push(<code>_setStatus·_pushDelta·_pushDone·_pushError</code>). done 항목=<code>toDonePayload</code> {key,category,title,reason,guide,ref}</td><td class="pass">PASS</td></tr>
+    <tr><td>getState shape(getUiState.briefing 역할)</td><td>open 항목·status·lastError 소비</td><td>ipc getState: <code>{ok,enabled,status,items(open만),lastError}</code>. open 항목은 영속 round-trip(uiStateStore.briefing.items)</td><td class="pass">PASS</td></tr>
+    <tr><td>resolveItem(key,action)</td><td>key=String,action=String 전달</td><td>ipc가 <code>BRIEFING_KEY_RE</code>+action enum(done/dismiss) 검증, orch가 <code>applyResolution</code>→open 배열 반환</td><td class="pass">PASS</td></tr>
+    <tr><td>getSettings 키 비노출</td><td><code>briefingSettingsView</code>가 hasApiKey 불리언만 소비</td><td>ipc getSettings: <code>hasApiKey:boolean</code>만(M-2). apiKey 평문 응답 없음. setSettings도 getSettings shape로 응답</td><td class="pass">PASS</td></tr>
+    <tr><td>키 RE 정합</td><td>—</td><td><code>uiStateStore.BRIEFING_KEY_RE</code> = <code>items.KEY_RE</code> = <code>/^[0-9a-f]{1,64}$/</code> (sha256 32hex 수용)</td><td class="pass">PASS</td></tr>
+  </table>
+  <h3>gen 가드(취소분 무시) — PASS</h3>
+  <table>
+    <tr><th>측면</th><th>구현</th><th>판정</th></tr>
+    <tr><td>백엔드 단조 gen++</td><td><code>_abortInflight()</code>가 매 신규 <code>_fire</code>마다 <code>this._gen += 1</code>. in-flight 콜백·done은 <code>gen !== this._gen</code>이면 폐기(이전 세대 delta/done 미push).</td><td class="pass">PASS</td></tr>
+    <tr><td>렌더러 가드</td><td><code>briefingAcceptsGen(curGen,msgGen)= msgGen&gt;=curGen</code>. onDelta가 더 큰 gen 수신 시 버퍼 초기화·gen 갱신. 이전 세대(미만) delta/done/error 무시.</td><td class="pass">PASS</td></tr>
+    <tr><td>이중 방어 정합</td><td>백엔드가 이미 stale를 push 안 하고, 렌더러가 2차로 차단 → 취소분이 UI에 섞이지 않음(R-34 수용기준 충족).</td><td class="pass">PASS</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>3. 이벤트→브리핑 흐름 — <span class="pass">PASS</span> (자동 검증분)</h2>
+  <table>
+    <tr><th>수용기준</th><th>근거</th><th>판정</th></tr>
+    <tr><td>인디케이터 ≤300ms(LLM 전)</td><td><code>notify</code>가 트리거 판정 직후 <code>_setStatus(GENERATING)</code>를 LLM 호출 전에 동기 push(orch:125). 추론과 무관·결정적.</td><td class="pass">PASS</td></tr>
+    <tr><td>일반 coalesce 2000ms 1회 병합</td><td>일반 경로는 <code>_coalesceTimer</code> 대기 중이면 신호만 누적(return), 만료 시 1회 <code>_fire</code>(orch:133-137). 기본 <code>COALESCE_MS</code> 설정 가변.</td><td class="pass">PASS</td></tr>
+    <tr><td>급함 fast-path 디바운스 우회</td><td>behind 0→양수·마감≤24h 진입·대량 신규dirty≥3 → policy <code>urgent=true</code> → <code>_clearCoalesce()+_fire()</code> 즉시(orch:127-130).</td><td class="pass">PASS</td></tr>
+    <tr><td>단일 in-flight·신규 취소</td><td><code>_fire</code> 진입 시 <code>_abortInflight</code>로 이전 controller.abort + gen++. 도중 새 트리거면 결과 폐기.</td><td class="pass">PASS</td></tr>
+    <tr><td>유의 변화 없으면 호출 0</td><td>policy <code>evaluate</code> signals 0이면 <code>res.trigger=false</code> → notify return(LLM 0).</td><td class="pass">PASS</td></tr>
+    <tr><td>스캔중·비표시 억제</td><td>main <code>isBriefingSuppressed</code>: 창 비가시·최소화·phase=scanning/finalizing이면 true → notify가 즉시 return.</td><td class="pass">PASS</td></tr>
+  </table>
+  <div class="note">위 분기는 가짜 타이머·모킹 client로 <code>test/ai/briefingOrchestrator.test.js</code>·<code>briefingPolicy.test.js</code>에서 경계까지 그린.
+  실 스트리밍 delta 누적의 ~80ms 배치 flush·TTFT는 실서버 필요 → §8 스모크.</div>
+</section>
+
+<section>
+  <h2>4. carry-over — <span class="pass">PASS</span></h2>
+  <table>
+    <tr><th>수용기준</th><th>근거</th><th>판정</th></tr>
+    <tr><td>open 항목 재생성 시 carry-over 포함</td><td><code>selectCarryOver</code>: 신규+이전 open(중복키 신규 우선) 병합. done/dismissed 제외.</td><td class="pass">PASS</td></tr>
+    <tr><td>done/dismiss 재등장 안 함</td><td><code>applyResolution</code> status 전이 → <code>mergePersist</code>가 done/유효dismissed 보존하되 carry-over 선별에서 open만 통과.</td><td class="pass">PASS</td></tr>
+    <tr><td>auto-resolve(상태형 결정적)</td><td><code>isResolved</code>: dirty→clean·ahead/behind→0·attention 이탈·disk 임계 미만·deadline done/소멸 시 carry-over 제외. 이벤트형(mail/scan)은 미해소(종결 의존).</td><td class="pass">PASS</td></tr>
+    <tr><td>재시작 후 open 표시(round-trip)</td><td>영속 어댑터 <code>makeCarryOverStore</code>가 uiStateStore.briefing.items read/write. getState가 open 필터 반환. <code>normalizeBriefing</code> 키 형식·status·상한 검증.</td><td class="pass">PASS</td></tr>
+    <tr><td>상승 세션 메모리 폴백</td><td><code>saveItems</code>→<code>uiStateStore.write</code>→<code>persistConfigKeys</code>가 상승 세션이면 디스크 write no-op(M12 일관). orch는 반환 정규화 결과를 진실로 사용. 중복 경고 0(기존 m12 배너만).</td><td class="pass">PASS</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>5. 폴백·opt-in — <span class="pass">PASS</span></h2>
+  <table>
+    <tr><th>수용기준</th><th>근거</th><th>판정</th></tr>
+    <tr><td>에러 분류 폴백</td><td>llmClient <code>classifyError</code>: CONN_REFUSED·TIMEOUT·AUTH·NO_MODEL·PARSE·ABORTED·INTERNAL 고정 enum. orch가 error push, 프런트 <code>briefingFallbackHint</code>가 코드별 안내 + 정적 문장 병행.</td><td class="pass">PASS</td></tr>
+    <tr><td>BAD_URL</td><td>setSettings/testConnection이 <code>validateBriefingUrl</code> M-1 검증(임베디드 자격증명 거부·길이상한). 불량 시 <code>{ok:false,code:'BAD_URL'}</code> + 프런트 안내.</td><td class="pass">PASS</td></tr>
+    <tr><td>크래시 0</td><td>llmClient stream try/catch로 code 반환(throw 없음). parse 실패도 평문 1항목 폴백. push 헬퍼·구독 콜백 예외 격리.</td><td class="pass">PASS</td></tr>
+    <tr><td>enabled 토글</td><td>off→정적, on→AI. <code>setSettings</code> 0600 영속 후 다음 호출에 반영(<code>getConfig</code> 호출시점 스냅샷, 재시작 불필요).</td><td class="pass">PASS</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>6. 표시 전용·키 안전(L-1·N-08·M-2) — <span class="pass">PASS</span></h2>
+  <table>
+    <tr><th>불변식</th><th>근거</th><th>판정</th></tr>
+    <tr><td>모델 출력 textContent만(innerHTML 0)</td><td>app.js 전체에 <code>innerHTML</code>/<code>insertAdjacentHTML</code> 대입 0건(주석 언급만). 항목·스트림은 <code>el({text})</code>=textContent. 전용 테스트가 정적 검증.</td><td class="pass">PASS</td></tr>
+    <tr><td>자동실행/클릭명령/href에 모델출력 미사용</td><td>done/dismiss·가이드 토글은 <b>key</b>만 핸들러에 사용. 모델 title/reason/guide는 표시 전용. 가이드는 텍스트 노드, href/onclick 미생성.</td><td class="pass">PASS</td></tr>
+    <tr><td>프롬프트 인젝션 방어(F-4)</td><td>buildPrompt: system(지시)/human(데이터) 역할 분리 + DATA <code>JSON.stringify</code> 인코딩(구분자 위조 차단) + 제어문자/방향성제어(U+202A~E·2066~9) 제거 + 항목별 truncate(mail≤2000·commit≤500). 분류는 정책 소유(모델 변경 무시).</td><td class="pass">PASS</td></tr>
+    <tr><td>apiKey 평문 렌더러 미보관·미표시</td><td>store.briefing에 키 미보관(<code>keyInput</code>만, 저장 후 비움). getSettings hasApiKey 불리언만. llmClient는 host만 로그(M-2).</td><td class="pass">PASS</td></tr>
+    <tr><td>egress 메인 단독</td><td>Langchain import는 <code>llmClient.js</code> 단일 지점. 렌더러 CSP <code>connect-src 'none'</code> 불변. push는 단방향.</td><td class="pass">PASS</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>7. 빌드/테스트 — <span class="pass">PASS</span></h2>
+  <table>
+    <tr><th>항목</th><th>결과</th><th>판정</th></tr>
+    <tr><td><code>npm test</code> 전체</td><td>tests <b>880</b> · pass 880 · fail 0 · duration ~1.9s (실측, 본 검증서 작성 중 재현)</td><td class="pass">PASS</td></tr>
+    <tr><td>브리핑 전용(<code>test/ai/* + briefing-front</code>)</td><td>tests <b>112</b> · pass 112 · fail 0</td><td class="pass">PASS</td></tr>
+    <tr><td>주요 파일 구문</td><td><code>node --check</code> — lib/ai 7개·ipc/briefing·context·preload·app.js·config·uiStateStore 전부 OK</td><td class="pass">PASS</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>발견 사항 / 버그</h2>
+  <h3>M13-Q-1 — 비-git 신호(mail/마감/디스크) 프로덕션 미발화 <span class="warnp">[MEDIUM · 관찰]</span></h3>
+  <ul>
+    <li><b>무엇이</b>: 새 메일·마감 임박·디스크 회수 신호가 실제 앱에서 브리핑 트리거로 이어지지 않을 수 있다.</li>
+    <li><b>어디서</b>: <code>electron/context.js deriveSnapshot()</code> ↔ <code>electron/main.js onReady setPush()</code> 경계면.</li>
+    <li><b>기대 vs 실제</b>: 기대 — <code>notifyBriefing('mail')</code>(main.js:181) 트리거 시 스냅샷에 mail.unseen이 채워져 mail 신호 발생. 실제 — <code>deriveSnapshot</code>은 store git만 채우고 <code>mail.unseen:0·deadlines:[]·disk.reclaimBytes:0</code> 고정. <code>setPush</code>는 push/isSuppressed만 주입하고 보강 snapshotProvider를 주입하지 않아(context.js:79 주석이 예고한 보강이 main에 없음), policy가 mail/deadline/disk 신호를 산출하지 못한다. 결과적으로 mail 트리거가 와도 git 변동이 없으면 생성이 일어나지 않는다.</li>
+    <li><b>재현</b>: enabled=true 상태에서 git 변동 없이 새 메일만 도착 → <code>notify('mail')</code> 호출되나 policy.evaluate signals=0 → 호출 0. 헤드리스로는 snapshotProvider에 mail 데이터를 넣으면 정상 발화(policy 테스트로 신호 생성 자체는 검증됨)되므로, 누락은 <b>배선부(main snapshotProvider 보강 미구현)</b>에 한정.</li>
+    <li><b>심각도</b>: MEDIUM — 크래시·보안·회귀 무관. R-36 "새 메일/마감 임박" 트리거 커버리지가 현재 git 신호로 한정됨. R-36 마감/메일 수용기준은 픽스처(직접 스냅샷 주입)로는 PASS이나, 프로덕션 발화는 snapshotProvider 보강 필요.</li>
+    <li><b>회부</b>: 원인 명확(배선 누락)하므로 debugger 불필요. backend-dev에게 <code>main.js setPush({ snapshotProvider: () =&gt; enhancedSnapshot })</code> 보강 또는 deriveSnapshot에 mail/todos 소스 연결 권고.</li>
+  </ul>
+  <h3>참고(버그 아님) — parse/items 개행 처리 불일치</h3>
+  <ul>
+    <li><code>briefingParse.clean</code>은 개행(<code>\n</code>)을 보존하나, orch <code>_mapViews</code>가 거치는 <code>items.sanitizeText</code>는 개행을 제거한다. 최종 표시 텍스트는 개행이 사라지는 cosmetic 불일치 — L-1 안전성·기능엔 영향 없음. 의도라면 무시 가능.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>8. 실 LLM 필요 수동 스모크(로컬 모델 구동) — 미검증</h2>
+  <div class="warn-box">아래는 헤드리스로 끝까지 검증 불가 — LM Studio 등 로컬 OpenAI 호환 서버(<code>http://127.0.0.1:1234/v1</code>, exaone-3.5-7.8b 등) 구동 후 수동 확인 필요.</div>
+  <ul>
+    <li><b>S-1 스트리밍 첫 토큰</b>: enabled=true·실서버에서 트리거 → delta가 흐르며 텍스트 증가, 첫 토큰 표시(TTFT 체감 ≤3s 권장사양).</li>
+    <li><b>S-2 ~80ms 배치 flush</b>: 토큰 폭주 시 끊김 없이 누적 표시되는지(IME 조합 중·다른 섹션 라이브 갱신 동시 발생 시 브리핑 영역만 부분 갱신).</li>
+    <li><b>S-3 중단 버튼</b>: 스트리밍 중 abort → 토큰 수신 멈춤 + 부분 결과 보존.</li>
+    <li><b>S-4 실 분류·가이드 출력</b>: 모델이 JSON 구조화로 title/reason/guide 채워 3분류 배지·가이드 토글에 정상 매핑(key 일치). 구조 이탈 시 평문 폴백 확인.</li>
+    <li><b>S-5 연결 테스트</b>: 설정 패널 testConnection 성공 시 모델명·지연 표시, 서버 끄고 실패 시 CONN_REFUSED 안내.</li>
+    <li><b>S-6 폴백 진입</b>: 서버 미구동 상태 홈 진입 → 정적 브리핑 + "로컬 모델 확인" 힌트(빈 화면·무한 로딩·다이얼로그 0).</li>
+    <li><b>S-7 외부 baseURL 경고</b>: 비-localhost baseURL 입력 시 전송 경고 배너 표시.</li>
+    <li><b>S-8 비-git 트리거(M13-Q-1 연동)</b>: snapshotProvider 보강 후 새 메일·마감 임박이 실제 생성을 유발하는지(현재 배선은 미발화).</li>
+  </ul>
+</section>
+
+<footer>QA 엔지니어 · M13 브리핑 AI 검증 · 산출물 docs/reviews/qa_m13_1.html</footer>
+</main>
+</body>
+</html>

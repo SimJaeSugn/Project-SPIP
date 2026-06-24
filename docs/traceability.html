@@ -68,7 +68,7 @@
 </head>
 <body>
 <header>
-  <span class="tag">추적성 매트릭스</span><span class="tag">v1.7</span><span class="tag">현재 단계: M9(R-25~R-33) + M10·M11 후속 배치 + M12 보안·안정성 수정 구현·검증 완료 · 테스트 768/768</span>
+  <span class="tag">추적성 매트릭스</span><span class="tag">v1.8</span><span class="tag">현재 단계: M9(R-25~R-33) + M10·M11 후속 + M12 보안·안정성 수정 + M13 브리핑 AI 연동(R-34~R-41·N-08~N-10) 구현·검증 완료 · 테스트 891/891</span>
   <h1>Project-SPIP — 추적성 매트릭스</h1>
   <p>요구가 <b>기획 → 설계 결정/모듈 → 구현 위치 → 검증</b>까지 끊기지 않고 이어지는지를 한 표로 관리하는 1급 산출물.
   PRD의 모든 요구(기능 R-01~R-16, 비기능 N-01~N-07) + M6 백로그(R-17~R-21) + M7(R-22·R-23)를 행으로 가지며, 각 요구를 아키텍처 설계서 §14 매핑·본문 §5~§9 모듈/계약/API·§7 디렉터리 트리(구현 위치)와 검증 기록(QA·코드·보안 PASS)에 연결한다.</p>
@@ -98,7 +98,10 @@
   <div class="note" style="background:rgba(248,113,113,.08);border-color:rgba(248,113,113,.35);color:#fecaca;">
     <b>M12 보안·안정성 수정 구현·검증 완료(새 R-요구 없음).</b> <b>자동 업데이트 후 권한 상승 데이터 손실/오염</b> 문제를 수정했다 — 자동 업데이트 직후 앱이 관리자 권한으로 재실행되면 <code>%APPDATA%</code> 경로가 달라져 기존 스캔 데이터가 안 보이고, 그 세션에서 write 시 관리자 프로필이 오염되던 문제. <b>데이터는 삭제 아님·위치 불변</b>(<code>%APPDATA%\spip</code>). 수정: <b>(A) 설치 per-user 고정</b> — <code>electron-builder.yml</code> <code>allowToChangeInstallationDirectory:false</code>로 상승 유발 경로 제거. <b>(B) 상승 세션 보호</b> — <code>lib/common/elevationGuard.js</code>(SID 권위 기반 상승 감지) + <code>lib/common/elevationState.js</code>(중앙 플래그)로 상승 세션의 <b>write 3경로(스냅샷·UI상태·설정) 보류</b> + <b>재스캔 ELEVATED 거부</b> + <b>경고 배너(L-1 textContent)</b>. <b>새 R-요구를 만들지 않는 보안/안정성 수정</b>으로, 데이터 위치 불변 불변식(<span class="nid">N-06</span>)을 상승 세션 경계로 강화한다. 검증: <b>qa PASS·security PASS</b>(치명/높음 0, 설계 5항 충족)·전체 <b>768 테스트 통과</b>(748→768·<code>test/elevationGuard.test.js</code>·<code>test/elevation-write-hold.test.js</code>). 보안 불변식(H-1·H-2·0600·L-1) 0 약화.
   </div>
-  <div class="meta">문서 유형: 추적성 매트릭스 · 작성: 기술 문서 작성자 · 최종 갱신: 2026-06-25 · 현재 단계: <b>전체(MVP+M4+M6+M7+M8+M9+M10·M11 후속+M12 보안·안정성 수정) 구현·검증 완료(테스트 768/768)</b> · 입력: PRD v1.0 / architecture.html rev.2 / m4-design.html / m6-design.html rev.2 / m7-design.html rev.2 / m8-design.html / m9-design.html rev.1 / m10-design.html rev.1 / adr.html rev.2(ADR-M10-1~4 포함) / S0~S7 + M4 후속 6건 + M6 백로그 5건 + M7 2건 + M8 1건 + M9 9건 + M10·M11 후속 배치 구현물 / 검증 PASS(MVP S7 + M4·M6·M7·M8 다면검증 + M9 단계별 P1~P8 qa/code/security·통합·최종 + M10·M11 qa·code-review)</div>
+  <div class="note" style="background:rgba(52,211,153,.08);border-color:rgba(52,211,153,.3);color:#bbf7d0;">
+    <b>M13 브리핑 AI 연동(R-34~R-41 + N-08~N-10) 구현·검증 완료.</b> 홈 "오늘의 브리핑"을 <b>로컬 OpenAI 호환 LLM</b>(기본 <code>http://127.0.0.1:1234/v1</code>·모델 <code>exaone</code>·Langchain)으로 <b>스트리밍 생성</b>한다. 데이터 변경 이벤트(스캔·라이브 갱신·메일 등) 시 <b>필요성 판정 → 생성</b>(coalesce 2초·급함 fast-path·인디케이터 ≤300ms), 항목을 <b>분류(알아야/알면좋은/급함)+처리 가이드</b>로 제시하고, 미처리 항목은 <b>carry-over</b>(done/dismiss·auto-resolve)로 이어진다. 설정(엔드포인트/모델/<b>키 0600</b>/토글·연결테스트)·<b>graceful 폴백</b>·<b>opt-in</b>. 설계 정본 <code>docs/architecture/briefing-ai-design.html</code>(ADR-BR-1 Langchain 채택)·기능명세 <code>docs/FeatureSpec-briefing-ai.html</code>. <b>보안</b>: egress는 <b>메인 프로세스 단독</b>(렌더러 CSP <code>connect-src 'none'</code> 불변)·<code>apiKey</code> 0600·URL 검증(자격증명 거부·외부 host 경고)·<b>프롬프트 인젝션 8종 방어</b>·출력 표시 전용(L-1 textContent). <b>신규 런타임 의존성</b> <code>@langchain/openai</code>+<code>@langchain/core</code>(asar +47MB·런타임 의존성 최소 규약 예외·ADR-BR-1 근거 명시·<code>lib/ai/llmClient.js</code> 단일 격리). 검증: 기획·설계 reviewer + 설계/통합 security <b>전부 PASS</b>(치명/높음 0·인젝션 8종 방어)·qa·code PASS·전체 <b>891 테스트 통과</b>(768→891·+123·<code>test/ai/*</code>·<code>test/briefing-front.test.js</code>).
+  </div>
+  <div class="meta">문서 유형: 추적성 매트릭스 · 작성: 기술 문서 작성자 · 최종 갱신: 2026-06-25 · 현재 단계: <b>전체(MVP+M4+M6+M7+M8+M9+M10·M11 후속+M12 보안·안정성 수정+M13 브리핑 AI) 구현·검증 완료(테스트 891/891)</b> · 입력: PRD v1.0 / architecture.html rev.2 / m4-design.html / m6-design.html rev.2 / m7-design.html rev.2 / m8-design.html / m9-design.html rev.1 / m10-design.html rev.1 / briefing-ai-design.html(ADR-BR-1) / FeatureSpec-briefing-ai.html / adr.html rev.2(ADR-M10-1~4·ADR-BR-1 포함) / S0~S7 + M4 후속 6건 + M6 백로그 5건 + M7 2건 + M8 1건 + M9 9건 + M10·M11 후속 배치 + M13 브리핑 AI 8건+비기능 3건 구현물 / 검증 PASS(MVP S7 + M4·M6·M7·M8 다면검증 + M9 단계별 P1~P8 qa/code/security·통합·최종 + M10·M11 qa·code-review + M13 기획·설계 reviewer·설계/통합 security·qa·code)</div>
 </header>
 
 <main>
@@ -106,15 +109,16 @@
 <section id="summary">
   <h2>요약</h2>
   <div class="grid">
-    <div class="card"><div class="k">전체 요구 수</div><div class="kpi">40</div><div class="v">기능 R 33건(R-01~R-33) + 비기능 N 7건. 추적 누락 0. (R-25~R-33은 M9 구현 완료·검증 통과)</div></div>
+    <div class="card"><div class="k">전체 요구 수</div><div class="kpi">51</div><div class="v">기능 R 41건(R-01~R-41) + 비기능 N 10건(N-01~N-10). 추적 누락 0. (R-34~R-41·N-08~N-10은 M13 브리핑 AI 구현 완료·검증 통과)</div></div>
     <div class="card"><div class="k">MVP 집합</div><div class="kpi">16</div><div class="v">기능 11(R-01·02·04·06·07·08·10·11·12·13·14) + 비기능 5(N-02·03·04·05·06)</div></div>
     <div class="card"><div class="k">M4 후속</div><div class="kpi">6</div><div class="v">R-03·R-05·R-09·R-15·R-16 + N-07(접근성) — 전건 <b>구현 완료</b></div></div>
     <div class="card"><div class="k">M6 백로그</div><div class="kpi">5</div><div class="v">R-17·R-18·R-19·R-20·R-21 — 전건 <b>구현 완료·검증 통과</b></div></div>
     <div class="card"><div class="k">M7</div><div class="kpi">2</div><div class="v">R-22(즐겨찾기 독립 토스트 창)·R-23(카드 reorder FLIP) — 전건 <b>구현 완료·검증 통과</b></div></div>
     <div class="card"><div class="k">M8</div><div class="kpi">1</div><div class="v">R-24(상태 주시·라이브 갱신) — <b>구현 완료·검증 통과</b></div></div>
     <div class="card" style="border-color:rgba(196,181,253,.45)"><div class="k">M9</div><div class="kpi" style="color:#c4b5fd">9</div><div class="v">R-25~R-33(부분갱신 가드·헤더/메뉴/설정 정리·실시간·드래그·SVG 차트) — <b>구현 완료·검증 통과</b></div></div>
+    <div class="card" style="border-color:rgba(52,211,153,.45)"><div class="k">M13 브리핑 AI</div><div class="kpi">11</div><div class="v">R-34~R-41(8) + N-08~N-10(3) — 로컬 LLM·Langchain·스트리밍·이벤트 트리거·carry-over·보안. <b>구현 완료·검증 통과</b></div></div>
     <div class="card"><div class="k">품질 기준</div><div class="kpi">1</div><div class="v">N-01(성능) — 기능 스토리 아닌 산출물 품질 기준으로 적용</div></div>
-    <div class="card"><div class="k">현재 상태</div><div class="kpi" style="font-size:16px;">M9(R-25~R-33) + M10·M11 후속 + M12 보안·안정성 수정 구현·검증 완료</div><div class="v">전송 Electron IPC. 단계별 QA/코드/보안 PASS·최종 충족·통합 PASS. M10 patchRegion·차트 깜빡임 0·툴팁 추적·폴링 무재시도, M11 메일 섹션·설정 우측 패널 patchRegion 확장(qa·code-review PASS). M12 자동 업데이트 권한 상승 데이터 손실/오염 수정(설치 per-user 고정+상승 감지·write 보류·경고, qa·security PASS). 테스트 768/768.</div></div>
+    <div class="card"><div class="k">현재 상태</div><div class="kpi" style="font-size:16px;">M9 + M10·M11 후속 + M12 보안·안정성 + M13 브리핑 AI 구현·검증 완료</div><div class="v">전송 Electron IPC. M10 patchRegion·차트 깜빡임 0·툴팁·폴링 무재시도, M11 메일·설정 patchRegion 확장. M12 자동 업데이트 권한 상승 데이터 손실/오염 수정(qa·security PASS). M13 브리핑 AI 연동(R-34~R-41·N-08~N-10 — 로컬 OpenAI호환 LLM·Langchain 스트리밍·이벤트 트리거·carry-over·설정·폴백·opt-in; egress 메인 단독·apiKey 0600·인젝션 8종 방어; 기획·설계 reviewer·설계/통합 security 전부 PASS·qa·code PASS). 테스트 891/891.</div></div>
   </div>
   <div class="note">
     <b>현재 단계 = 전체(MVP+M4+M6+M7) 구현 완료·검증 통과.</b> S0~S7 구현물 + M4 후속 6건 구현물(<code>scan.js</code>·<code>server.js</code>·<code>lib/server/scanController.js</code>·<code>lib/scan/driveEnum.js</code>·<code>lib/scan/collectors/size.js</code>·<code>lib/scan/walker.js</code>(depthLimit)·<code>public/**</code> 진행/접근성·<code>test/**</code>)이 실재한다. 본 매트릭스의 "구현 위치"는 <b>실제 파일 경로</b>이고, "검증" 칸은 다면 검증의 <b>실측 결과</b>를 반영한다. 통과한 검증: <b>QA(통합·동작) GO · 코드 품질 PASS · 보안 게이트 PASS(치명·높음·중간·낮음 0)</b>. 핵심 실측: <code>node --test</code> <b>213/213</b> 통과(MVP 107 → M4 포함 213) · 탐지율 100%(게이트 ≥95%) · 클라이언트 필터/정렬 5000건 0.154ms(게이트 200ms). M4 후속 6건(R-03·05·09·15·16·N-07)은 모두 <b>구현 완료</b>로 전이했다.
@@ -129,6 +133,7 @@
     <span><span class="pill m4">M4</span> 후속 (구현 완료)</span>
     <span><span class="pill m4" style="background:rgba(167,139,250,.16);color:#c4b5fd;border:1px solid rgba(167,139,250,.45)">M6</span> 백로그 (구현 완료)</span>
     <span><span class="pill m4" style="background:rgba(196,181,253,.16);color:#c4b5fd;border:1px solid rgba(196,181,253,.45)">M9</span> 백로그 (구현 완료·검증 통과)</span>
+    <span><span class="pill mvp" style="background:rgba(52,211,153,.16);color:#6ee7b7;border:1px solid rgba(52,211,153,.5)">M13</span> 브리핑 AI (구현 완료·검증 통과)</span>
     <span><span class="pill st-design">구현 완료</span></span>
     <span class="planned">예정(사용자 PC 수동 확인 등 헤드리스 잔여)</span>
     <span class="pass">PASS</span>
@@ -450,10 +455,84 @@
       <td>qa_m9_p8 / code_m9_p8 / sec_m9_p8 PASS(<code>qa_m9_p8_1.html</code>·<code>code_review_m9_p8_1.html</code>·<code>security_review_m9_p8_1.html</code>, M-2 충족) — SVG 자작 인터랙티브·외부 네트워크/차트라이브러리/새 의존성 0·CSP 위반 0·라벨·툴팁 textContent(L-1)·수치 Number 강제·재렌더 시 핸들러 누적 0. test/commitChart.test.js·test/homeLayout-equivalence.test.js. <b>M10 후속 실현:</b> patchRegion 부분 갱신으로 <b>폴링 시 차트 깜빡임 0</b>·툴팁 막대추적 — 설계 <code>m10-design.html</code> rev.1(R5 실현·ADR-M10-1~4)·qa·code-review PASS(<code>qa_m10_1.html</code>·<code>code_review_m10_1.html</code>, 정확성 결함 0)·test/patchRegion.test.js·commitChart.test.js. 732/732.</td>
       <td><span class="pill st-design">구현 완료</span></td>
     </tr>
+
+    <!-- ===== M13 브리핑 AI 연동 (R-34 ~ R-41) — 구현 완료·검증 통과 (891 테스트) ===== -->
+    <tr>
+      <td class="rid">R-34</td>
+      <td class="req">LLM 연동 클라이언트(Langchain·OpenAI 호환·설정 가능) — 메인 프로세스 단독 네트워크 호출, 엔드포인트/모델/키 설정 가능(온프레미스 교체 가능·벤더 고정 금지), 스트리밍(<code>stream:true</code>) 지원</td>
+      <td><span class="pill mvp" style="background:rgba(52,211,153,.16);color:#6ee7b7;border:1px solid rgba(52,211,153,.5)">M13</span></td>
+      <td><b>[Electron 메인 + 순수]</b> briefing-ai-design §②·③·ADR-BR-1 — Langchain(<code>@langchain/openai</code>+<code>@langchain/core</code>) import를 <code>lib/ai/llmClient.js</code> <b>단일 파일로 격리</b>(나머지 6개 AI 모듈 외부 의존성 0·헤드리스 테스트). 기본 base URL <code>http://127.0.0.1:1234/v1</code>·모델 <code>exaone</code>. egress는 메인 단독(렌더러 CSP <code>connect-src 'none'</code> 불변·N-08). 스트리밍 부분 토큰을 메인→렌더러 단방향 push(R-35)</td>
+      <td class="mono">lib/ai/llmClient.js(Langchain 단일 격리·streamChat·base URL/model/key)<br>electron/ipc/briefing.js(trigger·abort·getState 메인 오케스트레이션)<br>electron/ipc/register.js(spip:briefing:* guard)·context.js·main.js(wiring)<br>lib/common/config.js(briefing 엔드포인트/모델/apiKey)</td>
+      <td>기획·설계 reviewer PASS·설계/통합 security PASS(치명/높음 0)·qa·code PASS. egress 메인 단독·CSP connect-src 'none' 불변 확인. test/ai/llmClient.test.js(클라이언트 경계·스트림). 891/891.</td>
+      <td><span class="pill st-design">구현 완료</span></td>
+    </tr>
+    <tr>
+      <td class="rid">R-35</td>
+      <td class="req">스트리밍 브리핑 렌더 — 토큰 도착 즉시 브리핑 텍스트 증가, 첫 토큰 표시 지연 N-09 목표 이내, RG 가드(coalesce·patchRegion) 재사용</td>
+      <td><span class="pill mvp" style="background:rgba(52,211,153,.16);color:#6ee7b7;border:1px solid rgba(52,211,153,.5)">M13</span></td>
+      <td><b>[렌더러 push]</b> briefing-ai-design §④·§⑤ — 메인이 부분 토큰을 <code>spip:briefing:token</code> 단방향 push, 렌더러가 m9-design <code>RG.coalesce</code>/<code>RG.preserve.patchRegion</code> 재사용으로 브리핑 영역만 부분 갱신(깜빡임·포커스 흔들림 0). 출력은 <b>표시 전용 textContent</b>(L-1)</td>
+      <td class="mono">electron/ipc/briefing.js(token stream push)·electron/preload.js(onBriefingToken/onBriefingState 구독)<br>public/app.js(브리핑 영역 스트리밍 렌더·RG.coalesce/patchRegion 재사용·textContent)<br>public/styles.css(브리핑 영역·생성 중 인디케이터)</td>
+      <td>기획·설계 reviewer PASS·security PASS(L-1 표시 전용·CSP 불변)·qa·code PASS. 스트리밍 부분 토큰 push→영역 부분 갱신·textContent 전수 확인. test/briefing-front.test.js. 891/891.</td>
+      <td><span class="pill st-design">구현 완료</span></td>
+    </tr>
+    <tr>
+      <td class="rid">R-36</td>
+      <td class="req">이벤트 트리거 + 필요성 판단 + coalesce — 데이터 변경 이벤트 시 필요성 판정→생성, coalesce 디바운스 2초·급함 fast-path(behind 0→양수·마감 ≤24h·신규 dirty 대량)·인디케이터 ≤300ms, 동시 호출 1개·진행 중 취소 가드</td>
+      <td><span class="pill mvp" style="background:rgba(52,211,153,.16);color:#6ee7b7;border:1px solid rgba(52,211,153,.5)">M13</span></td>
+      <td><b>[순수 + 메인]</b> briefing-ai-design §④ — <code>lib/ai/briefingPolicy.js</code>(필요성 판정·신호 분류·coalesce/fast-path 판정·외부 의존성 0 순수)를 <code>lib/ai/briefingOrchestrator.js</code>가 사용. 데이터 변경 이벤트(스캔·R-24 라이브 갱신·메일) → 필요성 "아니오"면 호출 0(과도 호출 방지). 인디케이터 ≤300ms·급함 fast-path는 디바운스 우회. 동시 호출 1개·진행 중 abort 가드(N-09)</td>
+      <td class="mono">lib/ai/briefingPolicy.js(필요성/신호 분류·coalesce 2000ms·fast-path·순수)<br>lib/ai/briefingOrchestrator.js(이벤트→판정→생성 오케스트레이션·동시 1개·abort)<br>lib/ai/briefingConst.js(임계·상수)·electron/ipc/briefing.js(trigger·abort)</td>
+      <td>기획·설계 reviewer PASS·security PASS·qa·code PASS. 필요성 판정·coalesce 2초·급함 fast-path·인디케이터≤300ms·동시 1개/abort 단위. test/ai/briefingPolicy.test.js·briefingOrchestrator.test.js. 891/891.</td>
+      <td><span class="pill st-design">구현 완료</span></td>
+    </tr>
+    <tr>
+      <td class="rid">R-37</td>
+      <td class="req">분류 + 처리 가이드 생성 — 항목을 알아야/알면좋은/급함으로 분류하고 처리 가이드 제시. SPIP 실제 액션과 연결(열기·재스캔·메일 본문)하되 가이드는 <b>표시 전용</b>(자동 실행·명령 실행 금지·N-08)</td>
+      <td><span class="pill mvp" style="background:rgba(52,211,153,.16);color:#6ee7b7;border:1px solid rgba(52,211,153,.5)">M13</span></td>
+      <td><b>[순수 프롬프트 + 파싱]</b> briefing-ai-design §④·§⑤ — <code>lib/ai/briefingPrompt.js</code>(분류 3종+가이드 프롬프트 구성·인젝션 8종 방어 sanitize)·<code>lib/ai/briefingParse.js</code>(모델 출력 파싱·필드 정제·표시 전용). 가이드는 어떤 경우에도 자동 실행/클릭 명령/코드 실행에 미사용(N-08)</td>
+      <td class="mono">lib/ai/briefingPrompt.js(분류 3종+가이드 프롬프트·인젝션 방어 sanitize)<br>lib/ai/briefingParse.js(출력 파싱·필드 정제·표시 전용)<br>lib/ai/briefingConst.js(PARSE_*_MAX 상한)</td>
+      <td>기획·설계 reviewer PASS·security PASS(프롬프트 인젝션 8종 방어·출력 표시 전용 L-1)·qa·code PASS. 분류 3종·가이드 파싱·인젝션 방어 단위. test/ai/briefingPrompt.test.js·briefingParse.test.js. 891/891.</td>
+      <td><span class="pill st-design">구현 완료</span></td>
+    </tr>
+    <tr>
+      <td class="rid">R-38</td>
+      <td class="req">미처리 항목 carry-over 상태관리 — 처리됨=사용자의 항목별 done/dismiss(다시 본 것만으론 미처리), 미처리 항목은 다음 브리핑으로 이월. auto-resolve(신호 소멸 시 자동 해소)</td>
+      <td><span class="pill mvp" style="background:rgba(52,211,153,.16);color:#6ee7b7;border:1px solid rgba(52,211,153,.5)">M13</span></td>
+      <td><b>[순수 + uiState 영속]</b> briefing-ai-design §④ — <code>lib/ai/briefingItems.js</code>(항목 키 <code>itemKey</code>=sha256 32hex·상태전이 done/dismiss·carry-over·auto-resolve·순수). 상태는 <code>ui-state.json</code>에 0600 영속(<code>uiStateStore</code> 브리핑 항목 키/제목/사유 상한·정규화)·<code>ipc/uiState.js</code>로 done/dismiss 반영. R-41 UI→R-38 상태 API 단방향(F-3)</td>
+      <td class="mono">lib/ai/briefingItems.js(itemKey·normalizeItem·carry-over·auto-resolve·순수)<br>lib/common/uiStateStore.js(BRIEFING_KEY_RE·MAX_BRIEFING_ITEMS 200·title/reason 상한·정규화)<br>electron/ipc/uiState.js(브리핑 항목 done/dismiss)·electron/ipc/briefing.js(resolveItem)</td>
+      <td>기획·설계 reviewer PASS·security PASS(키 형식 검증·상한·실행/경로 미사용)·qa·code PASS. itemKey·상태전이·carry-over·auto-resolve·정규화 라운드트립 단위. test/ai/briefingItems.test.js·briefing-followup.test.js·uistate-briefing.test.js. 891/891.</td>
+      <td><span class="pill st-design">구현 완료</span></td>
+    </tr>
+    <tr>
+      <td class="rid">R-39</td>
+      <td class="req">설정 UI(엔드포인트/모델/API 키/토글) — base URL·모델명·키 변경 가능, 키 0600 저장·UI 마스킹·렌더러 평문 회송 금지, 브리핑 on/off 토글·연결 테스트</td>
+      <td><span class="pill mvp" style="background:rgba(52,211,153,.16);color:#6ee7b7;border:1px solid rgba(52,211,153,.5)">M13</span></td>
+      <td><b>[렌더러 + 메인]</b> briefing-ai-design §⑥ — R-30 설정 2-pane 인프라 재사용("연동" 카테고리). <code>config.js</code> 브리핑 엔드포인트/모델/토글 영속·<code>apiKey</code> 0600(N-08)·UI 마스킹·평문 회송 금지. 연결 테스트(<code>spip:briefing:testConnection</code> 계열) — URL 검증(자격증명 거부·외부 host 경고)</td>
+      <td class="mono">lib/common/config.js(briefing 엔드포인트/모델/토글·apiKey 0600·URL 검증)<br>electron/ipc/briefing.js(설정 조회/저장·연결 테스트·키 마스킹)·register.js·preload.js<br>public/app.js(설정 "연동" 브리핑 UI·마스킹 입력·연결 테스트·토글)·public/styles.css</td>
+      <td>기획·설계 reviewer PASS·security PASS(apiKey 0600·평문 회송 금지·URL 검증 자격증명 거부/외부 host 경고)·qa·code PASS. 엔드포인트/모델/키 저장·마스킹·연결 테스트·URL 검증 단위. test/ai/config-briefing.test.js·ipc-briefing.test.js. 891/891.</td>
+      <td><span class="pill st-design">구현 완료</span></td>
+    </tr>
+    <tr>
+      <td class="rid">R-40</td>
+      <td class="req">Graceful 폴백·에러 처리 — LLM 미연결/타임아웃/파싱 실패 등 호출 경로 어디서든 실패 시 프로세스 비종료, 직전 브리핑/정적 브리핑 유지·안내 표시, opt-in(기본 비활성 시 정적 브리핑)</td>
+      <td><span class="pill mvp" style="background:rgba(52,211,153,.16);color:#6ee7b7;border:1px solid rgba(52,211,153,.5)">M13</span></td>
+      <td><b>[횡단·메인+렌더러]</b> briefing-ai-design §④·§⑤ — 전 구간 횡단 관심사. 호출 실패/타임아웃/파싱 오류는 throw 아닌 결과로 수렴 → 직전 브리핑/정적 브리핑 유지·사용자 안내(L-1 textContent·L-3 메시지). 브리핑 <b>opt-in</b>(기본 비활성 시 정적 브리핑 표시·LLM 호출 0). 에러 메시지는 고정 안내문만(원시 예외·키 비노출)</td>
+      <td class="mono">lib/ai/briefingOrchestrator.js(실패 수렴·폴백 경로)·llmClient.js(타임아웃·에러)<br>electron/ipc/briefing.js(에러→안내 코드 매핑·L-3)<br>public/app.js(폴백 안내·정적 브리핑·opt-in 게이트)</td>
+      <td>기획·설계 reviewer PASS·security PASS(에러 메시지 키/예외 비노출 L-3)·qa·code PASS. 미연결/타임아웃/파싱 실패 시 비종료·정적 브리핑 유지·opt-in 단위. test/ai/llmClient.test.js·briefingOrchestrator.test.js·ipc-briefing.test.js. 891/891.</td>
+      <td><span class="pill st-design">구현 완료</span></td>
+    </tr>
+    <tr>
+      <td class="rid">R-41</td>
+      <td class="req">브리핑 항목 UI(done/dismiss·가이드 펼침) — 항목별 done/dismiss 액션·처리 가이드 펼침. 표시 전용(모델 출력 textContent), R-38 상태 API의 호출자</td>
+      <td><span class="pill mvp" style="background:rgba(52,211,153,.16);color:#6ee7b7;border:1px solid rgba(52,211,153,.5)">M13</span></td>
+      <td><b>[렌더러]</b> briefing-ai-design §⑤ — 브리핑 항목 카드(분류 배지·done/dismiss 버튼·가이드 펼침). done/dismiss는 R-38 상태 API(<code>spip:briefing:resolveItem</code>) 호출(단방향·F-3). 모델 출력은 <b>textContent 전용</b>(L-1)·자동 실행 0(N-08). <code>aria-pressed</code>/<code>aria-expanded</code>(N-07)</td>
+      <td class="mono">public/app.js(브리핑 항목 카드·done/dismiss·가이드 펼침·resolveItem 호출·textContent·aria)<br>public/styles.css(항목 카드·분류 배지·펼침)<br>electron/ipc/briefing.js(resolveItem)·preload.js(resolveItem)</td>
+      <td>기획·설계 reviewer PASS·security PASS(textContent·자동 실행 0)·qa·code PASS. done/dismiss→상태 API 단방향·가이드 펼침·textContent 전수 확인. test/briefing-front.test.js·ai/ipc-briefing.test.js. 891/891.</td>
+      <td><span class="pill st-design">구현 완료</span></td>
+    </tr>
   </table>
   </div>
 
-  <h3>비기능 요구 (N-01 ~ N-07)</h3>
+  <h3>비기능 요구 (N-01 ~ N-10)</h3>
   <div class="tbl-wrap">
   <table>
     <tr>
@@ -529,6 +608,35 @@
       <td>QA GO — 접근성 워크스루 불변·dashboard-m4.test.js 통과(프론트 무회귀). 키보드/포커스 트랩/aria 라이브 코드 실재. <b>213/213</b>. 보안 PASS</td>
       <td><span class="pill st-design">구현 완료</span></td>
     </tr>
+
+    <!-- ===== M13 브리핑 AI 비기능 (N-08 ~ N-10) — 구현 완료·검증 통과 ===== -->
+    <tr>
+      <td class="nid">N-08</td>
+      <td class="req">보안 — LLM egress는 <b>메인 프로세스 단독</b>(렌더러 CSP <code>connect-src 'none'</code> 불변), API 키 <b>0600</b>·렌더러 평문 회송 금지, URL 검증(자격증명 거부·외부 host 경고), <b>프롬프트 인젝션 방어</b>(스캔 데이터=부분신뢰), 모델 출력 표시 전용(자동 실행 0)</td>
+      <td><span class="pill mvp" style="background:rgba(52,211,153,.16);color:#6ee7b7;border:1px solid rgba(52,211,153,.5)">M13</span></td>
+      <td>briefing-ai-design §② 보안 — egress 메인 단독(<code>lib/ai/llmClient.js</code>·렌더러 CSP 불변)·<code>apiKey</code> 0600(<code>config.js</code>)·URL 검증(자격증명 거부·외부 host 경고)·프롬프트 인젝션 8종 방어 sanitize(<code>briefingPrompt.js</code>)·출력 표시 전용 textContent(L-1)·자동 실행 0. 부분신뢰(TB-B) 전제 승계(ADR-006) · <b>보안 통제 N-08(브리핑 인젝션·egress·키) 연결</b></td>
+      <td class="mono">lib/ai/llmClient.js(egress 메인 단독)·briefingPrompt.js(인젝션 8종 방어·sanitize)·briefingParse.js(출력 정제)<br>lib/common/config.js(apiKey 0600·URL 검증)<br>public/index.html(CSP connect-src 'none' 불변)·public/app.js(textContent 전용)</td>
+      <td><b>설계/통합 security PASS</b>(치명/높음 0·인젝션 8종 방어) — egress 메인 단독·CSP connect-src 'none' 불변·apiKey 0600·평문 회송 금지·URL 자격증명 거부/외부 host 경고·출력 표시 전용. test/ai/briefingPrompt.test.js(인젝션 방어)·config-briefing.test.js(키/URL)·llmClient.test.js. 891/891</td>
+      <td><span class="pill st-design">구현 완료</span></td>
+    </tr>
+    <tr>
+      <td class="nid">N-09</td>
+      <td class="req">성능·반응성 — 트리거 판정 시 인디케이터 ≤300ms 노출, 동시 LLM 호출 1개·진행 중 취소 가드, 첫 토큰(TTFT)은 별도 성능 지표. 라이브 갱신·홈 폴링과 동거 시 N-01 비퇴행</td>
+      <td><span class="pill quality">품질</span></td>
+      <td>briefing-ai-design §④ — 인디케이터 즉시 노출(추론 지연 무관 ≤300ms)·급함 fast-path·coalesce 2초로 과도 호출 억제·동시 호출 1개·진행 중 abort. LLM 호출은 메인 비동기(스캔/서빙 비블로킹)로 N-01 비퇴행</td>
+      <td class="mono">lib/ai/briefingPolicy.js(coalesce/fast-path 판정)·briefingOrchestrator.js(동시 1개·abort·인디케이터)<br>public/app.js(인디케이터 ≤300ms 노출)</td>
+      <td>qa·code PASS(품질 기준) — 인디케이터 즉시 노출·coalesce 2초·급함 fast-path·동시 1개/abort 단위·기존 전 스위트 회귀 0. test/ai/briefingPolicy.test.js·briefingOrchestrator.test.js. 891/891</td>
+      <td><span class="pill st-design">구현 완료</span></td>
+    </tr>
+    <tr>
+      <td class="nid">N-10</td>
+      <td class="req"><b>(Could)</b> 처리율 근사 계측 — 브리핑 생성·항목 done/dismiss 등 로컬 카운터 근사 계측(외부 전송 0)</td>
+      <td><span class="pill quality">품질</span></td>
+      <td>briefing-ai-design §④·§⑥ — 로컬 카운터 근사 계측(브리핑 생성/항목 처리). 외부 전송 0(N-02·N-08 정합)·로컬 보관(N-06)</td>
+      <td class="mono">lib/ai/briefingItems.js·briefingOrchestrator.js(로컬 카운터)<br>lib/common/uiStateStore.js(로컬 영속·외부 전송 0)</td>
+      <td>qa·code PASS(품질 기준) — 로컬 카운터·외부 전송 0 확인. test/ai/briefingItems.test.js·uistate-briefing.test.js. 891/891</td>
+      <td><span class="pill st-design">구현 완료</span></td>
+    </tr>
   </table>
   </div>
 </section>
@@ -545,6 +653,7 @@
     <tr><td class="sid">M-1</td><td><span class="pill" style="background:rgba(251,191,36,.16);color:#fcd34d;border:1px solid rgba(251,191,36,.4)">중간</span></td><td>CSRF/DNS 리바인딩 → Host allowlist+Origin 검증+세션 토큰(상태변경 POST)</td><td><span class="nid">N-02</span> · <span class="rid">R-12</span></td><td class="mono">lib/server/security.js · router.js · actionHandlers.js · staticHandler.js(토큰주입) (ADR-004)</td><td><span class="pass">PASS</span></td></tr>
     <tr><td class="sid">M-2</td><td><span class="pill" style="background:rgba(251,191,36,.16);color:#fcd34d;border:1px solid rgba(251,191,36,.4)">중간</span></td><td>스냅샷/설정 파일 권한 → 소유자 전용(0600/디렉터리 0700/Windows ACL), 원자적 쓰기·실패 정리</td><td><span class="nid">N-06</span></td><td class="mono">lib/scan/serializer.js · lib/common/paths.js (ADR-003)</td><td><span class="pass">PASS</span></td></tr>
     <tr><td class="sid">M12</td><td><span class="pill" style="background:rgba(251,191,36,.16);color:#fcd34d;border:1px solid rgba(251,191,36,.4)">중간</span></td><td>자동 업데이트 후 권한 상승 데이터 손실/오염 → 상승 세션이 다른 <code>%APPDATA%</code> 프로필을 가리켜 데이터 안 보임·write 시 관리자 프로필 오염(위치 불변·삭제 아님). 통제: 설치 per-user 고정(상승 제거) + 상승 세션 write 보류(스냅샷·UI상태·설정)로 관리자 프로필 오염 차단 + 재스캔 ELEVATED 거부 + 경고 배너(L-1)</td><td><span class="nid">N-06</span></td><td class="mono">lib/common/elevationGuard.js(SID 권위 상승 감지) · elevationState.js(중앙 플래그) · electron-builder.yml(allowToChangeInstallationDirectory:false) · electron/main.js · ipc/actions.js · serializer.js · uiStateStore.js · config.js · public/app.js</td><td><span class="pass">PASS</span><br>(qa·security)</td></tr>
+    <tr><td class="nid">N-08</td><td><span class="pill" style="background:rgba(52,211,153,.16);color:#6ee7b7;border:1px solid rgba(52,211,153,.5)">브리핑 AI</span></td><td>브리핑 AI egress·키·인젝션 → LLM 호출이 렌더러에서 나가거나(CSP 우회) API 키가 평문 노출되거나 부분신뢰 스캔 데이터가 프롬프트 인젝션으로 모델·출력을 오염시키는 위협. 통제: <b>egress 메인 프로세스 단독</b>(렌더러 CSP <code>connect-src 'none'</code> 불변)·<code>apiKey</code> 0600·평문 회송 금지·URL 검증(자격증명 거부·외부 host 경고)·<b>프롬프트 인젝션 8종 방어</b> sanitize·모델 출력 <b>표시 전용</b>(textContent·자동 실행 0·L-1)</td><td><span class="nid">N-08</span> · <span class="rid">R-34</span> · <span class="rid">R-37</span> · <span class="rid">R-39</span></td><td class="mono">lib/ai/llmClient.js(egress 메인 단독) · briefingPrompt.js(인젝션 8종 방어) · briefingParse.js(출력 정제) · lib/common/config.js(apiKey 0600·URL 검증) · public/index.html(CSP connect-src 'none')</td><td><span class="pass">PASS</span><br>(설계·통합 security)</td></tr>
     <tr><td class="sid">M-3</td><td><span class="pill" style="background:rgba(251,191,36,.16);color:#fcd34d;border:1px solid rgba(251,191,36,.4)">중간</span></td><td>심링크 루프/무한 재귀 → 내장 안전 깊이 상한+방문 realpath 추적 가지치기</td><td><span class="nid">N-05</span> · <span class="rid">R-03</span>(M4 depthLimit 설정화)</td><td class="mono">lib/scan/walker.js (기본 24·visited realpath·ABS_MAX_DEPTH 64 clamp)</td><td><span class="pass">PASS</span></td></tr>
     <tr><td class="sid">M-4</td><td><span class="pill" style="background:rgba(251,191,36,.16);color:#fcd34d;border:1px solid rgba(251,191,36,.4)">중간</span></td><td>외부 프로세스 행(hang)·중복 spawn → 타임아웃+강제 kill·출력 버퍼 상한·id별 in-flight 상한</td><td><span class="nid">N-03</span> · <span class="rid">R-08</span> · <span class="rid">R-12</span></td><td class="mono">lib/common/safeExec.js · lib/server/actionHandlers.js</td><td><span class="pass">PASS</span></td></tr>
     <tr><td class="sid">L-1</td><td><span class="pill" style="background:rgba(148,163,184,.16);color:#cbd5e1;border:1px solid rgba(148,163,184,.4)">낮음</span></td><td>저장형 XSS(오염된 name/description/branch) → view 전면 textContent/이스케이프·innerHTML 결합 금지·CSP 메타</td><td><span class="rid">R-10</span> · <span class="nid">N-03</span></td><td class="mono">public/app.js(textContent 전수) · index.html(CSP 메타) · staticHandler.js(CSP 헤더)</td><td><span class="pass">PASS</span></td></tr>
@@ -596,10 +705,16 @@
     <tr><td>M12 설계 검증 (자동 업데이트 권한 상승 데이터 손실/오염)</td><td class="pass">PASS</td><td>설계 5항 충족 — (A) 설치 per-user 고정(<code>allowToChangeInstallationDirectory:false</code>)으로 상승 유발 경로 제거 · (B) 상승 감지(<code>elevationGuard</code> SID 권위 기반)·중앙 플래그(<code>elevationState</code>)·write 3경로(스냅샷·UI상태·설정) 보류·재스캔 ELEVATED 거부·경고 배너(L-1 textContent). 데이터 위치 불변(<code>%APPDATA%\spip</code>·삭제 아님) 전제 확인. 새 R-요구 없음(N-06 강화)</td></tr>
     <tr><td>M12 동작·QA 검증</td><td class="pass">PASS</td><td><b>npm test 768/768</b>(748→768, M12 +20·fail 0)·정확성 결함 0. 상승 세션 write 3경로 보류·재스캔 ELEVATED 거부·경고 배너 동작·비상승 세션 무회귀 확인. <code>test/elevationGuard.test.js</code>(SID 권위 상승 감지)·<code>test/elevation-write-hold.test.js</code>(write 보류). 데이터 위치 불변·기존 전 스위트 회귀 0</td></tr>
     <tr><td>M12 보안 게이트 검증</td><td class="pass">PASS</td><td>치명·높음 결함 <b>0</b>·설계 5항 충족. 상승 세션 write 보류로 <b>관리자 프로필 오염 차단</b>(elevationGuard SID 권위 상승 감지·중앙 플래그)·설치 per-user 고정으로 상승 경로 제거·재스캔 ELEVATED 거부·경고 배너(L-1 textContent). 보안 불변식(H-1·H-2·0600·L-1) 0 약화·데이터 위치 불변. test/elevationGuard.test.js·elevation-write-hold.test.js</td></tr>
+    <tr><td>M13 기획 검증 (브리핑 AI)</td><td class="pass">PASS</td><td>브리핑 AI 기능명세(<code>docs/FeatureSpec-briefing-ai.html</code>) 기획 reviewer PASS — R-34~R-41(8) + N-08~N-10(3) 신규 요구 부여(R-34부터·N-08부터·ID 충돌 0)·Must/Should/Could 분류·구현 순서 권장·ref.md goal(로컬 LLM·거의 즉각 반응) 정합·기존 보안 불변식 0 약화 명시. 설계 착수 가능</td></tr>
+    <tr><td>M13 설계 검증 (브리핑 AI)</td><td class="pass">PASS</td><td>설계 정본 <code>docs/architecture/briefing-ai-design.html</code> 설계 reviewer PASS — ADR-BR-1(Langchain 채택·<code>@langchain/openai</code>+<code>@langchain/core</code> 2개 최소화·<code>lib/ai/llmClient.js</code> 단일 격리·대안 B 전환 가능 경계)·이벤트 트리거+필요성 판정+coalesce 2초/급함 fast-path·분류 3종+가이드·carry-over(done/dismiss·auto-resolve)·설정 2-pane 재사용·graceful 폴백·opt-in. 7개 AI 모듈 계층(L4 순수↔메인 격리) 정합. 코드 착수 가능</td></tr>
+    <tr><td>M13 설계 보안 검증 (브리핑 AI)</td><td class="pass">PASS</td><td>치명·높음 <b>0</b> — egress 메인 프로세스 단독(렌더러 CSP <code>connect-src 'none'</code> 불변·번들 무영향)·<code>apiKey</code> 0600·렌더러 평문 회송 금지·URL 검증(자격증명 거부·외부 host 경고)·<b>프롬프트 인젝션 8종 방어</b>(부분신뢰 스캔 데이터 sanitize)·모델 출력 표시 전용(L-1 textContent·자동 실행 0). 신규 런타임 의존성 2개는 <code>llmClient.js</code> 단일 격리로 표면 최소(ADR-BR-1)</td></tr>
+    <tr><td>M13 통합 보안 검증 (브리핑 AI)</td><td class="pass">PASS</td><td>치명·높음 <b>0</b> — 구현 코드에서 egress 메인 단독·CSP 불변·apiKey 0600·인젝션 8종 방어·출력 표시 전용 실재·동작 입증. 기존 보안 불변식(H-1·H-2·0600·L-1·L-3·N-06) 0 약화·신규 invoke 채널은 register.js guard·senderFrame 일치 정합. test/ai/briefingPrompt.test.js·config-briefing.test.js·llmClient.test.js·ipc-briefing.test.js</td></tr>
+    <tr><td>M13 동작·QA 검증 (브리핑 AI)</td><td class="pass">PASS</td><td><b>npm test 891/891</b>(768→891, M13 +123·fail 0)·정확성 결함 0. 로컬 LLM 스트리밍 생성·이벤트 트리거+필요성 판정·coalesce 2초/급함 fast-path/인디케이터 ≤300ms·분류 3종+가이드·carry-over(done/dismiss·auto-resolve)·설정/연결 테스트·graceful 폴백·opt-in 동작 확인. <code>test/ai/*</code>(briefingPolicy·briefingItems·briefingPrompt·briefingParse·llmClient·briefingOrchestrator·config-briefing·uistate-briefing·ipc-briefing·briefing-followup) + <code>test/briefing-front.test.js</code>. 기존 전 스위트 회귀 0</td></tr>
+    <tr><td>M13 코드 품질 검증 (브리핑 AI)</td><td class="pass">PASS</td><td>P1(정확성 결함) 0 — 7개 AI 모듈 계층 분리(L4 순수 6개 외부 의존성 0·헤드리스 테스트 / Langchain은 <code>llmClient.js</code> 단일 격리)·도메인/전송 분리(<code>ipc/briefing.js</code>는 <code>(args,ctx)→result</code>·register.js wiring)·동시 호출 1개/abort 가드·실패 수렴(throw 아닌 결과). 신규 런타임 의존성 2개(<code>@langchain/openai</code>+<code>@langchain/core</code>·asar +47MB)는 런타임 의존성 최소 규약 예외로 ADR-BR-1에 근거 명시</td></tr>
     <tr><td>막바지 버그픽스 (스캔 전환·패키징 크래시)</td><td class="pass">PASS</td><td>전환 후 발견된 블로커 2건 해소. ① 스캔 후 무한 로딩 — <code>scanController.start()</code> 터미널 phase(<code>finalizing</code>/<code>done</code>/<code>error</code>) push 누락 → emit 추가(세대 가드 유지), 회귀 <code>test/scanController-onprogress.test.js</code>. ② 패키징 앱 무반응 — <code>EnableEmbeddedAsarIntegrityValidation</code> fuse(Win+electron-builder 24.x) <code>FindResource</code> FATAL → 그 fuse만 off(나머지 보안 fuse 유지), <code>app://</code> 핸들러 fs 직접 읽기·<code>did-fail-load</code> 창 강제 표시. <b>npm test 306/306</b>. <b>실 GUI에서 앱 실행·창 표시·스캔→대시보드 전환 동작 확인됨.</b> 버전 1.0.1</td></tr>
   </table>
   <div class="note">
-    <b>추적 누락 0 확인.</b> 전체 요구 40건(기능 R-01~R-33 33건 + 비기능 N-01~N-07 7건)이 모두 본 매트릭스에 행으로 존재하며, 각 행의 "설계 결정/모듈"·"구현 위치"·"검증"·"상태" 칸이 모두 채워졌다(빈 칸 없음). <b>M12 보안·안정성 수정</b>은 새 R-요구를 만들지 않고 N-06(데이터 위치 불변·프로젝트 폴더 비오염) 행과 보안 통제 표에 반영됐다 — 자동 업데이트 후 권한 상승 시 데이터 위치 불변이나 상승 세션이 다른 프로필을 가리켜 안 보이고 write 시 관리자 프로필이 오염되던 문제를 (A) 설치 per-user 고정 (B) 상승 감지·write 보류·재스캔 거부·경고로 해소(qa·security PASS). <b>M10·M11 후속 배치</b>는 새 R-요구를 만들지 않고 기존 R-30·R-31·R-33의 개선 + 미뤘던 설계 R5(patchRegion) 실현(M10 차트·툴팁·폴링, M11 메일 섹션·설정 우측 패널)으로, 해당 행의 구현/검증 칸에 반영됐다(별도 행 불필요). <b>M9 9(R-25~R-33)</b>은 단계별(P1~P8) qa/code/security 다면검증 PASS·통합 PASS(<code>qa_m9_integration.html</code>)·최종 CONDITIONAL PASS→충족(<code>m9_final_review.html</code>, 조건=본 추적성 갱신·해소)·전체 <b>768/768</b>(705→732 M10 +27→748 M11 +16→768 M12 +20)로 <b>구현 완료</b>다. <b>M8 1(R-24)</b>은 M8 설계(<code>m8-design.html</code>·ADR-M8-1)·구현 보안 PASS·코드 P1 0·QA 통합가능으로 <b>구현 완료</b>다. MVP 16(R-01·02·04·06·07·08·10·11·12·13·14 + N-02·03·04·05·06)은 S7 QA·코드·보안 3면 PASS로, M4 후속 6(R-03·05·09·15·16·N-07)은 M4 설계 2회·다면검증 QA(GO)·코드·보안 + 재검증 2회로, M6 백로그 5(R-17·18·19·20·21)는 M6 설계 2회·보안 PASS·코드 P1 0·QA 통합가능으로, M7 2(R-22·23)는 M7 설계 2회·보안 2회 PASS·구현 보안 PASS·코드 P1 0·QA 통합가능으로 모두 <b>구현 완료</b>이며, 품질기준 1(N-01)은 측정 완료다. 즉 전체 39건이 <b>구현 완료·검증 통과</b>로 일관된다.
+    <b>추적 누락 0 확인.</b> 전체 요구 51건(기능 R-01~R-41 41건 + 비기능 N-01~N-10 10건)이 모두 본 매트릭스에 행으로 존재하며, 각 행의 "설계 결정/모듈"·"구현 위치"·"검증"·"상태" 칸이 모두 채워졌다(빈 칸 없음). <b>M13 브리핑 AI 연동</b>은 R-34~R-41 8건 + 비기능 N-08~N-10 3건을 신규 부여해 행으로 추가했다 — 홈 "오늘의 브리핑"을 로컬 OpenAI 호환 LLM(기본 <code>http://127.0.0.1:1234/v1</code>·<code>exaone</code>·Langchain)으로 스트리밍 생성하고, 데이터 변경 이벤트 시 필요성 판정→생성(coalesce 2초·급함 fast-path·인디케이터≤300ms)·분류 3종+가이드·carry-over(done/dismiss·auto-resolve)·설정/폴백/opt-in을 제공한다. 보안은 egress 메인 단독(렌더러 CSP <code>connect-src 'none'</code> 불변)·<code>apiKey</code> 0600·URL 검증·프롬프트 인젝션 8종 방어·출력 표시 전용(L-1)으로 N-08에 추적된다. 신규 런타임 의존성 <code>@langchain/openai</code>+<code>@langchain/core</code>(asar +47MB)는 런타임 의존성 최소 규약 예외로 ADR-BR-1에 근거가 명시됐다. 검증: 기획·설계 reviewer + 설계/통합 security 전부 PASS(치명/높음 0·인젝션 8종 방어)·qa·code PASS·전체 891 테스트(768→891·+123·<code>test/ai/*</code>·<code>test/briefing-front.test.js</code>). <b>M12 보안·안정성 수정</b>은 새 R-요구를 만들지 않고 N-06(데이터 위치 불변·프로젝트 폴더 비오염) 행과 보안 통제 표에 반영됐다 — 자동 업데이트 후 권한 상승 시 데이터 위치 불변이나 상승 세션이 다른 프로필을 가리켜 안 보이고 write 시 관리자 프로필이 오염되던 문제를 (A) 설치 per-user 고정 (B) 상승 감지·write 보류·재스캔 거부·경고로 해소(qa·security PASS). <b>M10·M11 후속 배치</b>는 새 R-요구를 만들지 않고 기존 R-30·R-31·R-33의 개선 + 미뤘던 설계 R5(patchRegion) 실현(M10 차트·툴팁·폴링, M11 메일 섹션·설정 우측 패널)으로, 해당 행의 구현/검증 칸에 반영됐다(별도 행 불필요). <b>M9 9(R-25~R-33)</b>은 단계별(P1~P8) qa/code/security 다면검증 PASS·통합 PASS(<code>qa_m9_integration.html</code>)·최종 CONDITIONAL PASS→충족(<code>m9_final_review.html</code>, 조건=본 추적성 갱신·해소)로 <b>구현 완료</b>다. <b>M13 브리핑 AI 11(R-34~R-41·N-08~N-10)</b>은 기획·설계 reviewer + 설계/통합 security 전부 PASS·qa·code PASS로 <b>구현 완료</b>다. 전체 테스트는 <b>891/891</b>(705→732 M10 +27→748 M11 +16→768 M12 +20→891 M13 +123)이다. <b>M8 1(R-24)</b>은 M8 설계(<code>m8-design.html</code>·ADR-M8-1)·구현 보안 PASS·코드 P1 0·QA 통합가능으로 <b>구현 완료</b>다. MVP 16(R-01·02·04·06·07·08·10·11·12·13·14 + N-02·03·04·05·06)은 S7 QA·코드·보안 3면 PASS로, M4 후속 6(R-03·05·09·15·16·N-07)은 M4 설계 2회·다면검증 QA(GO)·코드·보안 + 재검증 2회로, M6 백로그 5(R-17·18·19·20·21)는 M6 설계 2회·보안 PASS·코드 P1 0·QA 통합가능으로, M7 2(R-22·23)는 M7 설계 2회·보안 2회 PASS·구현 보안 PASS·코드 P1 0·QA 통합가능으로 모두 <b>구현 완료</b>이며, M13 브리핑 AI 11(R-34~R-41·N-08~N-10)은 기획·설계 reviewer·설계/통합 security·qa·code 전부 PASS로 <b>구현 완료</b>이고, 품질기준 1(N-01)은 측정 완료다. 즉 전체 50건이 <b>구현 완료·검증 통과</b>이고 품질기준 N-01까지 포함해 51건 전건이 추적된다.
   </div>
   <div class="note" style="background:rgba(196,181,253,.08);border-color:rgba(196,181,253,.3);color:#ddd6fe;">
     <b>M10 후속 배치로 구현 완료된 항목(M9 후속 4건 → 완료).</b> M9에서 "의도된 후속"으로 추적하던 다음 4건이 M10 후속 배치로 실현됐다(새 R-요구 없음·기존 R-31·R-33 개선 + 설계 R5 실현). ① <code>patchRegion</code> 부분 갱신 — 설계 R5 1차 제외 → <b>구현 완료</b>(<code>RG.preserve.patchRegion</code> + widget <code>_destroyById</code>/<code>_mountById</code>). ② 차트 폴링 깜빡임 완화 → <b>완료</b>(차트 깜빡임 0: silent render + 영역 patch + epoch-day diff 가드). ③ 툴팁 막대추적 → <b>완료</b>(세로 띄움 유지). ④ 커밋 폴링 <code>deferred</code> 무재시도 → <b>완료</b>(8지점 <code>maybeFlush</code> 보강). 설계 <code>m10-design.html</code> rev.1(ADR-M10-1~4)·검증 <code>m10_design_review_1.html</code>·<code>qa_m10_1.html</code>·<code>code_review_m10_1.html</code> PASS(정확성 결함 0)·전체 <b>732 테스트</b>·test/patchRegion.test.js·commitChart.test.js·commitPolling.test.js.
@@ -616,6 +731,6 @@
 </section>
 
 </main>
-<footer>Project-SPIP · 추적성 매트릭스 v1.7 · 요구 40건(R 33 + N 7) · MVP 16 + 품질 1 + M4 6 + M6 5 + M7 2 + M8 1 + M9 9 · 추적 누락 0 · 전송 Electron IPC(과도기 HTTP 보존) · 현재 단계: M9(R-25~R-33) + M10·M11 후속 배치 + M12 보안·안정성 수정(자동 업데이트 후 권한 상승 데이터 손실/오염 — 설치 per-user 고정+상승 감지·write 보류·경고, 새 R-요구 없음·N-06 강화)까지 구현·검증 완료(테스트 768/768·단계별 qa/code/security PASS·통합 PASS·최종 충족·M10·M11 qa/code-review PASS·M12 qa·security PASS) · 자족형 HTML 산출물</footer>
+<footer>Project-SPIP · 추적성 매트릭스 v1.8 · 요구 51건(R 41 + N 10) · MVP 16 + 품질 1 + M4 6 + M6 5 + M7 2 + M8 1 + M9 9 + M13 11(R-34~R-41·N-08~N-10) · 추적 누락 0 · 전송 Electron IPC(과도기 HTTP 보존) · 현재 단계: M9 + M10·M11 후속 + M12 보안·안정성 수정 + M13 브리핑 AI 연동(R-34~R-41·N-08~N-10 — 로컬 OpenAI호환 LLM·Langchain 스트리밍·이벤트 트리거·carry-over·보안)까지 구현·검증 완료(테스트 891/891·M13 기획·설계 reviewer·설계/통합 security·qa·code 전부 PASS) · 자족형 HTML 산출물</footer>
 </body>
 </html>

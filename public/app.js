@@ -614,7 +614,7 @@ function headerViewConfig(view) {
  */
 const SETTINGS_CATEGORIES = [
   { id: 'scan',       label: '스캔',   sections: ['roots', 'exclude', 'detect', 'scanOptions'] },
-  { id: 'integration', label: '연동',   sections: ['tools', 'mail'] },
+  { id: 'integration', label: '연동',   sections: ['tools', 'mail', 'briefing'] },
   { id: 'appearance', label: '외관',   sections: ['theme'] },
   { id: 'shortcuts',  label: '단축키', sections: ['shortcuts'] },
   { id: 'info',       label: '정보',   sections: ['info', 'update'] },
@@ -760,6 +760,74 @@ function mailSummaryKey(summary) {
     parts.push(id + '#' + unseen + '#' + its);
   }
   return parts.join('|');
+}
+
+/* =====================================================================
+ * [M13 R-34~R-41] 브리핑 AI 순수 로직 (DOM 비의존, 헤드리스 테스트 대상)
+ * ===================================================================== */
+
+/** [R-35] 세대 가드 — gen 은 단조 증가. push 의 gen 이 현재 추적 gen 이상이면 수용(최신 세대 채택),
+ *   미만(취소된 이전 호출 잔여)이면 무시. 수용 시 호출측이 store.briefing.gen 을 msgGen 으로 올린다. */
+function briefingAcceptsGen(curGen, msgGen) {
+  if (!Number.isFinite(msgGen)) return false;
+  return Number(msgGen) >= Number(curGen);
+}
+
+/** [R-41] 항목을 분류(category)별로 그룹핑(순수). 고정 순서 urgent→must→good, 미지 분류는 'good' 으로. */
+const BRIEFING_CATEGORIES = [
+  { id: 'urgent', label: '급함' },
+  { id: 'must',   label: '알아야 할 것' },
+  { id: 'good',   label: '알면 좋은 것' },
+];
+function briefingGroupItems(items) {
+  const groups = { urgent: [], must: [], good: [] };
+  if (Array.isArray(items)) for (const it of items) {
+    if (!it || typeof it !== 'object' || typeof it.key !== 'string') continue;
+    const cat = (it.category === 'urgent' || it.category === 'must') ? it.category : 'good';
+    groups[cat].push(it);
+  }
+  return BRIEFING_CATEGORIES.map((c) => ({ id: c.id, label: c.label, items: groups[c.id] }))
+    .filter((g) => g.items.length > 0);
+}
+
+/** [R-40] 폴백/에러 안내 문구(순수). status·code 별 비방해 인라인 힌트. enabled=false 면 안내만. */
+function briefingFallbackHint(status, code) {
+  if (status === 'disabled') return 'AI 브리핑이 꺼져 있습니다 — 설정 > 연동에서 켤 수 있습니다.';
+  if (status !== 'error') return '';
+  switch (code) {
+    case 'CONN_REFUSED': return 'AI 브리핑을 사용할 수 없습니다 — 로컬 모델 서버가 실행 중인지 설정에서 확인하세요.';
+    case 'TIMEOUT':      return 'AI 브리핑 응답이 지연됩니다 — 모델 서버 상태를 설정에서 확인하세요.';
+    case 'PARSE':        return 'AI 브리핑 응답을 해석하지 못했습니다 — 다시 시도하거나 모델 설정을 확인하세요.';
+    case 'BAD_URL':      return 'AI 브리핑 주소가 올바르지 않습니다 — 설정에서 baseURL 을 확인하세요.';
+    default:             return 'AI 브리핑을 사용할 수 없습니다 — 설정에서 연결을 확인하세요.';
+  }
+}
+
+/** [M-1] baseURL host 가 비-localhost(외부)인지 판정(순수). 경고 표시용. 파싱 실패 시 false(차단 아님). */
+function isExternalBaseURL(baseURL) {
+  if (typeof baseURL !== 'string' || !baseURL) return false;
+  let host = '';
+  try { host = new URL(baseURL).hostname; } catch (_) { return false; }
+  host = String(host).toLowerCase().replace(/^\[|\]$/g, ''); // ipv6 대괄호 제거
+  return !(host === 'localhost' || host === '127.0.0.1' || host === '::1');
+}
+
+/** [R-39] getSettings 응답 → 렌더러 설정 뷰(순수). apiKey 평문 없음(hasApiKey 불리언만), external 파생. */
+function briefingSettingsView(res) {
+  const r = (res && typeof res === 'object' && res.ok !== false) ? res : {};
+  const adv = (r.advanced && typeof r.advanced === 'object') ? r.advanced : {};
+  const baseURL = (typeof r.baseURL === 'string') ? r.baseURL : '';
+  return {
+    enabled: r.enabled === true,
+    baseURL,
+    model: (typeof r.model === 'string') ? r.model : '',
+    hasApiKey: r.hasApiKey === true,
+    external: isExternalBaseURL(baseURL),
+    advanced: {
+      coalesceMs: Number.isFinite(adv.coalesceMs) ? adv.coalesceMs : null,
+      deadlineH: Number.isFinite(adv.deadlineH) ? adv.deadlineH : null,
+    },
+  };
 }
 
 /**
@@ -1259,6 +1327,24 @@ function initBrowser() {
     mailRefreshTimer: null,       // 홈에서 메일 주기 갱신 타이머
     commitRefreshTimer: null,     // [R-31] 홈에서 커밋 차트 5분 주기 갱신 타이머(홈 이탈/비가시 시 정지)
     homeLayout: HOME_SECTION_IDS.slice(), // [R-32] 홈 섹션 표시 순서(getUiState.homeLayout 적재, 기본=enum 순서)
+    // [M13 R-34~R-41] 브리핑 AI — 렌더러 상태(apiKey 평문 절대 미보관). status 는 push 로 갱신.
+    briefing: {
+      enabled: false,            // getSettings.enabled(opt-in)
+      status: 'idle',            // idle|generating|streaming|done|error|disabled (onState)
+      gen: 0,                    // 최신 세대(취소분 delta/done 무시용)
+      streamText: '',            // onDelta 누적 버퍼(textContent 로만 표시)
+      items: [],                 // 최종/carry-over open 항목 [{key,category,title,reason,guide,ref}]
+      counters: null,            // getUiState.briefing.counters
+      lastError: null,           // 마지막 에러 code(고정 enum)
+      expanded: {},              // key -> 가이드 펼침 여부
+      settings: null,            // getSettings 응답 뷰(hasApiKey 불리언만 — 키 평문 없음)
+      testResult: null,          // testConnection 결과 {ok,model?,latencyMs?,code?}
+      busyTest: false, busySettings: false,
+      keyInput: '',              // 설정 키 입력(쓰기 전용 — 저장 후 비움, store 영속 안 함)
+      form: { baseURL: '', model: '' }, // 설정 입력 폼(컨트롤드 — getSettings 로 초기화)
+      subscribed: false,
+      _unsubs: [],
+    },
     // 자동 업데이트(사용자 주도) 상태 — 설정 드로어의 "소프트웨어 업데이트" 섹션이 표시.
     update: {
       packaged: null,          // null=미조회, true/false (false면 개발 모드 안내)
@@ -1790,7 +1876,153 @@ function initBrowser() {
     return /\b(re:|fwd:)|회신|요청|부탁/i.test(String(subject || ''));
   }
 
+  /* =====================================================================
+   * [M13 R-35/R-40/R-41] 브리핑 AI 렌더(스트리밍·항목·폴백). 모든 텍스트 textContent(L-1).
+   *   모델 출력은 절대 innerHTML/마크다운→HTML 변환 안 함 — el()+textContent 노드 구성만.
+   * ===================================================================== */
+  /** 정적 브리핑 문장(폴백·기본). 기존 KPI 기반 문장 보존. */
+  function staticBriefingLine() {
+    var kpis = homeKpis(store.viewModels || []);
+    var todosOpen = (store.todos || []).filter(function (t) { return !t.done; }).length;
+    var unread = mailUnreadTotal();
+    return fmtDate(store.now ? store.now.toISOString() : null)
+      + ' · 주의가 필요한 프로젝트 ' + kpis.attention + '개, 안 읽은 메일 ' + unread
+      + '건, 남은 할 일 ' + todosOpen + '건이 있어요.';
+  }
+
+  /** 브리핑 카드 본문(renderHome·patchBriefing 공용). enabled/상태에 따라 정적/스트리밍/항목/폴백. */
+  function renderBriefingCard() {
+    var b = store.briefing;
+    var card = el('div', { cls: 'briefing-card' });
+
+    // opt-in off → 정적 문장만(회귀 0).
+    if (!b.enabled) {
+      card.appendChild(el('p', { text: staticBriefingLine(), style: 'margin:0;font-size:13.5px;color:#78716c;line-height:1.55;' }));
+      return card;
+    }
+
+    // 상단 줄: 상태 + 액션(재생성/중단).
+    var head = el('div', { cls: 'briefing-card__head' });
+    var statusText = (b.status === 'generating') ? '브리핑 생성 중…'
+      : (b.status === 'streaming') ? '브리핑 작성 중…'
+      : (b.status === 'error') ? '브리핑 오류'
+      : 'AI 브리핑';
+    head.appendChild(el('span', { cls: 'briefing-card__status', text: statusText }));
+    if (b.status === 'generating' || b.status === 'streaming') {
+      head.appendChild(el('span', { cls: 'briefing-card__spinner', attrs: { 'aria-hidden': 'true' } }));
+      head.appendChild(el('button', {
+        cls: 'briefing-card__btn', text: '중단', attrs: { type: 'button', 'aria-label': '브리핑 생성 중단' },
+        on: { click: function () { try { spip.briefing.abort(); } catch (_) {} } },
+      }));
+    } else if (bridgeHas2('briefing')) {
+      head.appendChild(el('button', {
+        cls: 'briefing-card__btn', text: '새로고침', attrs: { type: 'button', 'aria-label': '브리핑 재생성' },
+        on: { click: function () { triggerBriefing(); } },
+      }));
+    }
+    card.appendChild(head);
+
+    // 폴백 안내(error/disabled) — 정적 문장 + 비방해 힌트.
+    var hint = briefingFallbackHint(b.status, b.lastError);
+    if (b.status === 'error') {
+      card.appendChild(el('p', { text: staticBriefingLine(), style: 'margin:6px 0 0;font-size:13.5px;color:#78716c;line-height:1.55;' }));
+    }
+    if (hint) {
+      var hintRow = el('div', { cls: 'briefing-card__hint' });
+      hintRow.appendChild(el('span', { text: hint }));
+      hintRow.appendChild(el('button', {
+        cls: 'briefing-card__link', text: '설정 열기', attrs: { type: 'button' },
+        on: { click: function () { store.settingsTab = 'integration'; openSettings(); } },
+      }));
+      card.appendChild(hintRow);
+    }
+
+    // 스트리밍 중 — 누적 텍스트(textContent). 마크다운→HTML 변환 절대 없음.
+    if (b.status === 'streaming' && b.streamText) {
+      card.appendChild(el('p', { cls: 'briefing-card__stream', text: b.streamText }));
+    }
+
+    // 항목(done/streaming 종료/carry-over) — 분류별 그룹 + done/dismiss + 가이드 토글.
+    var groups = briefingGroupItems(b.items);
+    if (groups.length > 0) {
+      var listWrap = el('div', { cls: 'briefing-items' });
+      groups.forEach(function (gp) {
+        listWrap.appendChild(el('div', { cls: 'briefing-items__cat', text: gp.label }));
+        gp.items.forEach(function (it) { listWrap.appendChild(renderBriefingItem(it, gp.id)); });
+      });
+      card.appendChild(listWrap);
+    } else if (b.status !== 'streaming' && b.status !== 'generating' && b.status !== 'error') {
+      // enabled·정상이나 항목 없음 → 정적 문장(빈 화면 0).
+      card.appendChild(el('p', { text: staticBriefingLine(), style: 'margin:6px 0 0;font-size:13.5px;color:#78716c;line-height:1.55;' }));
+    }
+    return card;
+  }
+
+  /** 브리핑 항목 1개 — 제목·사유(textContent) + done/dismiss + 가이드 접힘/펼침. 모델 출력 표시전용. */
+  function renderBriefingItem(it, catId) {
+    var key = it.key;
+    var row = el('div', { cls: 'briefing-item briefing-item--' + catId });
+    var top = el('div', { cls: 'briefing-item__top' });
+    top.appendChild(el('span', { cls: 'briefing-item__title', text: String(it.title || '') }));
+    // done/dismiss — resolveItem(key, action). 모델 문자열은 클릭 명령/href 에 절대 쓰지 않음(key 만).
+    var actions = el('div', { cls: 'briefing-item__actions' });
+    actions.appendChild(el('button', {
+      cls: 'briefing-item__act', text: '완료', attrs: { type: 'button', 'aria-label': '항목 완료 처리' },
+      on: { click: function () { resolveBriefingItem(key, 'done'); } },
+    }));
+    actions.appendChild(el('button', {
+      cls: 'briefing-item__act briefing-item__act--dim', text: '닫기', attrs: { type: 'button', 'aria-label': '항목 닫기' },
+      on: { click: function () { resolveBriefingItem(key, 'dismiss'); } },
+    }));
+    top.appendChild(actions);
+    row.appendChild(top);
+    if (it.reason) row.appendChild(el('div', { cls: 'briefing-item__reason', text: String(it.reason) }));
+    // 가이드 토글(urgent 기본 펼침).
+    if (it.guide) {
+      var open = (store.briefing.expanded[key] != null) ? store.briefing.expanded[key] : (catId === 'urgent');
+      var toggle = el('button', {
+        cls: 'briefing-item__guide-toggle', text: open ? '가이드 접기' : '가이드 보기',
+        attrs: { type: 'button', 'aria-expanded': open ? 'true' : 'false' },
+        on: { click: function () { store.briefing.expanded[key] = !open; patchBriefing(); } },
+      });
+      row.appendChild(toggle);
+      if (open) row.appendChild(el('div', { cls: 'briefing-item__guide', text: String(it.guide) }));
+    }
+    return row;
+  }
+
+  /** [R-35] 브리핑 영역만 부분 갱신(patchRegion). 영역 부재/오류/deferred 시 내부 안전 처리. */
+  function patchBriefing() {
+    if (typeof document === 'undefined') { render(); return; }
+    var region = document.querySelector('.briefing-region');
+    RG.preserve.patchRegion(region, function () { return renderBriefingCard(); }, {
+      widgets: [], preserveFocus: false, fallback: function () { render(); },
+    });
+  }
+
+  /** 브리핑 bridge 메서드 존재 확인(graceful). */
+  function bridgeHas2(ns) { return !!(spip && spip[ns] && typeof spip[ns].trigger === 'function'); }
+
+  /** 수동 트리거(새로고침). enabled·홈에서만. */
+  function triggerBriefing() {
+    if (!spip || !spip.briefing || typeof spip.briefing.trigger !== 'function') return;
+    try { spip.briefing.trigger({ reason: 'manual' }); } catch (_) { /* graceful */ }
+  }
+
+  /** [R-41] 항목 done/dismiss — resolveItem(key,action) → 응답 items 로 갱신 후 영역만 patch. */
+  function resolveBriefingItem(key, action) {
+    if (!spip || !spip.briefing || typeof spip.briefing.resolveItem !== 'function') return;
+    Promise.resolve(spip.briefing.resolveItem(key, action)).then(function (res) {
+      if (res && res.ok && Array.isArray(res.items)) {
+        store.briefing.items = res.items.filter(function (x) { return x && typeof x.key === 'string'; });
+        if (store.briefing.expanded) delete store.briefing.expanded[key];
+        patchBriefing();
+      }
+    }).catch(function () { /* graceful — 표시 유지 */ });
+  }
+
   function renderHome() {
+    maybeInitBriefing();
     maybeLoadMailSummary();
     maybeLoadCommitActivity();
     var vms = store.viewModels || [];
@@ -1825,10 +2057,11 @@ function initBrowser() {
     var heroL = el('div', { style: 'flex:1 1 0%;min-width:0;' });
     heroL.appendChild(el('div', { text: '오늘의 브리핑', style: HOME_MONO + 'font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:#4f46e5;' }));
     heroL.appendChild(el('h1', { text: g.greeting, style: 'margin:9px 0 7px;font-size:29px;font-weight:700;letter-spacing:-0.022em;line-height:1.12;' }));
-    heroL.appendChild(el('p', {
-      text: fmtDate(store.now ? store.now.toISOString() : null) + ' · 주의가 필요한 프로젝트 ' + kpis.attention + '개, 안 읽은 메일 ' + unread + '건, 남은 할 일 ' + todosOpen + '건이 있어요.',
-      style: 'margin:0;font-size:13.5px;color:#78716c;line-height:1.55;',
-    }));
+    // [M13 R-35/R-40] 정적 브리핑 문장을 브리핑 영역(2단: .briefing-region > 카드)으로 승격.
+    //   enabled 면 AI 스트리밍/항목, 아니면 기존 정적 문장 폴백. delta 시 이 영역만 patchRegion 교체.
+    var briefingRegion = el('div', { cls: 'briefing-region' });
+    briefingRegion.appendChild(renderBriefingCard());
+    heroL.appendChild(briefingRegion);
     hero.appendChild(heroL);
     var heroR = el('div', { style: 'display:flex;gap:0;flex:0 0 auto;' });
     var kpi = function (val, label, color) {
@@ -2404,6 +2637,8 @@ function initBrowser() {
     refreshUpdateState();
     // 프로젝트 인식 기준도 동기화(설정 오픈 시에만).
     refreshDetectSignals();
+    // [M13 R-39] 브리핑 설정도 동기화(키 평문 없음 — hasApiKey 만).
+    refreshBriefingSettings();
   }
   function closeSettings() {
     store.showSettings = false;
@@ -2483,6 +2718,7 @@ function initBrowser() {
       case 'shortcuts':   return renderShortcutSettings();
       case 'info':        return renderInfoSettings();
       case 'update':      return renderUpdateSettings();
+      case 'briefing':    return renderBriefingSettings();
       default:            return null;
     }
   }
@@ -2603,6 +2839,136 @@ function initBrowser() {
       ['dark', '다크', store.theme === 'dark', () => onSetTheme('dark')],
       ['system', '시스템', store.theme === 'system', () => onSetTheme('system')],
     ]));
+    return block;
+  }
+
+  /* [M13 R-39] 브리핑 AI 설정 — enabled·baseURL·model·apiKey(쓰기전용)·연결테스트·external 경고·advanced.
+   *   apiKey 는 렌더러에 평문 보관/표시 안 함(hasApiKey 불리언만). setSettings shape 은 메인이 재검증. */
+  function refreshBriefingSettings() {
+    if (!spip || !spip.briefing || typeof spip.briefing.getSettings !== 'function') return;
+    Promise.resolve(spip.briefing.getSettings()).then(function (res) {
+      var v = briefingSettingsView(res);
+      store.briefing.settings = v;
+      store.briefing.enabled = v.enabled;
+      store.briefing.form = { baseURL: v.baseURL, model: v.model };
+      if (store.showSettings) render();
+    }).catch(function () { /* graceful */ });
+  }
+  function onSetBriefingSettings(patch) {
+    if (!spip || !spip.briefing || typeof spip.briefing.setSettings !== 'function') return;
+    store.briefing.busySettings = true; render();
+    Promise.resolve(spip.briefing.setSettings(patch)).then(function (res) {
+      store.briefing.busySettings = false;
+      store.briefing.keyInput = ''; // 키 입력 비움(평문 미보관)
+      var v = briefingSettingsView(res);
+      if (res && res.ok === false) {
+        toast(res.code === 'BAD_URL' ? '주소(baseURL)가 올바르지 않습니다.' : '브리핑 설정 저장에 실패했습니다.', true);
+      } else {
+        store.briefing.settings = v;
+        store.briefing.enabled = v.enabled;
+        store.briefing.form = { baseURL: v.baseURL, model: v.model };
+      }
+      render();
+      patchBriefing();
+    }).catch(function () { store.briefing.busySettings = false; render(); });
+  }
+  function onTestBriefingConnection() {
+    if (!spip || !spip.briefing || typeof spip.briefing.testConnection !== 'function') return;
+    var s = { baseURL: store.briefing.form.baseURL, model: store.briefing.form.model };
+    if (store.briefing.keyInput) s.apiKey = store.briefing.keyInput; // 임시 키로 테스트(저장 아님)
+    store.briefing.busyTest = true; store.briefing.testResult = null; render();
+    Promise.resolve(spip.briefing.testConnection(s)).then(function (res) {
+      store.briefing.busyTest = false;
+      store.briefing.testResult = (res && typeof res === 'object') ? res : { ok: false, code: 'UNKNOWN' };
+      render();
+    }).catch(function () { store.briefing.busyTest = false; store.briefing.testResult = { ok: false, code: 'UNKNOWN' }; render(); });
+  }
+
+  function renderBriefingSettings() {
+    const block = el('div', { cls: 'insight', children: [el('div', { cls: 'insight__title', text: '브리핑 AI' })] });
+    if (!spip || !spip.briefing) {
+      block.appendChild(el('div', { cls: 'rootmgr__empty', text: '이 환경에서는 브리핑 AI를 설정할 수 없습니다.' }));
+      return block;
+    }
+    const v = store.briefing.settings || briefingSettingsView(null);
+    block.appendChild(el('p', { cls: 'settings__opt-sub', text: '로컬 LLM(예: LM Studio·Ollama)에 연결해 홈 상단에 AI 브리핑을 생성합니다. 기본은 꺼짐이며, 모든 요청은 이 PC에서 설정한 서버로만 전송됩니다.' }));
+
+    // enabled 토글
+    block.appendChild(optionRow({
+      id: 'opt-briefing-enabled', label: 'AI 브리핑 사용', sub: '켜면 홈 브리핑이 AI로 생성됩니다(끄면 기본 요약).',
+      checked: v.enabled, disabled: store.briefing.busySettings,
+      onChange: function (checked) { onSetBriefingSettings({ enabled: !!checked }); },
+    }));
+
+    // baseURL
+    const urlField = el('label', { cls: 'mailform__field' });
+    urlField.appendChild(el('span', { cls: 'mailform__label', text: '서버 주소(baseURL)' }));
+    const urlInput = el('input', { cls: 'rootmgr__input', attrs: { type: 'text', placeholder: 'http://127.0.0.1:1234/v1', autocomplete: 'off', spellcheck: 'false' } });
+    urlInput.value = store.briefing.form.baseURL || '';
+    urlInput.addEventListener('input', (e) => { store.briefing.form.baseURL = e.target.value || ''; });
+    urlField.appendChild(urlInput);
+    block.appendChild(urlField);
+
+    // external 경고(M-1)
+    if (isExternalBaseURL(store.briefing.form.baseURL)) {
+      block.appendChild(el('div', { cls: 'briefing-warn', text: '⚠ 외부 서버로 데이터가 전송됩니다 — 신뢰하는 서버만 사용하세요.' }));
+    }
+
+    // model
+    const modelField = el('label', { cls: 'mailform__field' });
+    modelField.appendChild(el('span', { cls: 'mailform__label', text: '모델 이름' }));
+    const modelInput = el('input', { cls: 'rootmgr__input', attrs: { type: 'text', placeholder: '예: exaone-3.5-7.8b-instruct', autocomplete: 'off', spellcheck: 'false' } });
+    modelInput.value = store.briefing.form.model || '';
+    modelInput.addEventListener('input', (e) => { store.briefing.form.model = e.target.value || ''; });
+    modelField.appendChild(modelInput);
+    block.appendChild(modelField);
+
+    // apiKey (쓰기 전용 — 평문 미표시. "설정됨/미설정" + 입력 시 저장 / 비우고 해제)
+    const keyField = el('label', { cls: 'mailform__field' });
+    keyField.appendChild(el('span', { cls: 'mailform__label', text: 'API 키' + (v.hasApiKey ? ' (설정됨)' : ' (미설정)') }));
+    const keyInput = el('input', { cls: 'rootmgr__input', attrs: { type: 'password', placeholder: v.hasApiKey ? '변경하려면 새 키 입력(필요 없으면 비움)' : '필요 시 입력(로컬은 보통 불필요)', autocomplete: 'new-password', spellcheck: 'false' } });
+    keyInput.value = store.briefing.keyInput || '';
+    keyInput.addEventListener('input', (e) => { store.briefing.keyInput = e.target.value || ''; });
+    keyField.appendChild(keyInput);
+    block.appendChild(keyField);
+
+    // 액션: 저장 / 연결 테스트 / (키 해제)
+    const actions = el('div', { cls: 'briefing-settings__actions' });
+    const saveBtn = el('button', {
+      cls: 'btn btn--dark', text: store.briefing.busySettings ? '저장 중…' : '저장',
+      attrs: { type: 'button', 'aria-label': '브리핑 설정 저장' },
+      on: { click: function () {
+        const patch = { baseURL: store.briefing.form.baseURL, model: store.briefing.form.model };
+        if (store.briefing.keyInput) patch.apiKey = store.briefing.keyInput; // 입력 시만 키 전송(미전송=유지)
+        onSetBriefingSettings(patch);
+      } },
+    });
+    if (store.briefing.busySettings) saveBtn.disabled = true;
+    actions.appendChild(saveBtn);
+    const testBtn = el('button', {
+      cls: 'btn', text: store.briefing.busyTest ? '테스트 중…' : '연결 테스트',
+      attrs: { type: 'button', 'aria-label': '브리핑 서버 연결 테스트' },
+      on: { click: onTestBriefingConnection },
+    });
+    if (store.briefing.busyTest) testBtn.disabled = true;
+    actions.appendChild(testBtn);
+    if (v.hasApiKey) {
+      actions.appendChild(el('button', {
+        cls: 'btn', text: '키 해제', attrs: { type: 'button', 'aria-label': 'API 키 해제' },
+        on: { click: function () { onSetBriefingSettings({ apiKey: null }); } }, // null = 해제
+      }));
+    }
+    block.appendChild(actions);
+
+    // 연결 테스트 결과(L-1 textContent)
+    const tr = store.briefing.testResult;
+    if (tr) {
+      const ok = tr.ok === true;
+      const msg = ok
+        ? ('연결 성공' + (tr.model ? ' · ' + tr.model : '') + (Number.isFinite(tr.latencyMs) ? ' · ' + tr.latencyMs + 'ms' : ''))
+        : ('연결 실패' + (tr.code ? ' · ' + tr.code : ''));
+      block.appendChild(el('div', { cls: 'briefing-test ' + (ok ? 'briefing-test--ok' : 'briefing-test--err'), text: msg }));
+    }
     return block;
   }
 
@@ -5058,6 +5424,62 @@ function initBrowser() {
     if (shouldPollCommit(store.state.view, visible)) startCommitAutoRefresh();
     else stopCommitAutoRefresh();
   }
+
+  /* [M13] 브리핑 AI — 1회 초기화(설정 적재 + carry-over 항목 + push 구독). 홈 진입 시 호출(graceful). */
+  function maybeInitBriefing() {
+    if (store.briefing.subscribed || !spip || !spip.briefing) return;
+    store.briefing.subscribed = true;
+    subscribeBriefing();
+    // 설정 적재(enabled·hasApiKey — 키 평문 없음).
+    if (typeof spip.briefing.getSettings === 'function') {
+      Promise.resolve(spip.briefing.getSettings()).then(function (res) {
+        var v = briefingSettingsView(res);
+        store.briefing.settings = v;
+        store.briefing.enabled = v.enabled;
+        patchBriefing();
+      }).catch(function () { /* graceful — 정적 폴백 유지 */ });
+    }
+  }
+  /** push 구독(onState/onDelta/onDone/onError) — gen 가드로 취소분 무시. 영역만 patch. */
+  function subscribeBriefing() {
+    if (!spip || !spip.briefing) return;
+    var subs = [];
+    if (typeof spip.briefing.onState === 'function') subs.push(spip.briefing.onState(function (p) {
+      if (!p || typeof p !== 'object') return;
+      store.briefing.status = (typeof p.status === 'string') ? p.status : store.briefing.status;
+      if (p.status === 'disabled') store.briefing.enabled = false;
+      else if (p.status === 'generating') { store.briefing.streamText = ''; store.briefing.lastError = null; }
+      if (typeof p.code === 'string') store.briefing.lastError = p.code;
+      patchBriefing();
+    }));
+    if (typeof spip.briefing.onDelta === 'function') subs.push(spip.briefing.onDelta(function (p) {
+      if (!p || !briefingAcceptsGen(store.briefing.gen, p.gen)) return; // [R-35] 이전 세대 잔여 무시
+      if (Number(p.gen) > store.briefing.gen) { store.briefing.gen = Number(p.gen); store.briefing.streamText = ''; } // 새 세대 시작 → 버퍼 초기화
+      store.briefing.status = 'streaming';
+      store.briefing.streamText += (typeof p.chunk === 'string') ? p.chunk : ''; // 누적(textContent)
+      patchBriefing();
+    }));
+    if (typeof spip.briefing.onDone === 'function') subs.push(spip.briefing.onDone(function (p) {
+      if (!p || !briefingAcceptsGen(store.briefing.gen, p.gen)) return; // [R-35] 이전 세대 잔여 무시
+      store.briefing.gen = Number(p.gen);
+      store.briefing.status = 'done';
+      store.briefing.streamText = '';
+      store.briefing.items = Array.isArray(p.items) ? p.items.filter(function (x) { return x && typeof x.key === 'string'; }) : [];
+      patchBriefing();
+    }));
+    if (typeof spip.briefing.onError === 'function') subs.push(spip.briefing.onError(function (p) {
+      if (p && Number.isFinite(p.gen) && !briefingAcceptsGen(store.briefing.gen, p.gen)) return;
+      store.briefing.status = 'error';
+      store.briefing.lastError = (p && typeof p.code === 'string') ? p.code : 'UNKNOWN';
+      patchBriefing();
+    }));
+    store.briefing._unsubs = subs;
+  }
+  function unsubscribeBriefing() {
+    var subs = store.briefing._unsubs || [];
+    for (var i = 0; i < subs.length; i++) { try { if (typeof subs[i] === 'function') subs[i](); } catch (_) {} }
+    store.briefing._unsubs = [];
+  }
   /**
    * 라이브 갱신 병합. 변경된 project(들)를 store.raw/viewModels 에 id 로 교체하고 재렌더한다.
    *   - 식별/구조 필드는 watcher 가 건드리지 않으므로 toViewModel 로 전체 재매핑해도 안전.
@@ -5477,6 +5899,12 @@ function initBrowser() {
     store.todos = (res && res.ok !== false && Array.isArray(res.todos)) ? res.todos.filter((t) => t && typeof t.id === 'string') : [];
     // [R-32] 홈 섹션 순서 — getUiState 응답의 homeLayout 적재(부재/손상 시 동형 정규화로 기본 순서 보충).
     store.homeLayout = applyHomeLayout(res && res.ok !== false ? res.homeLayout : null);
+    // [M13] 브리핑 carry-over 항목(open) 적재 — 영속 단일 출처. 실시간 생성상태는 push 로 갱신.
+    var bf = (res && res.ok !== false && res.briefing && typeof res.briefing === 'object') ? res.briefing : null;
+    if (bf) {
+      store.briefing.items = Array.isArray(bf.items) ? bf.items.filter((x) => x && typeof x.key === 'string') : [];
+      store.briefing.counters = (bf.counters && typeof bf.counters === 'object') ? bf.counters : null;
+    }
     applyProjectNames();   // 별칭을 현재 viewModels에 반영
     applyTheme();          // 테마 적용(라이트/다크/시스템)
   }
@@ -6144,6 +6572,7 @@ function initBrowser() {
     unsubscribeMailUpdated();
     stopMailAutoRefresh();
     stopCommitAutoRefresh(); // [R-31] 커밋 폴링 타이머 정리
+    unsubscribeBriefing();   // [M13] 브리핑 push 구독 해제
     unsubscribeUpdateStatus();
     unsubscribeElevationWarning(); // [M12 b3] 상승 경고 구독 해제
     RG.coalesce.cancel(); // [D-2] 잔여 디바운스 타이머 정리(unload 중 잉여 render 방지)
@@ -6219,6 +6648,13 @@ if (typeof module !== 'undefined' && module.exports) {
     patchRegionPlan,
     // [M11] 메일 요약 동일성 키(diff 가드, 순수)
     mailSummaryKey,
+    // [M13] 브리핑 AI 순수 로직(gen 가드·항목 그룹·폴백 힌트·external·설정 뷰)
+    briefingAcceptsGen,
+    briefingGroupItems,
+    briefingFallbackHint,
+    isExternalBaseURL,
+    briefingSettingsView,
+    BRIEFING_CATEGORIES,
     resolveScanReloadView,
     nextScanAction,
     sanitizeRescanOpts,

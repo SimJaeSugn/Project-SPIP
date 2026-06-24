@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>M13 코드 리뷰 — 브리핑 AI(백엔드+프런트)</title>
+<style>
+  :root { --bg:#0b0f14; --panel:#121821; --panel2:#0f141b; --border:#1f2937; --t1:#e5e7eb; --t2:#9ca3af; --t3:#6b7280;
+          --ok:#34d399; --ref:#38bdf8; --warn:#fbbf24; --bad:#f87171; --mono:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--t1); font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Malgun Gothic',sans-serif; line-height:1.6; font-size:14px; }
+  .wrap { max-width:1080px; margin:0 auto; padding:40px 28px 80px; }
+  h1 { font-size:24px; font-weight:700; margin:0 0 6px; letter-spacing:-0.02em; }
+  h2 { font-size:17px; font-weight:650; margin:34px 0 12px; color:var(--t1); border-left:3px solid var(--ref); padding-left:10px; }
+  .sub { color:var(--t2); font-size:13px; margin:0 0 4px; }
+  .verdict { display:inline-flex; align-items:center; gap:8px; font-size:15px; font-weight:700; padding:7px 16px; border-radius:8px; margin:14px 0 2px; }
+  .v-pass { background:rgba(52,211,153,.12); color:var(--ok); border:1px solid rgba(52,211,153,.35); }
+  .meta { color:var(--t3); font-size:12px; font-family:var(--mono); margin-top:8px; }
+  .pill { display:inline-block; font-size:11px; font-weight:700; padding:2px 9px; border-radius:20px; vertical-align:middle; }
+  .p-defect { background:rgba(248,113,113,.15); color:var(--bad); border:1px solid rgba(248,113,113,.4); }
+  .p-improve { background:rgba(251,191,36,.13); color:var(--warn); border:1px solid rgba(251,191,36,.38); }
+  .p-minor { background:rgba(156,163,175,.13); color:var(--t2); border:1px solid rgba(156,163,175,.34); }
+  .p-ok { background:rgba(56,189,248,.12); color:var(--ref); border:1px solid rgba(56,189,248,.36); }
+  table { width:100%; border-collapse:collapse; margin:10px 0 6px; font-size:13px; }
+  th, td { text-align:left; padding:9px 11px; border-bottom:1px solid var(--border); vertical-align:top; }
+  th { color:var(--t2); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.04em; background:var(--panel2); }
+  td.loc { font-family:var(--mono); font-size:12px; color:var(--ref); white-space:nowrap; }
+  tr:last-child td { border-bottom:none; }
+  .card { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:18px 20px; margin:12px 0; }
+  code { font-family:var(--mono); font-size:12.5px; background:rgba(148,163,184,.12); padding:1px 6px; border-radius:5px; color:#cbd5e1; }
+  ul { margin:6px 0 6px; padding-left:20px; }
+  li { margin:4px 0; }
+  .legend { display:flex; gap:16px; flex-wrap:wrap; font-size:12px; color:var(--t2); margin:8px 0 0; }
+  .small { font-size:12px; color:var(--t3); }
+  svg text { font-family:-apple-system,'Segoe UI',sans-serif; fill:var(--t1); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <p class="sub">코드 품질 리뷰 · Project-SPIP</p>
+  <h1>M13 — 브리핑 AI (lib/ai 7모듈 · IPC · config/uiState · 프런트)</h1>
+  <div class="verdict v-pass">PASS — 정확성 결함 0</div>
+  <p class="meta">대상: lib/ai/*.js(briefingConst·Policy·Items·Prompt·Parse·llmClient·Orchestrator) · electron/ipc/briefing.js · context.js · main.js · lib/common/config.js · uiStateStore.js · electron/ipc/uiState.js · public/app.js · styles.css<br>
+  기준: docs/Development 없음 → 주변 코드 일관성·일반 모범사례. test/ai 93건 통과 확인(전체 880 통과 전제). 동작=qa·보안=별도 트랙.</p>
+
+  <div class="card">
+    <strong>요약.</strong> M13은 순수 코어(policy·items·prompt·parse·const) + L2 경계(llmClient·orchestrator) + IPC + 영속 3지점을 책임 분리로 깔끔히 구현했다.
+    세대(gen) 가드의 단조 가정, 단일 in-flight + abort + gen++ 의 취소 레이스, 관대한 파서의 graceful 폴백은 모두 정확하다.
+    <strong>정확성 결함은 발견되지 않았다(PASS).</strong> 다만 영속 계층에 <strong>의도-구현 불일치 2건</strong>(carry-over 스냅샷 미영속, counters 데드 데이터)이 있어
+    재시작 직후 1회 과트리거와 미사용 스키마 필드를 남긴다 — 동작 결함은 아니나 확인·정리가 필요하다.
+    개선 3건, 사소 4건.
+    <div class="legend">
+      <span><span class="pill p-defect">결함</span> 정확성 — 통과 차단</span>
+      <span><span class="pill p-improve">개선</span> 품질 권고</span>
+      <span><span class="pill p-minor">사소</span> 취향·문서</span>
+      <span><span class="pill p-ok">검증</span> 확인 후 이상無</span>
+    </div>
+  </div>
+
+  <h2>핵심 정확성 — 점검 결과(검증)</h2>
+  <table>
+    <thead><tr><th>영역</th><th>판정</th><th>근거</th></tr></thead>
+    <tbody>
+      <tr><td>gen 가드 단조 가정</td><td><span class="pill p-ok">검증</span></td>
+        <td><code>briefingAcceptsGen</code>은 <code>msgGen&gt;=curGen</code>만 수용. orchestrator는 <code>_abortInflight()</code>에서 항상 gen++ 후 그 gen으로 push → 첫 fire는 gen=1, 프런트 초기 0과 정합. onDelta는 <code>&gt;</code>일 때만 버퍼 리셋, <code>==</code>면 누적 — 단조 가정 일관.</td></tr>
+      <tr><td>단일 in-flight·취소 레이스</td><td><span class="pill p-ok">검증</span></td>
+        <td>_fire 시작 시 abort+gen++. await 후 <code>gen !== this._gen</code> 2지점(onDelta·완료) 가드로 구세대 결과 폐기. 신규 fire가 <code>_controller</code>를 먼저 갱신하므로 구 fire의 <code>_controller=null</code> 도달 전 return — 클로버 없음.</td></tr>
+      <tr><td>coalesce·fast-path</td><td><span class="pill p-ok">검증</span></td>
+        <td>urgent → clearCoalesce+즉시 _fire. 일반 → 타이머 1회 병합, 대기 중 재진입은 신호 누적만. <code>_mergeSignals</code> 키 중복 제거. RG.coalesce(렌더 디바운스)와는 책임이 달라(트리거 측 vs 렌더 측) 중복 아님 — 별도 필요.</td></tr>
+      <tr><td>관대한 파싱 견고성</td><td><span class="pill p-ok">검증</span></td>
+        <td>코드펜스 제거→첫 <code>[</code>~끝 <code>]</code> / <code>{</code>~<code>}</code> 추출, JSON.parse 실패 시 평문 1항목 폴백(크래시 0). 악성/부분 출력도 제어문자 제거+상한만, HTML 미변환(L-1). title/reason/guide 한·영 키 모두 수용.</td></tr>
+      <tr><td>carry-over 전이·auto-resolve·만료</td><td><span class="pill p-ok">검증</span></td>
+        <td>상태형만 isResolved 결정 판정, 이벤트형(mail·scan) 제외. mergePersist에서 표시 없음+open=resolve로 제거 → 이벤트 항목 무한누적 없음. dismissed TTL 14일, MAX_ITEMS 200 상한.</td></tr>
+      <tr><td>llmClient stream/abort/timeout/에러분류</td><td><span class="pill p-ok">검증</span></td>
+        <td>signal 전달, onDelta 예외 격리, 부분 text 보존. classifyError가 name/code/status/정규식 다중 신호로 분류, ABORTED는 로그 제외(M-2). host만 로그.</td></tr>
+      <tr><td>config/uiState 3지점 정합</td><td><span class="pill p-ok">검증</span></td>
+        <td>config.normalizeBriefing(설정)·uiStateStore.normalizeBriefing(carry-over 상태)·uiState.toResponse(open만 노출)는 서로 다른 대상을 정규화 — 동명이의이나 책임 분리 정확. category/status 화이트리스트 일치.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>개선 항목 (품질 권고)</h2>
+  <table>
+    <thead><tr><th style="width:22%">무엇</th><th>위치 · 왜 문제 · 권고</th><th style="width:9%">심각도</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>carry-over <code>lastSnapshot</code>이 영속되지 않음 → 재시작 직후 1회 과트리거</td>
+        <td class="loc">electron/ipc/briefing.js:193-209</td>
+        <td><span class="pill p-improve">개선</span></td>
+      </tr>
+      <tr><td colspan="3" class="small">
+        <code>loadItems</code>는 항상 <code>lastSnapshot:null</code>을 반환하고, <code>saveItems</code>는 orchestrator가 넘긴 <code>next.lastSnapshot</code>을 무시한다(스키마엔 <code>lastSnapshotHash</code>만 있고 항상 prev값=null을 그대로 다시 씀). 따라서 직전 스냅샷은 메모리(<code>orchestrator._lastSnapshot</code>)에만 산다. 앱 재시작 후 첫 <code>notify</code>는 prev=null로 평가 → 현재 상태 전체를 신규 신호로 취급해 불필요 트리거 1회 발생(이후 정상). 동작 안전(graceful)이나 설계 ⑧의 "직전 생성 시점 기준 비교"와 어긋난다. <strong>권고:</strong> (a) 의도가 "스냅샷 비영속(세션 한정)"이면 orchestrator의 <code>persisted.lastSnapshot</code> 사용 경로와 saveItems의 lastSnapshot 인자를 제거해 죽은 인터페이스를 없앤다, 또는 (b) <code>lastSnapshotHash</code>(또는 직렬화 스냅샷)를 실제로 갱신·로드해 재시작 후에도 비교 기준을 복원한다. orchestrator 테스트의 mock saveItems는 lastSnapshot을 충실히 저장해 이 갭을 가린다(test/ai/briefingOrchestrator.test.js:42) — 프로덕션 어댑터와 동작이 달라 회귀 탐지가 안 됨.
+      </td></tr>
+
+      <tr>
+        <td><code>counters</code>(generated/done/dismiss)가 어디서도 증가하지 않는 데드 데이터 경로</td>
+        <td class="loc">uiStateStore.js:201-206 · briefing.js:205 · app.js:5906</td>
+        <td><span class="pill p-improve">개선</span></td>
+      </tr>
+      <tr><td colspan="3" class="small">
+        <code>counters</code>는 스키마·정규화·IPC 응답·프런트 store까지 끝까지 배선돼 있으나 어느 코드도 값을 1 증가시키지 않는다(전 코드 grep 결과 증가 지점 0). 프런트도 <code>store.briefing.counters</code>를 렌더에 쓰지 않는다. 즉 생성/완료/닫기 통계는 항상 0으로 고정된 미사용 필드다. <strong>권고:</strong> 통계 노출 계획이 있으면 orchestrator <code>_fire</code>(생성++)·<code>resolveItem</code>(done/dismiss++)에서 증가시키고 프런트에 표시, 없으면 스키마·IPC·store에서 제거해 단일출처·표면을 줄인다.
+      </td></tr>
+
+      <tr>
+        <td>4개 near-duplicate 텍스트 sanitizer</td>
+        <td class="loc">briefingItems.js:40 · briefingPrompt.js:82 · briefingParse.js:20 · uiStateStore.js:160</td>
+        <td><span class="pill p-improve">개선</span></td>
+      </tr>
+      <tr><td colspan="3" class="small">
+        <code>sanitizeText</code>·<code>clamp</code>·<code>clean</code>·<code>sanitizeBriefingText</code>가 "제어문자 제거+trim+상한" 동일 골격을 4벌 보유한다. 미묘한 차이(clamp만 방향성 유니코드 제거, clean만 <code>\n</code> 보존, items/uiState는 trim 후 slice)가 의도적이라 단순 통합은 위험하나, 차이를 옵션화한 단일 헬퍼(예: <code>{ keepNewline, stripBidi }</code>)로 묶으면 표면·드리프트 위험이 준다. 최소한 각 함수 주석에 "왜 다른가"를 명시할 것. uiStateStore는 lib/ai에 의존할 수 없는 계층이라(순환/경계) 별도 유지는 합리적 — 이 점은 주석으로 못박기를 권고.
+      </td></tr>
+    </tbody>
+  </table>
+
+  <h2>사소 (취향·문서·방어)</h2>
+  <table>
+    <thead><tr><th style="width:26%">무엇</th><th>위치 · 메모</th><th style="width:9%"></th></tr></thead>
+    <tbody>
+      <tr><td><code>clean</code>의 괄호 없는 <code>&amp;&amp;/||</code> 혼용</td>
+        <td class="loc">briefingParse.js:24</td><td><span class="pill p-minor">사소</span></td></tr>
+      <tr><td colspan="3" class="small">
+        <code>c &gt;= 32 &amp;&amp; c !== 127 || ch === '\n'</code>은 연산자 우선순위상 <code>(c&gt;=32 &amp;&amp; c!==127) || ch==='\n'</code>로 정확히 동작(<code>\n</code> 보존 의도 충족)하나 괄호 부재로 의도가 모호하고 일부 린트가 경고한다. 명시 괄호를 권고.
+      </td></tr>
+      <tr><td>onError gen 가드 비대칭</td>
+        <td class="loc">app.js:5471 vs 5456/5463</td><td><span class="pill p-minor">사소</span></td></tr>
+      <tr><td colspan="3" class="small">
+        onDelta/onDone은 gen 미수용 시 무조건 무시하나 onError는 <code>Number.isFinite(p.gen)</code>일 때만 가드 → gen 없는 error는 항상 통과. orchestrator는 늘 gen을 동봉하므로 실효는 없으나, "에러는 가급적 표시"라는 의도라면 주석 한 줄로 비대칭을 명시할 것.
+      </td></tr>
+      <tr><td>onState 'generating'의 streamText 리셋이 gen 비검사</td>
+        <td class="loc">app.js:5449-5453</td><td><span class="pill p-minor">사소</span></td></tr>
+      <tr><td colspan="3" class="small">
+        state push엔 gen이 없어 가드 불가. 'generating'에서 streamText를 비우는데, 직후 도착하는 신세대 delta가 다시 채우므로 실害 없음(검증). 다만 state와 delta/done의 순서 보장은 IPC 순차성에 의존 — 동일 채널 아님(state vs delta 별 채널)이라 이론상 재배열 가능하나 Electron send는 채널별 FIFO·동일 sender라 현실 영향 무시 가능. 메모만.
+      </td></tr>
+      <tr><td>BRIEFING_KEY_RE 폭(1-64) vs 실제 키(정확히 32 hex)</td>
+        <td class="loc">uiStateStore.js:37 · briefingItems.js:25 · briefing.js:57</td><td><span class="pill p-minor">사소</span></td></tr>
+      <tr><td colspan="3" class="small">
+        <code>itemKey</code>는 항상 sha256 32 hex를 산출하나 검증 정규식은 1-64 hex를 허용한다(관대). 표시·키 매핑 외 실행/경로 의미가 없어 안전하나, 정확히 32로 좁히면 의도가 더 분명하고 위조 키 표면이 준다(선택).
+      </td></tr>
+    </tbody>
+  </table>
+
+  <h2>모듈 분리·단순성 평가</h2>
+  <div class="card">
+    <ul>
+      <li><strong>lib/ai 7모듈 분리는 적절.</strong> const(임계값 단일출처)·policy(판정/분류 소유)·items(키/전이/carry-over)·prompt(인젝션 방어 조립)·parse(관대 파싱)는 모두 순수·외부의존0으로 헤드리스 테스트와 1:1 대응. llmClient(Langchain 격리 단일 경계)·orchestrator(상태머신/부수효과 주입)의 L2 경계 분리도 교과서적. 과도 추상화·죽은 코드는 없다.</li>
+      <li><strong>임계값 단일출처는 briefingConst가 사실상 보유.</strong> 단 일부 상한이 <em>두 계층에 중복 정의</em>됨 — 예: items 200·title 200·reason 500·guide 800·key 정규식·category/status 화이트리스트가 lib/ai/briefingConst(또는 briefingItems)와 uiStateStore에 각각 박혀 있다. 계층 경계(uiStateStore는 lib/ai 미의존)상 불가피하나, 값이 갈라지면 carry-over 라운드트립에서 절단/탈락이 비대칭으로 일어날 수 있다. <strong>권고:</strong> 두 곳을 "동일 값" 주석으로 상호 참조(toolRegistry.MAX_TOOLS↔config.LIMITS의 기존 패턴과 동형)해 드리프트를 막을 것.</li>
+      <li><strong>프런트 BRIEFING_CATEGORIES(urgent/must/good) ↔ 백엔드 category 일치 확인.</strong> app.js의 그룹 순서(urgent→must→good)와 policy/items/uiState의 화이트리스트가 정합. 미지 분류는 양측 모두 'good'으로 폴백 — 일관.</li>
+      <li><strong>CommonJS·네이밍·주석(한국어)·요구사항 마커(R-3x/N-08/M-1/L-1) 컨벤션</strong>은 주변 코드와 완전 일관.</li>
+    </ul>
+  </div>
+
+  <h2>데이터 흐름 — 영속 갭(개선 2건) 위치</h2>
+  <svg width="100%" viewBox="0 0 920 230" role="img" aria-label="브리핑 영속 흐름">
+    <rect x="10" y="20" width="150" height="48" rx="8" fill="#121821" stroke="#1f2937"/>
+    <text x="85" y="40" text-anchor="middle" font-size="12">orchestrator</text>
+    <text x="85" y="57" text-anchor="middle" font-size="10" fill="#9ca3af">_fire / resolveItem</text>
+
+    <rect x="220" y="20" width="180" height="48" rx="8" fill="#121821" stroke="#1f2937"/>
+    <text x="310" y="40" text-anchor="middle" font-size="12">makeCarryOverStore</text>
+    <text x="310" y="57" text-anchor="middle" font-size="10" fill="#9ca3af">load/saveItems</text>
+
+    <rect x="460" y="20" width="170" height="48" rx="8" fill="#121821" stroke="#1f2937"/>
+    <text x="545" y="40" text-anchor="middle" font-size="12">uiStateStore</text>
+    <text x="545" y="57" text-anchor="middle" font-size="10" fill="#9ca3af">normalizeBriefing</text>
+
+    <rect x="690" y="20" width="210" height="48" rx="8" fill="#121821" stroke="#1f2937"/>
+    <text x="795" y="40" text-anchor="middle" font-size="12">ui-state.json (0600)</text>
+
+    <line x1="160" y1="44" x2="218" y2="44" stroke="#38bdf8" stroke-width="1.5" marker-end="url(#a)"/>
+    <line x1="400" y1="44" x2="458" y2="44" stroke="#38bdf8" stroke-width="1.5" marker-end="url(#a)"/>
+    <line x1="630" y1="44" x2="688" y2="44" stroke="#38bdf8" stroke-width="1.5" marker-end="url(#a)"/>
+
+    <rect x="220" y="120" width="430" height="80" rx="8" fill="rgba(251,191,36,.08)" stroke="rgba(251,191,36,.4)"/>
+    <text x="235" y="145" font-size="11.5" fill="#fbbf24">갭①: saveItems가 next.lastSnapshot 폐기 → lastSnapshotHash 항상 null</text>
+    <text x="235" y="166" font-size="11.5" fill="#fbbf24">      → 재시작 후 prev=null → 첫 notify 과트리거 1회</text>
+    <text x="235" y="187" font-size="11.5" fill="#fbbf24">갭②: counters는 끝까지 배선되나 증가 지점 0 (데드 데이터)</text>
+
+    <line x1="310" y1="68" x2="380" y2="118" stroke="#fbbf24" stroke-width="1.2" stroke-dasharray="4 3"/>
+    <defs><marker id="a" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#38bdf8"/></marker></defs>
+  </svg>
+
+  <h2>확인 필요(설계 의도)</h2>
+  <ul>
+    <li><strong>스냅샷 영속 정책.</strong> <code>lastSnapshot</code>이 세션 한정(비영속)이 맞는지, 아니면 재시작 후 비교 기준 복원이 필요한지. 전자면 죽은 인터페이스 제거, 후자면 hash 갱신·로드 구현.</li>
+    <li><strong>counters 노출 계획.</strong> 생성/처리 통계를 UI에 보일 계획이 있는지. 없으면 스키마·IPC·store에서 제거 권고.</li>
+  </ul>
+
+  <p class="meta">판정: <strong>PASS</strong> · 정확성 결함 0 · 개선 3(영속 스냅샷 갭·counters 데드·sanitizer 중복) · 사소 4 · 확인 2.</p>
+
+</div>
+</body>
+</html>

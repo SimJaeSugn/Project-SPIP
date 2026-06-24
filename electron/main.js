@@ -25,7 +25,7 @@ const path = require('path');
 const fs = require('fs');
 const { app, BrowserWindow, Menu, dialog, ipcMain, protocol, shell, clipboard, screen } = require('electron');
 
-const { buildContext } = require('./context');
+const { buildContext, deriveSnapshot } = require('./context');
 const { registerIpcHandlers } = require('./ipc/register');
 const { applyCspHeaders, hardenWebContents, TRUSTED_ORIGIN } = require('./security');
 const { createTray } = require('./tray');
@@ -178,12 +178,48 @@ function applyMailWatch() {
   const accounts = Array.isArray(ctx.config && ctx.config.mailAccounts) ? ctx.config.mailAccounts : [];
   try {
     ctx.mailManager.apply(accounts, {
-      onNewMail: (payload) => { notifyNewMail(payload); pushMailUpdated(); },
+      onNewMail: (payload) => { notifyNewMail(payload); pushMailUpdated(); updateBriefingMailState(payload); notifyBriefing('mail'); },
       onAuthError: notifyMailAuthError,
     });
   } catch (err) {
     logger.error('메일 감시 재구성 실패', err);
   }
+}
+
+/** [M13] 브리핑 단방향 push 헬퍼 — 채널·payload는 설계 ③ 계약. 창 파괴 레이스 가드. egress 메인 단독. */
+function pushBriefing(channel, payload) {
+  if (win && !win.isDestroyed() && win.webContents && !win.webContents.isDestroyed()) {
+    try { win.webContents.send(channel, payload); } catch (_) { /* 창 파괴 레이스 격리 */ }
+  }
+}
+
+/** [M13] 홈 가시성 가드 — 창 비표시·최소화·비포커스 시 트리거 억제(N-09). */
+function isBriefingSuppressed() {
+  try {
+    if (!win || win.isDestroyed()) return true;
+    if (typeof win.isVisible === 'function' && !win.isVisible()) return true;
+    if (typeof win.isMinimized === 'function' && win.isMinimized()) return true;
+    const phase = ctx && ctx.scanController ? ctx.scanController.status().phase : 'idle';
+    if (phase === 'scanning' || phase === 'finalizing') return true;
+  } catch (_) { return false; }
+  return false;
+}
+
+// [M13-Q-1] 새 메일 신호용 경량 집계 — MailWatcher onNewMail로만 갱신(IMAP 재호출 없음).
+//   계정별 unseen 합·최신 uidnext를 캐시해 deriveSnapshot이 동기 조회한다(mail 트리거 실발화).
+const briefingMailState = { unseen: 0, latestUid: null };
+function updateBriefingMailState(payload) {
+  if (!payload || typeof payload !== 'object') return;
+  const unseen = Number.isFinite(payload.unseen) ? payload.unseen : null;
+  if (unseen != null && unseen >= 0) briefingMailState.unseen = unseen;
+  // uidnext(또는 newCount 누적)로 "새 메일 도착" 식별 — 단조 증가 토큰.
+  if (Number.isFinite(payload.uidnext)) briefingMailState.latestUid = String(payload.uidnext);
+}
+
+/** [M13] 브리핑 트리거 — 데이터 변경 발신원에서 호출. enabled=false·억제 시 내부에서 무동작. */
+function notifyBriefing(reason) {
+  if (!ctx || !ctx.briefingOrchestrator) return;
+  try { ctx.briefingOrchestrator.notify(reason); } catch (err) { logger.error('브리핑 트리거 실패', err); }
 }
 
 /** [M12 b3] 상승 경고를 렌더러로 단방향 push(고정 토큰만 — L-1). 창 파괴 레이스 가드. */
@@ -266,10 +302,29 @@ function onReady() {
         if (win && !win.isDestroyed() && win.webContents && !win.webContents.isDestroyed()) {
           try { win.webContents.send('spip:projectsUpdated', payload); } catch (_) { /* 창 파괴 레이스 격리 */ }
         }
+        // [M13] git·freshness 변경 → 브리핑 필요성 판정 트리거(opt-in·억제 가드는 내부).
+        notifyBriefing('state');
       },
     });
   } catch (err) {
     logger.error('상태 주시 시작 실패 — 주시 없이 계속', err);
+  }
+
+  // [M13] 브리핑 오케스트레이터 push·가시성 가드 배선(webContents 바인딩 후). egress 메인 단독.
+  try {
+    if (ctx.briefingOrchestrator && typeof ctx.briefingOrchestrator.setPush === 'function') {
+      ctx.briefingOrchestrator.setPush({
+        pushState: (p) => pushBriefing('spip:briefing:state', p),
+        pushDelta: (p) => pushBriefing('spip:briefing:delta', p),
+        pushDone: (p) => pushBriefing('spip:briefing:done', p),
+        pushError: (p) => pushBriefing('spip:briefing:error', p),
+        isSuppressed: isBriefingSuppressed,
+        // [M13-Q-1] 보강 snapshotProvider — mail unseen(캐시)·disk(node_modules 합) 실신호 반영.
+        snapshotProvider: () => deriveSnapshot(ctx, { mailState: () => briefingMailState }),
+      });
+    }
+  } catch (err) {
+    logger.error('브리핑 push 배선 실패 — 브리핑 없이 계속', err);
   }
 
   // [R-28] 네이티브 메뉴 제거 — 메뉴 미설치(접근성/기능은 헤더 버튼·렌더러 단축키로 대체).
@@ -395,6 +450,8 @@ function disposeResources() {
   try { if (ctx && ctx.stateWatcher && typeof ctx.stateWatcher.stop === 'function') ctx.stateWatcher.stop(); } catch (err) { logger.error('워처 정리 실패', err); }
   // 메일 감시 관리자(계정별 타이머) 정리(멱등).
   try { if (ctx && ctx.mailManager && typeof ctx.mailManager.stop === 'function') ctx.mailManager.stop(); } catch (err) { logger.error('메일 감시 정리 실패', err); }
+  // [M13] 브리핑 오케스트레이터 타이머·in-flight 정리(멱등).
+  try { if (ctx && ctx.briefingOrchestrator && typeof ctx.briefingOrchestrator.dispose === 'function') ctx.briefingOrchestrator.dispose(); } catch (err) { logger.error('브리핑 정리 실패', err); }
 }
 
 // [P2-2] 실제 종료 1지점: 자원 dispose는 여기서만(=Q4 통과/창 없음 확정 후). 멱등 설계.

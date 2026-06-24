@@ -24,6 +24,7 @@ const toolsIpc = require('./tools');
 const mailAccountsIpc = require('./mailAccounts');
 const insightsIpc = require('./insights');
 const uiStateIpc = require('./uiState');
+const briefingIpc = require('./briefing');
 const autoUpdate = require('../autoUpdate');
 // [P3-4] 신뢰 origin 단일 원천(security.js). 리터럴 이중정의 제거.
 const { TRUSTED_ORIGIN } = require('../security');
@@ -213,6 +214,16 @@ function registerIpcHandlers(deps) {
   guard('spip:removeTodo', (args) => uiStateIpc.removeTodo(args, ctx));
   // 홈 언어 분포 추세 baseline(스캔 간 비교) — getUiState 응답의 langTrend로 읽기.
   guard('spip:updateLangTrend', (args) => uiStateIpc.updateLangTrend(args, ctx));
+
+  // [M13 R-34~R-41] 브리핑 AI — shape 검증은 각 핸들러 본체(rev P1-1). 키 평문 회송 0(getSettings=hasApiKey).
+  //   상태/델타/완료/에러는 단방향 push(orchestrator가 getWebContents로 메인창에 send). egress는 메인 단독.
+  guard('spip:briefing:getState', (args) => briefingIpc.getState(args, ctx));
+  guard('spip:briefing:trigger', (args) => briefingIpc.trigger(args, ctx));
+  guard('spip:briefing:abort', (args) => briefingIpc.abort(args, ctx));
+  guard('spip:briefing:resolveItem', (args) => briefingIpc.resolveItem(args, ctx));
+  guard('spip:briefing:getSettings', (args) => briefingIpc.getSettings(args, ctx));
+  guard('spip:briefing:setSettings', (args) => briefingIpc.setSettings(args, ctx));
+  guard('spip:briefing:testConnection', (args) => briefingIpc.testConnection(args, ctx));
 
   // 자동 업데이트(사용자 주도) — 제어는 autoUpdate.js(electron-updater). 진행 상황은 단방향 push
   //   'spip:update:status'(initAutoUpdate 가 getWebContents 로 메인창에 send). 미패키징은 NOT_PACKAGED.

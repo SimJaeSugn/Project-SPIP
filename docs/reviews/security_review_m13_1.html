@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>보안 검증 보고 — M13 브리핑 AI 구현 (R-34~R-41 / N-08)</title>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#1e293b; --text:#e2e8f0; --sub:#94a3b8;
+    --accent:#34d399; --ref:#38bdf8; --line:#334155; --warn:#fbbf24; --danger:#f87171; --purple:#c4b5fd;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:"Segoe UI","Malgun Gothic",system-ui,sans-serif;line-height:1.7;}
+  header{padding:46px 32px 34px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#13203b,#0f172a);}
+  header h1{margin:0 0 10px;font-size:28px;letter-spacing:-0.01em;}
+  header .tag{display:inline-block;background:rgba(52,211,153,.12);color:var(--accent);
+    border:1px solid rgba(52,211,153,.4);border-radius:999px;padding:3px 12px;font-size:13px;margin-right:8px;margin-bottom:6px;}
+  header p{margin:14px 0 0;color:var(--sub);max-width:1040px;}
+  .meta{margin-top:14px;font-size:13px;color:var(--sub);}
+  main{max-width:1240px;margin:0 auto;padding:32px;}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:24px 28px;margin:22px 0;}
+  h2{margin:0 0 16px;font-size:21px;color:var(--accent);border-left:4px solid var(--accent);padding-left:12px;}
+  h3{font-size:16px;color:var(--ref);margin:22px 0 10px;}
+  p{margin:8px 0;}
+  ul,ol{margin:8px 0;padding-left:22px;}
+  li{margin:5px 0;}
+  code{background:#0b1220;color:var(--ref);padding:1px 6px;border-radius:5px;font-size:12.5px;font-family:Consolas,monospace;}
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13px;}
+  th,td{border:1px solid var(--line);padding:9px 11px;text-align:left;vertical-align:top;}
+  th{background:#142035;color:var(--accent);}
+  tr:nth-child(even) td{background:rgba(255,255,255,.02);}
+  .verdict{font-size:30px;font-weight:800;letter-spacing:.02em;}
+  .pass{color:var(--accent);} .fail{color:var(--danger);} .cond{color:var(--warn);}
+  .sev{font-size:11px;font-weight:800;padding:2px 9px;border-radius:6px;white-space:nowrap;display:inline-block;}
+  .crit{background:rgba(248,113,113,.22);color:#fecaca;border:1px solid rgba(248,113,113,.6);}
+  .high{background:rgba(251,146,60,.18);color:#fdba74;border:1px solid rgba(251,146,60,.55);}
+  .med{background:rgba(251,191,36,.16);color:#fcd34d;border:1px solid rgba(251,191,36,.5);}
+  .low{background:rgba(56,189,248,.16);color:#7dd3fc;border:1px solid rgba(56,189,248,.45);}
+  .info{background:rgba(148,163,184,.16);color:#cbd5e1;border:1px solid rgba(148,163,184,.45);}
+  .ok{background:rgba(52,211,153,.16);color:#6ee7b7;border:1px solid rgba(52,211,153,.5);}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;}
+  .card{background:#0b1220;border:1px solid var(--line);border-radius:10px;padding:14px;text-align:center;}
+  .card .n{font-size:30px;font-weight:800;}
+  .card .k{font-size:12px;color:var(--sub);text-transform:uppercase;letter-spacing:.5px;margin-top:4px;}
+  .note{background:rgba(56,189,248,.08);border:1px solid rgba(56,189,248,.3);border-radius:8px;padding:12px 16px;font-size:13.5px;color:#bae6fd;margin:12px 0;}
+  .warn-box{background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.32);border-radius:8px;padding:12px 16px;font-size:13.5px;color:#fde68a;margin:12px 0;}
+  .ok-box{background:rgba(52,211,153,.08);border:1px solid rgba(52,211,153,.32);border-radius:8px;padding:12px 16px;font-size:13.5px;color:#a7f3d0;margin:12px 0;}
+  .legend{display:flex;gap:18px;flex-wrap:wrap;font-size:12.5px;color:var(--sub);margin-top:10px;}
+  .legend span{display:inline-flex;align-items:center;gap:6px;}
+  .sw{width:14px;height:14px;border-radius:3px;display:inline-block;border:1px solid #475569;}
+  svg{max-width:100%;height:auto;display:block;margin:10px auto;}
+  .finding{border:1px solid var(--line);border-left:4px solid var(--line);border-radius:10px;padding:0;margin:16px 0;overflow:hidden;}
+  .finding.f-med{border-left-color:var(--warn);}
+  .finding.f-low{border-left-color:var(--ref);} .finding.f-info{border-left-color:#94a3b8;}
+  .finding__head{background:#142035;padding:11px 18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+  .finding__head .id{font-family:Consolas,monospace;font-weight:800;color:var(--purple);font-size:14px;}
+  .finding__head .ti{font-weight:700;}
+  .finding__body{padding:14px 20px;font-size:13.5px;}
+  .finding__body dt{color:var(--sub);font-size:12px;text-transform:uppercase;letter-spacing:.4px;margin-top:10px;}
+  .finding__body dd{margin:3px 0 0;}
+  footer{text-align:center;color:var(--sub);font-size:12.5px;padding:30px;border-top:1px solid var(--line);}
+  .mono{font-family:Consolas,monospace;}
+  .pf{color:var(--accent);font-weight:700;}
+</style>
+</head>
+<body>
+<header>
+  <span class="tag">보안 검증 보고</span>
+  <span class="tag">대상: M13 브리핑 AI 구현(백엔드+프런트)</span>
+  <span class="tag">R-34~R-41 / N-08</span>
+  <h1>Project-SPIP — M13 브리핑 AI 구현 보안 검증</h1>
+  <p>이 배치 최대의 신규 신뢰 경계(LLM 네트워크 egress + 신뢰 불가 데이터의 프롬프트 투입 + API 키 + 신규 IPC 7채널)에 대한
+  적대적 관점 구현 검증. 설계 단계 보안 게이트(M-1 URL/SSRF · M-2 키·로그 누출 · M-3 인젝션, 프로브 8종)가
+  코드로 실제 강제되는지를 <b>정적 분석 + 실측 프로브 + 의존성 스캔</b>으로 확인했다. 검증자는 코드를 수정하지 않는다.</p>
+  <div class="meta">대상 파일: <code>lib/ai/{llmClient,briefingPrompt,briefingParse,briefingPolicy,briefingItems,briefingOrchestrator,briefingConst}.js</code> ·
+  <code>electron/ipc/{briefing,register}.js</code> · <code>electron/preload.js</code> · <code>lib/common/{config,logger}.js</code> ·
+  <code>public/app.js</code> · <code>public/index.html</code>(CSP) · <code>package.json</code> ·
+  기준 폴더 <code>docs/Development/</code> 부재 → 프로젝트 보안 불변식(L-1·H-1·H-2·CSP·0600/0700·per-user·의존성 최소) + 표준 체크리스트 적용 ·
+  검증자: security-reviewer · 2026-06-25 · 회차 1</div>
+</header>
+
+<main>
+
+<!-- 종합 판정 -->
+<section>
+  <h2>종합 판정</h2>
+  <p class="verdict pass">PASS</p>
+  <p>치명·높음 <b>0건</b>. 설계 단계에서 게이트로 지정된 5대 신뢰 경계가 모두 <b>코드로 강제됨을 실측 확인</b>했다 —
+  ① egress는 <code>llmClient.js</code> 단독(Langchain 유일 import), 렌더러 CSP <code>connect-src 'none'</code> 불변,
+  ② API 키는 <code>hasApiKey:boolean</code>만 회송(평문 회송 0)·0600 저장·로그는 host만,
+  ③ <code>validateBriefingUrl</code>이 임베디드 자격증명·비 http/https scheme를 거부,
+  ④ 인젝션 프로브 8종이 JSON 인코딩 + 길이 상한 + 제어/방향성 문자 제거 + 분류 정책 소유로 모두 무력화,
+  ⑤ 모델 출력은 <code>textContent</code> 전용(innerHTML/마크다운→HTML/href/IPC/명령 0).
+  설계 단계 회차1의 중간 3건(M-1·M-2·M-3)은 모두 <b>구현·테스트로 시정 완료</b>되어 해소되었다.
+  남은 항목은 정보성 관찰뿐이다.</p>
+  <div class="grid">
+    <div class="card"><div class="n crit">0</div><div class="k">치명</div></div>
+    <div class="card"><div class="n high">0</div><div class="k">높음</div></div>
+    <div class="card"><div class="n med">0</div><div class="k">중간</div></div>
+    <div class="card"><div class="n low">2</div><div class="k">낮음</div></div>
+    <div class="card"><div class="n info">3</div><div class="k">정보</div></div>
+  </div>
+  <div class="ok-box"><b>FAIL 트리거 없음.</b> 치명·높음 0 → 보안 게이트 PASS. 880 테스트 통과 상태와 정합하며,
+  본 검증의 실측 프로브(인젝션 8종·키 비노출·URL 검증·의존성)도 전부 통과했다. 낮음 2건은 회귀 방지 관점의
+  심층방어 권고이며 게이트 미통과 사유가 아니다.</div>
+</section>
+
+<!-- 자산·신뢰 경계 -->
+<section>
+  <h2>자산 · 신뢰 경계 · 데이터 흐름(구현 확인)</h2>
+  <p>보호 자산: ① API 키(0600·렌더러 비노출) ② 사용자 로컬 데이터(스캔·메일·커밋 — 임의 외부 egress 차단)
+  ③ 렌더러 무결성(임의 코드 실행/XSS 차단). <b>빨간 점선</b>이 이번 배치가 도입한 신규 신뢰 경계.
+  아래는 설계 청사진이 아니라 <b>실제 코드에서 확인된</b> 흐름이다.</p>
+  <svg viewBox="0 0 980 430" role="img" aria-label="신뢰 경계·데이터 흐름·위협 표면(구현)">
+    <defs>
+      <marker id="a" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#64748b"/></marker>
+      <marker id="ag" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#34d399"/></marker>
+      <marker id="ad" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#f87171"/></marker>
+    </defs>
+    <style>
+      .t{fill:#e2e8f0;font:700 12.5px 'Segoe UI',sans-serif;}
+      .d{fill:#94a3b8;font:10.5px 'Segoe UI',sans-serif;}
+      .e{stroke:#64748b;stroke-width:1.5;fill:none;marker-end:url(#a);}
+      .eg{stroke:#34d399;stroke-width:1.8;fill:none;marker-end:url(#ag);}
+      .ed{stroke:#f87171;stroke-width:1.6;fill:none;marker-end:url(#ad);stroke-dasharray:5 3;}
+      .renderer{fill:#0e1a24;stroke:#38bdf8;}
+      .main{fill:#101c14;stroke:#34d399;}
+      .store{fill:#161427;stroke:#c4b5fd;}
+      .untrust{fill:#1c1320;stroke:#f87171;}
+      .b{rx:9;stroke-width:1.5;}
+    </style>
+    <rect x="20" y="50" width="270" height="350" rx="14" fill="none" stroke="#f87171" stroke-dasharray="7 5" stroke-width="1.5"/>
+    <text class="d" x="30" y="72" fill="#fca5a5">렌더러(sandbox · CSP connect-src 'none')</text>
+    <rect class="b renderer" x="46" y="92" width="220" height="46"/><text class="t" x="58" y="112">브리핑 UI</text><text class="d" x="58" y="128">el() textContent · innerHTML 0</text>
+    <rect class="b renderer" x="46" y="156" width="220" height="46"/><text class="t" x="58" y="176">설정 UI</text><text class="d" x="58" y="192">키 type=password 쓰기전용 · hasApiKey만</text>
+    <rect class="b renderer" x="46" y="220" width="220" height="46"/><text class="t" x="58" y="240">preload spip.briefing.*</text><text class="d" x="58" y="256">invoke + 단방향 on* 구독</text>
+
+    <rect x="320" y="50" width="340" height="350" rx="14" fill="none" stroke="#f87171" stroke-dasharray="7 5" stroke-width="1.5"/>
+    <text class="d" x="330" y="72" fill="#fca5a5">메인(Node · egress 단독 · 키 보유)</text>
+    <rect class="b main" x="346" y="90" width="290" height="44"/><text class="t" x="358" y="110">register guard</text><text class="d" x="358" y="126">senderFrame 정확일치 + 핸들러 shape</text>
+    <rect class="b main" x="346" y="148" width="290" height="46"/><text class="t" x="358" y="168">Orchestrator · buildPrompt</text><text class="d" x="358" y="184">JSON 인코딩 · truncate · 분류=정책</text>
+    <rect class="b main" x="346" y="210" width="290" height="44"/><text class="t" x="358" y="230">llmClient (Langchain 격리)</text><text class="d" x="358" y="246">유일 egress · timeout · AbortController</text>
+    <rect class="b store" x="346" y="270" width="290" height="44"/><text class="t" x="358" y="290">config 0600 (apiKey 평문)</text><text class="d" x="358" y="306">persistConfigKeys · elev write 보류</text>
+    <rect class="b store" x="346" y="330" width="290" height="44"/><text class="t" x="358" y="350">uiStateStore (carry-over)</text><text class="d" x="358" y="366">0600 · elev no-op</text>
+
+    <rect class="b untrust" x="700" y="100" width="250" height="56"/><text class="t" x="712" y="124">로컬/온프레미스 LLM</text><text class="d" x="712" y="142">baseURL http/https만 · 자격증명 거부</text>
+    <rect class="b untrust" x="700" y="200" width="250" height="56"/><text class="t" x="712" y="224">신뢰 불가 데이터원</text><text class="d" x="712" y="242">메일 본문·프로젝트명·커밋</text>
+    <rect class="b untrust" x="700" y="300" width="250" height="56"/><text class="t" x="712" y="324">로그 / 에러 / push payload</text><text class="d" x="712" y="342">{code} · host만 (키·URL 0)</text>
+
+    <path class="e" d="M266,243 L346,112"/><text class="d" x="270" y="200">IPC invoke</text>
+    <path class="eg" d="M346,112 L268,112"/><text class="d" x="272" y="86" fill="#34d399">단방향 push(키 비포함)</text>
+    <path class="eg" d="M636,230 L700,160"/><text class="d" x="630" y="200" fill="#34d399">유일 egress(키 첨부)</text>
+    <path class="ed" d="M700,236 L636,180"/><text class="d" x="648" y="282" fill="#f87171">적대 입력 → JSON 인코딩·truncate 후 프롬프트</text>
+  </svg>
+  <div class="legend">
+    <span><span class="sw" style="background:#101c14;border-color:#34d399"></span> 메인(egress·키)</span>
+    <span><span class="sw" style="background:#0e1a24;border-color:#38bdf8"></span> 렌더러(sandbox)</span>
+    <span><span class="sw" style="background:#161427;border-color:#c4b5fd"></span> 영속 0600</span>
+    <span><span class="sw" style="background:#1c1320;border-color:#f87171"></span> 외부/비신뢰</span>
+    <span>빨간 점선 = 신뢰 경계 / 적대 흐름</span>
+  </div>
+</section>
+
+<!-- 설계 게이트 충족 -->
+<section>
+  <h2>설계 단계 보안 게이트 — 구현 충족 검증(실측)</h2>
+  <p>설계 보안 검토(회차1) §"보안 게이트" 8항이 코드에서 어떻게 강제되는지, 그리고 실측 결과를 대조한다.</p>
+  <table>
+    <tr><th>게이트</th><th>코드 근거</th><th>실측/대조</th><th>판정</th></tr>
+    <tr><td>① egress 메인 단독</td><td>Langchain require가 <code>llmClient.js</code> <code>chatFactory</code> 1곳뿐. <code>public/</code> 번들러 없음 → 렌더러로 샐 경로 구조적 부재. CSP <code>default-src 'none'; connect-src 'none'</code> 실재</td><td><code>public/</code> 전역 grep: fetch/XHR/WebSocket·langchain import 0. CSP 메타 확인</td><td><span class="sev ok">충족</span></td></tr>
+    <tr><td>② 키 비노출(M-2)</td><td><code>getSettings</code>가 <code>hasApiKey:boolean</code>만 반환(apiKey 키 자체 없음). <code>setSettings</code>는 <code>getSettings</code> shape로 응답</td><td>실측: 키 <code>sk-SECRET…</code> 주입 후 getSettings/setSettings 응답 JSON에 평문 0, <code>hasApiKey:true</code></td><td><span class="sev ok">충족</span></td></tr>
+    <tr><td>③ 로그 키 누출 0(M-2)</td><td><code>llmClient</code> 실패 로그는 <code>{code, host}</code>만, <code>hostOnly()</code>가 자격증명·경로 제거. 에러 분류는 고정 enum code. orchestrator push는 <code>{gen, code}</code></td><td>코드 경로상 baseURL 전체·apiKey·<code>err</code> 객체를 logger/meta로 넘기는 지점 0</td><td><span class="sev ok">충족</span></td></tr>
+    <tr><td>④ URL/SSRF(M-1)</td><td><code>validateBriefingUrl</code>: <code>new URL()</code> + scheme∈{http,https} + <code>username/password</code> 비어야 함 + 길이상한. 불량 시 normalizeBriefing이 기본값 폴백</td><td>실측: <code>user:pass@</code>·<code>file:</code>·<code>ftp:</code>·<code>javascript:</code>·garbage 모두 ok:false / localhost·외부 https ok:true·external 플래그 정확</td><td><span class="sev ok">충족</span></td></tr>
+    <tr><td>⑤ 인젝션 프로브 8종(M-3)</td><td><code>buildPrompt</code>가 DATA를 <code>JSON.stringify</code> 인코딩 + 신호유형별 길이상한(메일≤2000·커밋≤500) + <code>clamp</code>가 C0/DEL·방향성 문자(U+202A~E, U+2066~9) 제거. 분류는 <code>briefingPolicy</code> 소유(모델 무신뢰)</td><td>실측 8종(지시덮어쓰기·악성URL·분류강제·키누출·구분자탈출·유니코드·truncate밀어내기·carry-over 2차) 모두: user 메시지 JSON 유효·역할 위조 불가·bidi/제어 제거·길이상한 적용. SYSTEM에 반인젝션 조항·분류불변 조항 존재·키/URL placeholder 0</td><td><span class="sev ok">충족</span></td></tr>
+    <tr><td>⑥ 출력 표시 전용(L-1)</td><td><code>briefingParse</code>가 HTML 미변환 평문 보존. 렌더는 <code>el(...,{text})</code> = <code>textContent</code>. app.js innerHTML/insertAdjacentHTML 0</td><td>실측: <code>&lt;script&gt;</code>·<code>onerror</code>·백틱 명령이 평문으로 보존(디코드 0). 모델 출력→href/onClick/IPC/명령 사용처 0</td><td><span class="sev ok">충족</span></td></tr>
+    <tr><td>⑦ IPC 표면(L-2)</td><td>briefing invoke 7채널 전부 <code>guard()</code> 경유(senderFrame 정확일치 + try/catch 고정 code). push 4채널은 preload <code>_sub</code> 구독·inbound 핸들러 0·ipcRenderer 원본 비노출. 핸들러 본체 shape 검증(BAD_ARGS)</td><td>register.js·preload.js 대조: 직접 <code>ipcMain.handle</code> 0, push 채널 inbound 0, 죽은 채널 0</td><td><span class="sev ok">충족</span></td></tr>
+    <tr><td>⑧ 공급망(L-3)</td><td><code>@langchain/openai</code>+<code>@langchain/core</code> 2개 추가(ADR 정당화)</td><td>실측 <code>npm ls</code>: 트리 = core@1.2.1 + openai@1.5.3(core deduped) — 과도 확장 없음. <code>npm audit --omit=dev</code>: <span class="pf">0 vulnerabilities</span></td><td><span class="sev ok">충족</span></td></tr>
+  </table>
+  <div class="ok-box">설계 게이트 8항 전부 코드로 강제됨을 실측 확인. 회차1의 중간 3건(M-1/M-2/M-3)은 모두 구현으로 해소.</div>
+</section>
+
+<!-- STRIDE 요약 -->
+<section>
+  <h2>점검 영역별 평가(STRIDE)</h2>
+  <table>
+    <tr><th>영역</th><th>STRIDE</th><th>구현 대응(코드)</th><th>판정</th></tr>
+    <tr><td>네트워크 egress</td><td>정보노출·변조</td><td>llmClient 단독 egress, 렌더러 CSP connect-src 'none', timeout(30s 기본)·AbortController·단일 in-flight</td><td><span class="sev ok">안전</span></td></tr>
+    <tr><td>API 키</td><td>정보노출</td><td>hasApiKey만 회송, 0600 평문 저장(메일 pass 동형), 상승 세션 write 보류, 프런트 store 평문 미보관·keyInput 저장 후 비움</td><td><span class="sev ok">안전</span></td></tr>
+    <tr><td>URL/SSRF</td><td>위장·정보노출</td><td>validateBriefingUrl(scheme·자격증명·길이), 외부 host UI 경고, 불량 폴백</td><td><span class="sev ok">안전</span></td></tr>
+    <tr><td>프롬프트 인젝션</td><td>변조·권한상승</td><td>JSON 인코딩·길이상한·제어/방향성 문자 제거·분류 정책 소유·출력 자동실행 0</td><td><span class="sev ok">안전</span></td></tr>
+    <tr><td>출력 안전</td><td>변조(XSS·코드실행)</td><td>textContent only, HTML/마크다운 미변환, 평문 폴백 크래시 0, gen 가드로 취소 세대 잔여 차단</td><td><span class="sev ok">안전</span></td></tr>
+    <tr><td>IPC 표면</td><td>위장·권한상승</td><td>guard 전수, shape 검증, push 단방향, 죽은 채널 0</td><td><span class="sev ok">안전</span></td></tr>
+    <tr><td>의존성 공급망</td><td>변조·DoS</td><td>2개 추가·트리 최소·audit 0건</td><td><span class="sev ok">안전</span></td></tr>
+  </table>
+</section>
+
+<!-- 발견 항목 -->
+<section>
+  <h2>발견 항목(낮음 · 정보) — 심층방어 권고</h2>
+
+  <div class="finding f-low">
+    <div class="finding__head"><span class="sev low">낮음</span><span class="id">L-1</span><span class="ti">스트림 누적 버퍼 무제한 — 악성/오작동 서버의 무한 스트림에 대한 절대 길이 상한 부재</span></div>
+    <div class="finding__body"><dl>
+      <dt>위치</dt><dd><code>lib/ai/llmClient.js</code> <code>streamBriefing</code>(<code>text += t</code>) · <code>public/app.js</code> <code>onDelta</code>(<code>store.briefing.streamText += chunk</code>)</dd>
+      <dt>위협(STRIDE)</dt><dd>서비스거부(D) — 메모리 고갈</dd>
+      <dt>악용 시나리오</dt><dd>설정된 baseURL 서버가 종료 토큰 없이 무한 스트림을 보내면 메인의 <code>text</code>와 렌더러 <code>streamText</code>가 무제한 증가한다. <code>maxTokens</code>(1024 기본)는 서버가 존중할 때만 유효하고, <code>timeout</code>은 토큰이 계속 흐르면 idle 타임아웃에 안 걸릴 수 있다. baseURL은 사용자 자신의 서버라 위협 표면은 낮으나, 오작동 로컬 서버나 잘못 붙인 외부 endpoint에서 발생 가능.</dd>
+      <dt>심각도 근거</dt><dd>단일 사용자·자기 endpoint·opt-in이라 낮음. AbortController·단일 in-flight가 동시 폭주는 이미 차단.</dd>
+      <dt>권고 조치</dt><dd>스트림 누적에 절대 바이트/문자 상한(예 <code>maxTokens</code> 기반 또는 고정 상한)을 두고 초과 시 abort + 부분 결과 표시. 렌더러 <code>streamText</code>에도 동일 상한(표시는 어차피 <code>PARSE_REASON_MAX</code>로 잘림). 회귀 테스트 권고.</dd>
+    </dl></div>
+  </div>
+
+  <div class="finding f-low">
+    <div class="finding__head"><span class="sev low">낮음</span><span class="id">L-2</span><span class="ti">getSettings가 baseURL 전체를 회송 — 키는 아니나 엔드포인트 경로 반향</span></div>
+    <div class="finding__body"><dl>
+      <dt>위치</dt><dd><code>electron/ipc/briefing.js</code> <code>getSettings</code>(<code>baseURL: b.baseURL</code>)</dd>
+      <dt>위협(STRIDE)</dt><dd>정보노출(I) — 경미</dd>
+      <dt>악용 시나리오</dt><dd>설정 폼 복원을 위해 baseURL 전체를 렌더러로 회송한다. <code>validateBriefingUrl</code>이 자격증명 포함 URL의 <b>영속을 차단</b>하므로 저장된 baseURL에는 user:pass가 없고, 회송 대상도 신뢰 렌더러(guard 통과)뿐이라 실질 누출은 아니다. 다만 키와 달리 baseURL은 평문 회송되므로, 향후 config 파일을 외부 편집해 자격증명 URL을 직접 심으면(검증 우회) 그 값이 그대로 회송될 수 있다(이론적).</dd>
+      <dt>심각도 근거</dt><dd>신뢰 렌더러 한정 + 자격증명 영속 차단 + 설정 폼 표시는 정당 용도. 낮음.</dd>
+      <dt>권고 조치</dt><dd>현 동작 유지 가능. 심층방어로 <code>getSettings</code>에서도 <code>validateBriefingUrl</code>로 한 번 더 정규화해 회송(직접 편집된 자격증명 URL이 폼으로 돌아오지 않게). 필수는 아님.</dd>
+    </dl></div>
+  </div>
+
+  <div class="finding f-info">
+    <div class="finding__head"><span class="sev info">정보</span><span class="id">I-1</span><span class="ti">apiKey 0600 평문 저장 — 메일 pass와 동일한 수용된 위험</span></div>
+    <div class="finding__body"><dl>
+      <dt>관찰</dt><dd>키를 <code>persistConfigKeys</code>로 0600 config에 평문 저장(상승 세션 시 write 보류). OS 키체인 미사용은 단일 사용자 로컬 도구로서 메일 비밀번호와 동일하게 일관된 위험 수용. 로컬 LLM은 통상 키 불필요(<code>apiKey || 'not-needed'</code>)이라 실제 키 보관은 드묾.</dd>
+    </dl></div>
+  </div>
+
+  <div class="finding f-info">
+    <div class="finding__head"><span class="sev info">정보</span><span class="id">I-2</span><span class="ti">외부 baseURL 허용 — 신뢰 불가 데이터의 외부 전송은 사용자 책임(경고 표기됨)</span></div>
+    <div class="finding__body"><dl>
+      <dt>관찰</dt><dd>비-localhost baseURL을 허용하면 프롬프트(메일 본문·커밋 메시지 포함 가능)가 그 외부 host로 전송된다. 정당 용도(자기 온프레미스/클라우드)이고, <code>external</code> 플래그 + 설정 UI에 "⚠ 외부 서버로 데이터가 전송됩니다" 경고(<code>briefing-warn</code>, textContent)가 표기된다. opt-in(기본 enabled:false)이라 무단 전송은 발생하지 않는다. 위험 수용은 사용자 결정.</dd>
+    </dl></div>
+  </div>
+
+  <div class="finding f-info">
+    <div class="finding__head"><span class="sev info">정보</span><span class="id">I-3</span><span class="ti">carry-over 2차 인젝션 표면 — 정규화로 차단되나 모델 출력 재투입 경로 존재</span></div>
+    <div class="finding__body"><dl>
+      <dt>관찰</dt><dd>미처리 항목(carry-over)의 <code>title</code>이 다음 프롬프트에 재투입될 수 있는데(2차 인젝션 표면), 실측상 <code>buildCarryOverData→clamp</code>가 길이상한(≤200)·제어/방향성 문자 제거·JSON 인코딩을 적용해 역할 위조 불가. 다만 현 오케스트레이터는 <code>buildPrompt({items, carryOver: []})</code>로 carry-over를 프롬프트에 싣지 않고 표시 항목만 보낸다 — 2차 인젝션 경로가 사실상 비활성. 향후 carry-over를 프롬프트에 포함하도록 바꾸면 위 정규화가 반드시 유지되어야 함(테스트로 못박기).</dd>
+    </dl></div>
+  </div>
+</section>
+
+<!-- 확인 필요 -->
+<section>
+  <h2>확인 필요(위험 수용 결정)</h2>
+  <table>
+    <tr><th>항목</th><th>질문</th><th>기본 권고</th></tr>
+    <tr><td>외부 baseURL 허용</td><td>비-localhost baseURL 허용을 유지할 것인가? 신뢰 불가 데이터가 외부로 나감</td><td>유지 — opt-in + UI 경고 + 자격증명 거부로 충분. 사용자 자율 결정(I-2)</td></tr>
+    <tr><td>의존성 규약 일탈</td><td>런타임 의존성 1→3 증가(ADR-BR-1)를 수용</td><td>수용 — 트리 최소·audit 0건 실측 확인</td></tr>
+  </table>
+  <div class="note">두 항목 모두 중대 위험이 아니므로 자율 결정 가능. 보안 게이트 통과를 막지 않는다.</div>
+</section>
+
+<!-- 회귀 방지 테스트 -->
+<section>
+  <h2>회귀 방지 — 유지할 테스트 불변식</h2>
+  <ol>
+    <li><b>egress 0</b>: <code>public/</code>에 fetch/XHR/WebSocket·langchain import 0, CSP <code>connect-src 'none'</code> 불변.</li>
+    <li><b>키 비노출</b>: getSettings/setSettings 응답에 apiKey 평문 0(hasApiKey만), 에러/done push payload는 <code>{gen, code/items}</code>만.</li>
+    <li><b>로그</b>: llmClient 실패 로그는 host만(자격증명·경로·키·err 객체 0).</li>
+    <li><b>URL</b>: 자격증명·file:·ftp:·기타 scheme 거부, http/https만, 불량 폴백 — 경계 테스트.</li>
+    <li><b>인젝션 8종</b>: JSON 유효·역할 위조 불가·bidi/제어 제거·길이상한·분류 정책 값 불변.</li>
+    <li><b>출력</b>: 모델 출력 innerHTML 0·HTML 미변환·평문 폴백 크래시 0·gen 가드.</li>
+    <li><b>IPC</b>: briefing invoke 전수 guard 경유, push inbound 0, 죽은 채널 0.</li>
+    <li><b>공급망</b>: <code>npm audit</code> 0건 유지, langchain 트리 최소 유지.</li>
+  </ol>
+  <div class="note">신규 기능으로 carry-over를 프롬프트에 포함하거나 분류를 모델에 위임하면 보안 재검토 필수(I-3·M-3 근본 방어 약화 위험).</div>
+</section>
+
+<footer>
+  Project-SPIP v1.7.3 · 보안 검증 보고 "M13 브리핑 AI 구현" · R-34~R-41 / N-08 · 2026-06-25 · 회차 1 ·
+  판정 <b class="pf">PASS</b> · 치명·높음 0 / 중간 0 / 낮음 2 / 정보 3 · 설계 게이트 8/8 충족(실측) ·
+  security-reviewer(직접 수정 없음 — 시정은 개발팀 위임)
+</footer>
+
+</main>
+</body>
+</html>

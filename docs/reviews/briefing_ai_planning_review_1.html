@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>검증 보고 — 브리핑 AI 연동 기능명세 (1회차)</title>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#1e293b; --text:#e2e8f0; --sub:#94a3b8;
+    --accent:#34d399; --ref:#38bdf8; --line:#334155; --warn:#fbbf24; --danger:#f87171; --purple:#c4b5fd;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:"Segoe UI","Malgun Gothic",system-ui,sans-serif;line-height:1.7;}
+  header{padding:46px 32px 34px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#13203b,#0f172a);}
+  header h1{margin:0 0 10px;font-size:28px;letter-spacing:-0.01em;}
+  header .tag{display:inline-block;background:rgba(52,211,153,.12);color:var(--accent);
+    border:1px solid rgba(52,211,153,.4);border-radius:999px;padding:3px 12px;font-size:13px;margin-right:8px;margin-bottom:6px;}
+  header p{margin:14px 0 0;color:var(--sub);max-width:1000px;}
+  .meta{margin-top:16px;font-size:13px;color:var(--sub);}
+  main{max-width:1240px;margin:0 auto;padding:32px;}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:24px 28px;margin:22px 0;}
+  h2{margin:0 0 16px;font-size:21px;color:var(--accent);border-left:4px solid var(--accent);padding-left:12px;}
+  h3{font-size:16px;color:var(--ref);margin:22px 0 10px;}
+  p{margin:8px 0;}
+  ul,ol{margin:8px 0;padding-left:22px;} li{margin:5px 0;}
+  code{background:#0b1220;color:var(--ref);padding:1px 6px;border-radius:5px;font-size:12.5px;font-family:Consolas,monospace;}
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13px;}
+  th,td{border:1px solid var(--line);padding:9px 11px;text-align:left;vertical-align:top;}
+  th{background:#142035;color:var(--accent);}
+  tr:nth-child(even) td{background:rgba(255,255,255,.02);}
+  .rid{font-family:Consolas,monospace;color:var(--accent);font-weight:700;white-space:nowrap;}
+  .nid{font-family:Consolas,monospace;color:var(--warn);font-weight:700;white-space:nowrap;}
+  .verdict{font-size:13px;font-weight:800;padding:3px 11px;border-radius:7px;white-space:nowrap;display:inline-block;}
+  .pass{background:rgba(52,211,153,.16);color:#6ee7b7;border:1px solid rgba(52,211,153,.5);}
+  .fail{background:rgba(248,113,113,.16);color:#fca5a5;border:1px solid rgba(248,113,113,.5);}
+  .cond{background:rgba(251,191,36,.16);color:#fcd34d;border:1px solid rgba(251,191,36,.5);}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px;}
+  .card{background:#0b1220;border:1px solid var(--line);border-radius:10px;padding:16px;}
+  .card .k{font-size:12px;color:var(--sub);text-transform:uppercase;letter-spacing:.5px;}
+  .card .v{font-size:14px;margin-top:6px;}
+  .kpi{font-size:30px;font-weight:800;}
+  .note{background:rgba(56,189,248,.08);border:1px solid rgba(56,189,248,.3);border-radius:8px;padding:12px 16px;font-size:13.5px;color:#bae6fd;margin:12px 0;}
+  .warn-box{background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.32);border-radius:8px;padding:12px 16px;font-size:13.5px;color:#fde68a;margin:12px 0;}
+  .danger-box{background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.35);border-radius:8px;padding:12px 16px;font-size:13.5px;color:#fecaca;margin:12px 0;}
+  .ok-box{background:rgba(52,211,153,.07);border:1px solid rgba(52,211,153,.32);border-radius:8px;padding:12px 16px;font-size:13.5px;color:#bbf7d0;margin:12px 0;}
+  .fid{font-family:Consolas,monospace;color:var(--purple);font-weight:700;white-space:nowrap;}
+  .pri{font-size:11px;font-weight:700;padding:2px 8px;border-radius:6px;white-space:nowrap;}
+  .p1{background:rgba(248,113,113,.16);color:#fca5a5;border:1px solid rgba(248,113,113,.5);}
+  .p2{background:rgba(251,191,36,.16);color:#fcd34d;border:1px solid rgba(251,191,36,.5);}
+  .p3{background:rgba(56,189,248,.16);color:#7dd3fc;border:1px solid rgba(56,189,248,.45);}
+  footer{text-align:center;color:var(--sub);font-size:12.5px;padding:30px;border-top:1px solid var(--line);}
+</style>
+</head>
+<body>
+<header>
+  <span class="tag">검증 보고 (Reviewer)</span>
+  <span class="tag">대상: 브리핑 AI 연동 기능명세</span>
+  <span class="tag">1회차</span>
+  <h1>독립 검증 — 브리핑 AI 연동 기능명세 (기획 단계)</h1>
+  <p>제3자 입장에서 <code>docs/FeatureSpec-briefing-ai.html</code>(R-34~R-41 · N-08~N-10)을 회의적으로 검증했다.
+  기준: <code>docs/ref.md</code>(원본 요구·goal) · <code>docs/traceability.html</code>(ID 체계) ·
+  <code>docs/architecture/m9-design.html</code>(RG·coalesce) · <code>docs/architecture/m12-design.html</code>(보안).
+  산출물을 직접 수정하지 않고 판정과 반영 항목만 낸다.</p>
+  <div class="meta">검증자: reviewer · 검증일 2026-06-25 · 기준 폴더(<code>docs/Planning/</code>) 부재 → 일반 기획 기준 + ref.md 역추적</div>
+</header>
+
+<main>
+
+<!-- 종합 판정 -->
+<section id="verdict">
+  <h2>0. 종합 판정</h2>
+  <div class="grid">
+    <div class="card"><div class="k">종합</div><div class="kpi" style="color:#fcd34d">CONDITIONAL</div><div class="v">조건 충족 시 아키텍처 단계 진행 가능. 치명 결함 없음.</div></div>
+    <div class="card"><div class="k">완결성(ref 추적)</div><div class="kpi" style="color:#6ee7b7">PASS*</div><div class="v">기능요구·goal 5요소 모두 요구로 추적됨. *1건 약점(아래 F-1).</div></div>
+    <div class="card"><div class="k">반영 항목(P1)</div><div class="kpi" style="color:#fca5a5">2</div><div class="v">F-1(즉각반응 vs 디바운스)·F-4(프롬프트 인젝션 수용기준 구체화)</div></div>
+    <div class="card"><div class="k">반영 항목(P2/P3)</div><div class="kpi" style="color:#fcd34d">4</div><div class="v">F-2·F-3·F-5·F-6</div></div>
+  </div>
+  <div class="note">기획 산출물로서 완결성·추적성·구조는 높은 수준이다. 의존성/플로우 다이어그램·필요성 판정 기준표·carry-over "처리됨" 정의·비범위·리스크·미해결 질문이 모두 명시돼 있어 기획 기준 체크리스트 대부분을 충족한다.
+  다만 <b>ref.md의 핵심 비기능 의도("거의 즉각적으로 반응")가 명세의 ~2초 디바운스 설계와 명시적으로 화해되지 않은 점</b>과 <b>프롬프트 인젝션 방어의 수용 기준이 "프로브로 확인"에 그쳐 구체 기준이 모호한 점</b> 2건을 조건으로 둔다.</div>
+</section>
+
+<!-- 체크리스트 결과 -->
+<section id="checklist">
+  <h2>1. 체크리스트별 판정</h2>
+  <table>
+    <tr><th style="width:230px">체크 항목</th><th style="width:90px">판정</th><th>근거</th></tr>
+    <tr>
+      <td><b>1. 완결성</b> — ref 기능요구·goal 전부 추적</td>
+      <td><span class="verdict cond">CONDITIONAL</span></td>
+      <td>ref의 5요소(스트리밍·Langchain·데이터변경시 필요판단·OpenAI호환 온프레미스·처리 가이드)와 goal 3요소(3분류·즉각반응·미처리 carry-over) 모두 요구로 매핑됨(아래 §2 역추적표). 단 "거의 즉각 반응"의 추적이 약함(F-1).</td>
+    </tr>
+    <tr>
+      <td><b>2. 수용 기준 검증가능성</b></td>
+      <td><span class="verdict cond">CONDITIONAL</span></td>
+      <td>"필요성 판정"은 R-36 표로 검증 가능하게 정의됨(우수). "carry-over 처리됨"도 R-38에서 done/dismiss로 명확히 정의(우수). 단 프롬프트 인젝션 수용 기준(N-08)·"가이드 환각 억제"(R-37)는 검증 절차가 모호(F-4·F-5).</td>
+    </tr>
+    <tr>
+      <td><b>3. 일관성·의존성</b></td>
+      <td><span class="verdict pass">PASS</span></td>
+      <td>의존성 다이어그램·구현 순서가 정합. R-34 기반 → R-36 트리거 → R-37/R-38 → R-35 렌더 흐름이 모순 없음. 단 R-38↔R-41 양방향 의존 표기에 경미한 순환 인상(F-3, 경미).</td>
+    </tr>
+    <tr>
+      <td><b>4. 보안 전제(N-08)</b></td>
+      <td><span class="verdict cond">CONDITIONAL</span></td>
+      <td>main egress·키0600·CSP·L-1·senderFrame·shape 화이트리스트가 수용 기준에 반영됨. 신뢰 못 할 스캔 데이터의 프롬프트 주입 위험을 R4 리스크로 인지. 단 인젝션 방어 수용 기준이 단일 프로브("이전 지시 무시")에 그쳐 검증 강도 부족(F-4).</td>
+    </tr>
+    <tr>
+      <td><b>5. 제약 정합</b> — Langchain 의존성·폴백</td>
+      <td><span class="verdict pass">PASS</span></td>
+      <td>Langchain이 "런타임 의존성 최소" 규약과 충돌함을 R1 리스크·미해결 질문·R-34 명세에서 명시 인지하고 ADR 위임·경량 대안 여지를 남김. graceful 폴백(R-40)은 Must로 별도 요구화되어 수용 기준 구체적. 양호.</td>
+    </tr>
+    <tr>
+      <td><b>6. 범위</b></td>
+      <td><span class="verdict pass">PASS</span></td>
+      <td>비범위 8항(클라우드 기본활성·앙상블·자동실행·챗·RAG·모델관리·VDOM·외부텔레메트리) 명확. 과대/과소 범위 징후 없음. opt-in·정적 폴백으로 무회귀 보장.</td>
+    </tr>
+  </table>
+</section>
+
+<!-- ref 역추적 -->
+<section id="trace">
+  <h2>2. ref.md 역추적 매트릭스 (완결성 근거)</h2>
+  <table>
+    <tr><th style="width:340px">ref.md 요구 / goal 항목</th><th style="width:120px">대응 요구</th><th>충족 여부 · 비고</th></tr>
+    <tr><td>스트리밍 방식 출력</td><td><span class="rid">R-35</span> · <span class="rid">R-34</span></td><td>충족 — stream:true·토큰 push·점진 렌더·TTFT 수용기준.</td></tr>
+    <tr><td>Langchain 이용</td><td><span class="rid">R-34</span></td><td>충족 — 명시 채택 + ADR 위임 + 경량 대안 여지(제약 정합 양호).</td></tr>
+    <tr><td>관리 모든 데이터 변경 시 + "필요 판단" 시 생성</td><td><span class="rid">R-36</span></td><td>충족(우수) — 8개 신호 × 유의변화 조건표로 "필요성"을 검증 가능하게 정의.</td></tr>
+    <tr><td>온프레미스 OpenAI 호환 확장</td><td><span class="rid">R-34</span> · <span class="rid">R-39</span></td><td>충족 — base URL/모델/키 설정 가능·벤더 고정 금지.</td></tr>
+    <tr><td>처리 "방법" 가이드 포함</td><td><span class="rid">R-37</span></td><td>충족 — how-to 가이드·실존 액션 안내·자동실행 금지.</td></tr>
+    <tr><td>goal: 알아야/알면좋은/급함 3분류</td><td><span class="rid">R-37</span> · <span class="rid">R-41</span></td><td>충족 — 3분류 태깅·시각 구분·급함 강조.</td></tr>
+    <tr><td>goal: 이벤트와 "동시에" 브리핑</td><td><span class="rid">R-36</span> · <span class="rid">N-09</span></td><td>부분충족 — 트리거는 있으나 "동시/즉각"의 정량 목표가 디바운스와 상충 여지(F-1).</td></tr>
+    <tr><td>goal: 새 이벤트 시 "거의 즉각" 반응</td><td><span class="nid">N-09</span></td><td><b>약점</b> — TTFT≤3초는 모델 추론 지연이고, coalesce ~2초 디바운스가 "즉각"과 충돌. 화해 미흡(F-1).</td></tr>
+    <tr><td>goal: 미처리 항목 포함 재생성</td><td><span class="rid">R-38</span></td><td>충족(우수) — 항목키·open/done/dismissed·auto-resolve·영속 정의.</td></tr>
+  </table>
+  <div class="ok-box"><b>ID 체계 검증:</b> traceability.html은 기능 R-01~R-33·비기능 N-01~N-07까지 사용(M9가 마지막 R-요구 배치, M10~M12는 새 R-요구 없음). 명세의 <span class="rid">R-34~R-41</span>·<span class="nid">N-08~N-10</span>은 기존 ID와 <b>충돌 없이 연속</b>. PASS.</div>
+</section>
+
+<!-- 반영 항목 -->
+<section id="findings">
+  <h2>3. 반영 항목 (생산자=PM에게)</h2>
+
+  <h3 style="color:#fca5a5;">우선순위 P1 (진행 전 반영 권고)</h3>
+
+  <div class="danger-box">
+    <p><span class="fid">F-1</span> <span class="pri p1">P1</span> &nbsp;<b>"거의 즉각 반응"(ref goal)과 ~2초 coalesce 디바운스의 정합이 명시적으로 화해되지 않음</b></p>
+    <ul>
+      <li><b>무엇:</b> ref.md goal은 "새로운 이벤트가 발생하면 거의 즉각적으로 반응해야 한다"가 핵심 비기능 요구다. 반면 명세는 R-36/N-09에서 coalesce 디바운스 기본 ~2초 + TTFT≤3초를 둔다. 디바운스 2초 + 추론 지연 3초 = 사용자가 체감하는 최초 반응이 최대 5초 이상이 될 수 있다.</li>
+      <li><b>위치:</b> R-36 "coalesce 디바운스(권장 기본 ~2초)" · N-09 "TTFT 중앙값 ≤3초" · 미해결질문표 "coalesce 디바운스 창 ~2초" · §1 성공지표 TTFT≤3초.</li>
+      <li><b>문제:</b> "거의 즉각"이라는 원본 의도가 별도 측정 가능한 요구로 승격되지 않았고, 디바운스 값과의 트레이드오프가 한 줄("과도 호출 억제 vs 거의 즉각 균형")로만 언급될 뿐 <b>"즉각"의 정량 정의·상한이 없다</b>. 검증 단계에서 "이 기능이 ref 의도를 충족했는가"를 판정할 기준이 없다.</li>
+      <li><b>권고:</b> (a) "이벤트→사용자 가시적 반응 시작(스피너/스트리밍 인디케이터 표시)"을 TTFT(첫 토큰)와 분리해 별도 지표화 — 예: "이벤트→인디케이터 표시 ≤ (디바운스창+200ms)". (b) "급함(deadline 경과 등)" 신호는 디바운스를 우회하거나 더 짧은 창을 적용하는 fast-path를 요구로 명시(현재 모든 신호가 동일 ~2초). (c) 미해결질문표의 디바운스 결정에 "ref '즉각' 의도와의 트레이드오프"를 명시적 근거로 기록.</li>
+    </ul>
+  </div>
+
+  <div class="danger-box">
+    <p><span class="fid">F-4</span> <span class="pri p1">P1</span> &nbsp;<b>프롬프트 인젝션 방어(N-08) 수용 기준이 단일 프로브에 그쳐 검증 강도 부족</b></p>
+    <ul>
+      <li><b>무엇:</b> 신뢰 못 할 스캔/메일 데이터(커밋 메시지·메일 본문·프로젝트명)가 LLM 프롬프트에 들어가는 것은 이 기능의 가장 큰 신규 신뢰 경계 위반 위험이다. N-08은 "데이터는 인용/구분자 블록으로 주입"한다고 명세하나, 수용 기준은 <code>"이전 지시 무시하고…" 삽입이 시스템 지시를 덮어쓰지 못함을 프로브로 확인</code> 1건뿐이다.</li>
+      <li><b>위치:</b> N-08 수용 기준 3번째 항목 · R4 리스크.</li>
+      <li><b>문제:</b> 인젝션은 단일 페이로드로 대표되지 않는다(가짜 도구 호출 유도, 가이드에 악성 URL/명령 삽입 유도, 분류 조작, 시스템 프롬프트 누출 등). "구분자 블록"만으로는 방어가 불완전한데, <b>방어가 성공했다고 볼 판정 기준(어떤 케이스 집합을 통과해야 PASS인가)</b>이 모호하다. 또한 메일 본문은 길고 적대적 제어 가능성이 가장 높은 입력인데 별도 취급이 없다.</li>
+      <li><b>권고:</b> (a) 인젝션 프로브를 케이스 집합으로 구체화 — ① 지시 덮어쓰기 ② 가이드에 외부 URL/쉘 명령 삽입 유도 ③ 분류 강제(모두 "급함"으로) ④ 시스템 프롬프트/키 누출 시도, 각각 "모델 출력이 시스템 정책을 위반하지 않음"을 수용 기준으로. (b) "가이드 내 URL/경로/명령은 렌더 시 실행 불가 텍스트로만, 클릭 가능 링크화 금지(또는 화이트리스트만)"를 N-08/R-37 수용 기준에 추가. (c) 입력 데이터 길이 상한·잘라내기 정책을 명시(메일 본문 전체 투입 시 토큰 폭주·인젝션 표면 확대).</li>
+    </ul>
+  </div>
+
+  <h3 style="color:#fcd34d;">우선순위 P2 (아키텍처 단계 위임 가능, 명세 보강 권고)</h3>
+
+  <div class="warn-box">
+    <p><span class="fid">F-2</span> <span class="pri p2">P2</span> &nbsp;<b>"필요성 판정" 임계값이 모두 "권장 기본값·조정 가능"으로 열려 있어 수용 기준 재현성이 약함</b></p>
+    <ul>
+      <li><b>무엇:</b> R-36 표의 트리거 조건은 검증 가능하게 잘 정의됐으나, 마감 임박 ≤24h·디스크 +1GB·디바운스 2초 등 수치가 "권장·아키텍처에서 조정 가능"으로 명시됨.</li>
+      <li><b>위치:</b> R-36 필요성 판정 표 하단 note · 미해결질문표.</li>
+      <li><b>문제:</b> 수용 기준("유의 변화 1건 발생 시 1회 트리거")은 임계값이 고정돼야 테스트 픽스처로 재현된다. 값이 전부 가변이면 "트리거됨/안 됨"의 경계 케이스가 비결정적이다.</li>
+      <li><b>권고:</b> 각 임계값을 "상수 단일 출처"로 고정(이미 방향 제시됨)하되, <b>기능명세 수준에서 기본 상수값을 확정 고정값으로 못 박고</b> "설정 노출 여부"만 아키텍처에 위임. 경계 테스트(임계 직전/직후)를 R-36 수용 기준에 추가.</li>
+    </ul>
+  </div>
+
+  <div class="warn-box">
+    <p><span class="fid">F-5</span> <span class="pri p2">P2</span> &nbsp;<b>가이드 환각 억제·"실존 액션만 참조"의 검증 방법이 모호</b></p>
+    <ul>
+      <li><b>무엇:</b> R-37 수용 기준 "가이드 내 앱 기능 안내는 실제 존재하는 기능만 참조한다(환각은 프롬프트로 억제)".</li>
+      <li><b>위치:</b> R-37 수용 기준 4번째 항목.</li>
+      <li><b>문제:</b> "프롬프트로 억제"는 비결정적 LLM 출력에 대한 검증 불가능한 기준이다. 7.8B 로컬 모델이 없는 기능을 안내할 가능성은 R2 리스크로도 인정됨. "환각 0"을 수용 기준으로 두면 사실상 통과 불가.</li>
+      <li><b>권고:</b> 수용 기준을 결정 가능한 형태로 재작성 — "가이드 텍스트는 자동 실행되지 않으며(이미 명시), 환각 액션이 있어도 사용자가 클릭/실행할 수단이 없다"를 안전 불변식으로(검증 가능). 환각 빈도는 "0" 대신 "안전 영향 없음(자동 실행 0)"으로 목표 재설정.</li>
+    </ul>
+  </div>
+
+  <h3 style="color:#7dd3fc;">우선순위 P3 (경미 · 가독성/완결성)</h3>
+
+  <div class="note">
+    <p><span class="fid">F-3</span> <span class="pri p3">P3</span> &nbsp;<b>R-38↔R-41 의존 표기가 양방향이라 순환 인상</b></p>
+    <ul>
+      <li><b>무엇:</b> R-38 "의존: R-41(상태 입력)" + R-41 "의존: R-38(상태)". 다이어그램에도 R-41→R-38 엣지 존재.</li>
+      <li><b>위치:</b> R-38·R-41 dep 표기 · §3 다이어그램.</li>
+      <li><b>문제:</b> 구현 순서(R-38 상태모델 먼저 → R-41 UI가 액션 발신)는 합리적이나, 양방향 의존 표기는 "어느 것을 먼저 만드나"를 흐린다. 실제로는 R-38(상태 스키마/순수 로직) → R-41(UI가 done/dismiss 호출)의 단방향에 가깝다.</li>
+      <li><b>권고:</b> "R-41은 R-38의 상태 전이 API를 호출(UI→상태)"로 방향 명확화. 순환이 아니라 R-38이 계약을 정의하고 R-41이 소비하는 단방향임을 명시.</li>
+    </ul>
+  </div>
+
+  <div class="note">
+    <p><span class="fid">F-6</span> <span class="pri p3">P3</span> &nbsp;<b>carry-over 영속 저장소가 m12 상승 세션 write 보류와 충돌하는데 동작 정의가 "보류 안내"로 미확정</b></p>
+    <ul>
+      <li><b>무엇:</b> R-38은 done/dismiss 상태를 uiStateStore(0600)에 영속. 그런데 m12-design에 따르면 권한 상승 세션에서는 uiStateStore write가 no-op(보류)된다. R-40은 이를 "보류 안내"로 언급만.</li>
+      <li><b>위치:</b> R-38 영속 · R-40 5번째 항목 · R5 리스크.</li>
+      <li><b>문제:</b> 상승 세션에서 사용자가 done 처리해도 영속이 안 되면 다음 재생성 시 항목이 되살아난다(carry-over 수용 기준 "다시 나타나지 않는다"와 충돌). 이 충돌의 기대 동작이 명세에 결정되지 않음.</li>
+      <li><b>권고:</b> 상승 세션에서의 done/dismiss 기대 동작을 명시 — 메모리 반영 + "이 세션에선 처리 상태가 저장되지 않음" 안내, 또는 상승 세션에선 처리 액션 비활성. 수용 기준에 1줄 추가.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- 가장 위험한 약점 -->
+<section id="risk">
+  <h2>4. 가장 위험한 약점 (요약)</h2>
+  <div class="danger-box">
+    <b>① (F-1) ref의 핵심 의도 "거의 즉각 반응"이 측정 가능한 요구로 승격되지 않음.</b>
+    이 기능의 존재 이유 중 하나가 "이벤트와 동시에 브리핑"인데, 명세의 디바운스 2초 + 추론 3초 설계가 이 의도와 정면으로 트레이드오프됨에도 화해/정량 기준이 없다. 검증 단계에서 "ref 충족"을 판정할 수 없고, 구현 후 "느리다"는 회귀가 사양 위반인지 판별 불가.
+  </div>
+  <div class="warn-box">
+    <b>② (F-4) 프롬프트 인젝션 방어의 수용 기준이 단일 프로브로 과소.</b>
+    신뢰 불가 데이터(특히 메일 본문)를 LLM에 넣는 것은 이 배치가 새로 들이는 가장 큰 신뢰 경계 위험이다. "구분자 블록 + 프로브 1건"은 방어 성공의 판정 기준으로 불충분하며, 가이드 출력의 링크/명령 처리 정책이 비어 있다.
+  </div>
+  <div class="note">두 약점 모두 <b>설계를 막는 결함은 아니다</b>(구조·추적성은 견고). 그러나 기획 산출물이 "검증 가능한 수용 기준"을 제공해야 한다는 기준에서, 이 기능의 정체성(즉각성)과 최대 위험(인젝션)에 대한 수용 기준이 모호한 것은 P1로 본다. 두 항목을 보강하면 아키텍처 단계로 진행 가능.</div>
+</section>
+
+<footer>
+  Project-SPIP · 검증 보고 "브리핑 AI 연동 기능명세" 1회차 · 종합 CONDITIONAL · reviewer · 2026-06-25 ·
+  산출물 미수정(판정·반영 항목만) · 수정은 생산자(PM) 위임
+</footer>
+
+</main>
+</body>
+</html>

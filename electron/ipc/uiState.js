@@ -27,7 +27,15 @@ function resolveStore(ctx) {
 }
 
 function toResponse(state) {
-  return { favorites: state.favorites, order: state.order, sortMode: state.sortMode, names: state.names, theme: state.theme, todos: state.todos, langTrend: state.langTrend, homeLayout: state.homeLayout };
+  // [M13 C-M-1 ③] briefing 포함 — 별도 파일이라 가장 누락되기 쉬움. 누락 시 getUiState 응답에서 사라짐.
+  //   carry-over 표시용으로 open 항목만 노출(done/dismissed는 비노출, 표시 안전·페이로드 최소).
+  const briefing = state.briefing || { items: [], counters: { generated: 0, done: 0, dismiss: 0 } };
+  const openItems = Array.isArray(briefing.items) ? briefing.items.filter((i) => i && i.status === 'open') : [];
+  return {
+    favorites: state.favorites, order: state.order, sortMode: state.sortMode, names: state.names,
+    theme: state.theme, todos: state.todos, langTrend: state.langTrend, homeLayout: state.homeLayout,
+    briefing: { items: openItems, counters: briefing.counters },
+  };
 }
 
 /** 할 일 id 생성(메인 권한). genTodoId 주입 가능(테스트). */

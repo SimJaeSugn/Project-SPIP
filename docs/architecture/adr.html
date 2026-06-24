@@ -67,6 +67,8 @@
   <b>M10-2</b> 차트 깜빡임 완화 = patchRegion + diff 가드 병합 채택(diff 가드 단독 기각 — 변경 시 깜빡임 잔존, CSS transition 마스킹 기각) ·
   <b>M10-3</b> 폴링 재시도 = _pendingCommitRefresh 플래그 + 보류 해제 훅 3곳 연결(폴링 주기 단축 기각 — ADR-M9-4 근거 파기, coalesce 내부 콜백 기각 — 단일 책임 위반) ·
   <b>M10-4</b> 툴팁 좌표 = getBoundingClientRect 기반 동적 계산 + 경계 클램핑(인덱스 기반 비율 기각 — 막대 간격/패딩 무시 오차 큼).
+  <br><br><b>ADR-BR-1 (브리핑 AI 연동, 정본 <code>docs/architecture/briefing-ai-design.html</code> §①):</b>
+  <b>Langchain 런타임 의존성 채택.</b> R-34·ref.md가 Langchain을 명시하므로 "런타임 의존성 최소(유일 electron-updater)" 규약 대비 채택을 결정한다. 범위는 <code>@langchain/openai</code> + (전이)<code>@langchain/core</code> <b>2개로 최소화</b>(<code>langchain</code> 메타 패키지 미설치)하고, import는 <code>lib/ai/llmClient.js</code> <b>단일 파일로 격리</b>한다(나머지 6개 AI 모듈은 외부 의존성 0 유지·헤드리스 테스트 가능). egress는 메인 프로세스 단독(렌더러 CSP <code>connect-src 'none'</code> 불변·번들 무영향). 대안 B(경량 fetch 직접 호출)는 ref 요구 위배로 기각하되, 무게/CJS·asar 호환 문제 시 1파일 교체로 전환 가능하도록 클라이언트 경계 뒤에 둔다. <b>P1 게이트</b>: CJS <code>require</code> 로드·node_modules asar 포함을 빌드에서 실측 검증(실패 시 동적 <code>import()</code> 폴백 또는 대안 B 전환을 ADR 갱신). 영향: 런타임 의존성 1→3개·asar 크기 증가. 정본: <code>docs/architecture/briefing-ai-design.html</code> §①.
 </div>
 
 <section class="toc">
