@@ -33,7 +33,7 @@ const { createTray } = require('./tray');
 const { resolveAppRelPath } = require('./appProtocol');
 const favoritesWidget = require('./favoritesWidget');
 const { initAutoUpdate } = require('./autoUpdate');
-const { Logger } = require('../lib/common/logger');
+const { Logger, clampString } = require('../lib/common/logger');
 
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 const PRELOAD = path.join(__dirname, 'preload.js');
@@ -131,6 +131,50 @@ function registerAppProtocol() {
   });
 }
 
+/** 계정 라벨 접두("[label] ") — 공개 뷰 기준, 제어문자/길이 정리(L-3). */
+function mailLabelPrefix(account) {
+  const label = (account && typeof account.label === 'string' && account.label)
+    ? account.label
+    : (account && account.user ? account.user : '');
+  return label ? '[' + clampString(label, 40) + '] ' : '';
+}
+
+/** 새 메일 도착을 트레이 풍선 알림으로 노출(어느 계정인지 라벨 포함, L-3). */
+function notifyNewMail(payload) {
+  if (!tray || !tray.tray || typeof tray.tray.displayBalloon !== 'function') return;
+  const newCount = (payload && Number.isFinite(payload.newCount)) ? payload.newCount : 0;
+  if (newCount <= 0) return;
+  const unseen = (payload && Number.isFinite(payload.unseen)) ? payload.unseen : null;
+  let content = mailLabelPrefix(payload && payload.account) + '새 메일 ' + newCount + '통이 도착했습니다.';
+  if (unseen != null && unseen > 0) content += ' (읽지 않음 ' + unseen + '통)';
+  try {
+    tray.tray.displayBalloon({ title: 'Project-SPIP 메일', content: clampString(content, 200) });
+  } catch (_) { /* noop */ }
+}
+
+/** 메일 로그인 실패를 트레이로 1회 안내(해당 계정 감시 중단 시점). */
+function notifyMailAuthError(payload) {
+  if (!tray || !tray.tray || typeof tray.tray.displayBalloon !== 'function') return;
+  try {
+    tray.tray.displayBalloon({
+      title: 'Project-SPIP 메일',
+      content: clampString(mailLabelPrefix(payload && payload.account)
+        + '메일 로그인에 실패해 자동 확인을 중단했습니다. 설정에서 계정 정보를 확인하세요.', 200),
+    });
+  } catch (_) { /* noop */ }
+}
+
+/** 현재 config.mailAccounts로 메일 감시를 재구성한다(계정 추가/수정/삭제 후 IPC가 호출). */
+function applyMailWatch() {
+  if (!ctx || !ctx.mailManager) return;
+  const accounts = Array.isArray(ctx.config && ctx.config.mailAccounts) ? ctx.config.mailAccounts : [];
+  try {
+    ctx.mailManager.apply(accounts, { onNewMail: notifyNewMail, onAuthError: notifyMailAuthError });
+  } catch (err) {
+    logger.error('메일 감시 재구성 실패', err);
+  }
+}
+
 function onReady() {
   registerAppProtocol();
 
@@ -215,6 +259,8 @@ function onReady() {
     tray = createTray({
       iconPath: TRAY_ICON,
       onShowDashboard: () => { if (win && !win.isDestroyed()) { win.show(); win.focus(); } },
+      // '메일 지금 확인' — 등록된 모든 계정을 즉시 1회 폴링(계정 없으면 무동작).
+      onCheckMail: () => { try { ctx.mailManager.checkNow(); } catch (_) { /* noop */ } },
       // [M7 §8.1 R4] 트레이 '즐겨찾기' → 독립 위젯 창 show(메인창 push/show 폐기).
       //   메인창이 hidden(트레이 상주)이어도 위젯 등장(R-22 독립성). applyCspHeaders는 deps 불요
       //   (SEC-H1: default session에 앱 1회 등록 자동 적용). hardenWebContents는 per-wc라 주입.
@@ -230,6 +276,18 @@ function onReady() {
   } catch (err) {
     logger.error('트레이 생성 실패 — 트레이 없이 계속', err);
   }
+
+  // 트레이 풍선 클릭 시 대시보드 복원(메일 알림 클릭 → 창 표시).
+  if (tray && tray.tray && typeof tray.tray.on === 'function') {
+    try {
+      tray.tray.on('balloon-click', () => { if (win && !win.isDestroyed()) { win.show(); win.focus(); } });
+    } catch (_) { /* noop */ }
+  }
+
+  // 메일 계정 변경 시 IPC 핸들러가 감시를 재구성하도록 훅 노출 + 시작 시 1회 적용.
+  //   최초 폴링은 계정별 기준선만 잡고 통지 안 함. 감시 실패는 워처 내부에서 격리(가용성 보존).
+  ctx.restartMailWatch = applyMailWatch;
+  applyMailWatch();
 
   win.loadURL('app://index.html');
   win.once('ready-to-show', () => win.show());
@@ -306,6 +364,8 @@ function disposeResources() {
   try { if (ctx && ctx.scanController && typeof ctx.scanController.dispose === 'function') ctx.scanController.dispose(); } catch (err) { logger.error('dispose 실패', err); }
   // [R-24] 상태 주시 워처 타이머 정리(멱등).
   try { if (ctx && ctx.stateWatcher && typeof ctx.stateWatcher.stop === 'function') ctx.stateWatcher.stop(); } catch (err) { logger.error('워처 정리 실패', err); }
+  // 메일 감시 관리자(계정별 타이머) 정리(멱등).
+  try { if (ctx && ctx.mailManager && typeof ctx.mailManager.stop === 'function') ctx.mailManager.stop(); } catch (err) { logger.error('메일 감시 정리 실패', err); }
 }
 
 // [P2-2] 실제 종료 1지점: 자원 dispose는 여기서만(=Q4 통과/창 없음 확정 후). 멱등 설계.

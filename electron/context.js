@@ -17,6 +17,7 @@ const { Logger } = require('../lib/common/logger');
 const { SnapshotStore } = require('../lib/server/snapshotStore');
 const { ScanController } = require('../lib/server/scanController');
 const { StateWatcher } = require('../lib/server/stateWatcher');
+const { MailWatcherManager } = require('../lib/mail/mailWatcherManager');
 
 /**
  * 앱 컨텍스트를 조립해 반환한다.
@@ -35,12 +36,15 @@ function buildContext(opts) {
   const scanController = new ScanController({ logger });
   // [R-24] 상태 주시 워처(재스캔 없이 git·freshness 주기 재수집). 시작/배선은 main이 담당.
   const stateWatcher = new StateWatcher({ logger, intervalMs: opts.watchIntervalMs });
+  // 복수 계정 메일 주기 감시 관리자. 계정 적용·시작/배선·트레이 알림은 main이 담당(여기선 조립만).
+  const mailManager = new MailWatcherManager({ logger, intervalMs: opts.mailIntervalMs });
 
   return {
     config,
     store,
     scanController,
     stateWatcher,
+    mailManager,
     cachePath: opts.cachePath, // 미지정이면 lib가 기본 경로(paths.cachePath) 사용
     logger,
     loaded,

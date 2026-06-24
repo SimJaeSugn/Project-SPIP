@@ -10,6 +10,19 @@
 
 const { contextBridge, ipcRenderer } = require('electron');
 
+// 메일 계정 입력(label/host/port/user/pass) 형태 고정 헬퍼. 빈 필드는 생략해 main 검증에 위임.
+//   pass는 빈 문자열도 의미가 있어(수정 시 기존 유지) 항상 문자열로 전달.
+function _mailArgs(a) {
+  a = (a && typeof a === 'object') ? a : {};
+  const out = {};
+  if (a.label != null) out.label = String(a.label);
+  if (a.host != null) out.host = String(a.host);
+  if (a.port != null && a.port !== '') out.port = Number(a.port);
+  if (a.user != null) out.user = String(a.user);
+  out.pass = a.pass == null ? '' : String(a.pass);
+  return out;
+}
+
 contextBridge.exposeInMainWorld('spip', {
   // 읽기(invoke/handle)
   getProjects: () => ipcRenderer.invoke('spip:getProjects'),
@@ -62,6 +75,15 @@ contextBridge.exposeInMainWorld('spip', {
   getTools: () => ipcRenderer.invoke('spip:getTools'),
   setToolPath: (id, p) => ipcRenderer.invoke('spip:setToolPath', { id: String(id), path: p == null ? null : String(p) }),
   pickToolExecutable: (id) => ipcRenderer.invoke('spip:pickToolExecutable', { id: String(id) }),
+
+  // 메일 계정(복수 IMAP) 관리 — 인자 형태를 preload에서 1차 고정(main이 재검증).
+  //   응답엔 비밀번호가 없다(공개 뷰). 수정 시 pass를 비우면 기존 비밀번호 유지.
+  getMailAccounts: () => ipcRenderer.invoke('spip:getMailAccounts'),
+  addMailAccount: (a) => ipcRenderer.invoke('spip:addMailAccount', _mailArgs(a)),
+  updateMailAccount: (id, a) => ipcRenderer.invoke('spip:updateMailAccount', Object.assign({ id: String(id) }, _mailArgs(a))),
+  removeMailAccount: (id) => ipcRenderer.invoke('spip:removeMailAccount', { id: String(id) }),
+  testMailAccount: (a) => ipcRenderer.invoke('spip:testMailAccount', Object.assign(
+    (a && a.id != null) ? { id: String(a.id) } : {}, _mailArgs(a))),
 
   // 자동 업데이트(사용자 주도) — 확인/다운로드/설치 트리거 + 상태 스냅샷. 인자 없음(main이 검증).
   //   진행 상황은 onUpdateStatus(cb) 구독으로 받는다. 채널명 하드코딩(MUST).

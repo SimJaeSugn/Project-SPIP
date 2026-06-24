@@ -25,12 +25,17 @@ const TRAY_ACTIONS = Object.freeze(['dashboard', 'favorites']);
 function buildTrayMenuTemplate(cbs) {
   cbs = cbs || {};
   const call = (fn) => () => { if (typeof fn === 'function') fn(); };
-  return [
+  const items = [
     { label: '대시보드 열기', click: call(cbs.onShowDashboard) },
     { label: '즐겨찾기', click: call(cbs.onShowFavorites) },
-    { type: 'separator' },
-    { label: '종료', click: call(cbs.onQuit) },
   ];
+  // '메일 지금 확인'은 메일 감시가 활성(콜백 주입)일 때만 노출한다.
+  if (typeof cbs.onCheckMail === 'function') {
+    items.push({ label: '메일 지금 확인', click: call(cbs.onCheckMail) });
+  }
+  items.push({ type: 'separator' });
+  items.push({ label: '종료', click: call(cbs.onQuit) });
+  return items;
 }
 
 /** 트레이 아이콘 이미지를 해석한다(에셋 부재 시 빈 이미지 폴백 — 트레이 생성은 계속). */

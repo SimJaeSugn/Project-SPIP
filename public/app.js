@@ -953,6 +953,11 @@ function initBrowser() {
     detectDefaults: [],          // 기본값(복원 안내용)
     detectInput: '',             // 직접 입력(컨트롤드)
     busyDetect: false,           // 추가/삭제/복원 in-flight
+    // 메일 알림 계정(복수 IMAP) — 공개 뷰 목록 + 입력 폼(비밀번호는 응답에 없음)
+    mailAccounts: [],            // getMailAccounts 응답(공개 뷰: id,label,host,port,user,hasPassword)
+    mailForm: { label: '', host: '', port: '', user: '', pass: '' }, // 추가/수정 폼(컨트롤드)
+    mailEditingId: null,         // 수정 중인 계정 id(없으면 추가 모드)
+    busyMail: false,             // 추가/수정/삭제/테스트 in-flight
     trayUnsubscribe: null,       // R-21: spip.onTray 구독 해제 함수
     projectsUpdatedUnsubscribe: null, // R-24: spip.onProjectsUpdated 구독 해제 함수
     // 자동 업데이트(사용자 주도) 상태 — 설정 드로어의 "소프트웨어 업데이트" 섹션이 표시.
@@ -1363,6 +1368,8 @@ function initBrowser() {
     refreshConfig();
     // R-18: 툴 해석 상태도 동기화(설정 드로어 오픈 시에만 — 빈도 낮음, §4.1)
     refreshTools();
+    // 메일 계정 목록도 동기화(설정 오픈 시에만).
+    refreshMailAccounts();
     // 업데이트 상태(현재 버전·패키징 여부·마지막 status)도 동기화(설정 오픈 시에만).
     refreshUpdateState();
     // 프로젝트 인식 기준도 동기화(설정 오픈 시에만).
@@ -1450,6 +1457,8 @@ function initBrowser() {
         renderScanOptions(),
         // 4) 외부 툴 경로(R-18)
         renderToolSettings(),
+        // 4-1) 메일 알림 계정(복수 IMAP)
+        renderMailSettings(),
         // 5) 테마(라이트/다크/시스템)
         renderThemeSettings(),
         // 6) 소프트웨어 업데이트(자동 업데이트 클라이언트)
@@ -1874,6 +1883,174 @@ function initBrowser() {
       store.excludes = res.excludes.filter((x) => typeof x === 'string');
     } else {
       toast('제외 항목 삭제에 실패했습니다.', true);
+    }
+    render();
+  }
+
+  /* =====================================================================
+   * 메일 알림 계정(복수 IMAP) — 추가/수정/삭제 + 연결 테스트. 비밀번호는 응답에 없음(공개 뷰).
+   * ===================================================================== */
+  function renderMailSettings() {
+    const block = el('div', { cls: 'insight', children: [el('div', { cls: 'insight__title', text: '메일 알림 계정' })] });
+    if (!bridgeHas('getMailAccounts')) {
+      block.appendChild(el('div', { cls: 'rootmgr__empty', text: '이 환경에서는 메일 계정을 설정할 수 없습니다.' }));
+      return block;
+    }
+    block.appendChild(el('p', { cls: 'settings__opt-sub', text: 'IMAP 계정을 추가하면 주기적으로 새 메일을 확인해 트레이로 알립니다. 비밀번호는 이 PC의 설정 파일(0600)에만 저장됩니다 — 2단계 인증 계정은 앱 비밀번호를 쓰고, Daum/Naver 등은 메일 설정에서 IMAP 사용을 먼저 켜세요.' }));
+
+    const editing = store.mailEditingId;
+    const f = store.mailForm;
+
+    // 입력 폼(이름/서버/포트/아이디/비밀번호)
+    const form = el('div', { cls: 'mailform' });
+    const mkField = (key, labelText, placeholder, type) => {
+      const wrap = el('label', { cls: 'mailform__field' });
+      wrap.appendChild(el('span', { cls: 'mailform__label', text: labelText }));
+      const input = el('input', {
+        cls: 'rootmgr__input',
+        attrs: { type: type || 'text', placeholder: placeholder || '', autocomplete: 'off', spellcheck: 'false' },
+      });
+      input.value = f[key] == null ? '' : String(f[key]);
+      input.addEventListener('input', (e) => { store.mailForm[key] = e.target.value || ''; });
+      input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); editing ? onUpdateMail() : onAddMail(); } });
+      if (store.busyMail) input.disabled = true;
+      wrap.appendChild(input);
+      return wrap;
+    };
+    form.appendChild(mkField('label', '이름(선택)', '예: 회사 메일'));
+    form.appendChild(mkField('host', 'IMAP 서버', '예: imap.daum.net'));
+    form.appendChild(mkField('port', '포트', '993'));
+    form.appendChild(mkField('user', '아이디', '예: me@daum.net'));
+    form.appendChild(mkField('pass', editing ? '비밀번호(변경 시에만)' : '비밀번호', editing ? '비워두면 기존 유지' : '앱 비밀번호', 'password'));
+    block.appendChild(form);
+
+    const actions = el('div', { cls: 'rootmgr__inputrow' });
+    const saveBtn = el('button', {
+      cls: 'btn', text: editing ? '저장' : '추가',
+      attrs: { type: 'button' }, on: { click: () => (editing ? onUpdateMail() : onAddMail()) },
+    });
+    const testBtn = el('button', { cls: 'btn', text: '연결 테스트', attrs: { type: 'button' }, on: { click: () => onTestMail() } });
+    if (store.busyMail) { saveBtn.disabled = true; testBtn.disabled = true; }
+    actions.appendChild(saveBtn);
+    actions.appendChild(testBtn);
+    if (editing) {
+      const cancel = el('button', { cls: 'link-btn', text: '취소', attrs: { type: 'button' }, on: { click: onCancelMailEdit } });
+      if (store.busyMail) cancel.disabled = true;
+      actions.appendChild(cancel);
+    }
+    block.appendChild(actions);
+
+    // 목록
+    block.appendChild(el('div', { cls: 'rootmgr__label', text: '등록 계정 (' + store.mailAccounts.length + ')' }));
+    if (store.mailAccounts.length === 0) {
+      block.appendChild(el('div', { cls: 'rootmgr__empty', text: '등록된 메일 계정이 없습니다.' }));
+    } else {
+      const ul = el('ul', { cls: 'rootmgr__list spip-scroll', attrs: { role: 'list' } });
+      for (const a of store.mailAccounts) {
+        const li = el('li', { cls: 'rootmgr__item' });
+        const desc = (a.label ? a.label + ' · ' : '') + (a.user || '') + ' @ ' + (a.host || '') + ':' + (a.port || 993);
+        li.appendChild(el('span', { cls: 'rootmgr__path mono', text: desc, title: desc })); // L-1: textContent
+        const test = el('button', {
+          cls: 'rootmgr__remove', text: '테스트',
+          attrs: { type: 'button', 'aria-label': '연결 테스트: ' + desc }, on: { click: () => onTestMail(a.id) },
+        });
+        const edit = el('button', {
+          cls: 'rootmgr__remove', text: '수정',
+          attrs: { type: 'button', 'aria-label': '계정 수정: ' + desc }, on: { click: () => onEditMail(a.id) },
+        });
+        const rm = el('button', {
+          cls: 'rootmgr__remove', text: '삭제',
+          attrs: { type: 'button', 'aria-label': '계정 삭제: ' + desc }, on: { click: () => onRemoveMail(a.id) },
+        });
+        if (store.busyMail) { test.disabled = true; edit.disabled = true; rm.disabled = true; }
+        li.appendChild(test); li.appendChild(edit); li.appendChild(rm);
+        ul.appendChild(li);
+      }
+      block.appendChild(ul);
+    }
+    return block;
+  }
+
+  function resetMailForm() {
+    store.mailForm = { label: '', host: '', port: '', user: '', pass: '' };
+    store.mailEditingId = null;
+  }
+  function applyMailResult(res) {
+    if (res && res.ok && Array.isArray(res.accounts)) { store.mailAccounts = res.accounts; return true; }
+    return false;
+  }
+  function describeMailError(res) {
+    switch (res && res.code) {
+      case 'INVALID_HOST': return 'IMAP 서버 주소가 올바르지 않습니다.';
+      case 'INVALID_USER': return '아이디가 올바르지 않습니다.';
+      case 'INVALID_PASS': return '비밀번호를 입력하세요.';
+      case 'INVALID_PORT': return '포트는 1~65535 사이여야 합니다.';
+      case 'NOT_FOUND': return '계정을 찾을 수 없습니다.';
+      case 'LIMIT': return '계정 수가 상한에 도달했습니다.';
+      case 'AUTH': return '로그인 실패 — 아이디/비밀번호 또는 IMAP 사용 설정을 확인하세요.';
+      case 'NETWORK': return '서버에 연결하지 못했습니다. 주소/포트/네트워크를 확인하세요.';
+      default: return '처리에 실패했습니다.';
+    }
+  }
+  async function refreshMailAccounts() {
+    if (!bridgeHas('getMailAccounts')) return;
+    const res = await ipc('getMailAccounts');
+    if (res && res.ok && Array.isArray(res.accounts)) store.mailAccounts = res.accounts;
+    render();
+  }
+  async function onAddMail() {
+    if (store.busyMail || !bridgeHas('addMailAccount')) return;
+    store.busyMail = true; render();
+    const res = await ipc('addMailAccount', store.mailForm);
+    store.busyMail = false;
+    if (applyMailResult(res)) { resetMailForm(); toast('메일 계정을 추가했습니다.'); }
+    else toast(describeMailError(res), true);
+    render();
+  }
+  async function onUpdateMail() {
+    if (store.busyMail || !bridgeHas('updateMailAccount') || !store.mailEditingId) return;
+    store.busyMail = true; render();
+    const res = await ipc('updateMailAccount', store.mailEditingId, store.mailForm);
+    store.busyMail = false;
+    if (applyMailResult(res)) { resetMailForm(); toast('메일 계정을 저장했습니다.'); }
+    else toast(describeMailError(res), true);
+    render();
+  }
+  async function onRemoveMail(id) {
+    if (store.busyMail || !bridgeHas('removeMailAccount')) return;
+    store.busyMail = true; render();
+    const res = await ipc('removeMailAccount', id);
+    store.busyMail = false;
+    if (applyMailResult(res)) { if (store.mailEditingId === id) resetMailForm(); toast('메일 계정을 삭제했습니다.'); }
+    else toast(describeMailError(res), true);
+    render();
+  }
+  function onEditMail(id) {
+    const a = store.mailAccounts.find((x) => x && x.id === id);
+    if (!a) return;
+    store.mailEditingId = id;
+    store.mailForm = { label: a.label || '', host: a.host || '', port: a.port ? String(a.port) : '', user: a.user || '', pass: '' };
+    render();
+  }
+  function onCancelMailEdit() { resetMailForm(); render(); }
+  async function onTestMail(id) {
+    if (store.busyMail || !bridgeHas('testMailAccount')) return;
+    // 목록의 '테스트'(id 문자열)면 저장된 계정 자격, 폼의 '연결 테스트'면 입력값(+편집 중이면 id).
+    let payload;
+    if (typeof id === 'string') {
+      const a = store.mailAccounts.find((x) => x && x.id === id) || {};
+      payload = { id, label: a.label, host: a.host, port: a.port, user: a.user };
+    } else {
+      payload = Object.assign({}, store.mailForm, store.mailEditingId ? { id: store.mailEditingId } : {});
+    }
+    store.busyMail = true; render();
+    const res = await ipc('testMailAccount', payload);
+    store.busyMail = false;
+    if (res && res.ok) {
+      const unseen = (res.status && Number.isFinite(res.status.unseen)) ? res.status.unseen : null;
+      toast('연결 성공' + (unseen != null ? ' — 읽지 않음 ' + unseen + '통' : '') + '.');
+    } else {
+      toast(describeMailError(res), true);
     }
     render();
   }

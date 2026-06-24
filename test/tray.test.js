@@ -35,6 +35,19 @@ test('buildTrayMenuTemplate — 콜백 미제공도 throw 안 함', () => {
   for (const item of t) if (typeof item.click === 'function') assert.doesNotThrow(() => item.click());
 });
 
+test('buildTrayMenuTemplate — onCheckMail 주입 시에만 "메일 지금 확인" 노출', () => {
+  // 미주입: 메일 항목 없음(기존 메뉴 불변).
+  const without = tray.buildTrayMenuTemplate({}).filter((x) => x.label).map((x) => x.label);
+  assert.ok(!without.includes('메일 지금 확인'));
+  // 주입: 구분선 앞에 메일 항목 삽입 + 콜백 디스패치.
+  const seen = [];
+  const t = tray.buildTrayMenuTemplate({ onCheckMail: () => seen.push('mail') });
+  const labels = t.filter((x) => x.label).map((x) => x.label);
+  assert.deepStrictEqual(labels, ['대시보드 열기', '즐겨찾기', '메일 지금 확인', '종료']);
+  t.find((x) => x.label === '메일 지금 확인').click();
+  assert.deepStrictEqual(seen, ['mail']);
+});
+
 // ── createTray (Electron stub 주입) ──
 function fakeElectron() {
   const events = {};

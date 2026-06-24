@@ -21,6 +21,7 @@ const scanIpc = require('./scan');
 const foldersIpc = require('./folders');
 const clipboardIpc = require('./clipboard');
 const toolsIpc = require('./tools');
+const mailAccountsIpc = require('./mailAccounts');
 const uiStateIpc = require('./uiState');
 const autoUpdate = require('../autoUpdate');
 // [P3-4] 신뢰 origin 단일 원천(security.js). 리터럴 이중정의 제거.
@@ -163,6 +164,14 @@ function registerIpcHandlers(deps) {
     dialog,
     win: typeof getWin === 'function' ? getWin() : undefined,
   })));
+
+  // 메일 계정(복수 IMAP) — mailAccounts.js. 변경 시 persist + 감시 재구성(ctx.restartMailWatch).
+  //   응답엔 비밀번호 미포함(toPublicView). testMailAccount는 실제 IMAP 로그인 1회 시도.
+  guard('spip:getMailAccounts', () => mailAccountsIpc.getMailAccounts(ctx));
+  guard('spip:addMailAccount', (args) => mailAccountsIpc.addMailAccount(args, ctx));
+  guard('spip:updateMailAccount', (args) => mailAccountsIpc.updateMailAccount(args, ctx));
+  guard('spip:removeMailAccount', (args) => mailAccountsIpc.removeMailAccount(args, ctx));
+  guard('spip:testMailAccount', (args) => mailAccountsIpc.testMailAccount(args, ctx));
 
   // [M7 SEC-M2] 즐겨찾기 변경 broadcast(단방향 push) — setFavorite 성공 시 메인 wc + 위젯 wc 양쪽에 동기화.
   //   payload 스키마 = { favorites:string[] }만(경로/실행 인자/내부 상태 금지). 대상 wc는 메인·위젯 2개로
