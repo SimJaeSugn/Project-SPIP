@@ -27,6 +27,30 @@ test('R-36 — 신규 dirty 1건 트리거(must·디바운스)', () => {
   assert.strictEqual(r.signals[0].category, 'must');
 });
 
+test('[briefing name] normProject·normDeadline가 name 보존(없으면 빈 문자열)', () => {
+  const n = policy.normalizeSnapshot({
+    projects: [{ id: 'a', name: 'My-Project', dirty: true }, { id: 'b', dirty: true }],
+    deadlines: [{ id: 'd1', name: '보고서 마감', dueAt: 1, done: false }],
+  });
+  assert.strictEqual(n.projects[0].name, 'My-Project');
+  assert.strictEqual(n.projects[1].name, '', 'name 없으면 빈 문자열 graceful');
+  assert.strictEqual(n.deadlines[0].name, '보고서 마감');
+});
+
+test('[briefing name] 신호에 targetLabel(name) 포함, targetId(해시 식별자)는 매칭용 유지', () => {
+  const prev = { projects: [{ id: 'hash-a', name: 'My-Project', dirty: false }] };
+  const cur = { projects: [{ id: 'hash-a', name: 'My-Project', dirty: true }] };
+  const s = policy.evaluate(prev, cur, { now: NOW }).signals[0];
+  assert.strictEqual(s.targetLabel, 'My-Project');
+  assert.strictEqual(s.targetId, 'hash-a', 'targetId는 매칭·dedup용 유지');
+});
+
+test('[briefing name] deadline 신호도 라벨 포함(없으면 graceful 빈값)', () => {
+  const cur = { deadlines: [{ id: 'd1', dueAt: NOW, done: false }] };
+  const s = policy.evaluate(null, cur, { now: NOW }).signals.find((x) => x.type === 'deadline');
+  assert.strictEqual(s.targetLabel, '');
+});
+
 test('R-36 — 대량 신규 dirty(≥3) fast-path 승격(urgent)', () => {
   const prev = { projects: [{ id: 'a' }, { id: 'b' }, { id: 'c' }] };
   const cur = { projects: [{ id: 'a', dirty: true }, { id: 'b', dirty: true }, { id: 'c', dirty: true }] };

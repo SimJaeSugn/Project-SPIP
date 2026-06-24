@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QA 검증 보고 — AI 브리핑 프로젝트 name 호명 버그 수정</title>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#1e293b; --text:#e2e8f0; --sub:#94a3b8;
+    --accent:#34d399; --ref:#38bdf8; --line:#334155; --warn:#fbbf24; --danger:#f87171; --purple:#c4b5fd;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:"Segoe UI","Malgun Gothic",system-ui,sans-serif;line-height:1.7;}
+  header{padding:44px 32px 32px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#13203b,#0f172a);}
+  header h1{margin:0 0 8px;font-size:27px;letter-spacing:-0.01em;}
+  header .tag{display:inline-block;background:rgba(52,211,153,.12);color:var(--accent);
+    border:1px solid rgba(52,211,153,.4);border-radius:999px;padding:3px 12px;font-size:13px;margin-right:8px;margin-bottom:6px;}
+  header p{margin:12px 0 0;color:var(--sub);max-width:1000px;}
+  .meta{margin-top:14px;font-size:12.5px;color:var(--sub);}
+  main{max-width:1180px;margin:0 auto;padding:28px 32px;}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:22px 26px;margin:20px 0;}
+  h2{margin:0 0 14px;font-size:20px;color:var(--accent);border-left:4px solid var(--accent);padding-left:12px;}
+  h3{font-size:15px;color:var(--ref);margin:20px 0 8px;}
+  p{margin:8px 0;}
+  ul,ol{margin:8px 0;padding-left:22px;} li{margin:5px 0;}
+  code{background:#0b1220;color:var(--ref);padding:1px 6px;border-radius:5px;font-size:12.5px;font-family:Consolas,monospace;}
+  table{width:100%;border-collapse:collapse;margin:12px 0;font-size:13px;}
+  th,td{border:1px solid var(--line);padding:9px 11px;text-align:left;vertical-align:top;}
+  th{background:#142035;color:var(--accent);}
+  tr:nth-child(even) td{background:rgba(255,255,255,.02);}
+  .rid{font-family:Consolas,monospace;color:var(--accent);font-weight:700;white-space:nowrap;}
+  .pass{color:#6ee7b7;font-weight:800;}
+  .fail{color:#fca5a5;font-weight:800;}
+  .cond{color:#fcd34d;font-weight:800;}
+  .verdict{display:inline-block;border-radius:999px;padding:4px 16px;font-size:15px;font-weight:800;}
+  .v-pass{background:rgba(52,211,153,.16);color:#6ee7b7;border:1px solid rgba(52,211,153,.5);}
+  .pill{font-size:11px;font-weight:700;padding:2px 9px;border-radius:6px;white-space:nowrap;display:inline-block;}
+  .p1{background:rgba(248,113,113,.16);color:#fca5a5;border:1px solid rgba(248,113,113,.5);}
+  .p2{background:rgba(251,191,36,.16);color:#fcd34d;border:1px solid rgba(251,191,36,.5);}
+  .p3{background:rgba(56,189,248,.16);color:#7dd3fc;border:1px solid rgba(56,189,248,.45);}
+  .note{background:rgba(56,189,248,.08);border:1px solid rgba(56,189,248,.3);border-radius:8px;padding:12px 16px;font-size:13.5px;color:#bae6fd;margin:12px 0;}
+  .warn-box{background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.32);border-radius:8px;padding:12px 16px;font-size:13.5px;color:#fde68a;margin:12px 0;}
+  .ok-box{background:rgba(52,211,153,.08);border:1px solid rgba(52,211,153,.32);border-radius:8px;padding:12px 16px;font-size:13.5px;color:#a7f3d0;margin:12px 0;}
+  footer{text-align:center;color:var(--sub);font-size:12.5px;padding:28px;border-top:1px solid var(--line);}
+  .small{font-size:12px;color:var(--sub);}
+  .flow{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:12.5px;margin:14px 0;}
+  .flow .node{background:#0b1220;border:1px solid var(--line);border-radius:8px;padding:7px 11px;color:#bae6fd;font-family:Consolas,monospace;}
+  .flow .arr{color:var(--accent);font-weight:800;}
+</style>
+</head>
+<body>
+<header>
+  <span class="tag">QA 검증 보고 (QA Engineer)</span>
+  <span class="tag">대상: AI 브리핑 name 호명 버그 수정</span>
+  <span class="tag">회차 1</span>
+  <h1>QA 검증 — 브리핑이 해시 ID 대신 프로젝트 이름을 호명하는가</h1>
+  <p>버그: 브리핑이 프로젝트 <b>name 대신 내부 해시 id</b>를 호명. 수정: name을 데이터 경로 5단계로 전파,
+  프롬프트가 해시 대신 <code>label(name)</code> 전달, 제목 폴백을 name화. 본 검증은 <b>동작·경계면 정합·회귀</b>를 본다
+  (코드 품질·보안 취약점·문서 정합은 각 검증자 몫).</p>
+  <div class="meta">검증 방식: 경계면 교차 비교(5단계 양쪽 동시 대조) + <code>npm test</code> 실제 실행 + done payload shape 대조 ·
+  날짜 2026-06-25</div>
+</header>
+<main>
+
+<section>
+  <h2>종합 판정</h2>
+  <p><span class="verdict v-pass">PASS — 5/5 항목 통과</span></p>
+  <div class="ok-box">
+    <b>버그 해소 확인.</b> 프롬프트 DATA의 식별자가 해시 <code>targetId</code> → 사람이 읽는 <code>label(name)</code>로
+    교체되었고, 해시는 항목 매칭용 <code>key</code>에만 남아 모델에 식별자로 노출되지 않는다. 제목/표시 폴백이 모두
+    <code>targetLabel</code>(name)을 먼저 사용하고, name이 없으면 신호유형으로 graceful 폴백한다.
+    데이터 경로 5단계(<code>deriveSnapshot → normProject → signal.targetLabel → item.targetLabel → prompt label</code>)가
+    끊김 없이 이어진다. 회귀 0 — 기존 신호 판정·carry-over·done payload shape 불변.
+  </div>
+  <table>
+    <tr><th>#</th><th>검증 항목</th><th>판정</th><th>근거 요약</th></tr>
+    <tr><td>1</td><td>버그 해소(해시 비노출·name 호명·제목 폴백)</td><td class="pass">PASS</td><td>label=name, target(해시) 필드 제거, key만 매칭용. 제목 폴백 targetLabel 우선·해시 미사용. name 없으면 빈/신호유형</td></tr>
+    <tr><td>2</td><td>name 전달 일관성(5단계 라운드트립)</td><td class="pass">PASS</td><td>5단계 모두 코드상 연결·끊김 없음. item targetLabel 라운드트립 보존 테스트 통과</td></tr>
+    <tr><td>3</td><td>회귀 0(신호 판정·carry-over·payload shape)</td><td class="pass">PASS</td><td>signal/item/payload에 필드 추가만, 제거·shape 변경 없음. done payload는 해시·label 비포함 유지</td></tr>
+    <tr><td>4</td><td>graceful(name 미존재·비문자열·빈 store)</td><td class="pass">PASS</td><td>4개 가드 계층 모두 비문자열→빈 문자열. 크래시 경로 없음</td></tr>
+    <tr><td>5</td><td>빌드/테스트(npm test 901)</td><td class="pass">PASS</td><td><code>npm test</code> 실행 → pass 901 / fail 0. 브리핑 단독 80 통과</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>1. 버그 해소 (핵심) — <span class="pass">PASS</span></h2>
+  <p><b>무엇을 봤나:</b> <code>buildSignalData</code>가 모델에 무엇을 식별자로 싣는지, 해시가 프롬프트 DATA에 노출되는지,
+  제목 폴백이 무엇을 쓰는지를 양쪽 코드와 테스트 어서션으로 대조했다.</p>
+  <ul>
+    <li><b>label = name 탑재.</b> <code>buildSignalData</code>가 항목당 <code>{ key, type, category, label, context }</code>를 싣고,
+      <code>label</code>은 <code>clamp(it.targetLabel, TITLE_MAX)</code> — 즉 프로젝트 name이다. 과거의 해시 식별자 필드는 없다.</li>
+    <li><b>해시 비노출.</b> DATA JSON에 <code>target</code>(해시) 필드가 존재하지 않는다. 해시는 <code>key</code>(항목 매칭·dedup용)에만
+      남는다. 어서션 <code>obj.signals[0].target === undefined</code>, <code>obj.signals[0].key === hash</code>로 직접 검증된다.</li>
+    <li><b>제목 폴백 name화.</b> <code>_mapViews</code>의 title 폴백이 <code>v.title || it.title || it.targetLabel || it.signalType</code> 순서 —
+      모델이 title을 비우면 name(targetLabel)을, name마저 없으면 신호유형으로 떨어진다. 해시는 폴백 사슬 어디에도 없다.</li>
+    <li><b>graceful 폴백.</b> name이 비면 <code>label=''</code>이 되고, 시스템 프롬프트가 "label이 비어 있으면 신호 유형으로 일반적으로
+      표현한다"고 명시. 제목 폴백 사슬도 빈 label → signalType으로 안전 종료.</li>
+    <li><b>시스템 지시 강화.</b> SYSTEM_PROMPT에 "DATA의 label로만 부른다 / 내부 key·해시는 절대 노출하지 말라" 2줄이 추가됨
+      (테스트가 <code>/label/</code>·<code>/해시/</code> 정규식으로 존재 확인).</li>
+  </ul>
+  <div class="note">인젝션 방어 회귀도 동시 확인: name에 RTL(U+202E)·제어문자(BEL)·JSON 구조 위조 페이로드를 주입해도
+    clamp가 제어/방향성 문자를 제거하고 JSON.stringify가 구조 위조를 흡수(단일 항목 유지), 시스템 프롬프트 무오염.
+    name 도입이 기존 N-08/M-3 방어를 약화시키지 않았다.</div>
+</section>
+
+<section>
+  <h2>2. name 전달 일관성 (5단계) — <span class="pass">PASS</span></h2>
+  <p><b>경계면 교차 비교:</b> 각 단계의 출력 필드명과 다음 단계의 입력 필드명을 동시에 읽어 맞물림을 확인했다.</p>
+  <div class="flow">
+    <span class="node">deriveSnapshot<br>projects[].name</span><span class="arr">→</span>
+    <span class="node">normProject<br>name(strOrEmpty)</span><span class="arr">→</span>
+    <span class="node">mk()<br>signal.targetLabel</span><span class="arr">→</span>
+    <span class="node">itemsFromSignals<br>item.targetLabel</span><span class="arr">→</span>
+    <span class="node">buildSignalData<br>label</span>
+  </div>
+  <table>
+    <tr><th>경계</th><th>출력측</th><th>입력측</th><th>맞물림</th></tr>
+    <tr><td>① context → policy</td><td><code>deriveSnapshot</code>: projects에 <code>name</code> 추가</td><td><code>normProject</code>가 <code>p.name</code> 읽어 보존</td><td class="pass">일치</td></tr>
+    <tr><td>② policy 내부</td><td><code>normProject.name</code></td><td><code>mk(...,p.name)</code> → <code>signal.targetLabel</code></td><td class="pass">일치 (dirty/ahead/behind/attention/deadline 모두 전달)</td></tr>
+    <tr><td>③ policy → items</td><td><code>signal.targetLabel</code></td><td><code>itemsFromSignals</code>: <code>sanitizeText(s.targetLabel)</code> → <code>item.targetLabel</code></td><td class="pass">일치</td></tr>
+    <tr><td>④ items 라운드트립</td><td><code>item.targetLabel</code> 영속</td><td><code>normalizeItem</code>: <code>sanitizeText(input.targetLabel)</code> 보존</td><td class="pass">일치 (carry-over 후에도 name 유지)</td></tr>
+    <tr><td>⑤ items → prompt</td><td><code>item.targetLabel</code></td><td><code>buildSignalData</code>: <code>label = clamp(it.targetLabel)</code></td><td class="pass">일치</td></tr>
+  </table>
+  <div class="ok-box">5단계가 단절 없이 연결된다. <code>mail</code>·<code>disk</code>·<code>scan</code> 신호는 프로젝트가 아니므로 <code>mk</code>에
+    targetLabel 인자를 넘기지 않아 빈 문자열이 되며, 이는 의도된 graceful(해당 신호는 유형명으로 표현). 라운드트립 보존은
+    <code>briefingItems.test.js</code>의 정규화 왕복 어서션으로 통과.</div>
+</section>
+
+<section>
+  <h2>3. 회귀 0 — <span class="pass">PASS</span></h2>
+  <ul>
+    <li><b>신호 판정 불변.</b> dirty/ahead/behind/attention/deadline/mail/disk/scan 판정 조건식은 손대지 않았다.
+      <code>mk</code> 시그니처에 마지막 인자 <code>targetLabel</code>만 추가 — 기존 호출은 인자가 부족해도 <code>typeof !== 'string' → ''</code>로 안전.</li>
+    <li><b>signal shape.</b> <code>{ type, targetId, targetLabel, category, urgent, meta }</code> — 기존 필드 그대로, <code>targetLabel</code> 추가뿐.
+      <code>targetId</code>는 매칭·dedup·키 산출(itemKey)용으로 그대로 유지되어 안정 키가 바뀌지 않는다(carry-over 키 호환).</li>
+    <li><b>item shape.</b> <code>targetLabel</code> 필드 추가. <code>itemKey</code>는 여전히 <code>signalType + ':' + targetId</code> 기반 —
+      name이 키에 섞이지 않아 carry-over 매칭 불변.</li>
+    <li><b>auto-resolve / carry-over / trigger.</b> <code>isResolved</code>·<code>selectCarryOver</code>·<code>mergePersist</code>·
+      <code>evaluate.trigger/urgent</code>는 name을 참조하지 않는다 — 영향 없음.</li>
+    <li><b>done payload shape 불변(중요).</b> <code>toDonePayload</code>는 여전히 <code>{ key, category, title, reason, guide, ref }</code>만 내보낸다.
+      <code>targetLabel</code>·<code>targetId</code>는 페이로드에 포함되지 않으므로 IPC 계약·프런트 무영향. name은 title 폴백을 통해서만
+      사용자에게 도달(텍스트 표시).</li>
+    <li><b>전체 그린.</b> 기존 891 + 신규(policy/items/prompt name 케이스) = 901 모두 통과.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>4. graceful (방어 계층) — <span class="pass">PASS</span></h2>
+  <p>name이 없거나 비문자열인 입력에서 크래시 경로가 없음을 4개 가드 계층으로 확인했다.</p>
+  <table>
+    <tr><th>계층</th><th>가드</th><th>비정상 입력 처리</th></tr>
+    <tr><td>deriveSnapshot</td><td><code>typeof p.name === 'string' ? p.name : ''</code></td><td>undefined/숫자/null → 빈 문자열</td></tr>
+    <tr><td>normProject</td><td><code>strOrEmpty(p.name)</code></td><td>비문자열 → 빈 문자열</td></tr>
+    <tr><td>mk</td><td><code>typeof targetLabel === 'string' ? targetLabel : ''</code></td><td>인자 누락 → 빈 문자열</td></tr>
+    <tr><td>itemsFromSignals / normalizeItem</td><td><code>sanitizeText(...)</code> (비문자열→'')</td><td>비문자열 → 빈 문자열</td></tr>
+    <tr><td>buildSignalData</td><td><code>clamp(it.targetLabel)</code> (비문자열→'')</td><td>비문자열 → 빈 문자열</td></tr>
+  </table>
+  <div class="ok-box">빈 store(<code>hasSnapshot</code> false)에서는 projects가 빈 배열 → 신호 0 → 트리거 0. name 미존재 프로젝트는 빈 label로
+    전달되고 시스템 프롬프트가 신호유형 표현으로 폴백. 어느 경로에서도 예외가 던져지지 않는다.
+    <code>briefingItems.test.js</code>의 sanitize 테스트(제어문자 'p\\x07q'→'pq', 500자→상한 200)가 이를 뒷받침.</div>
+</section>
+
+<section>
+  <h2>5. 빌드/테스트 — <span class="pass">PASS</span></h2>
+  <p>추측 없이 실제 실행한 결과:</p>
+  <ul>
+    <li><code>npm test</code> (node --test "test/**/*.test.js") → <b class="pass">tests 901 · pass 901 · fail 0 · cancelled 0</b> (duration ~1.7s)</li>
+    <li>브리핑 단독(<code>test/ai/brief*.test.js</code> + followup) → <b class="pass">tests 80 · pass 80 · fail 0</b></li>
+    <li>구문 OK — 모듈 로드·실행 중 SyntaxError 없음(테스트가 전부 require·실행됨)</li>
+  </ul>
+  <div class="note">신규/갱신 테스트가 핵심 버그를 직접 어서트한다: "buildSignalData가 name을 label로 싣는다",
+    "프롬프트 DATA에 해시 targetId가 식별자로 노출되지 않는다(target undefined·key=hash)", "신호→항목 targetLabel 전파+라운드트립",
+    "deadline 라벨 없으면 graceful 빈값". CLAUDE.md 테스트 컨벤션(요구 마커 <code>[briefing name]</code> 병기)도 준수.</div>
+</section>
+
+<section>
+  <h2>발견 버그</h2>
+  <div class="ok-box"><b>없음.</b> 블로커/높음/보통/낮음 모든 심각도에서 동작·통합 버그 미발견. 자동화로 닫지 못하는 잔여 리스크는
+    아래 "수동 스모크 권고"의 실제 LLM 호명 1건뿐이며, 이는 코드 결함이 아니라 모델 행동 확인용.</div>
+</section>
+
+<section>
+  <h2>잔여 리스크 / 수동 스모크 권고</h2>
+  <div class="warn-box">
+    <b>자동화 한계 — 실제 LLM 호명은 미검증.</b> 단위 테스트는 프롬프트 DATA에 name이 실리고 해시가 빠진 것까지만 보장한다.
+    "모델이 실제로 그 label로 사용자를 호명하는가"는 시스템 지시 준수에 달려 있어 실 LLM 1회 수동 스모크를 권한다:
+    <ul>
+      <li>브리핑 enable + 실제 baseURL/모델 설정 → dirty 프로젝트 1개 만들어 트리거 → 생성된 title/reason에
+        <b>프로젝트 이름(예: <code>My-Cool-Project</code>)</b>이 보이고 32자 hex 해시가 보이지 않는지 육안 확인.</li>
+      <li>name이 빈 프로젝트(스캔 메타 누락)로도 트리거해 "미커밋 변경" 류 일반 표현으로 떨어지는지 확인.</li>
+    </ul>
+    이 스모크는 코드 결함 검증이 아니라 모델 프롬프트 준수 확인이므로, 실패 시 원인은 시스템 지시 문구 튜닝(프롬프트 영역)이다.
+  </div>
+</section>
+
+<footer>
+  QA 검증 보고 · AI 브리핑 name 호명 버그 수정 · 회차 1 · 검증 기준: 경계면 교차 비교 + npm test 실행 결과<br>
+  검증 범위: 동작·통합·회귀 (코드 품질·보안·문서 정합은 각 검증자 몫)
+</footer>
+</main>
+</body>
+</html>

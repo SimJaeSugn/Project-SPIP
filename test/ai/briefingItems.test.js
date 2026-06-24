@@ -28,6 +28,22 @@ test('R-38 — 신호→open 항목 변환(표현 비어있음)', () => {
   assert.strictEqual(its[0].createdAt, NOW);
 });
 
+test('[briefing name] 신호→항목: targetLabel(name) 전파 + 라운드트립 보존', () => {
+  const sigs = [{ type: 'dirty', targetId: 'a', category: 'must', targetLabel: 'My-Project' }];
+  const its = items.itemsFromSignals(sigs, NOW);
+  assert.strictEqual(its[0].targetLabel, 'My-Project', '신호 라벨 전파');
+  // normalizeItems 라운드트립(영속→재로드) 보존.
+  const round = items.normalizeItems(its);
+  assert.strictEqual(round[0].targetLabel, 'My-Project', '정규화 라운드트립 보존');
+});
+
+test('[briefing name] targetLabel sanitize·상한(제어문자 제거·길이 제한)', () => {
+  const evil = items.normalizeItem({ signalType: 'dirty', targetId: 'a', targetLabel: 'p' + String.fromCharCode(7) + 'q' });
+  assert.strictEqual(evil.targetLabel, 'pq', '제어문자 제거');
+  const long = items.normalizeItem({ signalType: 'dirty', targetId: 'a', targetLabel: 'z'.repeat(500) });
+  assert.ok(long.targetLabel.length <= 200, '길이 상한');
+});
+
 test('R-38 — done/dismiss 전이(applyResolution)', () => {
   const its = items.itemsFromSignals([{ type: 'dirty', targetId: 'a' }], NOW);
   const key = its[0].key;

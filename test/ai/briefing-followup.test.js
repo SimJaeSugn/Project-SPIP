@@ -43,6 +43,22 @@ test('P1/M13-Q-1 — deriveSnapshot이 mail unseen(주입 getter)·disk(node_mod
   assert.strictEqual(snap.disk.reclaimBytes, 2 * 1024 * 1024 * 1024);
 });
 
+test('[briefing name] deriveSnapshot이 프로젝트 name 보존(없으면 빈 문자열 graceful)', () => {
+  const ctx = {
+    store: {
+      hasSnapshot: true,
+      getProjects: () => ([
+        { id: 'aa', name: 'My-Project', git: { dirty: true } },
+        { id: 'bb', git: { dirty: true } },
+      ]),
+      getGeneratedAt: () => null,
+    },
+  };
+  const snap = deriveSnapshot(ctx, {});
+  assert.strictEqual(snap.projects[0].name, 'My-Project');
+  assert.strictEqual(snap.projects[1].name, '', 'name 없으면 빈 문자열');
+});
+
 test('P1 — mail unseen 증가가 policy 트리거(이벤트형)', () => {
   const prev = deriveSnapshot({ store: { hasSnapshot: true, getProjects: () => [], getGeneratedAt: () => null } }, { mailState: () => ({ unseen: 0 }) });
   const cur = deriveSnapshot({ store: { hasSnapshot: true, getProjects: () => [], getGeneratedAt: () => null } }, { mailState: () => ({ unseen: 3, latestUid: 'u9' }) });

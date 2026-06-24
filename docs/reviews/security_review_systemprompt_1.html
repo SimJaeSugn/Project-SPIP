@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>보안 검증 — 사용자 편집 시스템 프롬프트 (security_review_systemprompt_1)</title>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#1e293b; --panel2:#172033; --ink:#e2e8f0; --mut:#94a3b8;
+    --ok:#34d399; --ref:#38bdf8; --warn:#fbbf24; --high:#fb923c; --crit:#f87171; --line:#334155;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.65 -apple-system,"Segoe UI",Roboto,"Malgun Gothic",sans-serif;padding:32px}
+  .wrap{max-width:1080px;margin:0 auto}
+  h1{font-size:25px;margin:0 0 4px;color:#fff}
+  h2{font-size:19px;margin:34px 0 12px;color:var(--ok);border-bottom:1px solid var(--line);padding-bottom:6px}
+  h3{font-size:16px;margin:20px 0 8px;color:var(--ref)}
+  .sub{color:var(--mut);margin:0 0 18px}
+  .verdict{display:inline-block;font-weight:700;font-size:17px;padding:8px 18px;border-radius:10px;background:rgba(52,211,153,.13);color:var(--ok);border:1px solid rgba(52,211,153,.4)}
+  .grid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin:18px 0}
+  .kpi{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px;text-align:center}
+  .kpi .n{font-size:24px;font-weight:700}
+  .kpi .l{font-size:12px;color:var(--mut);margin-top:2px}
+  .c-crit{color:var(--crit)} .c-high{color:var(--high)} .c-mid{color:var(--warn)} .c-low{color:var(--ref)} .c-info{color:var(--mut)}
+  table{width:100%;border-collapse:collapse;margin:10px 0;font-size:14px}
+  th,td{border:1px solid var(--line);padding:9px 11px;text-align:left;vertical-align:top}
+  th{background:var(--panel2);color:var(--ref)}
+  td.sev{font-weight:700;white-space:nowrap}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px 20px;margin:12px 0}
+  code{background:#0b1220;border:1px solid var(--line);border-radius:5px;padding:1px 6px;color:#cbd5e1;font-size:13px}
+  .pill{display:inline-block;font-size:12px;padding:2px 9px;border-radius:999px;border:1px solid var(--line);margin:0 4px 4px 0;color:var(--mut)}
+  .pill.ok{color:var(--ok);border-color:rgba(52,211,153,.4)}
+  ul{margin:6px 0 6px 4px;padding-left:18px} li{margin:3px 0}
+  svg{max-width:100%;height:auto;background:var(--panel2);border:1px solid var(--line);border-radius:12px}
+  .legend{font-size:12px;color:var(--mut);margin-top:6px}
+  .foot{color:var(--mut);font-size:12px;margin-top:30px;border-top:1px solid var(--line);padding-top:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>보안 검증 보고 — 사용자 편집 시스템 프롬프트</h1>
+  <p class="sub">대상: AI 브리핑 "사용자 편집 가능 System(지시) 프롬프트" 설정 · 보고서 ID <code>security_review_systemprompt_1</code> · 2026-06-25</p>
+
+  <p><span class="verdict">판정: PASS</span></p>
+  <p class="sub">핵심 질문 "프롬프트를 사용자가 편집해도 구조적 인젝션 방어·출력 안전이 약화되지 않는가" — <b>약화되지 않음</b>. 편집되는 것은 신뢰 영역(System) 지시 텍스트뿐이고, 신뢰 불가 DATA 처리·분류 소유·출력 표시전용은 모두 코드 레벨로 강제된다.</p>
+
+  <div class="grid">
+    <div class="kpi"><div class="n c-crit">0</div><div class="l">치명</div></div>
+    <div class="kpi"><div class="n c-high">0</div><div class="l">높음</div></div>
+    <div class="kpi"><div class="n c-mid">0</div><div class="l">중간</div></div>
+    <div class="kpi"><div class="n c-low">1</div><div class="l">낮음</div></div>
+    <div class="kpi"><div class="n c-info">2</div><div class="l">정보</div></div>
+  </div>
+
+  <h2>신뢰 경계 · 데이터 흐름</h2>
+  <svg viewBox="0 0 1000 360" role="img" aria-label="시스템 프롬프트 신뢰 경계 다이어그램">
+    <!-- 렌더러 -->
+    <rect x="20" y="30" width="250" height="300" rx="10" fill="#172033" stroke="#334155"/>
+    <text x="40" y="55" fill="#38bdf8" font-size="14" font-weight="700">렌더러 (신뢰 불가 UI)</text>
+    <rect x="40" y="72" width="210" height="44" rx="6" fill="#1e293b" stroke="#475569"/>
+    <text x="52" y="92" fill="#e2e8f0" font-size="12">textarea (.value)</text>
+    <text x="52" y="108" fill="#94a3b8" font-size="11">L-1: textContent/value만</text>
+    <rect x="40" y="128" width="210" height="44" rx="6" fill="#1e293b" stroke="#475569"/>
+    <text x="52" y="148" fill="#e2e8f0" font-size="12">브리핑 결과 표시</text>
+    <text x="52" y="164" fill="#94a3b8" font-size="11">title/reason/guide/stream</text>
+    <text x="52" y="178" fill="#34d399" font-size="11">el(text:) → textContent</text>
+
+    <!-- 경계 1 -->
+    <line x1="270" y1="40" x2="270" y2="320" stroke="#fbbf24" stroke-dasharray="6 5"/>
+    <text x="276" y="345" fill="#fbbf24" font-size="11">신뢰 경계: contextBridge / IPC</text>
+
+    <!-- 메인 -->
+    <rect x="300" y="30" width="320" height="300" rx="10" fill="#172033" stroke="#334155"/>
+    <text x="320" y="55" fill="#38bdf8" font-size="14" font-weight="700">메인 (신뢰)</text>
+    <rect x="320" y="72" width="280" height="40" rx="6" fill="#1e293b" stroke="#475569"/>
+    <text x="332" y="96" fill="#e2e8f0" font-size="12">preload._briefingArgs → String()</text>
+    <rect x="320" y="120" width="280" height="44" rx="6" fill="#1e293b" stroke="#475569"/>
+    <text x="332" y="140" fill="#e2e8f0" font-size="12">validateSettingsArgs</text>
+    <text x="332" y="156" fill="#94a3b8" font-size="11">shape·문자열·≤16000 거부</text>
+    <rect x="320" y="172" width="280" height="44" rx="6" fill="#1e293b" stroke="#475569"/>
+    <text x="332" y="192" fill="#e2e8f0" font-size="12">normalizeBriefing/sanitize</text>
+    <text x="332" y="208" fill="#94a3b8" font-size="11">제어·방향성 제거 + clamp 8000</text>
+    <rect x="320" y="224" width="280" height="44" rx="6" fill="#1e293b" stroke="#475569"/>
+    <text x="332" y="244" fill="#e2e8f0" font-size="12">buildPrompt(System=override||시드)</text>
+    <text x="332" y="260" fill="#34d399" font-size="11">DATA: buildSignalData+clamp+JSON.stringify</text>
+    <rect x="320" y="278" width="280" height="38" rx="6" fill="#1e293b" stroke="#475569"/>
+    <text x="332" y="301" fill="#e2e8f0" font-size="12">persistConfigKeys → 0600 (상승=보류)</text>
+
+    <!-- 경계 2 -->
+    <line x1="650" y1="40" x2="650" y2="320" stroke="#fbbf24" stroke-dasharray="6 5"/>
+    <text x="656" y="345" fill="#fbbf24" font-size="11">신뢰 경계: LLM API</text>
+
+    <!-- LLM -->
+    <rect x="690" y="30" width="290" height="300" rx="10" fill="#172033" stroke="#334155"/>
+    <text x="710" y="55" fill="#38bdf8" font-size="14" font-weight="700">LLM (외부·신뢰 불가 응답)</text>
+    <rect x="710" y="90" width="250" height="60" rx="6" fill="#1e293b" stroke="#475569"/>
+    <text x="722" y="114" fill="#e2e8f0" font-size="12">System(신뢰)+DATA(JSON 인코딩)</text>
+    <text x="722" y="132" fill="#94a3b8" font-size="11">분류는 정책 소유 — 모델 변경 불가</text>
+    <rect x="710" y="166" width="250" height="64" rx="6" fill="#1e293b" stroke="#475569"/>
+    <text x="722" y="190" fill="#e2e8f0" font-size="12">응답 파서 + 표시전용</text>
+    <text x="722" y="208" fill="#94a3b8" font-size="11">PARSE_* 상한, MAX_STREAM_CHARS</text>
+    <text x="722" y="224" fill="#34d399" font-size="11">실행 0 · 링크/명령 자동실행 0</text>
+
+    <!-- 화살표 -->
+    <line x1="250" y1="94" x2="320" y2="92" stroke="#38bdf8" stroke-width="2" marker-end="url(#a)"/>
+    <line x1="600" y1="246" x2="710" y2="120" stroke="#38bdf8" stroke-width="2" marker-end="url(#a)"/>
+    <line x1="710" y1="198" x2="250" y2="150" stroke="#34d399" stroke-width="2" marker-end="url(#a)"/>
+    <defs><marker id="a" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#38bdf8"/></marker></defs>
+  </svg>
+  <p class="legend">파란 흐름 = 요청(System+DATA). 초록 흐름 = LLM 응답 → 표시전용(textContent). 편집 가능한 것은 메인 단계의 <b>System 텍스트</b>뿐이며, DATA 인코딩·분류 소유·출력 표시전용은 그 우회 경로에 영향받지 않는다.</p>
+
+  <h2>STRIDE 위협 도출 요약</h2>
+  <table>
+    <tr><th>경계</th><th>위협(STRIDE)</th><th>방어</th><th>상태</th></tr>
+    <tr><td>렌더러→메인 (IPC)</td><td>변조: 거대/제어문자 프롬프트 주입</td><td>preload String 강제, validateSettingsArgs ≤16000, sanitize+clamp 8000</td><td class="c-low">방어됨</td></tr>
+    <tr><td>System 텍스트 vs DATA</td><td>권한상승: 프롬프트 편집으로 인젝션 방어 무력화</td><td>DATA는 buildSignalData/clamp+JSON.stringify로 별도 강제(System 무관)</td><td class="c-low">방어됨</td></tr>
+    <tr><td>LLM→렌더러</td><td>정보노출/변조: 악성 응답 DOM 주입</td><td>el(text:)=textContent, 파서 상한, 분류 정책 소유, 실행 0</td><td class="c-low">방어됨</td></tr>
+    <tr><td>메인→디스크</td><td>정보노출: 설정 평문 노출</td><td>0600 저장, 상승세션 write 보류, getSettings는 apiKey 평문 미노출</td><td class="c-low">방어됨</td></tr>
+    <tr><td>메인→렌더러 (getSettings)</td><td>정보노출: 시크릿 회송</td><td>hasApiKey:boolean만, baseURL 검증값만, systemPrompt는 비밀 아님</td><td class="c-low">방어됨</td></tr>
+  </table>
+
+  <h2>발견 항목</h2>
+  <table>
+    <tr><th>#</th><th class="sev">심각도</th><th>취약점 / 위치</th><th>위협</th><th>악용 시나리오</th><th>권고 조치</th></tr>
+    <tr>
+      <td>F-1</td><td class="sev c-low">낮음</td>
+      <td>길이 상한 이원화 — IPC <code>validateSettingsArgs</code> 16000자 거부, <code>sanitizeSystemPrompt</code> 8000자 clamp. <code>electron/ipc/briefing.js</code> / <code>lib/common/config.js</code></td>
+      <td>DoS(자원)</td>
+      <td>8000~16000자 입력은 IPC 통과 후 normalize에서 8000으로 절단 — 동작은 안전하나 두 상수(16000/8000)가 분리돼 의미가 모호. 16000자 자체는 메모리/CPU에 무해한 수준이라 실질 DoS 아님.</td>
+      <td>의도된 이중 방어(IPC는 여유분 거부, normalize가 정칙 clamp)임을 주석으로 이미 명시. 두 상한을 단일 출처(<code>SYSTEM_PROMPT_MAX</code>)로 수렴하거나 IPC 거부값을 16000 그대로 두되 관계를 문서화. <b>차단 사유 아님.</b></td>
+    </tr>
+    <tr>
+      <td>F-2</td><td class="sev c-info">정보</td>
+      <td>placeholder에 <code>defaultSystemPrompt</code> 노출. <code>public/app.js</code></td>
+      <td>정보노출</td>
+      <td>시드 프롬프트가 UI placeholder/복원용으로 렌더러에 회송됨. 시드는 비밀이 아니며(설계상 명시), setAttribute 경로라 L-1 위반 없음.</td>
+      <td>조치 불필요. 의도된 동작.</td>
+    </tr>
+    <tr>
+      <td>F-3</td><td class="sev c-info">정보</td>
+      <td>System override는 사용자가 자기 지시를 약화/무력화 가능(예: "한국어로만" 제거). <code>buildPrompt</code></td>
+      <td>해당 없음</td>
+      <td>사용자가 자신의 지시 품질을 낮추는 것은 신뢰 영역의 자기 선택이며 앱 보안 경계 밖. 신뢰 불가 데이터 발 인젝션 방어와 무관.</td>
+      <td>조치 불필요. 위험 수용은 사용자 본인 몫.</td>
+    </tr>
+  </table>
+
+  <h2>점검 1 — 구조적 방어 불변 (핵심)</h2>
+  <div class="panel">
+    <p>사용자가 <code>systemPrompt</code>를 임의 변경하거나 비워도 다음이 <b>코드 레벨로 그대로 강제</b>됨을 확인:</p>
+    <ul>
+      <li><b>DATA 인코딩</b>: <code>buildSignalData/buildCarryOverData</code> → 항목당 <code>clamp</code>(제어·방향성 문자 제거+길이상한) → <code>JSON.stringify({signals,carryOver})</code>. System 텍스트 분기(<code>override || 시드</code>)와 완전히 독립된 경로.</li>
+      <li><b>분류 소유</b>: <code>category</code>는 정책이 결정해 DATA에 박제, 모델에는 설명/가이드만 요청. 프롬프트 편집으로 분류 권한이 모델로 넘어가지 않음.</li>
+      <li><b>출력 표시전용</b>: streamText·title·reason·guide 전부 <code>el(...{text})</code>=textContent 렌더(<code>public/app.js</code>), 명령/링크 자동실행 경로 없음. resolveItem은 모델 문자열이 아닌 <code>key</code>(정규식 검증)만 사용.</li>
+      <li><b>회귀 테스트</b>: <code>[systemPrompt] 인젝션 방어 불변</code> 테스트가 "악성 System override + 악성 라벨 동시 주입" 시 구조 위조 실패·방향성 제거·분류 정책 소유를 검증. 35/35 통과.</li>
+    </ul>
+    <p class="pill ok">평가: 편집 가능 프롬프트가 구조적 방어를 약화하지 않음 — PASS</p>
+  </div>
+
+  <h2>점검 2 — systemPrompt 자체 안전 (길이 / 정제)</h2>
+  <div class="panel">
+    <ul>
+      <li><b>길이 상한</b>: preload <code>String()</code> 강제 → IPC <code>≤16000</code> 초과 거부(BAD_ARGS) → normalize <code>clamp 8000</code>. 이중 방어로 거대 문자열 DoS 차단.</li>
+      <li><b>정제</b>: <code>sanitizeSystemPrompt</code>가 C0/DEL·방향성 제어문자(U+202A~E, U+2066~9) 제거, <code>\n</code>/<code>\t</code>만 보존. 공백뿐이면 ''(시드 폴백).</li>
+      <li>신뢰 영역(System)이므로 인젝션 정제는 불필요하나, 비정상 입력(거대/제어/방향성) 방어는 적용됨. 16000자는 토큰·메모리상 무해 수준이라 실질 자원고갈 위협 없음(F-1).</li>
+    </ul>
+    <p class="pill ok">평가: 길이/정제 적정 — PASS</p>
+  </div>
+
+  <h2>점검 3 — 저장 · 노출</h2>
+  <div class="panel">
+    <ul>
+      <li><b>0600 저장</b>: <code>persistConfigKeys</code>가 임시파일→fsync→rename→chmod 0600. 상승 세션이면 디스크 write 보류(메모리 유지).</li>
+      <li><b>getSettings 노출</b>: <code>systemPrompt</code>/<code>defaultSystemPrompt</code> 회송은 시크릿 누출 아님(프롬프트는 비밀 아님). <code>apiKey</code>는 <code>hasApiKey:boolean</code>만, <code>baseURL</code>은 검증 통과값만 회송 — 자격증명 비노출 유지.</li>
+      <li><b>렌더러</b>: textarea는 <code>.value</code>, placeholder는 <code>setAttribute</code> — innerHTML 미사용(L-1 유지).</li>
+    </ul>
+    <p class="pill ok">평가: 저장·노출 안전 — PASS</p>
+  </div>
+
+  <h2>점검 4 — IPC shape</h2>
+  <div class="panel">
+    <ul>
+      <li><b>신규 채널 0</b>: 기존 <code>spip:briefing:getSettings</code>/<code>setSettings</code> 확장만. preload 표면 변화 없음(필드 추가뿐).</li>
+      <li><b>shape 검증</b>: <code>validateSettingsArgs</code>가 <code>systemPrompt</code>를 문자열/길이(≤16000)로 검증, null→''(시드 복원), 그 외 타입/과길이는 <code>BAD_ARGS</code> 거부.</li>
+      <li>setSettings 응답은 getSettings shape 재사용 — 키 평문 회송 0.</li>
+    </ul>
+    <p class="pill ok">평가: IPC 표면·검증 안전 — PASS</p>
+  </div>
+
+  <h2>증거 (실제 실행)</h2>
+  <div class="panel">
+    <ul>
+      <li><code>node --test test/ai/briefingPrompt.test.js test/ai/config-briefing.test.js</code> → <b>35 pass / 0 fail</b> (인젝션 방어 불변·정제·길이상한·시드 폴백 포함).</li>
+      <li><code>npm audit --omit=dev</code> → <b>found 0 vulnerabilities</b> (런타임 의존성 취약점 0).</li>
+    </ul>
+  </div>
+
+  <h2>종합 판정</h2>
+  <div class="panel">
+    <p><b>PASS</b> — 치명/높음 발견 0건. 낮음 1건(F-1, 길이 상한 이원화 — 의도된 이중 방어, 차단 사유 아님), 정보 2건.</p>
+    <p>편집 가능 시스템 프롬프트는 <b>신뢰 영역 지시 텍스트</b>만 바꾸며, 신뢰 불가 DATA의 JSON 인코딩·clamp·분류 정책 소유·출력 textContent 표시전용·자동실행 0은 모두 코드가 독립적으로 강제한다. 따라서 프롬프트 편집으로 구조적 인젝션 방어가 무력화되지 않는다. 보안 게이트 통과.</p>
+  </div>
+
+  <p class="foot">검증자: 보안 전담 검증자(Security Reviewer) · 코드 수정 없음 · 시정은 담당 개발자 몫 · 기준 문서(docs/Development) 부재로 표준 체크리스트 + 프로젝트 보안 불변식(L-1/H-1/H-2/M-3/N-08) 적용</p>
+</div>
+</body>
+</html>

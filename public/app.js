@@ -822,6 +822,9 @@ function briefingSettingsView(res) {
     baseURL,
     model: (typeof r.model === 'string') ? r.model : '',
     hasApiKey: r.hasApiKey === true,
+    // 사용자 편집 System(지시) 텍스트(빈='' = 시드 사용). defaultSystemPrompt는 시드(읽기전용·placeholder/복원용).
+    systemPrompt: (typeof r.systemPrompt === 'string') ? r.systemPrompt : '',
+    defaultSystemPrompt: (typeof r.defaultSystemPrompt === 'string') ? r.defaultSystemPrompt : '',
     external: isExternalBaseURL(baseURL),
     advanced: {
       coalesceMs: Number.isFinite(adv.coalesceMs) ? adv.coalesceMs : null,
@@ -1341,7 +1344,7 @@ function initBrowser() {
       testResult: null,          // testConnection 결과 {ok,model?,latencyMs?,code?}
       busyTest: false, busySettings: false,
       keyInput: '',              // 설정 키 입력(쓰기 전용 — 저장 후 비움, store 영속 안 함)
-      form: { baseURL: '', model: '' }, // 설정 입력 폼(컨트롤드 — getSettings 로 초기화)
+      form: { baseURL: '', model: '', systemPrompt: '' }, // 설정 입력 폼(컨트롤드 — getSettings 로 초기화)
       subscribed: false,
       _unsubs: [],
     },
@@ -2850,7 +2853,7 @@ function initBrowser() {
       var v = briefingSettingsView(res);
       store.briefing.settings = v;
       store.briefing.enabled = v.enabled;
-      store.briefing.form = { baseURL: v.baseURL, model: v.model };
+      store.briefing.form = { baseURL: v.baseURL, model: v.model, systemPrompt: v.systemPrompt };
       if (store.showSettings) render();
     }).catch(function () { /* graceful */ });
   }
@@ -2866,7 +2869,7 @@ function initBrowser() {
       } else {
         store.briefing.settings = v;
         store.briefing.enabled = v.enabled;
-        store.briefing.form = { baseURL: v.baseURL, model: v.model };
+        store.briefing.form = { baseURL: v.baseURL, model: v.model, systemPrompt: v.systemPrompt };
       }
       render();
       patchBriefing();
@@ -2923,6 +2926,30 @@ function initBrowser() {
     modelField.appendChild(modelInput);
     block.appendChild(modelField);
 
+    // 시스템 프롬프트(프롬프트 엔지니어링) — 사용자 편집. 빈 값이면 시드(기본 프롬프트) 사용.
+    //   L-1: textarea value 는 textContent 경로(innerHTML 미사용)라 안전. 구조적 인젝션 방어·출력 렌더는
+    //   코드 레벨이 계속 강제하므로(편집은 System 지시 텍스트뿐), 편집해도 앱 보안은 유지된다.
+    const spField = el('label', { cls: 'mailform__field' });
+    spField.appendChild(el('span', { cls: 'mailform__label', text: '시스템 프롬프트 (고급)' }));
+    const spInput = el('textarea', {
+      cls: 'rootmgr__input briefing-systemprompt',
+      attrs: {
+        rows: '8', autocomplete: 'off', spellcheck: 'false',
+        placeholder: v.defaultSystemPrompt || '비우면 기본 프롬프트를 사용합니다.',
+        'aria-label': '브리핑 시스템 프롬프트',
+      },
+    });
+    // 폼 미초기화(undefined)면 settings 값으로 채운다(빈 문자열 = 시드 미적용 상태).
+    if (typeof store.briefing.form.systemPrompt !== 'string') store.briefing.form.systemPrompt = v.systemPrompt || '';
+    spInput.value = store.briefing.form.systemPrompt;
+    spInput.addEventListener('input', (e) => { store.briefing.form.systemPrompt = e.target.value || ''; });
+    spField.appendChild(spInput);
+    block.appendChild(spField);
+    block.appendChild(el('p', {
+      cls: 'settings__opt-sub',
+      text: '브리핑의 출력 언어·형식·어조 등을 바꿉니다. 비우면 기본 프롬프트를 사용합니다(최대 8000자). 데이터(프로젝트명·메일 등)는 항상 안전하게 분리 처리됩니다.',
+    }));
+
     // apiKey (쓰기 전용 — 평문 미표시. "설정됨/미설정" + 입력 시 저장 / 비우고 해제)
     const keyField = el('label', { cls: 'mailform__field' });
     keyField.appendChild(el('span', { cls: 'mailform__label', text: 'API 키' + (v.hasApiKey ? ' (설정됨)' : ' (미설정)') }));
@@ -2938,7 +2965,12 @@ function initBrowser() {
       cls: 'btn btn--dark', text: store.briefing.busySettings ? '저장 중…' : '저장',
       attrs: { type: 'button', 'aria-label': '브리핑 설정 저장' },
       on: { click: function () {
-        const patch = { baseURL: store.briefing.form.baseURL, model: store.briefing.form.model };
+        const patch = {
+          baseURL: store.briefing.form.baseURL,
+          model: store.briefing.form.model,
+          // 시스템 프롬프트: 항상 전송(빈 문자열 = 시드 복원). 메인이 정제·길이상한 강제.
+          systemPrompt: (typeof store.briefing.form.systemPrompt === 'string') ? store.briefing.form.systemPrompt : '',
+        };
         if (store.briefing.keyInput) patch.apiKey = store.briefing.keyInput; // 입력 시만 키 전송(미전송=유지)
         onSetBriefingSettings(patch);
       } },
@@ -2952,6 +2984,14 @@ function initBrowser() {
     });
     if (store.briefing.busyTest) testBtn.disabled = true;
     actions.appendChild(testBtn);
+    // 시스템 프롬프트 기본값 복원 — systemPrompt='' 저장(시드 사용). 폼도 비운다.
+    const resetPromptBtn = el('button', {
+      cls: 'btn', text: '프롬프트 기본값 복원',
+      attrs: { type: 'button', 'aria-label': '시스템 프롬프트 기본값 복원' },
+      on: { click: function () { store.briefing.form.systemPrompt = ''; onSetBriefingSettings({ systemPrompt: '' }); } },
+    });
+    if (store.briefing.busySettings) resetPromptBtn.disabled = true;
+    actions.appendChild(resetPromptBtn);
     if (v.hasApiKey) {
       actions.appendChild(el('button', {
         cls: 'btn', text: '키 해제', attrs: { type: 'button', 'aria-label': 'API 키 해제' },

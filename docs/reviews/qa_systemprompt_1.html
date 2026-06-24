@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QA — 브리핑 시스템 프롬프트 편집(프롬프트 엔지니어링)</title>
+<style>
+  :root { --bg:#0b0f14; --panel:#121821; --panel2:#0f141b; --border:#1f2937; --t1:#e5e7eb; --t2:#9ca3af; --t3:#6b7280;
+          --ok:#34d399; --ref:#38bdf8; --warn:#fbbf24; --bad:#f87171; --mono:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--t1); font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Malgun Gothic',sans-serif; line-height:1.6; font-size:14px; }
+  .wrap { max-width:1080px; margin:0 auto; padding:40px 28px 80px; }
+  h1 { font-size:24px; font-weight:700; margin:0 0 6px; letter-spacing:-0.02em; }
+  h2 { font-size:17px; font-weight:650; margin:34px 0 12px; color:var(--t1); border-left:3px solid var(--ref); padding-left:10px; }
+  .sub { color:var(--t2); font-size:13px; margin:0 0 4px; }
+  .verdict { display:inline-flex; align-items:center; gap:8px; font-size:15px; font-weight:700; padding:7px 16px; border-radius:8px; margin:14px 0 2px; }
+  .v-pass { background:rgba(52,211,153,.12); color:var(--ok); border:1px solid rgba(52,211,153,.35); }
+  .meta { color:var(--t3); font-size:12px; font-family:var(--mono); margin-top:8px; }
+  .pill { display:inline-block; font-size:11px; font-weight:700; padding:2px 9px; border-radius:20px; vertical-align:middle; }
+  .p-pass { background:rgba(52,211,153,.13); color:var(--ok); border:1px solid rgba(52,211,153,.38); }
+  .p-fail { background:rgba(248,113,113,.15); color:var(--bad); border:1px solid rgba(248,113,113,.4); }
+  .p-na { background:rgba(156,163,175,.13); color:var(--t2); border:1px solid rgba(156,163,175,.34); }
+  .p-ok { background:rgba(56,189,248,.12); color:var(--ref); border:1px solid rgba(56,189,248,.36); }
+  table { width:100%; border-collapse:collapse; margin:10px 0 6px; font-size:13px; }
+  th, td { text-align:left; padding:9px 11px; border-bottom:1px solid var(--border); vertical-align:top; }
+  th { color:var(--t2); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.04em; background:var(--panel2); }
+  td.loc { font-family:var(--mono); font-size:12px; color:var(--ref); white-space:nowrap; }
+  tr:last-child td { border-bottom:none; }
+  .card { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:18px 20px; margin:12px 0; }
+  code { font-family:var(--mono); font-size:12.5px; background:rgba(148,163,184,.12); padding:1px 6px; border-radius:5px; color:#cbd5e1; }
+  ul { margin:6px 0 6px; padding-left:20px; }
+  li { margin:4px 0; }
+  .legend { display:flex; gap:16px; flex-wrap:wrap; font-size:12px; color:var(--t2); margin:8px 0 0; }
+  .small { font-size:12px; color:var(--t3); }
+  .kpi { display:flex; gap:14px; flex-wrap:wrap; margin:16px 0 4px; }
+  .kpi div { background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:12px 18px; min-width:120px; }
+  .kpi .n { font-size:22px; font-weight:700; }
+  .kpi .l { font-size:11px; color:var(--t2); text-transform:uppercase; letter-spacing:.04em; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <p class="sub">QA 검증 보고 · Project-SPIP</p>
+  <h1>브리핑 AI — 시스템 프롬프트 편집(프롬프트 엔지니어링) 설정</h1>
+  <div class="verdict v-pass">PASS — 통과 6 / 실패 0 · 블로커 0</div>
+  <p class="meta">대상: lib/ai/briefingConst.js · briefingPrompt.js · briefingOrchestrator.js · lib/common/config.js · electron/ipc/briefing.js · electron/preload.js · public/app.js<br>
+  기준: docs/Development 부재 → 수용 기준·설계 계약·주변 코드 일관성. 실행: <code>npm test</code> 914/914 통과 + 경계면 교차 대조 + node 스모크.</p>
+
+  <div class="kpi">
+    <div><div class="n" style="color:var(--ok)">914</div><div class="l">전체 테스트 통과</div></div>
+    <div><div class="n" style="color:var(--ok)">48</div><div class="l">대상 3파일 테스트</div></div>
+    <div><div class="n" style="color:var(--ok)">6/6</div><div class="l">검증 항목 PASS</div></div>
+    <div><div class="n" style="color:var(--ok)">0</div><div class="l">회귀·버그</div></div>
+  </div>
+
+  <div class="card">
+    <strong>요약.</strong> 시스템 프롬프트 편집 기능은 "빈 값=시드(<code>DEFAULT_SYSTEM_PROMPT</code>)" 폴백 규약을 모든 계층(buildPrompt · normalizeBriefing · validateSettingsArgs)에서 일관되게 강제한다.
+    경계면(프롬프트↔orchestrator↔IPC↔config↔preload↔프런트)을 양쪽에서 대조한 결과 shape·계약이 정확히 맞물린다.
+    회귀 표면은 0 — <code>systemPrompt</code>는 <code>getSettings</code>/<code>setSettings</code>에만 추가됐고 done/getState/delta payload는 불변이며 기본값 빈('')에서 시드와 동일 동작이 보장된다.
+    인젝션 방어 불변(DATA의 JSON 인코딩·clamp)이 System override 편집으로 무력화되지 않음도 코드·테스트로 확인. <strong>통과 차단 결함 없음(PASS).</strong>
+    <div class="legend">
+      <span><span class="pill p-pass">PASS</span> 수용 기준 충족</span>
+      <span><span class="pill p-fail">FAIL</span> 결함 — 통과 차단</span>
+      <span><span class="pill p-ok">검증</span> 경계면 대조 이상無</span>
+      <span><span class="pill p-na">미검증</span> 실행 범위 밖</span>
+    </div>
+  </div>
+
+  <h2>검증 항목별 판정</h2>
+  <table>
+    <thead><tr><th>#</th><th>항목</th><th>판정</th><th>근거</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>시드·override·복원</td><td><span class="pill p-pass">PASS</span></td>
+        <td><code>buildPrompt</code>(briefingPrompt.js:144-145): <code>sanitizeSystemPrompt(opts.systemPrompt)</code> 정제값 있으면 사용, <code>'' / 공백 / null</code>이면 <code>DEFAULT_SYSTEM_PROMPT</code> 폴백. 스모크 4종(빈·null·공백뿐·override) 전부 기대 일치. <code>setSettings({systemPrompt:''})</code>→영속 빈값=복원(briefing.js:124, normalize 326). <code>getSettings</code>가 <code>systemPrompt</code>(현재 override)+<code>defaultSystemPrompt</code>(시드) 동시 반환(briefing.js:83-85). orchestrator가 <code>cfg.briefing.systemPrompt</code>를 <code>buildPrompt</code>에 전달(orchestrator.js:238-239) — 미설정 시 빈문자 폴백.</td></tr>
+      <tr><td>2</td><td>회귀 0 (핵심)</td><td><span class="pill p-pass">PASS</span></td>
+        <td><code>DEFAULTS.briefing.systemPrompt=''</code>(config.js:82) → buildPrompt가 시드 사용 = 기존 동작 동일. 전체 <strong>914 그린</strong>(이전 902 + 신규 12). <code>systemPrompt</code> 문자열이 IPC 전역에서 <code>briefing.js</code>에만 등장 → done/getState/delta shape 불변(grep 교차 확인). 시드 텍스트에 직전 2개 수정 보존 확인: "반드시 한국어로만"(briefingPrompt.js:25)·DATA를 "label로만 부른다"(37행)·내부 key 비노출(38행). <code>SYSTEM_PROMPT</code> 하위호환 alias 유지(168행).</td></tr>
+      <tr><td>3</td><td>정제·상한</td><td><span class="pill p-pass">PASS</span></td>
+        <td><code>sanitizeSystemPrompt</code>: <code>\n</code>(10)·<code>\t</code>(9) 보존, 기타 C0/DEL·방향성 제어(U+202A~202E, U+2066~2069) 제거, 8000자 상한, 정제 후 공백뿐이면 ''(briefingPrompt.js:111-123). <code>SYSTEM_PROMPT_MAX=8000</code>(const.js:27)와 config <code>MAX_BRIEFING_SYSTEM_PROMPT_LEN=8000</code>(config.js:33) 정합. 두 sanitize 정책 출력 동일(스모크 policyMatch=true). IPC <code>validateSettingsArgs</code> 1차 상한 16000 초과 거부=<code>BAD_ARGS</code>, 비문자=<code>BAD_ARGS</code>(briefing.js:121-127), 최종 8000 강제는 normalizeBriefing.</td></tr>
+      <tr><td>4</td><td>설정 UI flow</td><td><span class="pill p-pass">PASS</span></td>
+        <td>textarea 현재값=<code>store.briefing.form.systemPrompt</code>(app.js:2944), 빈 값이면 <code>placeholder=defaultSystemPrompt</code>로 시드 안내(2938). 저장 시 항상 <code>systemPrompt</code> 동봉(빈=복원, 2971-2972). "프롬프트 기본값 복원" 버튼 → <code>systemPrompt=''</code> 저장+폼 비움(2991). preload <code>_briefingArgs</code>가 <code>'systemPrompt' in s</code>일 때만 통과(null→''), 누락 시 patch 드롭(preload.js:36) — 스모크 dropped=true. <code>briefingSettingsView</code>가 <code>systemPrompt</code>·<code>defaultSystemPrompt</code> 둘 다 정규화(app.js:826-827).</td></tr>
+      <tr><td>5</td><td>0600·상승 세션 보류</td><td><span class="pill p-pass">PASS</span></td>
+        <td><code>setSettings</code>가 <code>persistConfigKeys({briefing: normalized})</code> 경유(briefing.js:164) → <code>systemPrompt</code>가 briefing 객체에 포함돼 동일 경로로 영속. <code>persistConfigKeys</code>: 상승 세션(<code>isElevated()</code>)이면 디스크 write 보류(config.js:419-422), 파일은 <code>FILE_MODE</code>(0600) 생성·chmod(440·447). systemPrompt에 별도 분기 없음 = 기존 키와 동일 보안 처리.</td></tr>
+      <tr><td>6</td><td>빌드·테스트·구문</td><td><span class="pill p-pass">PASS</span></td>
+        <td><code>npm test</code> = <strong>tests 914 / pass 914 / fail 0</strong>(duration ~1.58s). 대상 3파일 단독 실행 48/48 통과. 변경 7개 JS 전부 <code>node --check</code> 통과. 런타임 스모크(시드 폴백·override·8000 상한·제어문자 정제·alias·IPC BAD_ARGS·키 비노출) 전 항목 기대 일치.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>경계면 교차 대조(검증 상세)</h2>
+  <table>
+    <thead><tr><th>경계면</th><th>판정</th><th>맞물림 확인</th></tr></thead>
+    <tbody>
+      <tr><td>orchestrator → buildPrompt</td><td><span class="pill p-ok">검증</span></td>
+        <td><code>_fire()</code>가 <code>cfg.briefing.systemPrompt</code>를 읽어(타입가드 후 비문자→'') <code>buildPrompt(input, {systemPrompt})</code>로 전달. 인젝션 방어(DATA <code>JSON.stringify</code>+<code>buildSignalData/clamp</code>)는 System override와 무관하게 코드가 계속 강제 — System 텍스트만 교체될 뿐 DATA 영역 불변.</td></tr>
+      <tr><td>IPC getSettings ↔ 프런트 view</td><td><span class="pill p-ok">검증</span></td>
+        <td>반환 <code>{systemPrompt, defaultSystemPrompt}</code> 키가 <code>briefingSettingsView</code>의 기대 키와 정확히 일치. apiKey 평문 미회송(스모크 noKeyLeak=true), baseURL 재검증값만 회송 — 기존 보안 shape 유지.</td></tr>
+      <tr><td>프런트 form → preload → IPC patch</td><td><span class="pill p-ok">검증</span></td>
+        <td>app.js가 항상 <code>systemPrompt</code> 동봉 → preload가 String 캐스팅(null→'') → validateSettingsArgs가 ≤16000 수용·초과 BAD_ARGS → normalizeBriefing이 8000·제어문자 최종 강제. 3계층 방어 깊이 일관.</td></tr>
+      <tr><td>config sanitize ↔ prompt sanitize</td><td><span class="pill p-ok">검증</span></td>
+        <td>두 모듈의 <code>sanitizeSystemPrompt</code>가 별도 구현이나 동일 정책(\t\n 보존·동일 제어 제거·동일 상한). 동일 입력에 동일 출력 확인. 의도된 중복(L4 순수 모듈 각각 독립). 향후 정책 변경 시 양쪽 동기화 필요 — 동작 결함 아님.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>수동 스모크 결과</h2>
+  <div class="card">
+    <ul>
+      <li><strong>시드 폴백</strong> — <code>systemPrompt</code> = 빈/null/공백뿐 3종 모두 <code>DEFAULT_SYSTEM_PROMPT</code> 반환. PASS</li>
+      <li><strong>override</strong> — 임의 문자열 전달 시 정제 후 그대로 System으로 사용, 시드와 다름. PASS</li>
+      <li><strong>8000 상한</strong> — 9000자 입력 → prompt·config 양쪽 정확히 8000자로 절단. <code>SYSTEM_PROMPT_MAX===8000</code>. PASS</li>
+      <li><strong>정제</strong> — BEL(0x07)+RTL override(U+202E) 제거, <code>\n</code>·<code>\t</code> 보존(<code>a\x07‮b\nc\td → ab\nc\td</code>). PASS</li>
+      <li><strong>IPC 거부</strong> — 20000자=BAD_ARGS, 숫자=BAD_ARGS, model만 전송 시 patch에 systemPrompt 없음(드롭), null→''. PASS</li>
+      <li><strong>getSettings</strong> — defaultSystemPrompt=시드, systemPrompt=현재 override, apiKey 비노출. PASS</li>
+      <li><strong>회귀 가드</strong> — 시드 텍스트에 한국어 강제·label 호명·내부 key 비노출 지시 보존. PASS</li>
+    </ul>
+    <p class="small">미검증(실행 범위 밖): 실제 Electron 렌더러에서의 textarea placeholder 시각 표시·복원 버튼 클릭 인터랙션은 헤드리스 환경에서 직접 클릭 불가 — 코드 경로(이벤트 핸들러·patch 조립)는 정적 대조로 확인했으며 결함 없음.</p>
+  </div>
+
+  <h2>발견 버그</h2>
+  <div class="card">
+    <strong>없음.</strong> 통과 차단 결함·회귀·경계면 불일치 모두 0건. 보고할 버그 없음.
+  </div>
+
+  <p class="meta">검증자: QA 엔지니어 · 동작·통합 트랙(코드 품질=code-reviewer · 보안=security-reviewer 별도). 2026-06-25.</p>
+
+</div>
+</body>
+</html>

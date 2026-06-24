@@ -723,6 +723,11 @@ button.home-list__name:hover { color: var(--accent); text-decoration: underline;
 }
 .rootmgr__input:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px var(--accent-bg); }
 .rootmgr__input:disabled { opacity: .6; }
+/* 브리핑 시스템 프롬프트 편집 textarea — 세로 리사이즈·등폭·줄바꿈 보존(L-1: value는 textContent 경로). */
+textarea.briefing-systemprompt {
+  width: 100%; resize: vertical; min-height: 120px; line-height: 1.5;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre-wrap;
+}
 .rootmgr__label {
   font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
   color: var(--t4); margin-top: 4px;

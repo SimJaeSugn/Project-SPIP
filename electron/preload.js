@@ -32,6 +32,8 @@ function _briefingArgs(s) {
   if (s.baseURL != null) out.baseURL = String(s.baseURL);
   if (s.model != null) out.model = String(s.model);
   if ('apiKey' in s) out.apiKey = s.apiKey === null ? null : String(s.apiKey); // null=해제
+  // 시스템 프롬프트(사용자 편집·신뢰 영역). 빈 문자열/null=시드 복원. main 핸들러가 정제·길이상한 재검증.
+  if ('systemPrompt' in s) out.systemPrompt = s.systemPrompt === null ? '' : String(s.systemPrompt);
   if (s.advanced && typeof s.advanced === 'object') {
     const adv = {};
     if (s.advanced.coalesceMs != null && s.advanced.coalesceMs !== '') adv.coalesceMs = Number(s.advanced.coalesceMs);

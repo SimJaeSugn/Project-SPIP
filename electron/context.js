@@ -95,6 +95,8 @@ function deriveSnapshot(ctx, extra) {
         const g = p.git || {};
         out.projects.push({
           id: p.id,
+          // [briefing name] 사용자 호명용 표시 이름(신뢰 불가·스캔 유래). 없으면 빈 문자열 graceful.
+          name: (typeof p.name === 'string') ? p.name : '',
           dirty: g.dirty === true,
           ahead: (typeof g.ahead === 'number') ? g.ahead : 0,
           behind: (typeof g.behind === 'number') ? g.behind : 0,

@@ -18,6 +18,7 @@
 
 const config = require('../../lib/common/config');
 const uiStateStore = require('../../lib/common/uiStateStore');
+const briefingPrompt = require('../../lib/ai/briefingPrompt');
 
 /** ctx에서 orchestrator 해석. */
 function orch(ctx) {
@@ -78,6 +79,10 @@ function getSettings(_args, ctx) {
     baseURL: urlCheck.ok ? urlCheck.value : config.DEFAULTS.briefing.baseURL,
     model: b.model,
     hasApiKey: typeof b.apiKey === 'string' && b.apiKey.length > 0,
+    // 사용자 편집 System(지시) 텍스트. 빈 문자열이면 시드 미적용(기본값 사용) 상태 — 시크릿 아님(노출 가능).
+    systemPrompt: typeof b.systemPrompt === 'string' ? b.systemPrompt : '',
+    // 시드(기본값) — UI의 "기본값 복원"·placeholder용 읽기전용. 키/baseURL 등 비노출 원칙과 무관(노출 가능).
+    defaultSystemPrompt: briefingPrompt.DEFAULT_SYSTEM_PROMPT,
     external: urlCheck.ok ? urlCheck.external : false, // 비-localhost 경고용(M-1)
     advanced: {
       coalesceMs: (b.advanced && b.advanced.coalesceMs) || config.DEFAULTS.briefing.advanced.coalesceMs,
@@ -111,6 +116,13 @@ function validateSettingsArgs(args) {
   if (args.apiKey !== undefined) {
     if (args.apiKey === null) patch.apiKey = '';
     else if (typeof args.apiKey === 'string' && args.apiKey.length <= 4096) patch.apiKey = args.apiKey;
+    else return { ok: false, code: 'BAD_ARGS' };
+  }
+  if (args.systemPrompt !== undefined) {
+    // 문자열=설정, 빈 문자열=시드 복원. 길이 상한(여유분 — 정제·clamp는 normalizeBriefing이 강제).
+    //   null도 빈 문자열(시드 복원)로 수용. 정제 후 0600 영속은 normalizeBriefing→persist 경로.
+    if (args.systemPrompt === null) patch.systemPrompt = '';
+    else if (typeof args.systemPrompt === 'string' && args.systemPrompt.length <= 16000) patch.systemPrompt = args.systemPrompt;
     else return { ok: false, code: 'BAD_ARGS' };
   }
   if (args.advanced !== undefined) {

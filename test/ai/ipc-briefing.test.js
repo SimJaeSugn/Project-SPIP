@@ -6,6 +6,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert');
 const briefing = require('../../electron/ipc/briefing');
+const briefingPrompt = require('../../lib/ai/briefingPrompt');
 
 function baseCtx(over) {
   return Object.assign({
@@ -76,6 +77,52 @@ test('setSettings — apiKey 미전송 시 기존 키 유지', () => {
   assert.strictEqual(ctx.config.briefing.apiKey, 'sk-secret', 'apiKey 유지');
   assert.strictEqual(r.hasApiKey, true);
   assert.strictEqual(r.apiKey, undefined);
+});
+
+// ── [systemPrompt] getSettings shape · setSettings 라운드트립(빈=복원) ──
+
+test('[systemPrompt] getSettings — systemPrompt + defaultSystemPrompt(시드) 포함', () => {
+  const ctx = baseCtx({ config: { briefing: { baseURL: 'http://127.0.0.1:1234/v1', model: 'm', apiKey: '', systemPrompt: '커스텀 지시' } } });
+  const r = briefing.getSettings(null, ctx);
+  assert.strictEqual(r.systemPrompt, '커스텀 지시');
+  assert.strictEqual(r.defaultSystemPrompt, briefingPrompt.DEFAULT_SYSTEM_PROMPT, '시드 노출(읽기전용·복원용)');
+  // 빈 systemPrompt(시드 미적용 상태)도 그대로 노출.
+  const r2 = briefing.getSettings(null, baseCtx());
+  assert.strictEqual(r2.systemPrompt, '');
+});
+
+test('[systemPrompt] validateSettingsArgs — 문자열=설정·빈/null=복원·과길이 거부', () => {
+  assert.strictEqual(briefing.validateSettingsArgs({ systemPrompt: '지시' }).patch.systemPrompt, '지시');
+  assert.strictEqual(briefing.validateSettingsArgs({ systemPrompt: '' }).patch.systemPrompt, '');
+  assert.strictEqual(briefing.validateSettingsArgs({ systemPrompt: null }).patch.systemPrompt, '');
+  assert.strictEqual(briefing.validateSettingsArgs({ systemPrompt: 'x'.repeat(20000) }).code, 'BAD_ARGS');
+  assert.strictEqual(briefing.validateSettingsArgs({ systemPrompt: 42 }).code, 'BAD_ARGS');
+  // 미전송 = patch 없음(기존 유지)
+  assert.strictEqual('systemPrompt' in briefing.validateSettingsArgs({ model: 'x' }).patch, false);
+});
+
+test('[systemPrompt] setSettings 라운드트립 — 설정 후 빈 문자열=시드 복원', () => {
+  const ctx = baseCtx();
+  ctx.configDeps = { fs: fakeFs(), paths: { configPath: () => '/x', ensureDirFor: () => '/x' }, elevationState: { isElevated: () => true } };
+  // 설정
+  const set = briefing.setSettings({ systemPrompt: '너는 영어로 답한다.' }, ctx);
+  assert.strictEqual(set.ok, true);
+  assert.strictEqual(ctx.config.briefing.systemPrompt, '너는 영어로 답한다.');
+  assert.strictEqual(set.systemPrompt, '너는 영어로 답한다.');
+  // 복원(빈 문자열)
+  const reset = briefing.setSettings({ systemPrompt: '' }, ctx);
+  assert.strictEqual(reset.ok, true);
+  assert.strictEqual(ctx.config.briefing.systemPrompt, '', '빈=시드 복원');
+  assert.strictEqual(reset.systemPrompt, '');
+  assert.strictEqual(reset.defaultSystemPrompt, briefingPrompt.DEFAULT_SYSTEM_PROMPT);
+});
+
+test('[systemPrompt] setSettings — 제어문자 정제·길이 상한 강제(normalizeBriefing 경유)', () => {
+  const ctx = baseCtx();
+  ctx.configDeps = { fs: fakeFs(), paths: { configPath: () => '/x', ensureDirFor: () => '/x' }, elevationState: { isElevated: () => true } };
+  const r = briefing.setSettings({ systemPrompt: 'safe' + String.fromCharCode(7) + 'x' }, ctx);
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(ctx.config.briefing.systemPrompt, 'safex', '제어문자 정제');
 });
 
 test('setSettings — 불량 baseURL 거부(BAD_URL)', () => {
