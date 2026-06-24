@@ -40,7 +40,9 @@ win:
 nsis:
   oneClick: false
   perMachine: false
-  allowToChangeInstallationDirectory: true
+  # [M12 A] false — 디렉터리 변경 페이지 제거로 보호경로(Program Files) 설치를 차단해
+  #   per-machine UAC 상승 자체를 없앤다(상승 컨텍스트 재실행 → 관리자 프로필 %APPDATA% 버그 근본 차단).
+  allowToChangeInstallationDirectory: false
   createDesktopShortcut: true
   createStartMenuShortcut: true
 

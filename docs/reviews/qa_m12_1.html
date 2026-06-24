@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>M12 QA 검증 보고서 (회차 1)</title>
+<style>
+  :root {
+    --bg: #0f172a; --panel: #1e293b; --fg: #e2e8f0; --muted: #94a3b8;
+    --accent: #34d399; --ref: #38bdf8; --warn: #fbbf24; --danger: #f87171;
+    --border: #334155;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg);
+    font-family: "Segoe UI", "Malgun Gothic", system-ui, sans-serif; line-height: 1.65; padding: 32px 0; }
+  .wrap { max-width: 1060px; margin: 0 auto; padding: 0 24px; }
+  h1 { font-size: 1.9rem; margin: 0 0 4px; }
+  h2 { font-size: 1.32rem; margin: 38px 0 12px; padding-bottom: 6px; border-bottom: 1px solid var(--border); color: var(--accent); }
+  h3 { font-size: 1.05rem; margin: 22px 0 8px; color: var(--ref); }
+  p, li { color: var(--fg); }
+  .muted { color: var(--muted); }
+  .lead { color: var(--muted); font-size: 1.02rem; margin-top: 0; }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 18px 22px; margin: 16px 0; }
+  code { background: #0b1220; border: 1px solid var(--border); border-radius: 4px; padding: 1px 6px;
+    font-family: "Cascadia Code", Consolas, monospace; font-size: 0.88em; color: #cbd5e1; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 0.92rem; }
+  th, td { border: 1px solid var(--border); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: #0b1220; color: var(--accent); }
+  .tag { display: inline-block; font-size: 0.74rem; font-weight: 700; padding: 2px 9px; border-radius: 999px; }
+  .pass { background: #064e3b; color: var(--accent); }
+  .fail { background: #3f1d1d; color: var(--danger); }
+  .cond { background: #4a3209; color: var(--warn); }
+  .callout { border-left: 4px solid var(--accent); background: #0b1220; padding: 12px 16px; margin: 14px 0; border-radius: 0 8px 8px 0; }
+  .callout.warn { border-left-color: var(--warn); }
+  .callout.danger { border-left-color: var(--danger); }
+  .callout.ref { border-left-color: var(--ref); }
+  .accent { color: var(--accent); } .ref { color: var(--ref); } .warn { color: var(--warn); } .danger { color: var(--danger); }
+  .filepath { color: var(--ref); font-family: "Cascadia Code", Consolas, monospace; font-size: 0.85em; }
+  ul.tight li { margin: 4px 0; }
+  footer { margin-top: 48px; color: var(--muted); font-size: 0.85rem; border-top: 1px solid var(--border); padding-top: 16px; }
+  .verdict-big { font-size: 1.15rem; font-weight: 700; }
+  .mono { font-family: "Cascadia Code", Consolas, monospace; font-size: 0.85em; }
+  .smoke { counter-reset: smoke; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>M12 QA 검증 보고서</h1>
+  <p class="lead">대상: 자동 업데이트 후 권한 상승 데이터 손실/오염 수정(B안 b3 + A안) · 검증자: QA 엔지니어 · 회차 1 · 코드 미수정</p>
+
+  <div class="panel">
+    <p class="verdict-big">종합 판정: <span class="tag pass">PASS</span></p>
+    <p>검증 6항목 전부 PASS. <code>npm test</code> 실제 실행 결과 <b>768/768 통과(fail 0)</b>. 비상승·portable·dev·CLI 경로의 동작 불변(회귀 0)이 코드 경계면과 테스트로 확인됐고, 상승 판정 → 중앙 플래그 → write 보류 3경로 / rescan 가드 / 배너 push의 계약이 양쪽에서 맞물린다. <span class="filepath">lib/common/paths.js</span>·<span class="filepath">electron/autoUpdate.js</span>는 elevation 토큰 0건으로 무변경 확인. 다만 실 권한 상승·실 자동업데이트 경로는 헤드리스로 재현 불가 — 아래 수동 스모크가 잔여 검증으로 필요하다(블로커 아님).</p>
+  </div>
+
+  <h2>① 항목별 판정 요약</h2>
+  <table>
+    <tr><th>#</th><th>검증 항목</th><th>판정</th><th>핵심 근거</th></tr>
+    <tr><td>1</td><td>회귀 0 (비상승·portable·dev 흐름 불변)</td><td><span class="tag pass">PASS</span></td><td>중앙 플래그 기본 false·set 미호출 시 분기 미진입. paths.js·autoUpdate.js 무변경. 768 그린</td></tr>
+    <tr><td>2</td><td>상승 판정 (SID 권위·트리거 분리·폴백·고정경로)</td><td><span class="tag pass">PASS</span></td><td>High/SYSTEM ML SID만 차단, APPDATA는 트리거-only, 4종 폴백 모두 false, whoami 고정 절대경로·['/groups']</td></tr>
+    <tr><td>3</td><td>write 보류 3경로 (snapshot·uiState·config)</td><td><span class="tag pass">PASS</span></td><td>elevated 시 디렉터리·임시파일 생성 이전 조기 return. config 비밀번호 디스크 미기록 검증됨</td></tr>
+    <tr><td>4</td><td>rescan 가드 (acquire/start 이전 조기반환)</td><td><span class="tag pass">PASS</span></td><td>elev.isElevated() 분기가 controller 유효성·sanitize·acquire 전 최선두. {ok:false,code:ELEVATED}</td></tr>
+    <tr><td>5</td><td>배너·push (고정문구 textContent·graceful)</td><td><span class="tag pass">PASS</span></td><td>ready-to-show 후 push, 고정 payload {elevated:true}, 배너 el(text:)=textContent. 부재 시 graceful</td></tr>
+    <tr><td>6</td><td>빌드/테스트 (768 통과·구문)</td><td><span class="tag pass">PASS</span></td><td>npm test 768 pass / 0 fail. 9개 변경 파일 node -c 전부 OK</td></tr>
+  </table>
+
+  <h2>② 항목 1 — 회귀 0 (최우선) <span class="tag pass">PASS</span></h2>
+  <p>중앙 출처는 <span class="filepath">lib/common/elevationState.js</span> 모듈 싱글턴이며 기본값 <code>_elevated=false</code>. <code>setElevated</code>는 <span class="filepath">electron/main.js</span> <code>onReady</code> 1곳에서만 호출되므로 CLI(<code>scan.js</code>)·dev·테스트·portable 실행 경로에는 set이 도달하지 않아 항상 false다. write 3경로와 rescan 가드 모두 <code>if (_elev.isElevated())</code> 진입 전에는 기존 코드 흐름과 바이트 단위로 동일(분기만 추가, 기존 라인 무변경) — 정규화·원자적 write·rename·chmod 로직 보존을 라인 대조로 확인했다.</p>
+  <div class="callout ref">
+    <b>무변경 확인(교차 검증):</b> <span class="filepath">lib/common/paths.js</span>·<span class="filepath">electron/autoUpdate.js</span>에 <code>elevation|elevated|Elevation</code> 매치 <b>0건</b>. 위치 결정(appDir/APPDATA 종속)·자동업데이트 트리거는 손대지 않아 기존 사용자 데이터 위치·업데이트 동작 불변.
+  </div>
+  <p>회귀 테스트가 명시적으로 false 경로를 커버한다: <code>writeSnapshot/uiStateStore.write/persistConfigKeys</code> elevated:false → 파일 생성 + 내용 라운드트립 검증, <code>rescan</code> false → <code>SCAN_STARTED</code> + acquire 호출 검증, 그리고 deps 미주입(기본 중앙 모듈 + reset된 false) 케이스도 정상 write/스캔을 확인한다. 전체 768 그린이라 인접 모듈(snapshotStore·folders 등) 동작도 깨지지 않았다.</p>
+
+  <h2>③ 항목 2 — 상승 판정 <span class="tag pass">PASS</span></h2>
+  <ul class="tight">
+    <li><b>SID 권위:</b> <code>hasHighIntegritySid</code>가 <code>S-1-16-12288</code>(High) 또는 <code>S-1-16-16384</code>(SYSTEM) 포함 시에만 true. Medium(<code>S-1-16-8192</code>)·빈문자열·null은 false. 테스트로 직접 검증됨.</li>
+    <li><b>APPDATA 휴리스틱 = 트리거-only:</b> <code>appdataMismatch</code>가 불일치여도 whoami가 Medium이면 <code>medium-or-below</code>로 false — 단독 차단 안 함. 일치(no-trigger) 시 whoami 호출조차 안 함(비용 0, called=false 검증).</li>
+    <li><b>판정 불가 폴백 4종 모두 false:</b> non-win32 / no-trigger / whoami-unresolved(resolveBin null) / whoami-failed(execFileSync throw→null). 가용성 우선 보수 폴백이 코드·테스트 일치.</li>
+    <li><b>win32 외 false:</b> darwin·linux 모두 <code>non-win32</code> 조기 반환(트리거·whoami 미평가).</li>
+    <li><b>whoami 고정경로·인자(H-2/M12-S-01):</b> <code>resolveWhoamiBin</code>이 <code>%SystemRoot%\System32\whoami.exe</code>(없으면 <code>C:\Windows</code>)를 <code>resolveBin(abs)</code> 절대경로 분기로 검증 — PATH 순회 없음. <code>execWhoamiGroups</code>가 <code>execFileSync(bin, ['/groups'], {shell:false, windowsHide:true, timeout:5000})</code>로 실행. 모킹 테스트로 args·shell·bin 계약 확정.</li>
+  </ul>
+  <div class="callout warn">
+    <b>관찰(버그 아님):</b> <code>hasHighIntegritySid</code>는 stdout 전체에서 SID 문자열을 <code>indexOf</code>로 탐색한다. 정상 whoami /groups 출력에서 그 SID는 무결성 레이블 행에만 나타나므로 false positive 위험은 실질적으로 없으나, "라인/레이블 한정 파싱"이 아닌 단순 substring이라는 점은 설계 의도대로의 보수적 선택임을 기록한다(차단 방향 오탐이 아니라 가용성 영향 없음).
+  </div>
+
+  <h2>④ 항목 3 — write 보류 3경로 <span class="tag pass">PASS</span></h2>
+  <p>세 함수 모두 <b>디렉터리 생성·임시파일 open·rename 이전</b>에 elevated 분기를 둔다 — 부분 파일·잔여 tmp가 관리자 프로필에 남지 않는다.</p>
+  <table>
+    <tr><th>경로</th><th>위치</th><th>elevated:true 동작</th><th>반환</th></tr>
+    <tr><td>serializer.writeSnapshot</td><td>정규화 직후, <code>ensureDirFor</code> 이전</td><td>디스크 무접촉</td><td><code>{path,bytes,written:false}</code></td></tr>
+    <tr><td>uiStateStore.write</td><td>정규화 직후, body/dir 이전</td><td>디스크 무접촉</td><td>정규화 메모리 상태 객체</td></tr>
+    <tr><td>config.persistConfigKeys</td><td>patch 검증 직후, read-merge 이전</td><td>디스크 무접촉(read도 안 함)</td><td>없음(void)</td></tr>
+  </table>
+  <p>가장 민감한 경로 검증: <code>persistConfigKeys({mailAccounts:[{...pass:'SECRET-PW'}]})</code> elevated:true → <code>fs.existsSync(cfgPath)===false</code>. 메일 비밀번호가 관리자 프로필에 새 0600 파일로 떨어지지 않음을 테스트가 직접 확인한다. false 경로는 모두 정상 write + 내용 라운드트립.</p>
+  <div class="callout ref">
+    <b>경계면 일치:</b> 세 함수의 <code>(opts.deps||ctx.deps).elevationState || require('./elevationState')</code> 주입 패턴이 동일하고, main.js의 단일 <code>setElevated</code> 출처와 require 캐시 싱글턴으로 연결됨 — 출처 1·참조 N 단일화 계약 성립.
+  </div>
+
+  <h2>⑤ 항목 4 — rescan 가드 <span class="tag pass">PASS</span></h2>
+  <p><span class="filepath">electron/ipc/actions.js</span> <code>rescan</code>에서 elevated 분기가 <b>함수 최선두</b>(controller 유효성 체크·<code>sanitizeRescanOpts</code>·scanRoots 평가·<code>acquire()</code>/<code>start()</code> 모두 이전)에 위치. <code>{ ok:false, code:'ELEVATED' }</code> 즉시 반환. 테스트로 <code>controller._acquired===false</code>(락·스캔 미시작) 확인. 비상승·미주입(기본 모듈)은 <code>SCAN_STARTED</code> + acquire 호출로 불변. serializer 보류와 합쳐 이중 안전.</p>
+
+  <h2>⑥ 항목 5 — 배너·push <span class="tag pass">PASS</span></h2>
+  <ul class="tight">
+    <li><b>push 시점·페이로드:</b> <span class="filepath">electron/main.js</span> <code>win.once('ready-to-show')</code> → <code>win.show()</code> 후 <code>_elevated</code>면 <code>pushElevationWarning()</code>. payload는 고정 <code>{elevated:true}</code>만 — APPDATA 경로·프로필명·whoami 출력 비전송. 창 파괴 레이스 가드(<code>isDestroyed</code>) + try/catch.</li>
+    <li><b>preload 중계:</b> <code>onElevationWarning(cb)</code>가 <code>ipcRenderer</code> 원본 비노출·콜백만 중계, unsubscribe 반환. 비함수 cb는 no-op.</li>
+    <li><b>배너 textContent(L-1):</b> <span class="filepath">public/app.js</span> <code>el('span',{text: ELEVATION_BANNER_TEXT})</code> — 고정 문구 상수, 데이터 의존 0. <code>innerHTML</code> 미사용. 경로·프로필 비노출. 1회만(<code>_elevationBannerEl</code> 가드).</li>
+    <li><b>graceful:</b> <code>subscribeElevationWarning</code>이 <code>hasBridge()</code>·<code>typeof spip.onElevationWarning==='function'</code> 미충족 시 즉시 return — 웹/테스트·비상승(push 미수신)에서 배너 미표시. <code>pagehide</code> teardown에서 구독 해제.</li>
+    <li><b>스타일:</b> <span class="filepath">public/styles.css</span> <code>.elevation-banner</code> sticky 상단 z-index:200. 동일 다크 팔레트.</li>
+  </ul>
+
+  <h2>⑦ 항목 6 — 빌드/테스트 <span class="tag pass">PASS</span></h2>
+  <div class="callout">
+    <p class="mono">$ npm test &nbsp;(node --test "test/**/*.test.js")</p>
+    <p class="mono accent">tests 768 · pass 768 · fail 0 · cancelled 0 · skipped 0 · duration ~1.5s</p>
+  </div>
+  <p>변경 9개 파일 + 진입점 <code>node -c</code> 구문 검사 전부 OK: elevationGuard·elevationState·serializer·uiStateStore·config·actions·main·preload·app.js. 신규 테스트 2종(<span class="filepath">test/elevationGuard.test.js</span> 10케이스, <span class="filepath">test/elevation-write-hold.test.js</span> 10케이스)이 판정·보류·가드·회귀를 헤드리스로 커버.</p>
+
+  <h2>⑧ 발견 버그</h2>
+  <div class="callout">
+    <p><b>블로커/높음/보통/낮음 모든 심각도에서 신규 버그 0건.</b> 6개 검증 항목 전부 PASS, 회귀 미발견. 항목 2의 substring SID 탐색은 차단 방향 오탐 가능성이 없어(가용성 영향 0) 버그가 아닌 설계 의도 기록으로 남긴다.</p>
+  </div>
+
+  <h2>⑨ 헤드리스 불가 — 수동 스모크 (잔여 검증)</h2>
+  <p>아래는 실 OS·실 권한 상승·실 자동업데이트가 필요해 <code>node --test</code>로 재현 불가하다. 릴리즈 전 1회 수행 권장(블로커 아님 — 코드 경계면은 PASS).</p>
+  <ol>
+    <li><b>실 상승 판정:</b> 설치본을 "관리자 권한으로 실행" → 상단에 고정 문구 배너 노출, 변경 저장(즐겨찾기·테마·메일계정) 시도 시 디스크 미반영, 재스캔 버튼이 ELEVATED로 거부되는지. 일반 권한 재실행 시 배너 없음·정상 저장 복귀.</li>
+    <li><b>실 자동업데이트 경로:</b> 이전 버전 설치 → 자동 업데이트 트리거 → 재실행 세션이 상승 컨텍스트가 되는지/되지 않는지(A안 <code>allowToChangeInstallationDirectory:false</code>로 per-machine 상승 자체가 제거되었는지) 실측. 업데이트 직후 기존 데이터(즐겨찾기·설정) 손실·오염 없음 확인.</li>
+    <li><b>관리자 프로필 비오염:</b> 상승 세션 중 어떤 저장 동작을 해도 <code>%USERPROFILE%(Administrator)\AppData\Roaming\…\spip</code> 하위에 신규 config/ui-state/cache 파일이 생성되지 않는지(특히 비밀번호 포함 config) 파일시스템 직접 확인.</li>
+    <li><b>whoami 실측:</b> 상승 콘솔에서 <code>whoami /groups</code>가 <code>S-1-16-12288</code>를 실제로 출력하는지(환경별 로캘 무관 SID 기반이라 안전하나 1회 확인).</li>
+    <li><b>설치 디렉터리 페이지 제거:</b> NSIS 인스톨러에서 설치 경로 변경 페이지가 사라졌는지(A안), per-user 기본 설치로 UAC 상승 프롬프트가 뜨지 않는지.</li>
+  </ol>
+
+  <footer>
+    M12 QA 검증 회차 1 · 코드 미수정 · npm test 768/768 pass(실측) · 회귀 0 · 신규 버그 0 · 잔여: 수동 스모크 5종
+  </footer>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>M12 설계 보안 검증 — 권한 상승 감지 + 스냅샷 저장 보류</title>
+<style>
+  :root {
+    --bg: #0f172a; --panel: #1e293b; --fg: #e2e8f0; --muted: #94a3b8;
+    --accent: #34d399; --ref: #38bdf8; --warn: #fbbf24; --danger: #f87171;
+    --border: #334155;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg);
+    font-family: "Segoe UI", "Malgun Gothic", system-ui, sans-serif; line-height: 1.65; padding: 32px 0; }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 0 24px; }
+  h1 { font-size: 1.85rem; margin: 0 0 4px; }
+  h2 { font-size: 1.3rem; margin: 38px 0 12px; padding-bottom: 6px;
+    border-bottom: 1px solid var(--border); color: var(--accent); }
+  h3 { font-size: 1.05rem; margin: 22px 0 8px; color: var(--ref); }
+  p, li { color: var(--fg); }
+  .muted { color: var(--muted); }
+  .lead { color: var(--muted); font-size: 1.02rem; margin-top: 0; }
+  .panel { background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 18px 22px; margin: 16px 0; }
+  code, kbd { background: #0b1220; border: 1px solid var(--border); border-radius: 4px;
+    padding: 1px 6px; font-family: "Cascadia Code", Consolas, monospace; font-size: 0.88em; color: #cbd5e1; }
+  pre { background: #0b1220; border: 1px solid var(--border); border-radius: 8px;
+    padding: 14px 16px; overflow-x: auto; font-size: 0.85rem;
+    font-family: "Cascadia Code", Consolas, monospace; color: #cbd5e1; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 0.9rem; }
+  th, td { border: 1px solid var(--border); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: #0b1220; color: var(--accent); }
+  .sev { display: inline-block; font-size: 0.72rem; font-weight: 700;
+    padding: 2px 9px; border-radius: 999px; white-space: nowrap; }
+  .sev-crit { background: #450a0a; color: #fca5a5; border: 1px solid #f87171; }
+  .sev-high { background: #4a1d1d; color: #fca5a5; }
+  .sev-mid  { background: #4a3209; color: var(--warn); }
+  .sev-low  { background: #0c4a6e; color: var(--ref); }
+  .sev-info { background: #1f2937; color: var(--muted); }
+  .verdict { font-size: 1.4rem; font-weight: 800; }
+  .pass { color: var(--accent); } .fail { color: var(--danger); }
+  .callout { border-left: 4px solid var(--accent); background: #0b1220;
+    padding: 12px 16px; margin: 14px 0; border-radius: 0 8px 8px 0; }
+  .callout.warn { border-left-color: var(--warn); }
+  .callout.danger { border-left-color: var(--danger); }
+  .callout.ref { border-left-color: var(--ref); }
+  .accent { color: var(--accent); } .ref { color: var(--ref); }
+  .warn { color: var(--warn); } .danger { color: var(--danger); }
+  ul.tight li { margin: 4px 0; }
+  svg { max-width: 100%; height: auto; display: block; margin: 8px auto; }
+  .filepath { color: var(--ref); font-family: "Cascadia Code", Consolas, monospace; font-size: 0.85em; }
+  footer { margin-top: 48px; color: var(--muted); font-size: 0.85rem; border-top: 1px solid var(--border); padding-top: 16px; }
+  .finding-id { font-family: "Cascadia Code", Consolas, monospace; color: var(--warn); font-weight: 700; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>M12 설계 보안 검증 보고서</h1>
+  <p class="lead">대상: 권한 상승(elevated) 컨텍스트 감지 + 상승 세션 스냅샷/설정 저장 보류 설계
+    · <span class="filepath">docs/architecture/m12-design.html</span> (조사·설계 단계, 코드 미구현)</p>
+
+  <div class="panel">
+    <div class="verdict">판정: <span class="pass">PASS (조건부)</span></div>
+    <p style="margin:8px 0 0">치명·높음 발견 <b>0건</b>. 설계의 보안 방향(상승 제거 + 오염 방지 + L-1 유지)은
+      이 프로젝트의 보안 모델과 정합하며, 공격 표면을 <b>줄이는</b> 방향이다.
+      다만 구현 단계에서 반드시 닫아야 할 <b>중간 2건 · 낮음 2건 · 정보 2건</b>이 있다.
+      특히 <span class="finding-id">M12-S-01</span>(whoami 절대경로 해석)과
+      <span class="finding-id">M12-S-02</span>(write 보류 범위)는 구현 시 검증 게이트로 다시 확인해야 한다.</p>
+    <p class="muted" style="margin:8px 0 0">발견 집계 — 치명 0 · 높음 0 · 중간 2 · 낮음 2 · 정보 2.
+      <code>docs/Development/</code> 정책 문서는 부재 → CLAUDE.md 보안 불변식(L-1·H-1·H-2·0600/0700·per-user)을 기준으로 검증.</p>
+  </div>
+
+  <!-- ============================================================= -->
+  <h2>① 자산 · 신뢰 경계 · 데이터 흐름</h2>
+
+  <svg viewBox="0 0 960 320" role="img" aria-label="M12 신뢰 경계와 데이터 흐름">
+    <defs>
+      <marker id="arr" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+        <path d="M0,0 L8,3 L0,6 Z" fill="#94a3b8" />
+      </marker>
+    </defs>
+
+    <!-- OS / 토큰 경계 -->
+    <rect x="20" y="20" width="270" height="120" rx="8" fill="#0b1220" stroke="#475569" stroke-dasharray="5 3"/>
+    <text x="155" y="40" fill="#94a3b8" font-size="11" text-anchor="middle">신뢰 경계 ① OS 토큰 / 권한</text>
+    <rect x="40" y="54" width="230" height="34" rx="6" fill="#1e293b" stroke="#334155"/>
+    <text x="155" y="76" fill="#e2e8f0" font-size="12" text-anchor="middle">whoami.exe (시스템 바이너리)</text>
+    <rect x="40" y="96" width="230" height="34" rx="6" fill="#1e293b" stroke="#334155"/>
+    <text x="155" y="118" fill="#e2e8f0" font-size="12" text-anchor="middle">process.env (APPDATA·PATH·SystemRoot)</text>
+
+    <!-- main 프로세스 -->
+    <rect x="330" y="20" width="290" height="180" rx="8" fill="#0b1220" stroke="#34d399" stroke-dasharray="5 3"/>
+    <text x="475" y="40" fill="#34d399" font-size="11" text-anchor="middle">신뢰 경계 ② main(Node, 전체권한)</text>
+    <rect x="350" y="54" width="250" height="40" rx="6" fill="#0c2a22" stroke="#34d399"/>
+    <text x="475" y="72" fill="#a7f3d0" font-size="12" text-anchor="middle">elevationGuard.detectElevation()</text>
+    <text x="475" y="88" fill="#6ee7b7" font-size="10" text-anchor="middle">safeExec(whoami) · 부작용 0 · 판정만</text>
+    <rect x="350" y="104" width="250" height="40" rx="6" fill="#1e293b" stroke="#334155"/>
+    <text x="475" y="122" fill="#e2e8f0" font-size="12" text-anchor="middle">scanController / serializer</text>
+    <text x="475" y="138" fill="#94a3b8" font-size="10" text-anchor="middle">writeSnapshot (0600) — 보류 가드</text>
+    <rect x="350" y="154" width="250" height="36" rx="6" fill="#1e293b" stroke="#334155"/>
+    <text x="475" y="176" fill="#e2e8f0" font-size="12" text-anchor="middle">uiStateStore / config persist (0600)</text>
+
+    <!-- renderer -->
+    <rect x="660" y="20" width="280" height="120" rx="8" fill="#0b1220" stroke="#38bdf8" stroke-dasharray="5 3"/>
+    <text x="800" y="40" fill="#38bdf8" font-size="11" text-anchor="middle">신뢰 경계 ③ renderer(sandbox)</text>
+    <rect x="680" y="54" width="240" height="34" rx="6" fill="#0c3a4a" stroke="#38bdf8"/>
+    <text x="800" y="76" fill="#bae6fd" font-size="12" text-anchor="middle">preload.onElevationWarning(cb)</text>
+    <rect x="680" y="96" width="240" height="34" rx="6" fill="#1e293b" stroke="#334155"/>
+    <text x="800" y="118" fill="#e2e8f0" font-size="12" text-anchor="middle">경고 배너 (textContent · L-1)</text>
+
+    <!-- 데이터 저장 -->
+    <rect x="330" y="240" width="290" height="56" rx="8" fill="#3f1d1d" stroke="#f87171"/>
+    <text x="475" y="263" fill="#f87171" font-size="12" text-anchor="middle">%APPDATA%\spip (관리자 프로필이면 오염)</text>
+    <text x="475" y="282" fill="#fca5a5" font-size="10" text-anchor="middle">상승 세션 write → 잘못된 프로필에 0600 생성</text>
+
+    <line x1="270" y1="71" x2="348" y2="74" stroke="#94a3b8" marker-end="url(#arr)"/>
+    <line x1="270" y1="113" x2="348" y2="115" stroke="#94a3b8" marker-end="url(#arr)"/>
+    <line x1="600" y1="72" x2="678" y2="71" stroke="#38bdf8" marker-end="url(#arr)"/>
+    <line x1="475" y1="190" x2="475" y2="238" stroke="#f87171" stroke-dasharray="4 3" marker-end="url(#arr)"/>
+    <text x="520" y="222" fill="#fca5a5" font-size="10">← b3가 차단해야 하는 흐름</text>
+  </svg>
+
+  <table>
+    <tr><th>보호 자산</th><th>위협(STRIDE)</th><th>설계의 대응</th></tr>
+    <tr><td>사용자 스캔 데이터(<code>%APPDATA%\spip</code>)</td>
+      <td>변조/정보노출 — 상승 세션이 관리자 프로필에 잘못된 데이터 생성·노출</td>
+      <td>b3: write 보류 + 데이터 위치 불변</td></tr>
+    <tr><td>실행 무결성(whoami 호출)</td>
+      <td>권한상승/위장 — PATH 하이재킹·셸 인터폴레이션으로 위장 바이너리 실행</td>
+      <td>safeExec(절대경로·shell:false·인자배열, H-2)</td></tr>
+    <tr><td>renderer 표면(경고 배너)</td>
+      <td>변조(XSS) — 시스템/스캔 문자열이 innerHTML로 주입</td>
+      <td>textContent 고정 문구(L-1) + 단방향 수신 API</td></tr>
+    <tr><td>per-user 격리(0600/0700)</td>
+      <td>정보노출/권한상승 — 데이터 위치 이동·권한 약화</td>
+      <td>위치·권한 불변(§C), 설치경로 per-user 고정으로 상승 자체 제거(A안)</td></tr>
+  </table>
+
+  <!-- ============================================================= -->
+  <h2>② 발견 항목</h2>
+
+  <table>
+    <tr><th>ID</th><th>취약점 / 항목</th><th>위치</th><th>STRIDE</th><th>심각도</th></tr>
+    <tr><td class="finding-id">M12-S-01</td><td>whoami 절대경로 해석 방식 미확정</td><td>elevationGuard.js(신규)</td><td>위장/권한상승</td><td><span class="sev sev-mid">중간</span></td></tr>
+    <tr><td class="finding-id">M12-S-02</td><td>write 보류 범위가 스냅샷에만 한정 — UI상태·설정 누락 가능</td><td>scanController / uiStateStore / config</td><td>변조/정보노출</td><td><span class="sev sev-mid">중간</span></td></tr>
+    <tr><td class="finding-id">M12-S-03</td><td>감지 휴리스틱(APPDATA 비교)의 false negative — 보수적 기본값 필요</td><td>elevationGuard.js(신규)</td><td>서비스거부(데이터)</td><td><span class="sev sev-low">낮음</span></td></tr>
+    <tr><td class="finding-id">M12-S-04</td><td>경고 배너 문구·preload API의 L-1/단방향 준수 확인</td><td>preload.js / public/app.js</td><td>변조(XSS)</td><td><span class="sev sev-low">낮음</span></td></tr>
+    <tr><td class="finding-id">M12-S-05</td><td>per-user 격리·위치 불변 결정 — 보안상 긍정(표면 감소)</td><td>electron-builder.yml / paths.js</td><td>—</td><td><span class="sev sev-info">정보</span></td></tr>
+    <tr><td class="finding-id">M12-S-06</td><td>whoami 출력 파싱은 신뢰 경계 — 실패 시 안전 분기</td><td>elevationGuard.js(신규)</td><td>정보노출/DoS</td><td><span class="sev sev-info">정보</span></td></tr>
+  </table>
+
+  <!-- ===== M12-S-01 ===== -->
+  <h3><span class="finding-id">M12-S-01</span> whoami 절대경로 해석 — <span class="sev sev-mid">중간</span></h3>
+  <p><b>위협(STRIDE):</b> 위장(Spoofing)·권한상승. <b>악용 시나리오:</b> elevationGuard가 상승 판정에
+    <code>whoami /groups</code>를 실행할 때, 실행 파일을 <b>PATH 검색</b>으로 찾으면(<code>resolveBin('whoami')</code>)
+    공격자가 부분신뢰 cwd나 사용자 쓰기 가능한 PATH 디렉터리에 <code>whoami.exe</code>를 심어 위장 바이너리가
+    선택될 수 있다. 또한 <code>%SystemRoot%</code> 환경변수로 경로를 조립하면 환경변수 변조 표면이 생긴다.</p>
+  <div class="callout ref">
+    <b>현행 safeExec 분석(증거):</b> <span class="filepath">lib/common/safeExec.js</span>의
+    <code>resolveBin</code>은 cwd(<code>.</code>)·빈 항목을 PATH 탐색에서 제외하고 <code>.exe</code>만 허용하며,
+    <code>safeExec</code>는 절대경로·<code>shell:false</code>·문자열 인자배열을 강제한다 — H-2 불변식은 이미 견고하다.
+    문제는 <b>whoami가 신뢰 경로에서 해석되도록 강제하는지</b>다. <code>resolveBin('whoami')</code>는 사용자
+    PATH 전체를 순회하므로, PATH 앞쪽에 비신뢰 디렉터리가 있으면 위장 바이너리를 집을 여지가 이론상 존재한다
+    (System32보다 앞선 사용자 PATH 항목).
+  </div>
+  <p><b>권고 조치(구현 단계):</b></p>
+  <ul class="tight">
+    <li>whoami를 PATH 검색이 아니라 <b>고정 절대경로로 직접 검증</b>한다.
+      <code>path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'whoami.exe')</code>를 만들되,
+      <code>resolveBin(absPath)</code>(절대경로 분기 — 확장자·존재 검증만 수행)를 거쳐 safeExec에 넘긴다.
+      이러면 PATH 순회 자체가 일어나지 않아 PATH 하이재킹 표면이 0이 된다.</li>
+    <li><code>process.env.SystemRoot</code>를 신뢰하기 어려우면 그대로 <code>C:\Windows</code> 폴백을 두되,
+      파일이 없으면 <b>판정 실패가 아니라 보수적 분기</b>(M12-S-03 참조)로 처리한다.</li>
+    <li>인자는 <code>['/groups']</code> 고정 배열 — 사용자/스캔 입력을 절대 인자로 넣지 않는다(이미 설계 의도와 일치).</li>
+    <li>호출은 설계대로 <b>기동 시 1회·timeout 고정</b>으로 제한(safeExec 기본 5s·maxBuffer 1MB가 자동 적용).</li>
+  </ul>
+  <p class="muted">판정: 설계 문구("절대경로 <code>C:\Windows\System32\whoami.exe</code>·shell:false")는
+    올바른 방향이다. 다만 <b>"resolveBin('whoami') PATH 검색"이 아니라 고정 절대경로 검증"</b>임을 구현 계약으로 못박아야
+    중간 등급에서 안전으로 내려간다. 1차 휴리스틱(APPDATA 비교)만으로도 대부분 커버되어 whoami는 보강용이라 실위험은 낮으나,
+    호출 시 표면을 0으로 닫는 것이 정석.</p>
+
+  <!-- ===== M12-S-02 ===== -->
+  <h3><span class="finding-id">M12-S-02</span> write 보류 범위 — <span class="sev sev-mid">중간</span></h3>
+  <p><b>위협(STRIDE):</b> 변조·정보노출. <b>악용/오작동 시나리오:</b> 설계 §3의 변경 지점은 write 보류를
+    <span class="filepath">scanController.js</span>의 <b>스냅샷 저장(<code>serializer.writeSnapshot</code>)</b> 한 곳에 둔다.
+    그러나 상승 세션에서 사용자가 즐겨찾기·정렬·테마·할 일을 만지거나 설정을 바꾸면
+    <span class="filepath">uiStateStore.js</span>·<span class="filepath">config.js</span>의 <code>persistConfigKeys</code>가
+    <b>관리자 프로필에 새 0600 파일을 생성</b>한다. 이는 설계 목표("관리자 프로필 오염 방지")의 부분 누수다.</p>
+  <div class="callout warn">
+    <b>증거:</b> <span class="filepath">lib/common/uiStateStore.js</span>(0600 원자적 쓰기),
+    <span class="filepath">lib/common/config.js</span> <code>persistConfigKeys</code>(0600 원자적 쓰기)는
+    scanController와 무관하게 IPC 핸들러에서 직접 디스크에 쓴다. 상승 플래그가 scanController 저장 가드에만
+    걸리면 이 경로들은 보류 대상에서 빠진다. (참고: <span class="filepath">stateWatcher.js</span>는 메모리·renderer
+    push만 하고 디스크 write를 하지 않으므로 보류 대상 아님 — 양호.)
+  </div>
+  <p><b>권고 조치:</b></p>
+  <ul class="tight">
+    <li>상승 플래그를 <b>중앙 1지점</b>(예: ctx 또는 elevationGuard 모듈)에서 보관하고, <b>모든 영속 write 진입부</b>가
+      이를 조회하도록 한다: ① <code>serializer.writeSnapshot</code> 호출부, ② <code>uiStateStore</code> write,
+      ③ <code>config.persistConfigKeys</code>(메일 계정 비밀번호 포함 — 정보노출 측면에서 가장 민감).</li>
+    <li>대안(더 단순·안전): 상승 세션이면 <b>UI를 읽기 전용으로 비활성화</b>(재스캔·즐겨찾기·설정 저장 버튼 disable) +
+      배너 안내. 그러면 write 진입 자체가 줄어 가드 누락 리스크가 감소한다.</li>
+    <li>구현 후 테스트: 상승 플래그 set 상태에서 <b>스냅샷·UI상태·설정 write가 모두 스킵</b>되는지 단위 검증
+      (설계 §5의 M12-2를 세 경로로 확장).</li>
+  </ul>
+  <p class="muted">판정: "기존 데이터 무손상"은 충족된다 — write를 보류하면 디스크를 건드리지 않으므로 원래 사용자 프로필의
+    데이터는 그대로 보존된다(읽기 허용·위치 불변). 단 <b>오염 방지의 완전성</b>을 위해 가드 범위를 세 write 경로로 넓혀야 한다.</p>
+
+  <!-- ===== M12-S-03 ===== -->
+  <h3><span class="finding-id">M12-S-03</span> 감지 false negative — 보수적 기본값 — <span class="sev sev-low">낮음</span></h3>
+  <p><b>위협:</b> 서비스거부(데이터 가용성). <b>시나리오:</b> 1차 휴리스틱(<code>process.env.APPDATA</code> vs
+    <code>os.homedir()</code> 기대값)은 환경에 따라 빗나갈 수 있다(로밍 프로필·UAC 가상화·도메인 계정 등).
+    whoami 호출이 실패(파일 부재·timeout·파싱 실패)하면 감지 로직이 무엇을 반환하느냐가 중요하다.</p>
+  <p><b>권고 조치:</b> 감지의 <b>안전 기본값을 명시</b>한다. 핵심 원칙은
+    <b>"감지 실패가 보안 약화로 이어지지 않게"</b>다. 다만 M12에서 "상승 의심 시 write 보류"는 가용성(빈 화면)을
+    희생하므로, false positive(정상인데 상승 판정)는 데이터를 안 망치되 사용성만 떨어뜨리고, false negative(상승인데
+    정상 판정)는 오염을 허용한다. 따라서:</p>
+  <ul class="tight">
+    <li>두 신호(APPDATA 불일치 <b>OR</b> whoami High ML) 중 <b>하나라도 상승을 가리키면 보류</b>(보수적 OR 결합).</li>
+    <li>whoami 호출 자체 실패 시 — APPDATA 휴리스틱 결과를 단독 채택(추가 위험 없음). 둘 다 불확실하면
+      <b>비상승(정상 흐름)으로 폴백</b>해 정상 사용자의 가용성을 보장한다(false negative보다 정상 사용자 피해가 더 흔하므로).
+      이 트레이드오프를 설계 문서에 1줄로 명시 권장.</li>
+    <li>감지는 설계대로 <b>부작용 0·판정만</b> 유지 — 어떤 새 권한·신뢰 경계도 만들지 않는다(설계 충족, 양호).</li>
+  </ul>
+
+  <!-- ===== M12-S-04 ===== -->
+  <h3><span class="finding-id">M12-S-04</span> 경고 배너 L-1 · preload 단방향 — <span class="sev sev-low">낮음</span></h3>
+  <p><b>위협:</b> 변조(XSS). <b>시나리오:</b> 경고 배너가 동적 문자열(프로필명·실제 APPDATA 경로 등 시스템 문자열)을
+    <code>innerHTML</code>로 렌더하면 L-1 위반·정보노출이 된다.</p>
+  <div class="callout ref">
+    <b>증거(설계는 올바른 방향):</b> 설계 §3·§6은 "고정 문구 textContent만"을 명시하고, preload는 기존
+    <code>onScanProgress</code>/<code>onUpdateStatus</code>와 동일한 <b>단방향 on() 중계 패턴</b>(콜백만, ipcRenderer 원본 미노출)을
+    따른다 — <span class="filepath">electron/preload.js</span> 기존 패턴과 일치해 안전하다.
+  </div>
+  <p><b>권고 조치(구현 게이트):</b></p>
+  <ul class="tight">
+    <li>배너는 <b>하드코딩 고정 문구</b>("관리자 권한으로 실행됨 — 일반 실행으로 다시 여세요")만 표시.
+      <b>실제 APPDATA 경로·프로필명·whoami 출력을 화면에 절대 넣지 않는다</b>(정보노출 차단 + L-1 단순화).
+      디버깅 정보가 필요하면 main 로그에만(logger는 clampString 사용).</li>
+    <li>preload <code>onElevationWarning(cb)</code>은 payload를 받더라도 신호용(boolean/없음)으로 최소화.
+      만약 reason을 전달하면 renderer는 그것을 <b>고정 메시지 매핑</b>으로만 쓰고 직접 렌더하지 않는다.</li>
+    <li>채널명 하드코딩(<code>spip:elevation:warning</code>) — preload allowlist 원칙 준수.</li>
+  </ul>
+
+  <!-- ===== M12-S-05 ===== -->
+  <h3><span class="finding-id">M12-S-05</span> per-user 격리·위치 불변 — <span class="sev sev-info">정보(긍정)</span></h3>
+  <p><code>allowToChangeInstallationDirectory: false</code> + <code>perMachine: false</code>는 설치를 per-user
+    경로(<code>%LOCALAPPDATA%\Programs</code>)로 고정해 <b>UAC 상승 유발 자체를 제거</b>한다. 보안상 명백히 긍정이다:</p>
+  <ul class="tight">
+    <li>상승 흐름이 사라지면 관리자 토큰으로 앱이 뜰 표면이 줄어 <b>공격·오염 표면 감소</b>.</li>
+    <li>데이터 위치(<code>%APPDATA%\spip</code>)·권한(0600/0700)·per-user 격리가 <b>전부 불변</b>(설계 §C, 증거:
+      <span class="filepath">paths.js</span>·<span class="filepath">serializer.js</span> 미변경).
+      데이터 이동 스크립트를 만들지 않는 결정도 옳다(이동은 권한·경합 리스크를 새로 만든다).</li>
+    <li>설치 위치 선택 불가의 부정적 보안 영향 없음 — 로컬 단일사용자 도구라 기능 손실 미미.</li>
+  </ul>
+  <p class="muted">유의: 이미 보호경로에 per-machine으로 설치된 기존 사용자는 A안만으로 자동 교정되지 않으므로
+    b3 안전망이 반드시 함께 적용되어야 한다(설계 §4가 이미 인지·반영).</p>
+
+  <!-- ===== M12-S-06 ===== -->
+  <h3><span class="finding-id">M12-S-06</span> whoami 출력 파싱 = 신뢰 경계 — <span class="sev sev-info">정보</span></h3>
+  <p>whoami stdout은 OS가 생성하지만 파싱 코드는 <b>방어적</b>이어야 한다. <code>S-1-16-12288</code>(High Mandatory Level)
+    부분 문자열 포함 여부 검사는 단순·안전하다. 권고:</p>
+  <ul class="tight">
+    <li>stdout 부재·빈 문자열·timeout(<code>timedOut:true</code>)·non-zero exit는 <b>"상승 미확인"</b>으로 처리하고
+      M12-S-03의 폴백 규칙을 따른다.</li>
+    <li>safeExec의 maxBuffer(1MB)·timeout(5s)·SIGKILL가 자동 적용되므로 출력 폭주·hang DoS는 이미 차단됨(양호).</li>
+    <li>파싱은 정규식/indexOf 단순 매칭만 — 동적 로직·eval 금지(자명하나 명시).</li>
+  </ul>
+
+  <!-- ============================================================= -->
+  <h2>③ 점검 항목별 평가 요약</h2>
+  <table>
+    <tr><th>요청 점검</th><th>평가</th><th>근거</th></tr>
+    <tr><td>1. whoami safeExec(H-2)</td><td><span class="warn">조건부 양호</span></td>
+      <td>safeExec는 절대경로·shell:false·인자배열 강제로 견고. 단 <b>whoami를 PATH 검색이 아닌 고정 절대경로 검증</b>으로 구현해야 PATH 하이재킹 0(M12-S-01).</td></tr>
+    <tr><td>2. 상승 감지의 안전성</td><td><span class="accent">양호</span></td>
+      <td>감지는 부작용 0·판정만 — 새 신뢰 경계·권한 생성 없음. 감지 실패의 보수적 기본값만 명시하면 됨(M12-S-03).</td></tr>
+    <tr><td>3. 데이터 오염 방지 효과</td><td><span class="warn">부분 양호</span></td>
+      <td>write 보류는 기존 데이터 무손상·위치 불변을 보장(읽기 허용). 단 가드를 스냅샷 외 UI상태·설정 write로 확장해야 완전(M12-S-02).</td></tr>
+    <tr><td>4. 경고 배너 L-1</td><td><span class="accent">양호</span></td>
+      <td>고정 문구 textContent + 기존 단방향 on() 패턴 재사용. 시스템 문자열을 배너에 넣지 않는 것만 게이트로 확인(M12-S-04).</td></tr>
+    <tr><td>5. per-user 격리·위치 불변</td><td><span class="accent">양호(긍정)</span></td>
+      <td>상승 제거로 표면 감소. 0600/0700·per-user·위치 전부 불변(M12-S-05).</td></tr>
+  </table>
+
+  <div class="callout">
+    <b>구현 단계 보안 게이트(요약):</b>
+    <ul class="tight" style="margin:8px 0 0">
+      <li>① whoami = <code>%SystemRoot%\System32\whoami.exe</code> 고정 절대경로 검증(PATH 검색 금지).</li>
+      <li>② write 보류 가드 = 스냅샷 + UI상태 + 설정(persistConfigKeys) 세 경로 전부.</li>
+      <li>③ 감지 실패 폴백 규칙 명시(보수적 OR + whoami 실패 시 휴리스틱 단독, 둘 다 불확실 시 정상 폴백).</li>
+      <li>④ 배너는 고정 문구 textContent만, 시스템 경로·프로필명 비노출.</li>
+      <li>⑤ 단위 테스트: 감지 판정(M12-1) + 세 write 보류(M12-2 확장) + 비상승 회귀 불변(M12-3) + whoami High ML 파싱.</li>
+    </ul>
+  </div>
+
+  <h2>④ 확인 필요(위험 수용 결정)</h2>
+  <ul class="tight">
+    <li>M12-S-03의 트레이드오프(감지 둘 다 불확실 시 <b>정상 폴백</b> → 드물게 오염 허용 vs 정상 사용자 가용성 보장)는
+      제품 결정이다. 본 검증은 <b>정상 폴백</b>을 권장한다(상승은 예외적·b3는 안전망일 뿐, 정상 사용자 가용성이 우선).
+      치명/높음이 아니므로 별도 사용자 질의 없이 PM 판단으로 진행 가능.</li>
+  </ul>
+
+  <footer>
+    M12 설계 보안 검증 · Project-SPIP · 보안 전담 검증자 · 코드 미수정(검증·시정 항목만 산출).
+    판정 PASS(조건부) — 치명·높음 0. 구현 단계에서 ③의 게이트 5항을 닫을 것.
+  </footer>
+
+</div>
+</body>
+</html>

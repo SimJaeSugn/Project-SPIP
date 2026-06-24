@@ -25,6 +25,7 @@ const pathGuard = require('../../lib/common/pathGuard');
 const { resolveBin, safeExec } = require('../../lib/common/safeExec');
 const driveEnum = require('../../lib/scan/driveEnum');
 const toolRegistry = require('../../lib/common/toolRegistry');
+const elevationState = require('../../lib/common/elevationState');
 
 // id별 in-flight 상한(M-4) — 같은 프로젝트 중복 열기 폭주 차단(actionHandlers와 동일).
 const MAX_INFLIGHT_PER_ID = 2;
@@ -163,8 +164,12 @@ async function openPath(args, ctx) {
 /**
  * spip:rescan — 재스캔 트리거. 게이트·락·start (actionHandlers.rescan 이식).
  * 경로는 config에서만 가져온다(인자로 경로 안 받음 — H-1 정합).
+ * [M12 b3] 진입부(acquire/start 이전)에서 중앙 elevated 플래그면 { ok:false, code:'ELEVATED' }
+ *   조기 반환 — 상승 세션에서는 락 획득·스캔 시작·write 를 일절 하지 않는다(관리자 프로필 오염 방지·
+ *   명확한 UX). ctx.elevationState 주입 가능(테스트).
+ *
  * @param {object} args { withSize?, allDrives? }
- * @param {object} ctx { scanController, config, store, cachePath, logger, driveEnum?, sendProgress? }
+ * @param {object} ctx { scanController, config, store, cachePath, logger, driveEnum?, sendProgress?, elevationState? }
  * @returns {{ok:true,code:'SCAN_STARTED',scanId,startedAt} | {ok:false,code:string,scanId?}}
  */
 function rescan(args, ctx) {
@@ -172,6 +177,12 @@ function rescan(args, ctx) {
   const config = ctx.config || {};
   const logger = ctx.logger;
   const de = (ctx && ctx.driveEnum) || driveEnum;
+  const elev = (ctx && ctx.elevationState) || elevationState;
+
+  // [M12 b3] 상승 세션 조기거부 — acquire()/start() 이전. 락·스캔·write 일절 안 함.
+  if (elev.isElevated()) {
+    return { ok: false, code: 'ELEVATED' };
+  }
 
   if (!controller || typeof controller.acquire !== 'function') {
     return { ok: false, code: 'INTERNAL' };

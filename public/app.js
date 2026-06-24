@@ -4914,6 +4914,43 @@ function initBrowser() {
     store.update.unsubscribe = null;
   }
 
+  /* =====================================================================
+   * [M12 b3] 권한 상승 경고 배너 — main(elevationGuard)이 보내는 'spip:elevation:warning'
+   *   단방향 push 를 받아 상단 고정 배너를 1회 표시한다(textContent 만, L-1). 실제 APPDATA 경로·
+   *   프로필명·whoami 출력은 절대 표시하지 않는다(정보노출 차단). 부재(웹/테스트) graceful.
+   * ===================================================================== */
+  var _elevationUnsub = null;
+  var _elevationBannerEl = null;
+  // 고정 문구(L-1). 데이터 의존 0 — 어떤 동적값도 섞지 않는다.
+  var ELEVATION_BANNER_TEXT = '관리자 권한으로 실행 중입니다. 데이터가 다르게 보일 수 있어 변경 저장이 일시 중단됩니다. 일반 권한으로 다시 실행하세요.';
+  function showElevationBanner() {
+    if (_elevationBannerEl) return; // 1회만
+    if (typeof document === 'undefined' || !document.body) return;
+    var banner = el('div', {
+      cls: 'elevation-banner',
+      attrs: { role: 'alert', 'aria-live': 'assertive' },
+      children: [
+        el('span', { cls: 'elevation-banner__icon', text: '⚠', attrs: { 'aria-hidden': 'true' } }),
+        el('span', { cls: 'elevation-banner__text', text: ELEVATION_BANNER_TEXT }), // L-1: 고정 문구만
+      ],
+    });
+    _elevationBannerEl = banner;
+    document.body.insertBefore(banner, document.body.firstChild);
+    try { document.body.classList.add('has-elevation-banner'); } catch (_) { /* ignore */ }
+  }
+  function subscribeElevationWarning() {
+    unsubscribeElevationWarning();
+    if (!hasBridge() || typeof spip.onElevationWarning !== 'function') return; // graceful
+    var unsub = spip.onElevationWarning(function () { showElevationBanner(); });
+    _elevationUnsub = (typeof unsub === 'function') ? unsub : null;
+  }
+  function unsubscribeElevationWarning() {
+    if (typeof _elevationUnsub === 'function') {
+      try { _elevationUnsub(); } catch (_) { /* ignore */ }
+    }
+    _elevationUnsub = null;
+  }
+
   /** 메뉴 '새로고침' — 진행 중 스캔이 없을 때 대시보드 데이터 재조회(getProjects/getStats). */
   async function refreshDashboard() {
     if (store.state.view === 'scanning') return; // 스캔 중엔 push 가 갱신
@@ -6093,6 +6130,8 @@ function initBrowser() {
   }
   // 자동 업데이트 진행 구독(앱 1회). 부재 시 graceful — 내부 가드.
   subscribeUpdateStatus();
+  // [M12 b3] 권한 상승 경고 구독(앱 1회). 비상승·웹·테스트면 push 가 없어 배너 미표시(graceful).
+  subscribeElevationWarning();
   // 테마 즉시 적용(시스템 기본) + 시스템 테마 변경 구독. ui-state 적재 시 사용자 설정으로 갱신.
   applyTheme();
   subscribeSystemTheme();
@@ -6106,6 +6145,7 @@ function initBrowser() {
     stopMailAutoRefresh();
     stopCommitAutoRefresh(); // [R-31] 커밋 폴링 타이머 정리
     unsubscribeUpdateStatus();
+    unsubscribeElevationWarning(); // [M12 b3] 상승 경고 구독 해제
     RG.coalesce.cancel(); // [D-2] 잔여 디바운스 타이머 정리(unload 중 잉여 render 방지)
     stopOrbit(); // 궤도 캔버스 RAF·리스너 정리
   }

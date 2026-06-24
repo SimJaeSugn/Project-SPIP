@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>M12 설계 — 자동 업데이트 후 스캔 데이터 미표시 버그</title>
+<style>
+  :root {
+    --bg: #0f172a; --panel: #1e293b; --fg: #e2e8f0; --muted: #94a3b8;
+    --accent: #34d399; --ref: #38bdf8; --warn: #fbbf24; --danger: #f87171;
+    --border: #334155;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font-family: "Segoe UI", "Malgun Gothic", system-ui, sans-serif;
+    line-height: 1.65; padding: 32px 0;
+  }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 0 24px; }
+  h1 { font-size: 1.9rem; margin: 0 0 4px; }
+  h2 {
+    font-size: 1.35rem; margin: 40px 0 12px; padding-bottom: 6px;
+    border-bottom: 1px solid var(--border); color: var(--accent);
+  }
+  h3 { font-size: 1.08rem; margin: 24px 0 8px; color: var(--ref); }
+  p, li { color: var(--fg); }
+  .muted { color: var(--muted); }
+  .lead { color: var(--muted); font-size: 1.02rem; margin-top: 0; }
+  .panel {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 18px 22px; margin: 16px 0;
+  }
+  code, kbd {
+    background: #0b1220; border: 1px solid var(--border); border-radius: 4px;
+    padding: 1px 6px; font-family: "Cascadia Code", Consolas, monospace;
+    font-size: 0.88em; color: #cbd5e1;
+  }
+  pre {
+    background: #0b1220; border: 1px solid var(--border); border-radius: 8px;
+    padding: 14px 16px; overflow-x: auto; font-size: 0.85rem;
+    font-family: "Cascadia Code", Consolas, monospace; color: #cbd5e1;
+  }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 0.92rem; }
+  th, td { border: 1px solid var(--border); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: #0b1220; color: var(--accent); }
+  .tag {
+    display: inline-block; font-size: 0.72rem; font-weight: 600;
+    padding: 2px 8px; border-radius: 999px; margin-right: 6px; vertical-align: middle;
+  }
+  .tag-conf { background: #064e3b; color: var(--accent); }
+  .tag-warn { background: #4a3209; color: var(--warn); }
+  .tag-rec  { background: #0c4a6e; color: var(--ref); }
+  .callout {
+    border-left: 4px solid var(--accent); background: #0b1220;
+    padding: 12px 16px; margin: 14px 0; border-radius: 0 8px 8px 0;
+  }
+  .callout.warn { border-left-color: var(--warn); }
+  .callout.danger { border-left-color: var(--danger); }
+  .callout.ref { border-left-color: var(--ref); }
+  .accent { color: var(--accent); }
+  .ref { color: var(--ref); }
+  .warn { color: var(--warn); }
+  .danger { color: var(--danger); }
+  ul.tight li { margin: 3px 0; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 760px) { .grid2 { grid-template-columns: 1fr; } }
+  svg { max-width: 100%; height: auto; display: block; margin: 8px auto; }
+  .filepath { color: var(--ref); font-family: "Cascadia Code", Consolas, monospace; font-size: 0.85em; }
+  footer { margin-top: 48px; color: var(--muted); font-size: 0.85rem; border-top: 1px solid var(--border); padding-top: 16px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>M12 — 자동 업데이트 후 스캔 데이터 미표시 버그</h1>
+  <p class="lead">근본 원인 조사 · 최소·안전 수정안 설계 (조사/설계 단계, 코드 미수정)</p>
+
+  <div class="panel">
+    <strong>대상</strong> Project-SPIP (Electron 데스크톱 앱) · electron-builder 24.13.3 + electron-updater 6.8.9 · Windows NSIS+portable · CommonJS<br />
+    <strong>증상</strong> 앱 내 자동 업데이트(electron-updater) 직후에만 스캔 목록이 빈다. 일반 재시작은 정상이며, 업데이트 후 빈 앱을 완전히 종료하고 다시 열면 데이터가 돌아온다(삭제 아님).<br />
+    <strong>결론(요약)</strong> <span class="tag tag-conf">원인 확정</span> 업데이트 설치가 <b>관리자 권한(elevated)</b>으로 진행된 케이스에서, NSIS의 설치 후 재실행이 <b>관리자 권한 컨텍스트</b>로 앱을 띄워 그 세션의 <code>%APPDATA%</code>가 관리자 프로필을 가리킨다 → 빈 <code>%APPDATA%\spip</code> → "초기화"처럼 보임. 다음 일반 실행은 원래 사용자라 데이터 복귀.
+  </div>
+
+  <!-- ============================================================= -->
+  <h2>① 근본 원인 조사 — 근거</h2>
+
+  <h3>1.1 데이터 경로는 전적으로 환경변수에 종속</h3>
+  <p>스캔 스냅샷·설정·UI 상태는 <span class="filepath">lib/common/paths.js</span>의 <code>appDir()</code>가 결정한다. Windows에서:</p>
+  <pre>base = process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming');
+return path.join(base, 'spip');   // → %APPDATA%\spip</pre>
+  <p><span class="filepath">lib/server/snapshotStore.js</span>가 기동 시 <code>paths.cachePath()</code>(= <code>&lt;appDir&gt;/cache/projects.json</code>)를 1회 읽어 메모리에 적재하고, 렌더러 <span class="filepath">public/app.js</span> <code>load()</code>가 <code>getProjects</code>로 그 스냅샷을 복원한다. <b>버전 게이팅·마이그레이션·캐시 삭제 로직은 어디에도 없다.</b> 즉 데이터가 사라지는 게 아니라, 읽는 <code>%APPDATA%</code>가 <b>다른 프로필</b>을 가리키면 빈 폴더로 보인다.</p>
+
+  <div class="callout danger">
+    <b>핵심:</b> <code>os.homedir()</code>·<code>process.env.APPDATA</code>·Electron <code>app.getPath('appData')</code>는 모두 <b>현재 프로세스를 띄운 사용자 토큰</b>을 따른다. 앱이 관리자(Administrator) 토큰으로 뜨면 <code>%APPDATA%</code> = <code>C:\Users\<i>Administrator</i>\AppData\Roaming</code> (또는 UAC 가상화/다른 프로필) → 거기엔 <code>spip\cache\projects.json</code>이 없다.
+  </div>
+
+  <h3>1.2 electron-updater의 재실행 경로 (소스 확인)</h3>
+  <p><span class="filepath">electron/autoUpdate.js</span>는 <code>quitAndInstall(false, true)</code>(isSilent=false, isForceRunAfter=true)를 호출한다. node_modules 소스 추적 결과:</p>
+
+  <p><b>① <span class="filepath">electron-updater/out/BaseUpdater.js</span> — <code>quitAndInstall</code></b></p>
+  <pre>quitAndInstall(isSilent = false, isForceRunAfter = false) {
+  // 비-사일런트면 isForceRunAfter 대신 this.autoRunAppAfterInstall(기본 true) 사용
+  const isInstalled = this.install(isSilent, isSilent ? isForceRunAfter : this.autoRunAppAfterInstall);
+  ...
+}</pre>
+  <p class="muted">→ 우리 호출은 <code>install(false, true)</code>와 동치(autoRunAppAfterInstall 기본 true). 설치 후 앱을 재실행한다.</p>
+
+  <p><b>② <span class="filepath">electron-updater/out/NsisUpdater.js</span> — <code>doInstall</code></b></p>
+  <pre>const args = ["--updated"];
+if (options.isSilent) args.push("/S");          // ← isSilent=false 이므로 /S 없음
+if (options.isForceRunAfter) args.push("--force-run");
+...
+if (options.isAdminRightsRequired) {            // latest.yml의 isAdminRightsRequired(기본 false)
+  callUsingElevation();  // process.resourcesPath/elevate.exe 로 인스톨러 실행
+  return true;
+}
+this.spawnLog(installerPath, args)...           // 평소엔 비-elevated 로 spawn</pre>
+  <div class="callout ref">
+    <b>관찰 1.</b> 인스톨러는 <b>비-사일런트(<code>/S</code> 없음) + <code>--force-run</code></b>로 실행된다.<br />
+    <b>관찰 2.</b> 우리 빌드는 <code>publish</code>에 <code>isAdminRightsRequired</code>를 넣지 않으므로 electron-updater 단계에서 <code>elevate.exe</code>는 쓰이지 않는다 — 인스톨러는 <b>현재(비-상승) 사용자 토큰</b>으로 시작한다.
+  </div>
+
+  <h3>1.3 NSIS 인스톨러 내부의 권한 상승 & 재실행 (소스 확인)</h3>
+  <p>oneClick:false 이므로 <b>assisted installer</b> 경로다(<span class="filepath">app-builder-lib/templates/nsis/installer.nsi</span>):</p>
+  <pre>!ifdef INSTALL_MODE_PER_ALL_USERS   ; ← perMachine:false 라 이 심볼 미정의
+  RequestExecutionLevel admin
+!else
+  RequestExecutionLevel user        ; ← 우리 케이스: 인스톨러 자체는 user 레벨로 시작
+!endif</pre>
+
+  <p><b>재실행(launch-after-install) 경로 — <span class="filepath">assistedInstaller.nsh</span> &amp; <span class="filepath">installSection.nsh</span></b></p>
+  <p>비-사일런트 assisted 인스톨러는 두 가지 재실행 지점이 있다:</p>
+  <ul class="tight">
+    <li><b>완료 페이지(MUI_PAGE_FINISH) "Run app" 체크박스</b> → <code>StartApp</code> 함수가 <code>${StdUtils.ExecShellAsUser}</code>로 실행. <span class="filepath">StdUtils.nsh</span> 주석: <i>"ShellExecute() as NON-elevated user from elevated installer"</i> — explorer.exe 경유 <b>de-elevation</b>.</li>
+    <li><b><span class="filepath">installSection.nsh</span> doStartApp</b> → <code>${if} ${isForceRun} ${andIf} ${Silent}</code> 조건. 우리는 <b>비-사일런트</b>라 이 분기는 <b>실행 안 됨</b>.</li>
+  </ul>
+
+  <div class="callout">
+    <b>de-elevation이 정상 동작하는 경우:</b> 사용자가 완료 페이지까지 보고 "실행"으로 떴다면 <code>ExecShellAsUser</code>가 원래 사용자로 de-elevate → <code>%APPDATA%</code> 정상 → 데이터 정상. <span class="muted">(그래서 항상 재현되지 않고 "자동 업데이트 직후에만" 나타난다.)</span>
+  </div>
+
+  <h3>1.4 그렇다면 언제 elevated 컨텍스트로 뜨나 — 가설 검증 결과</h3>
+  <p>인스톨러가 <code>RequestExecutionLevel user</code>로 시작하더라도, 다음 경로에서 <b>UAC 상승</b>이 일어난다(<span class="filepath">multiUserUi.nsh</span>, <span class="filepath">multiUser.nsh</span>, <span class="filepath">installer.nsi</span>):</p>
+  <ul class="tight">
+    <li><b>기존 설치가 per-machine(HKLM)인 경우:</b> <code>initMultiUser</code>가 HKLM <code>InstallLocation</code>을 읽어 <code>$hasPerMachineInstallation=1</code> → 설치 모드 "all"로 강제 → <code>UAC_RunElevated</code>로 <b>상승된 inner 인스턴스</b> 생성. 사용자가 과거에 "모든 사용자용" 또는 <code>allowToChangeInstallationDirectory:true</code>로 <b>Program Files 등 보호 경로</b>에 설치했다면 이 경로를 탄다.</li>
+    <li><b>보호 경로 쓰기 실패:</b> 디렉터리 변경으로 보호 경로에 설치 시도 시 쓰기 권한이 필요해 상승 흐름으로 이어진다.</li>
+  </ul>
+
+  <div class="callout danger">
+    <b>버그가 트리거되는 정확한 조합:</b> 상승된 inner 인스턴스(Administrator 토큰)에서 설치가 끝난 뒤, 그 인스턴스가 앱을 재실행할 때 <b><code>ExecShellAsUser</code>를 통과하지 못하면</b>(완료 페이지를 건너뛰는 흐름이거나, 상승 컨텍스트에서 launch가 일어나는 흐름이면) 앱은 <b>관리자 토큰</b>으로 뜬다. 그 세션의 <code>%APPDATA%</code>는 관리자 프로필 → <code>%APPDATA%\spip</code> 빈 폴더 → 빈 목록.
+  </div>
+
+  <h3>1.5 증상과의 정합성 (가설 확정 근거)</h3>
+  <table>
+    <tr><th>관찰된 증상</th><th>가설로 설명</th></tr>
+    <tr><td>자동 업데이트 직후에만 빔</td><td>업데이트 설치가 상승 컨텍스트를 거치고, 재실행이 그 토큰을 상속할 때만 발생. 일반 실행은 항상 로그인 사용자 토큰.</td></tr>
+    <tr><td>일반 재시작은 정상</td><td>바탕화면/시작메뉴 단축아이콘 실행은 로그인 사용자 토큰 → 원래 <code>%APPDATA%\spip</code> 읽음.</td></tr>
+    <tr><td>완전 종료 후 다시 열면 데이터 복귀</td><td>데이터는 원래 사용자 프로필에 그대로 있고 <b>삭제되지 않았다</b>. 단지 직전 세션이 잘못된 프로필을 읽었을 뿐.</td></tr>
+    <tr><td>마이그레이션·캐시삭제 코드 없음에도 발생</td><td>코드가 데이터를 지우는 게 아니라, <b>읽는 경로(프로필)가 바뀐 것</b>이라는 가설과 완전 정합.</td></tr>
+  </table>
+
+  <div class="callout warn">
+    <b>확정 vs 잔여 불확실성.</b> 메커니즘(상승 컨텍스트 → <code>%APPDATA%</code> 프로필 분기 → 빈 spip)은 소스 근거로 <b>확정</b>이다. 다만 "사용자의 실제 설치가 per-machine/보호경로였는지"는 <b>해당 PC의 레지스트리·설치 경로 1회 확인</b>이 필요하다. 검증 방법은 §⑤에 둔다. 이 확인은 원인 확정에 영향을 주지 않으며(B안의 방어는 원인과 무관하게 안전망), A안 적용 여부 판단에만 쓰인다.
+  </div>
+
+  <!-- ============================================================= -->
+  <h2>② A · B · C 설계 결정과 트레이드오프</h2>
+
+  <svg viewBox="0 0 960 300" role="img" aria-label="원인과 두 방어선 흐름도">
+    <defs>
+      <marker id="arr" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+        <path d="M0,0 L8,3 L0,6 Z" fill="#94a3b8" />
+      </marker>
+    </defs>
+    <rect x="20" y="20" width="200" height="60" rx="8" fill="#1e293b" stroke="#334155"/>
+    <text x="120" y="45" fill="#e2e8f0" font-size="13" text-anchor="middle">자동 업데이트</text>
+    <text x="120" y="64" fill="#94a3b8" font-size="11" text-anchor="middle">quitAndInstall(false,true)</text>
+
+    <rect x="260" y="20" width="220" height="60" rx="8" fill="#1e293b" stroke="#334155"/>
+    <text x="370" y="42" fill="#e2e8f0" font-size="13" text-anchor="middle">기존 설치가 per-machine /</text>
+    <text x="370" y="60" fill="#e2e8f0" font-size="13" text-anchor="middle">보호경로 → UAC 상승</text>
+
+    <rect x="520" y="20" width="200" height="60" rx="8" fill="#3f1d1d" stroke="#f87171"/>
+    <text x="620" y="42" fill="#f87171" font-size="13" text-anchor="middle">상승 토큰으로 앱 재실행</text>
+    <text x="620" y="60" fill="#fca5a5" font-size="11" text-anchor="middle">(ExecShellAsUser 우회 시)</text>
+
+    <rect x="760" y="20" width="180" height="60" rx="8" fill="#3f1d1d" stroke="#f87171"/>
+    <text x="850" y="45" fill="#f87171" font-size="13" text-anchor="middle">%APPDATA% = 관리자</text>
+    <text x="850" y="63" fill="#fca5a5" font-size="11" text-anchor="middle">→ 빈 spip 목록</text>
+
+    <line x1="220" y1="50" x2="258" y2="50" stroke="#94a3b8" marker-end="url(#arr)"/>
+    <line x1="480" y1="50" x2="518" y2="50" stroke="#94a3b8" marker-end="url(#arr)"/>
+    <line x1="720" y1="50" x2="758" y2="50" stroke="#94a3b8" marker-end="url(#arr)"/>
+
+    <rect x="180" y="150" width="300" height="80" rx="8" fill="#0c2a22" stroke="#34d399"/>
+    <text x="330" y="178" fill="#34d399" font-size="13" font-weight="bold" text-anchor="middle">A) 설치 방식 교정 (근본)</text>
+    <text x="330" y="198" fill="#a7f3d0" font-size="11" text-anchor="middle">allowToChangeInstallationDirectory:false</text>
+    <text x="330" y="214" fill="#a7f3d0" font-size="11" text-anchor="middle">→ per-user 경로 강제 → 상승 자체 제거</text>
+
+    <rect x="520" y="150" width="320" height="80" rx="8" fill="#0c3a4a" stroke="#38bdf8"/>
+    <text x="680" y="178" fill="#38bdf8" font-size="13" font-weight="bold" text-anchor="middle">B) 메인 프로세스 방어 (안전망)</text>
+    <text x="680" y="198" fill="#bae6fd" font-size="11" text-anchor="middle">상승 감지(SID) → 경고 + 영속 write 3경로 차단(b3)</text>
+    <text x="680" y="214" fill="#bae6fd" font-size="11" text-anchor="middle">관리자 프로필 오염 방지</text>
+
+    <line x1="850" y1="80" x2="700" y2="148" stroke="#38bdf8" stroke-dasharray="4 3" marker-end="url(#arr)"/>
+    <line x1="370" y1="80" x2="340" y2="148" stroke="#34d399" stroke-dasharray="4 3" marker-end="url(#arr)"/>
+  </svg>
+
+  <h3>A) 설치 방식 교정 — <span class="tag tag-rec">권장</span></h3>
+  <p>업데이트가 권한 상승 없이 per-user로 진행·재실행되도록 한다. 상승이 안 일어나면 재실행은 항상 로그인 사용자 토큰 → <code>%APPDATA%</code> 정상.</p>
+  <table>
+    <tr><th>후보</th><th>효과</th><th>트레이드오프</th></tr>
+    <tr>
+      <td><code>allowToChangeInstallationDirectory: false</code></td>
+      <td><b>권장.</b> 디렉터리 변경 페이지를 없애 보호경로 설치 자체를 차단. 기본 per-user 경로(<code>%LOCALAPPDATA%\Programs\Project-SPIP</code>)로 고정 → 상승 불필요.</td>
+      <td>사용자가 설치 위치를 못 고름(로컬 단일사용자 도구라 영향 미미). 기존 보호경로 사용자는 별도 마이그레이션 필요(§④).</td>
+    </tr>
+    <tr>
+      <td><code>perMachine: false</code> 유지</td>
+      <td>이미 설정됨. per-machine 강제 상승 회피의 전제.</td>
+      <td>변경 없음.</td>
+    </tr>
+    <tr>
+      <td><code>oneClick</code> 전환(false→true)</td>
+      <td>완료 페이지 제거·자동 진행. 그러나 oneClick에서도 isForceRun 재실행 분기 존재.</td>
+      <td><b>비권장.</b> UX 변화 크고 원인(상승)과 직접 무관. 회귀 위험.</td>
+    </tr>
+    <tr>
+      <td>코드 서명 도입</td>
+      <td>SmartScreen 완화. 상승 문제와는 무관.</td>
+      <td>범위 밖(PM이 미서명 수용).</td>
+    </tr>
+  </table>
+  <div class="callout">
+    <b>A 결정:</b> <code>allowToChangeInstallationDirectory: false</code> 1줄 변경. <code>perMachine:false</code> 유지. 그러면 신규/재설치 사용자는 항상 per-user 경로로 상승 없이 업데이트된다. <span class="muted">(이미 보호경로에 깔린 기존 사용자는 이 변경만으로는 자동 교정되지 않음 — §④ 마이그레이션으로 처리.)</span>
+  </div>
+
+  <h3>B) 메인 프로세스 방어 — <span class="tag tag-rec">권장: b3 (경고 + 쓰기 차단)</span></h3>
+  <p>A를 적용해도 (ⅰ) 이미 보호경로에 깔린 기존 사용자, (ⅱ) 사용자가 앱을 "관리자 권한으로 실행"한 경우엔 여전히 빈 목록이 보일 수 있다. 안전망으로 <b>상승 감지(SID) → 경고 + 영속 write 차단</b>을 둔다. 핵심 목표는 <b>상승 세션이 관리자 프로필에 새 데이터·설정·비밀번호를 영속화해 오염시키지 않기</b>.</p>
+  <table>
+    <tr><th>옵션</th><th>구현/신뢰성</th><th>판단</th></tr>
+    <tr>
+      <td><b>b1</b> 로그인 사용자의 실제 spip 경로 해석</td>
+      <td>상승 세션에서 "원래 사용자"를 신뢰성 있게 알아내려면 <code>WTSQueryUserToken</code>/<code>explorer.exe</code> 소유자 조회 등 네이티브 호출 필요. Node 내장만으로는 불가하고 새 의존성·복잡도↑. 잘못 해석 시 엉뚱한 프로필에 쓸 위험.</td>
+      <td class="danger">비채택 (신뢰성·의존성 위반)</td>
+    </tr>
+    <tr>
+      <td><b>b2</b> de-elevated로 재실행</td>
+      <td>Windows에서 자식 프로세스를 de-elevate하려면 explorer 토큰 도용/COM(<code>ShellExecute</code> via shell) 트릭 필요. Electron 단독으론 까다롭고 재실행 루프·UX 깜빡임 위험.</td>
+      <td class="warn">비채택 (구현난이도·회귀위험)</td>
+    </tr>
+    <tr>
+      <td><b>b3</b> 경고 + 영속 write 차단</td>
+      <td>상승 감지는 가벼움(아래). 상승 세션의 <b>디스크 write를 no-op</b>으로 만들어 관리자 프로필 오염을 막고, 사용자 명시 재스캔은 조기 거부. "관리자 권한 실행 — 일반 실행으로 다시 여세요" 안내.</td>
+      <td class="accent">채택 — 최소·안전·의존성0</td>
+    </tr>
+  </table>
+
+  <div class="callout warn">
+    <b>위협 모델 교정(reviewer P1).</b> 실제 코드 확인 결과 <b>부팅/주기 자동 스캔 트리거는 존재하지 않는다</b>(<span class="filepath">electron/main.js</span> <code>onReady</code>는 rescan을 부르지 않고, <span class="filepath">lib/server/stateWatcher.js</span>는 메모리 오버레이·렌더러 push만으로 디스크 write 없음 → 보류 대상 아님). 따라서 위협은 "자동 스캔"이 아니라 <b>상승 세션이 영속 write(전부 사용자 명시 동작)로 관리자 프로필에 새 <code>0600</code> 파일을 만드는 것"</b>이다. b3의 목표를 "자동 스캔 보류"가 아니라 <b>"상승 세션의 영속 write 차단"</b>으로 교정한다.
+  </div>
+
+  <h4 class="ref">b3 — 차단해야 할 영속 write 3경로 (전부, security M12-S-02)</h4>
+  <p>실제 코드 확인 결과 상승 세션에서 관리자 프로필에 새 <code>0600</code> 파일을 만드는 write는 정확히 세 곳이다:</p>
+  <table>
+    <tr><th>#</th><th>write 함수 (실제 코드)</th><th>저장물 / 민감도</th></tr>
+    <tr><td>1</td><td><span class="filepath">lib/scan/serializer.js</span> <code>writeSnapshot</code> (scanController 경유)</td><td>스캔 스냅샷 <code>cache/projects.json</code></td></tr>
+    <tr><td>2</td><td><span class="filepath">lib/common/uiStateStore.js</span> <code>write</code> (0600 원자적)</td><td>UI 상태 — 즐겨찾기·정렬·테마·할일·homeLayout·별칭</td></tr>
+    <tr><td>3</td><td><span class="filepath">lib/common/config.js</span> <code>persistConfigKeys</code> (0600 원자적)</td><td>설정 — <span class="danger">메일 계정 비밀번호 포함(정보노출상 가장 민감)</span></td></tr>
+  </table>
+  <div class="callout ref">
+    <b>가드 단일화(권장 구조).</b> 시작 시 <code>elevationGuard.detectElevation()</code> 결과를 <b>중앙 elevated 플래그</b> 1곳에 둔다(출처: <span class="filepath">electron/main.js</span> <code>onReady</code>에서 1회 판정 → ctx/모듈 단일 게터). 위 3개 write 함수(또는 그를 부르는 IPC mutation 핸들러 경로)는 <b>플래그 true면 디스크 write를 no-op(메모리만 유지)</b> 하는 단일 규칙을 따른다. 추가로 사용자 명시 재스캔은 <span class="filepath">electron/ipc/actions.js</span> <code>rescan()</code> 진입부에서 <b><code>controller.acquire()</code>/<code>start()</code> 이전</b>에 <code>elevated</code>면 <code>{ ok:false, code:'ELEVATED' }</code> 조기 반환(명확한 UX). → <b>플래그 출처 1곳·가드 규칙 1개</b>로 산재 방지.
+  </div>
+
+  <p><b>상승 감지 방법 (Windows, 내장 + safeExec) — SID 권위·보수적 폴백:</b></p>
+  <ul class="tight">
+    <li><b>최종 권위 = SID.</b> <code>safeExec(whoami, ['/groups'])</code> 출력에서 <code>S-1-16-12288</code>(High Mandatory Level) 포함 여부가 <b>유일한 차단 근거</b>. High ML이 확인된 경우에만 <code>elevated:true</code>.</li>
+    <li><b>휴리스틱은 "검사 트리거"로만.</b> 기대 <code>%APPDATA%</code>(<code>path.join(os.homedir(),'AppData','Roaming','spip')</code>) vs 실제 불일치는 whoami 검사를 <i>유발</i>하는 신호일 뿐, <b>단독 차단 금지</b>(APPDATA 리다이렉트·로밍 프로필 false positive 방지, reviewer/security #3).</li>
+    <li><b>보수적 폴백.</b> whoami 실행/파싱 실패 등 <b>판정 불가 시 비상승(정상)으로 간주</b> — 정상 사용자의 가용성·write를 절대 막지 않는다. (오탐으로 데이터 저장을 막는 쪽이 더 큰 피해.)</li>
+  </ul>
+  <div class="callout ref">
+    <b>B 결정(b3):</b> <code>detectElevation()</code>이 SID로 High ML을 확인한 경우에만 <code>elevated:true</code>. 그러면 메인이 <span class="accent">고정 문구</span> 경고를 렌더러에 push하고, 위 <b>3경로 write를 no-op + rescan 조기거부</b>한다. 데이터 위치·권한은 그대로(§C 불변).
+  </div>
+
+  <h3>C) 회귀 안전 (불변)</h3>
+  <ul class="tight">
+    <li>일반(비상승) 실행·portable·dev 모드 동작은 <b>완전 불변</b>. B 감지는 "상승"일 때만 분기.</li>
+    <li>데이터 이동/위치 변경 <b>금지</b> — <code>%APPDATA%\spip</code> 유지가 정답.</li>
+    <li>보안 모델 불변: <code>0600</code> 권한, per-user 격리, <code>pathGuard</code>, <code>safeExec</code>(절대경로·shell:false) 유지. b3의 whoami 호출도 <code>safeExec</code> 규약 준수.</li>
+  </ul>
+
+  <!-- ============================================================= -->
+  <h2>③ 정확한 변경 지점</h2>
+
+  <h3>A — <span class="filepath">electron-builder.yml</span></h3>
+  <pre>nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true   # ← false 로 변경
+  createDesktopShortcut: true
+  createStartMenuShortcut: true</pre>
+  <p class="muted">변경: <code>allowToChangeInstallationDirectory: false</code>. 다른 키는 그대로. (선택: <code>differentialPackage</code> 등은 손대지 않음.) <code>publish</code> 블록은 변경 없음 — <code>isAdminRightsRequired</code>는 추가하지 않는다(상승 유도 금지).</p>
+
+  <h3>B — 메인 프로세스 (신규 모듈 1개 + 진입점 훅)</h3>
+  <table>
+    <tr><th>파일</th><th>변경 내용</th></tr>
+    <tr>
+      <td><span class="filepath">lib/common/elevationGuard.js</span> <span class="muted">(신규)</span></td>
+      <td>내장 모듈 + <code>safeExec</code>만 사용. <code>detectElevation()</code> — (트리거) 기대 <code>%APPDATA%</code> vs 실제 불일치 등으로 검사 유발 → (권위) <code>safeExec(whoamiBin, ['/groups'])</code> 출력에서 <code>S-1-16-12288</code>(High ML) 포함 시에만 <code>elevated:true</code>. <b>whoami는 PATH 검색 금지</b> — <code>path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'whoami.exe')</code> 고정 절대경로를 <code>resolveBin(absPath)</code>로 검증 후 <code>shell:false</code> 실행(H-2, security M12-S-01). 인자 <code>['/groups']</code> 고정. 판정 실패 시 <b>비상승 폴백</b>. <code>{ elevated:boolean, reason }</code> 반환(경로·프로필명 등 민감값은 호출측 비노출). <b>판정만, 부작용 없음.</b></td>
+    </tr>
+    <tr>
+      <td><span class="filepath">electron/main.js</span></td>
+      <td><code>onReady</code>에서 <code>detectElevation()</code> 1회 호출 → <b>중앙 elevated 플래그</b> 설정(단일 출처). <code>elevated===true</code>면 렌더러로 <code>spip:elevation:warning</code> push(고정 토큰만). <b>자동 스캔 보류 로직은 없음</b>(애초에 자동 스캔 트리거가 없으므로). 비상승이면 기존 흐름 완전 불변.</td>
+    </tr>
+    <tr>
+      <td><span class="filepath">electron/ipc/actions.js</span> <code>rescan()</code></td>
+      <td>진입부(<code>controller.acquire()</code>/<code>start()</code> 이전)에서 중앙 플래그 <code>elevated</code>면 <code>{ ok:false, code:'ELEVATED' }</code> 조기 반환. 락 획득·스캔 시작·write를 일절 하지 않음.</td>
+    </tr>
+    <tr>
+      <td><span class="filepath">electron/preload.js</span></td>
+      <td><code>onElevationWarning(cb)</code> 단방향 수신 API 노출(기존 <code>onScanProgress</code>/<code>onUpdateStatus</code>와 동일 패턴, textContent 렌더 원칙 유지).</td>
+    </tr>
+    <tr>
+      <td><span class="filepath">lib/scan/serializer.js</span> <code>writeSnapshot</code> (또는 scanController 저장 직전)</td>
+      <td><b>write 보류 #1.</b> 중앙 <code>elevated</code> 플래그 true면 디스크 write를 no-op(메모리 유지). 읽기는 허용. (rescan 조기거부와 이중 안전.)</td>
+    </tr>
+    <tr>
+      <td><span class="filepath">lib/common/uiStateStore.js</span> <code>write</code></td>
+      <td><b>write 보류 #2.</b> <code>elevated</code> true면 <code>0600</code> 디스크 write no-op(정규화 메모리 결과만 반환). 즐겨찾기·정렬·테마·할일·homeLayout이 관리자 프로필에 안 떨어짐.</td>
+    </tr>
+    <tr>
+      <td><span class="filepath">lib/common/config.js</span> <code>persistConfigKeys</code></td>
+      <td><b>write 보류 #3 (가장 민감).</b> <code>elevated</code> true면 <code>0600</code> 디스크 write no-op. <span class="danger">메일 계정 비밀번호</span>가 관리자 프로필에 새로 기록되는 것을 차단(정보노출 방지).</td>
+    </tr>
+    <tr>
+      <td><span class="filepath">public/app.js</span> / <span class="filepath">public/index.html</span> / <span class="filepath">public/styles.css</span></td>
+      <td><code>onElevationWarning</code> 구독 → 상단 경고 배너 표시. <b>고정 문구 <code>textContent</code>만</b>(L-1, security #4) — 실제 <code>%APPDATA%</code> 경로·프로필명·whoami 출력은 <b>배너에 넣지 않음</b>(정보노출 차단). "일반 실행으로 다시 여세요" 안내 + 재스캔 버튼 비활성/경고.</td>
+    </tr>
+  </table>
+  <div class="callout">
+    <b>가드 단일 지점 정리:</b> 플래그 출처는 <span class="filepath">main.js</span> <code>onReady</code> 1회 판정(중앙 플래그). 차단 규칙은 ① 3개 write 함수 no-op + ② <code>actions.js rescan()</code> 조기거부. 산재한 if 분기 대신 <b>출처 1·규칙 2</b>로 고정.
+  </div>
+
+  <h3>autoUpdate.js는?</h3>
+  <p><span class="filepath">electron/autoUpdate.js</span>의 <code>quitAndInstall(false, true)</code>는 <b>변경하지 않는다.</b> 상승 자체를 A안으로 없애므로 인자 변경 불필요. (대안으로 <code>isForceRunAfter=false</code>로 두어 자동 재실행을 끄고 사용자가 단축아이콘으로 직접 여는 방안도 있으나, UX 후퇴라 비권장.)</p>
+
+  <!-- ============================================================= -->
+  <h2>④ 기존 사용자 마이그레이션</h2>
+  <p><code>allowToChangeInstallationDirectory:false</code>는 <b>신규 설치 경로만</b> 바꾼다. 이미 보호경로(예: Program Files)에 per-machine으로 깔린 사용자는 새 인스톨러가 여전히 HKLM 항목을 읽어 per-machine 상승 흐름을 탈 수 있다. 대응:</p>
+  <ul class="tight">
+    <li><b>1순위(자동 안전망):</b> B안(b3)이 이미 적용되어 있으므로, 마이그레이션 전이라도 빈 화면에서 데이터를 망치지 않고 안내가 뜬다. 사용자는 일반 실행으로 데이터를 정상 확인 가능 — <b>실질 피해 없음</b>.</li>
+    <li><b>2순위(클린 재설치 안내):</b> 릴리즈 노트·설정 화면 안내로 "기존 버전 제거 후 신규 설치(기본 per-user 경로)" 1회 권장. 데이터는 <code>%APPDATA%\spip</code>(Roaming)에 있어 <b>제거/재설치와 무관하게 보존</b>된다. NSIS <code>deleteAppDataOnUninstall</code> 미설정이라 제거 시에도 삭제 안 됨(현행 유지).</li>
+    <li><b>주의:</b> 데이터 이동 스크립트는 만들지 않는다(§C: 위치 불변). Roaming 경로는 그대로이므로 재설치만으로 충분.</li>
+  </ul>
+  <div class="callout warn">
+    <b>리스크:</b> per-machine 기존 설치가 남아 있는 동안 자동 업데이트가 상승 흐름을 또 탈 수 있다. 이때도 b3가 오염을 막는다. 완전 해소는 사용자의 1회 클린 재설치가 필요 — 강제는 불가(로컬 단일사용자·미서명 환경).
+  </div>
+
+  <!-- ============================================================= -->
+  <h2>⑤ 테스트 전략</h2>
+  <div class="grid2">
+    <div class="panel">
+      <h3 style="margin-top:0">헤드리스 가능 (node --test)</h3>
+      <ul class="tight">
+        <li><b>SID 파싱(M12-1):</b> <code>safeExec</code> 모킹으로 whoami <code>/groups</code> 출력 주입 — <code>S-1-16-12288</code> 포함 시 <code>elevated:true</code>, Medium(<code>S-1-16-8192</code>)이면 <code>false</code>.</li>
+        <li><b>휴리스틱은 트리거만(M12-1b):</b> APPDATA 불일치만으로는 <b>차단 안 됨</b> 확인(SID Medium이면 <code>elevated:false</code>).</li>
+        <li><b>보수적 폴백(M12-1c):</b> whoami 실행 throw/출력 파싱 불가 시 <code>elevated:false</code>(가용성 우선).</li>
+        <li><b>write 보류 3경로(M12-2):</b> <code>elevated</code> true에서 (a) <code>serializer.writeSnapshot</code>, (b) <code>uiStateStore.write</code>, (c) <code>config.persistConfigKeys</code> 각각 디스크 write no-op(fs 모킹으로 openSync/rename 미호출 확인). 비밀번호 키가 디스크에 안 떨어짐 검증.</li>
+        <li><b>rescan ELEVATED(M12-2b):</b> <code>actions.js rescan()</code>이 <code>elevated</code> 시 <code>{ok:false,code:'ELEVATED'}</code> 반환 + <code>controller.acquire</code> 미호출.</li>
+        <li><b>비상승 회귀(M12-3):</b> <code>elevated:false</code>면 3경로 write·rescan 흐름 전부 기존과 동일(불변).</li>
+      </ul>
+    </div>
+    <div class="panel">
+      <h3 style="margin-top:0">수동 스모크 (실 설치본)</h3>
+      <ul class="tight">
+        <li><b>원인 확인:</b> 증상 PC에서 <code>HKLM\Software\&lt;APP_GUID&gt; InstallLocation</code> 존재 여부 + 설치 경로가 Program Files류인지 확인(가설 §1.4 검증).</li>
+        <li>A 적용 빌드로 신규 설치 → 설치 경로가 <code>%LOCALAPPDATA%\Programs</code>인지, UAC 프롬프트가 뜨지 않는지.</li>
+        <li><b>기존 per-user 설치 → 자동 업데이트 시나리오:</b> 이전 버전을 per-user(기본) 경로에 깔고 → 자동 업데이트 수행 → 재실행된 앱에서 스캔 목록·UI상태·설정이 보존되는지(상승 없는 정상 경로 회귀 확인).</li>
+        <li>(보강) 기존 per-machine/보호경로 설치 → 자동 업데이트 → 상승 발생 시 b3 배너 + 3경로 write 보류 동작 확인.</li>
+        <li>B 검증: 앱을 "관리자 권한으로 실행" → 경고 배너(고정 문구) + 재스캔 ELEVATED + 3경로 write 미반영 확인. 이후 일반 실행 시 데이터 정상.</li>
+        <li>portable 빌드: 상승 무관·동작 불변 확인.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ============================================================= -->
+  <h2>⑥ 보안 · 회귀 영향</h2>
+  <table>
+    <tr><th>항목</th><th>영향</th></tr>
+    <tr><td>L-1 (textContent 렌더)</td><td>불변. 경고 배너는 고정 문구 <code>textContent</code>만 사용.</td></tr>
+    <tr><td>H-1 (pathGuard)</td><td>불변. 데이터 경로·등록 경로 검증 로직 변경 없음.</td></tr>
+    <tr><td>H-2 (safeExec)</td><td>유지. b3의 whoami는 <b>PATH 검색 금지</b> — <code>%SystemRoot%\System32\whoami.exe</code> 고정 절대경로를 <code>resolveBin(absPath)</code> 분기로 검증 후 <code>shell:false</code>·인자 <code>['/groups']</code> 고정 실행(PATH 하이재킹 표면 0, M12-S-01).</td></tr>
+    <tr><td>0600 권한 · per-user 격리</td><td>불변. 데이터 위치·권한 변경 없음.</td></tr>
+    <tr><td>런타임 의존성 최소화</td><td>유지. 신규 의존성 0(내장 + 기존 safeExec).</td></tr>
+    <tr><td>회귀</td><td>비상승·portable·dev 경로는 감지 분기를 타지 않아 동작 불변. A는 신규 설치 경로만 영향.</td></tr>
+  </table>
+
+  <footer>
+    M12 설계 산출물 · Project-SPIP · 조사/설계 단계(코드 미수정). 구현은 후속 단계에서 진행.
+  </footer>
+
+</div>
+</body>
+</html>

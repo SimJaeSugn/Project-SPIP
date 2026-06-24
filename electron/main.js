@@ -33,6 +33,8 @@ const { resolveAppRelPath } = require('./appProtocol');
 const favoritesWidget = require('./favoritesWidget');
 const { initAutoUpdate } = require('./autoUpdate');
 const { Logger, clampString } = require('../lib/common/logger');
+const { detectElevation } = require('../lib/common/elevationGuard');
+const elevationState = require('../lib/common/elevationState');
 
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 const PRELOAD = path.join(__dirname, 'preload.js');
@@ -184,8 +186,31 @@ function applyMailWatch() {
   }
 }
 
+/** [M12 b3] 상승 경고를 렌더러로 단방향 push(고정 토큰만 — L-1). 창 파괴 레이스 가드. */
+function pushElevationWarning() {
+  if (win && !win.isDestroyed() && win.webContents && !win.webContents.isDestroyed()) {
+    // payload 는 신호용 고정 객체만. 실제 APPDATA 경로·프로필명·whoami 출력은 절대 보내지 않는다(정보노출 차단).
+    try { win.webContents.send('spip:elevation:warning', { elevated: true }); } catch (_) { /* 창 파괴 레이스 격리 */ }
+  }
+}
+
 function onReady() {
   registerAppProtocol();
+
+  // [M12 b3] 권한 상승 판정 1회 — 중앙 elevated 플래그 설정(단일 출처). detectElevation 은
+  //   판정만(부작용 없음): win32 + APPDATA 불일치 트리거 시 whoami /groups 의 High ML SID 로만 차단,
+  //   판정 불가 시 비상승 폴백(가용성 우선). 비상승이면 아래 흐름은 완전 불변(회귀 0).
+  let _elevated = false;
+  try {
+    const r = detectElevation();
+    _elevated = !!(r && r.elevated);
+    elevationState.setElevated(_elevated);
+    if (_elevated) logger.warn('상승(elevated) 세션 감지 — 영속 write 보류 + 재스캔 차단(M12 b3)', { reason: r && r.reason });
+  } catch (err) {
+    // 판정 자체 실패 — 보수적으로 비상승 유지(정상 사용자 가용성 우선).
+    elevationState.setElevated(false);
+    logger.error('상승 판정 실패 — 비상승으로 진행', err);
+  }
 
   // composition root 승계.
   ctx = buildContext({ logger });
@@ -290,7 +315,11 @@ function onReady() {
   applyMailWatch();
 
   win.loadURL('app://index.html');
-  win.once('ready-to-show', () => win.show());
+  win.once('ready-to-show', () => {
+    win.show();
+    // [M12 b3] 상승 세션이면 렌더러로 경고 push(고정 토큰만). 렌더러 표시 준비 후 보낸다.
+    if (_elevated) pushElevationWarning();
+  });
   // 방어: 렌더러 로드가 실패하면 ready-to-show가 영영 안 와서 창이 숨은 채(=무반응) 멈춘다.
   //   실패를 로깅하고 창을 강제 표시해 사용자가 상태를 인지하도록 한다.
   win.webContents.on('did-fail-load', (_e, code, desc, url) => {

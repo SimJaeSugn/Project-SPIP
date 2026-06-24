@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>보안 검증 보고 — M12 권한 상승 감지 · write 보류 · 배너 (회차 1)</title>
+<style>
+  :root {
+    --bg: #0f172a; --bg2: #1e293b; --panel: #1a2436; --line: #334155;
+    --fg: #e2e8f0; --muted: #94a3b8; --accent: #34d399; --ref: #38bdf8;
+    --crit: #f87171; --high: #fb923c; --mid: #fbbf24; --low: #a3e635; --info: #38bdf8;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg);
+    font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, "Malgun Gothic", sans-serif;
+    line-height: 1.6; padding: 32px; }
+  .wrap { max-width: 1080px; margin: 0 auto; }
+  h1 { font-size: 26px; margin: 0 0 6px; color: #fff; }
+  h2 { font-size: 19px; margin: 36px 0 12px; color: var(--accent);
+    border-bottom: 1px solid var(--line); padding-bottom: 6px; }
+  h3 { font-size: 16px; margin: 24px 0 8px; color: #fff; }
+  .sub { color: var(--muted); font-size: 13px; margin-bottom: 18px; }
+  code { background: #0b1322; color: var(--ref); padding: 1px 6px; border-radius: 4px;
+    font-family: "Cascadia Code", Consolas, monospace; font-size: 13px; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 18px 22px; margin: 14px 0; }
+  .verdict { display: flex; align-items: center; gap: 16px; }
+  .badge { font-size: 22px; font-weight: 700; padding: 8px 20px; border-radius: 8px; }
+  .pass { background: rgba(52,211,153,.15); color: var(--accent); border: 1px solid var(--accent); }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13.5px; }
+  th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; background: #16213a; }
+  tr:hover td { background: rgba(255,255,255,.02); }
+  .fid { color: var(--ref); font-weight: 600; white-space: nowrap; }
+  .sev { font-weight: 700; padding: 2px 9px; border-radius: 5px; font-size: 12px; white-space: nowrap; }
+  .s-crit { background: rgba(248,113,113,.15); color: var(--crit); }
+  .s-high { background: rgba(251,146,60,.15); color: var(--high); }
+  .s-mid  { background: rgba(251,191,36,.15); color: var(--mid); }
+  .s-low  { background: rgba(163,230,53,.15); color: var(--low); }
+  .s-info { background: rgba(56,189,248,.15); color: var(--info); }
+  .s-pass { background: rgba(52,211,153,.15); color: var(--accent); }
+  .ok-box { background: rgba(52,211,153,.08); border-left: 3px solid var(--accent);
+    padding: 12px 16px; border-radius: 6px; margin: 14px 0; }
+  .note-box { background: rgba(251,191,36,.07); border-left: 3px solid var(--mid);
+    padding: 12px 16px; border-radius: 6px; margin: 14px 0; }
+  ul { margin: 8px 0; padding-left: 22px; } li { margin: 4px 0; }
+  .muted { color: var(--muted); }
+  svg { max-width: 100%; height: auto; display: block; margin: 8px auto; }
+  .legend { font-size: 12px; color: var(--muted); text-align: center; margin-top: 4px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>보안 검증 보고 — M12</h1>
+  <div class="sub">권한 상승(elevated) 감지 + 영속 write 보류 + 경고 배너 · 회차 1 · 2026-06-25 ·
+    검증자: 보안 전담 검증자 · 대상 커밋 기준 전체 테스트 768 통과</div>
+
+  <div class="panel verdict">
+    <span class="badge pass">PASS</span>
+    <div>
+      <b>치명 0 · 높음 0 · 중간 0 · 낮음 0 · 정보 5</b><br>
+      <span class="muted">설계 보안 게이트 5항(M12-S-01~05) 전부 코드에 접지·충족. 신규 공격 표면 최소(단방향 push 1개).
+      적대적 관점에서 잔존 치명/높음 위협 없음 — 보안 게이트 통과.</span>
+    </div>
+  </div>
+
+  <div class="ok-box">
+    <b>요약:</b> M12 구현은 설계 시 식별된 5개 보안 게이트를 모두 닫았다.
+    whoami 는 <code>%SystemRoot%\System32\whoami.exe</code> 고정 절대경로를 <code>resolveBin</code> 절대경로
+    분기로 검증하고 <code>shell:false</code>·인자 <code>['/groups']</code> 고정으로 실행한다(PATH 하이재킹·인터폴레이션 0).
+    write 보류는 스냅샷·UI상태·설정(메일 비밀번호 포함) 3경로 모두 디스크 진입 전 no-op 한다(임시파일·디렉터리 생성 0).
+    감지는 SID(<code>S-1-16-12288</code>) 단독 차단·판정 불가 시 비상승 폴백으로 정상 사용자를 막지 않는다.
+    배너·push payload·로그 어디에도 APPDATA 경로·프로필명·whoami 출력·SID 가 노출되지 않는다.
+  </div>
+
+  <h2>신뢰 경계 · 데이터 흐름 (M12)</h2>
+  <svg viewBox="0 0 920 360" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="M12 신뢰 경계와 데이터 흐름">
+    <defs>
+      <marker id="arr" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto">
+        <path d="M0,0 L7,3 L0,6 Z" fill="#34d399"/>
+      </marker>
+      <marker id="arrR" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto">
+        <path d="M0,0 L7,3 L0,6 Z" fill="#f87171"/>
+      </marker>
+    </defs>
+    <!-- OS 신뢰 경계 -->
+    <rect x="14" y="14" width="270" height="332" rx="10" fill="none" stroke="#475569" stroke-dasharray="5 4"/>
+    <text x="28" y="34" fill="#94a3b8" font-size="12">OS 신뢰 경계 (System32)</text>
+    <rect x="40" y="70" width="200" height="56" rx="8" fill="#1e293b" stroke="#38bdf8"/>
+    <text x="140" y="93" fill="#e2e8f0" font-size="13" text-anchor="middle">whoami.exe</text>
+    <text x="140" y="111" fill="#94a3b8" font-size="11" text-anchor="middle">고정 절대경로·/groups</text>
+
+    <!-- Main 프로세스 -->
+    <rect x="320" y="14" width="300" height="332" rx="10" fill="none" stroke="#475569" stroke-dasharray="5 4"/>
+    <text x="334" y="34" fill="#94a3b8" font-size="12">Electron Main (신뢰)</text>
+    <rect x="345" y="58" width="250" height="50" rx="8" fill="#1a2436" stroke="#34d399"/>
+    <text x="470" y="78" fill="#e2e8f0" font-size="12.5" text-anchor="middle">elevationGuard.detectElevation()</text>
+    <text x="470" y="96" fill="#94a3b8" font-size="10.5" text-anchor="middle">판정만·부작용 0</text>
+    <rect x="345" y="128" width="250" height="46" rx="8" fill="#1a2436" stroke="#34d399"/>
+    <text x="470" y="156" fill="#e2e8f0" font-size="12.5" text-anchor="middle">elevationState (중앙 플래그)</text>
+    <rect x="345" y="194" width="250" height="64" rx="8" fill="#1a2436" stroke="#fbbf24"/>
+    <text x="470" y="216" fill="#e2e8f0" font-size="11.5" text-anchor="middle">write 보류 3경로 (no-op)</text>
+    <text x="470" y="233" fill="#94a3b8" font-size="10" text-anchor="middle">snapshot · ui-state · config(pass)</text>
+    <text x="470" y="248" fill="#94a3b8" font-size="10" text-anchor="middle">+ rescan ELEVATED 조기거부</text>
+    <rect x="345" y="278" width="250" height="48" rx="8" fill="#1a2436" stroke="#38bdf8"/>
+    <text x="470" y="300" fill="#e2e8f0" font-size="11.5" text-anchor="middle">send('spip:elevation:warning')</text>
+    <text x="470" y="316" fill="#94a3b8" font-size="10" text-anchor="middle">{ elevated:true } 고정 — 단방향</text>
+
+    <!-- Renderer -->
+    <rect x="656" y="14" width="250" height="332" rx="10" fill="none" stroke="#475569" stroke-dasharray="5 4"/>
+    <text x="670" y="34" fill="#94a3b8" font-size="12">Renderer (sandbox·부분신뢰)</text>
+    <rect x="680" y="200" width="200" height="56" rx="8" fill="#1e293b" stroke="#38bdf8"/>
+    <text x="780" y="223" fill="#e2e8f0" font-size="12" text-anchor="middle">고정 문구 배너</text>
+    <text x="780" y="241" fill="#94a3b8" font-size="10.5" text-anchor="middle">textContent (L-1)</text>
+
+    <!-- 흐름 -->
+    <line x1="345" y1="84" x2="244" y2="98" stroke="#34d399" stroke-width="2" marker-end="url(#arr)"/>
+    <text x="250" y="78" fill="#94a3b8" font-size="10">execFileSync</text>
+    <line x1="470" y1="108" x2="470" y2="126" stroke="#34d399" stroke-width="2" marker-end="url(#arr)"/>
+    <line x1="470" y1="174" x2="470" y2="192" stroke="#34d399" stroke-width="2" marker-end="url(#arr)"/>
+    <line x1="470" y1="258" x2="470" y2="276" stroke="#34d399" stroke-width="2" marker-end="url(#arr)"/>
+    <line x1="595" y1="302" x2="678" y2="240" stroke="#34d399" stroke-width="2" marker-end="url(#arr)"/>
+    <!-- 차단된 역방향(없음 강조) -->
+    <line x1="678" y1="216" x2="600" y2="300" stroke="#f87171" stroke-width="1.4" stroke-dasharray="4 4"/>
+    <text x="612" y="260" fill="#f87171" font-size="10">inbound 채널 없음</text>
+  </svg>
+  <div class="legend">녹색 = 허용 흐름(단방향) · 붉은 점선 = 의도적으로 만들지 않은 역방향(렌더러→main elevation 핸들러 부재)</div>
+
+  <h2>설계 보안 게이트 5항 검증 결과</h2>
+  <table>
+    <tr><th style="width:90px;">게이트</th><th>항목 / 위협(STRIDE)</th><th style="width:90px;">심각도</th><th style="width:80px;">판정</th></tr>
+    <tr><td class="fid">M12-S-01</td><td>whoami 고정 절대경로·shell:false·인자 고정 (위장/권한상승)</td><td><span class="sev s-info">정보</span></td><td><span class="sev s-pass">충족</span></td></tr>
+    <tr><td class="fid">M12-S-02</td><td>write 보류 완전성 — 스냅샷·UI상태·설정 3경로 (변조/정보노출)</td><td><span class="sev s-info">정보</span></td><td><span class="sev s-pass">충족</span></td></tr>
+    <tr><td class="fid">M12-S-03</td><td>감지 보수성 — false positive 미차단·실패 시 정상 폴백 (DoS-데이터)</td><td><span class="sev s-info">정보</span></td><td><span class="sev s-pass">충족</span></td></tr>
+    <tr><td class="fid">M12-S-04</td><td>배너 L-1·정보노출·preload 단방향 (변조/정보노출)</td><td><span class="sev s-info">정보</span></td><td><span class="sev s-pass">충족</span></td></tr>
+    <tr><td class="fid">M12-S-05</td><td>표면·격리 — 단방향 push·per-user·위치 불변·0600/0700 (—)</td><td><span class="sev s-info">정보</span></td><td><span class="sev s-pass">충족</span></td></tr>
+  </table>
+
+  <!-- M12-S-01 -->
+  <h3><span class="fid">M12-S-01</span> whoami 고정 절대경로 실행 — <span class="sev s-pass">충족</span></h3>
+  <p><b>위치:</b> <code>lib/common/elevationGuard.js</code> (resolveWhoamiBin · execWhoamiGroups), <code>lib/common/safeExec.js</code> (resolveBin 절대경로 분기)</p>
+  <ul>
+    <li><b>PATH 검색 0:</b> <code>resolveWhoamiBin</code> 은 <code>%SystemRoot%</code>(부재 시 <code>C:\Windows</code> 폴백) + <code>System32\whoami.exe</code> 로 절대경로를 조립한 뒤
+      <code>resolveBin(abs)</code> 절대경로 분기에 넘긴다. 이 분기는 <code>path.isAbsolute</code> 확인 후 <code>.exe</code> 확장자 화이트리스트·실존 파일 검사만 하며 PATH 순회를 일절 하지 않는다(PATH 하이재킹 0).</li>
+    <li><b>인터폴레이션 0:</b> <code>execWhoamiGroups</code> 는 <code>childProcess.execFileSync(bin, ['/groups'], {shell:false, windowsHide:true, timeout:5000, maxBuffer:1MB})</code> 로 인자를 배열 고정 실행. 셸 해석 경로 없음(H-2 준수). 테스트가 <code>shell:false</code>·인자 <code>['/groups']</code>·고정 bin 을 모킹으로 검증.</li>
+    <li><b>%SystemRoot% 변조/부재 안전:</b> SystemRoot 가 비거나 변조돼 잘못된 경로가 되면 <code>resolveBin</code> 이 실존 파일 검사에서 <code>null</code> 반환 → <code>detectElevation</code> 이 <code>whoami-unresolved</code> 로 <b>비상승 폴백</b>. 공격자가 SystemRoot 를 위장 경로로 바꿔도 임의 바이너리가 실행될 여지는 없다(.exe·실존·절대경로 3중). 단, 신뢰 환경(main 프로세스 env)이라 이 변수 자체의 변조 위협은 로컬 단일사용자 모델 밖.</li>
+  </ul>
+
+  <!-- M12-S-02 -->
+  <h3><span class="fid">M12-S-02</span> write 보류 완전성 (3경로) — <span class="sev s-pass">충족</span></h3>
+  <p><b>위치:</b> <code>serializer.writeSnapshot</code> · <code>uiStateStore.write</code> · <code>config.persistConfigKeys</code> · <code>actions.rescan</code></p>
+  <ul>
+    <li><b>3경로 전부 디스크 미진입:</b> 세 함수 모두 정규화(JSON 직렬화는 메모리상) 직후, <code>ensureDirFor</code>(디렉터리 생성)·임시파일 <code>openSync('wx')</code>·rename <b>이전에</b> <code>isElevated()</code> 검사로 조기 반환한다. 따라서 상승 세션에서는 <b>디렉터리·임시(.tmp)파일·최종파일 어느 것도 생성되지 않는다</b>(테스트 <code>fs.existsSync === false</code> 로 확인).</li>
+    <li><b>설정(메일 비밀번호) 포함:</b> 가장 민감한 <code>persistConfigKeys</code> 가 보류 대상에 포함돼, 메일 계정 <code>pass</code> 가 관리자 프로필에 새 0600 파일로 떨어지는 정보노출이 차단된다(전용 테스트 존재).</li>
+    <li><b>rescan 이중 안전:</b> <code>actions.rescan</code> 이 <code>acquire()/start()</code> 이전에 <code>ELEVATED</code> 조기거부 → 스캔 자체가 시작되지 않아 스냅샷 write 트리거가 원천 차단(write no-op 와 이중 방어).</li>
+    <li><b>기존 데이터 무손상(읽기 허용):</b> <code>loadConfig</code>·<code>uiStateStore.read</code> 는 read-only 이며 가드 대상이 아니다. 보류는 write 만 막아 기존 사용자 데이터를 읽어 정상 표시할 수 있고, 덮어쓰기/삭제가 없어 손상 위험 0. <code>writeDefaultConfig</code>(raw fs write·미가드)는 CLI(<code>scan.js</code>) 전용으로 Electron 상승 세션 경로에서 호출되지 않음(확인 완료).</li>
+  </ul>
+
+  <!-- M12-S-03 -->
+  <h3><span class="fid">M12-S-03</span> 감지 보수성 (false positive 미차단) — <span class="sev s-pass">충족</span></h3>
+  <p><b>위치:</b> <code>elevationGuard.detectElevation</code> · <code>appdataMismatch</code></p>
+  <ul>
+    <li><b>SID 단독 차단:</b> APPDATA 불일치(로밍 프로필·APPDATA 리다이렉트 등 false positive 원인)는 "whoami 검사 트리거"로만 쓰이고, 유일한 차단 근거는 whoami /groups 의 High/SYSTEM ML SID(<code>S-1-16-12288</code>/<code>S-1-16-16384</code>)다. 불일치만으로는 절대 차단하지 않는다(전용 테스트로 Medium SID + 불일치 → 비상승 확인).</li>
+    <li><b>판정 실패 = 비상승 폴백:</b> win32 외, 트리거 없음, whoami 미해석, 실행/파싱 실패의 모든 경로가 <code>elevated:false</code> 로 폴백. 오탐으로 정상 사용자의 저장을 막는 쪽을 더 큰 피해로 보고 가용성을 우선하는 보수적 설계가 일관되게 구현됨.</li>
+  </ul>
+
+  <!-- M12-S-04 -->
+  <h3><span class="fid">M12-S-04</span> 배너 L-1 · 정보노출 · preload 단방향 — <span class="sev s-pass">충족</span></h3>
+  <p><b>위치:</b> <code>public/app.js</code>(showElevationBanner) · <code>public/styles.css</code> · <code>electron/preload.js</code>(onElevationWarning) · <code>electron/main.js</code>(pushElevationWarning)</p>
+  <ul>
+    <li><b>고정 문구·L-1:</b> 배너는 상수 <code>ELEVATION_BANNER_TEXT</code> 만 <code>el(..,{text})</code> = <code>textContent</code> 로 렌더한다. 동적값 결합 0, <code>innerHTML</code> 미사용. 콜백 <code>function(){ showElevationBanner(); }</code> 가 payload 를 아예 참조하지 않아, payload 가 오염돼도 화면에 들어갈 경로가 없다.</li>
+    <li><b>정보노출 0:</b> push payload 는 <code>{ elevated:true }</code> 고정 신호. main 이 실제 APPDATA 경로·프로필명·whoami 출력·SID 를 보내지 않는다. 진단 <code>reason</code> 토큰(<code>high-integrity</code> 등)은 로그(main 로컬)에만 남고 렌더러로 전달되지 않으며 민감값을 담지 않는다.</li>
+    <li><b>단방향·ipcRenderer 비노출:</b> preload 는 콜백 중계 + unsubscribe 만 노출하고 <code>ipcRenderer</code> 원본을 노출하지 않는다. main 의 <code>webContents.send</code> ↔ preload 의 <code>ipcRenderer.on</code> 단방향이며, 이 채널에 대한 <code>ipcMain.handle/on</code> 핸들러가 없어 렌더러→main 인바운드 표면이 0.</li>
+  </ul>
+
+  <!-- M12-S-05 -->
+  <h3><span class="fid">M12-S-05</span> 표면 · 격리 — <span class="sev s-pass">충족</span></h3>
+  <p><b>위치:</b> <code>electron-builder.yml</code> · <code>preload.js</code> · 기존 paths 정책</p>
+  <ul>
+    <li><b>표면 최소:</b> 신규 IPC 는 단방향 push <code>spip:elevation:warning</code> 1개뿐. 새 invoke/handle 없음 → 신규 공격 표면 사실상 0.</li>
+    <li><b>per-user·위치 불변:</b> <code>nsis.perMachine:false</code>(per-user) + <code>allowToChangeInstallationDirectory:false</code>(설치 위치 고정)로 설치 표면·경로 변동을 줄인다. 데이터는 기존대로 OS 앱데이터 폴더 0700·파일 0600 정책 유지(write 보류는 정책을 바꾸지 않고 write 시점만 건너뜀).</li>
+  </ul>
+
+  <h2>적대적 점검 — 추가 확인 항목</h2>
+  <table>
+    <tr><th>공격 가설</th><th>결과</th></tr>
+    <tr><td>PATH 에 위장 <code>whoami.exe</code> 를 심어 임의 코드 실행</td><td><span class="sev s-pass">차단</span> — 절대경로 고정·PATH 순회 없음·.exe·실존 검사</td></tr>
+    <tr><td>오염된 push payload 로 배너에 스크립트/경로 주입(XSS·정보노출)</td><td><span class="sev s-pass">차단</span> — textContent 고정 문구·payload 미참조·CSP <code>default-src 'none'</code></td></tr>
+    <tr><td>renderer 가 elevation 채널로 main 에 invoke 시도</td><td><span class="sev s-pass">차단</span> — 해당 채널 inbound 핸들러 부재(push 전용)</td></tr>
+    <tr><td>상승 세션에서 임시(.tmp) 파일이라도 관리자 프로필에 잔류</td><td><span class="sev s-pass">차단</span> — 가드가 ensureDirFor/openSync 이전 반환, 임시파일 생성 0</td></tr>
+    <tr><td>로밍 프로필/APPDATA 리다이렉트 사용자가 오탐 차단됨</td><td><span class="sev s-pass">안전</span> — SID 확인 후에만 차단, 불일치 단독 차단 없음</td></tr>
+    <tr><td>whoami 응답 폭주/지연으로 시작 행(DoS)</td><td><span class="sev s-pass">완화</span> — execFileSync <code>timeout:5000</code>·<code>maxBuffer:1MB</code>, 트리거 없으면 호출 0</td></tr>
+  </table>
+
+  <h2>확인 필요(위험 수용)</h2>
+  <div class="note-box">
+    중대한 사용자 판단 항목 없음. 설계 단계에서 합의된 <b>M12-S-03 트레이드오프</b>(감지 신호가
+    둘 다 불확실하면 정상 폴백 → 드물게 상승 세션 오염을 허용하더라도 정상 사용자의 가용성·저장을 보장)는
+    구현이 그대로 반영했다. 로컬 단일사용자·신뢰 환경 가정에서 합리적이며 별도 재승인 불요.
+  </div>
+
+  <h2>판정</h2>
+  <div class="ok-box">
+    <b>PASS</b> — 치명·높음·중간·낮음 발견 0. 설계 보안 게이트 5항(M12-S-01~05) 전부 코드에 접지·충족.
+    whoami 고정경로 실행, 3경로 write 보류, 정보노출 차단, 단방향 push 표면 최소가 모두 검증됐고
+    전체 테스트 768 통과(elevationGuard 9 · write-hold 11 케이스 포함). 보안 게이트 통과.
+  </div>
+
+  <p class="muted" style="margin-top:24px; font-size:12px;">
+    보고서 경로: <code>docs/reviews/security_review_m12_1.html</code> · 코드 수정 없음(검증 전용).
+  </p>
+
+</div>
+</body>
+</html>

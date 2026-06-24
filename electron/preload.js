@@ -156,6 +156,16 @@ contextBridge.exposeInMainWorld('spip', {
     return () => ipcRenderer.removeListener('spip:update:status', h);
   },
 
+  // [M12 b3] 권한 상승 경고 구독 — main 이 보내는 'spip:elevation:warning' 단방향 push 를 콜백으로 중계.
+  //   payload: { elevated:true } 고정 신호만(경로·프로필명·whoami 출력 비노출). 콜백만 받고 ipcRenderer
+  //   원본은 노출하지 않음(보안). 렌더러는 고정 문구 배너만 표시한다(L-1). unsubscribe 함수 반환.
+  onElevationWarning: (cb) => {
+    if (typeof cb !== 'function') return () => {};
+    const h = (_evt, payload) => cb(payload);
+    ipcRenderer.on('spip:elevation:warning', h);
+    return () => ipcRenderer.removeListener('spip:elevation:warning', h);
+  },
+
   // [R-28] onMenu 제거 — 네이티브 메뉴(폴더추가·재스캔·새로고침·정보) 폐기에 따른
   //   죽은 수신 채널 정리(SEC-L1 양방향). 해당 기능은 헤더 버튼·렌더러 단축키(F5/Ctrl+O/Ctrl+R)·
   //   설정 '정보' 섹션으로 이관됨. main(menu.js) 발신 경로도 함께 제거됨.
