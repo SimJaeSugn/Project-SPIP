@@ -1,6 +1,6 @@
 # 브리핑 AI 연동
 
-## 모델 정보
+## 모델 정보 
 base_url = http://127.0.0.1:1234/v1/chat/completions
 모델명 : exaone-3.5-7.8b-instruct
 
