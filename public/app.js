@@ -1945,17 +1945,23 @@ function initBrowser() {
 
   function renderHomeAttention() {
     var items = homeAttention(store.viewModels || [], 6);
-    var card = el('div', {
-      cls: 'home-hoverable', style: HOME_CARD + 'padding:21px 22px;cursor:pointer;',
-      on: { click: function () { store.state.view = 'dashboard'; render(); } },
-    });
+    // 섹션 전체 클릭/커서 제거 — 이동은 아래 '전체보기' 액션만 담당.
+    var card = el('div', { style: HOME_CARD + 'padding:21px 22px;' });
+    var openDashboard = function () { store.state.view = 'dashboard'; render(); };
     var icon = el('div', { style: 'width:30px;height:30px;border-radius:8px;background:#fef3c7;display:flex;align-items:center;justify-content:center;flex:0 0 auto;' });
     icon.appendChild(svg([{ t: 'path', d: 'M12 9v4M12 17h.01' }, { t: 'path', d: 'M10.3 3.86l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3.14l-8-14a2 2 0 0 0-3.4 0z' }], { size: 16, stroke: '#b45309' }));
     var titleWrap = el('div', { style: 'flex:1 1 0%;' });
     titleWrap.appendChild(el('div', { text: '주의가 필요한 프로젝트', style: 'font-size:15px;font-weight:600;letter-spacing:-0.01em;' }));
     titleWrap.appendChild(el('div', { text: '미커밋 · 미푸시 · 방치 ' + items.length + '건', style: 'font-size:11.5px;color:#a8a29e;margin-top:1px;' }));
-    var open = el('span', { style: 'font-size:12.5px;font-weight:600;color:#4f46e5;display:inline-flex;align-items:center;gap:4px;' });
-    open.appendChild(el('span', { text: '열기' }));
+    var open = el('span', {
+      style: 'font-size:12.5px;font-weight:600;color:#4f46e5;display:inline-flex;align-items:center;gap:4px;cursor:pointer;',
+      attrs: { role: 'button', tabindex: '0', 'aria-label': '주의가 필요한 프로젝트 전체보기' },
+      on: {
+        click: openDashboard,
+        keydown: function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDashboard(); } },
+      },
+    });
+    open.appendChild(el('span', { text: '전체보기' }));
     open.appendChild(el('span', { text: '→', style: 'font-size:14px;' }));
     var head = el('div', { style: 'display:flex;align-items:center;gap:10px;margin-bottom:15px;' });
     head.appendChild(icon); head.appendChild(titleWrap); head.appendChild(open);
