@@ -1008,6 +1008,7 @@ function initBrowser() {
     busyFolders: false,          // 폴더 추가/선택/삭제 in-flight(버튼 비활성)
     showSettings: false,         // 설정 팝업(모달) 열림 여부
     showHelp: false,             // #6 도움말 팝업(모달) 열림 여부
+    showFirstRun: false,         // 최초 스캔 팝업(모달) — 스냅샷 없을 때 홈 위에 표시(닫기 가능)
     // 궤도 맵(Orbit Map) 컨트롤 상태 — 캔버스 루프가 live로 읽는다.
     orbit: { layout: 'drive', speed: 1, paused: false, scrub: 0, triage: false, hi: null, search: '', kpi: null },
     opts: { withSize: false, allDrives: false }, // 재스캔 옵션 UI 상태
@@ -1185,6 +1186,8 @@ function initBrowser() {
     // 설정·도움말 모달은 모든 뷰 위에 표시(대시보드·궤도 등 어디서든 열림).
     if (store.showSettings) app.appendChild(renderSettings());
     if (store.showHelp) app.appendChild(renderHelp());
+    // 최초 스캔 팝업 — 홈 위에만 표시(스냅샷 없을 때). 닫기 가능(× / Esc / 오버레이).
+    if (store.showFirstRun && store.state.view === 'home') app.appendChild(renderFirstRunModal());
     // 저장한 스크롤 위치를 새 컨테이너에 복원(버튼 클릭 등 재렌더 후에도 위치 유지).
     SCROLL_SEL.forEach((sel) => { if (savedScroll[sel] != null) { const e = app.querySelector(sel); if (e) e.scrollTop = savedScroll[sel]; } });
     // 검색 입력 포커스/캐럿 복원(타이핑 중 재렌더로 포커스가 풀리는 문제 해결).
@@ -1363,6 +1366,34 @@ function initBrowser() {
     return el('div', { cls: 'centered-screen', children: [card] });
   }
 
+  /** 최초 스캔 팝업(모달) — renderFirstRun 내용을 대시보드 앞 닫기 가능한 모달로 제공. */
+  function renderFirstRunModal() {
+    const enter = !store._firstRunShown; store._firstRunShown = true; // 진입 애니메이션 1회만
+    const hasRoots = store.roots.length > 0;
+    const body = [];
+    body.push(el('p', { cls: 'settings__opt-sub', text: hasRoots
+      ? '아래 폴더를 스캔하면 대시보드가 채워집니다. 스캔은 이 PC에서 로컬로만 수행됩니다.'
+      : '프로젝트가 들어 있는 폴더를 추가하면 스캔할 수 있습니다. 폴더 선택·스캔은 이 PC에서 로컬로만 수행됩니다.' }));
+    body.push(renderRootManager());
+    const startBtn = el('button', {
+      cls: 'btn btn--dark btn--block', text: store.state.rescanning ? '스캔 시작 중…' : '스캔 시작',
+      attrs: { 'aria-label': '추가된 폴더 스캔 시작' }, on: { click: () => triggerRescan('home') },
+    });
+    if (!store.state.rescanning) startBtn.prepend(svg([{ t: 'path', d: 'M21 12a9 9 0 1 1-2.64-6.36' }, { t: 'path', d: 'M21 3v6h-6' }], { size: 15 }));
+    if (store.state.rescanning || !hasRoots || store.busyFolders) startBtn.disabled = true;
+    body.push(startBtn);
+    if (!hasRoots) body.push(el('p', { cls: 'firstrun__note', text: '폴더를 1개 이상 추가하면 스캔할 수 있습니다.' }));
+    body.push(el('div', { cls: 'firstrun__security', children: [
+      svg([{ t: 'rect', x: '4', y: '11', width: '16', height: '9', rx: '2' }, { t: 'path', d: 'M8 11V8a4 4 0 0 1 8 0v3' }], { size: 13, stroke: '#a8a29e' }),
+      el('span', { text: '로컬 전용 · 외부로 어떤 데이터도 전송하지 않습니다' }),
+    ]}));
+    return buildModal({
+      titleId: 'firstrun-title', title: '프로젝트 스캔', subtitle: '스캔할 폴더를 추가하고 스캔을 시작하세요',
+      onClose: closeFirstRun, enter: enter, bodyChildren: body,
+    });
+  }
+  function closeFirstRun() { store.showFirstRun = false; store._firstRunShown = false; render(); }
+
   /* =====================================================================
    * 루트 관리 컴포넌트 (firstRun · 설정 공용)
    *   - 네이티브 폴더 선택(pickFolders) · 경로 직접 입력(addRoots) · 목록/삭제(removeRoot)
@@ -1494,6 +1525,19 @@ function initBrowser() {
 
     var main = el('main', { cls: 'dash__main spip-scroll', attrs: { id: 'main' }, style: 'background:#f6f6f5;color:#1c1917;font-family:Geist,Pretendard,system-ui,sans-serif;' });
     var wrap = el('div', { style: 'max-width:1480px;margin:0 auto;' });
+
+    // 스캔된 프로젝트가 없으면(팝업을 닫았어도) 재스캔 진입 배너를 노출.
+    if (vms.length === 0 && !store.showFirstRun) {
+      var bn = el('div', { style: 'padding:18px 30px 0;' });
+      var bar = el('div', { style: 'background:#eef2ff;border:1px solid #c7d2fe;border-radius:12px;padding:13px 16px;display:flex;align-items:center;gap:12px;' });
+      bar.appendChild(el('span', { text: '아직 스캔된 프로젝트가 없습니다.', style: 'flex:1;font-size:13px;color:#1c1917;' }));
+      bar.appendChild(el('button', {
+        cls: 'btn btn--dark', text: '폴더 스캔하기', attrs: { type: 'button', 'aria-label': '프로젝트 스캔 팝업 열기' },
+        on: { click: function () { store.showFirstRun = true; render(); } },
+      }));
+      bn.appendChild(bar);
+      wrap.appendChild(bn);
+    }
 
     // ── 히어로(오늘의 브리핑 + KPI 4) ──
     var heroPad = el('div', { style: 'padding:26px 30px 6px;' });
@@ -4351,10 +4395,12 @@ function initBrowser() {
       const next = resolveScanReloadView(payload);
       if (next.empty) {
         store.raw = []; store.viewModels = [];
+        store.showFirstRun = true; // 스캔 결과 0 → 홈 위 스캔 팝업 유지
         await refreshConfig(); // 루트 표시 갱신
       } else {
         store.raw = payload.projects;
         store.viewModels = payload.projects.map(toViewModel);
+        store.showFirstRun = false; // 프로젝트 발견 → 팝업 닫음
         captureDetectedNames(); applyProjectNames(); // 감지명 캡처 + 별칭 적용
       }
       // ★ 재스캔/스캔 완료 후 UI 상태(즐겨찾기·수동순서·별칭)를 다시 적재한다. 이전엔 reloadAfterScan이
@@ -4364,7 +4410,8 @@ function initBrowser() {
       // scanning(스캔 done) 또는 dashboard/firstRun(메뉴 새로고침)에서만 결과 뷰로 전환.
       // 그 외(error/loading 등)는 현 뷰 유지 — 사용자 컨텍스트 보존.
       const v = store.state.view;
-      if (v === 'scanning' || v === 'dashboard' || v === 'firstRun') store.state.view = next.view;
+      // 결과 뷰는 항상 홈(브리핑). 스냅샷 0이면 홈 위 스캔 팝업이 함께 뜬다.
+      if (v === 'scanning' || v === 'dashboard' || v === 'firstRun' || v === 'home') store.state.view = 'home';
       store.scan.ownScanId = null; // P2-3 보강: 잔여 구독 재진입 차단(전환 완료 후 리셋)
       render();
     } catch (err) {
@@ -5136,17 +5183,18 @@ function initBrowser() {
         ? ('스냅샷 ' + fmtDate(payload.generatedAt))
         : '';
 
-      if (isEmptySnapshot(payload)) {
+      // 스냅샷이 없어도 홈으로 바로 진입하고, 최초 스캔 팝업을 홈 위에 띄운다(닫기 가능).
+      const empty = isEmptySnapshot(payload);
+      if (empty) {
         store.raw = [];
         store.viewModels = [];
-        await refreshConfig(); // firstRun 의 루트 목록 표시용
-        store.state.view = 'firstRun';
-        render();
-        return;
+        store.showFirstRun = true;       // 홈 위 스캔 팝업 표시
+        await refreshConfig();           // 팝업의 루트 목록 표시용
+      } else {
+        store.raw = payload.projects;
+        store.viewModels = payload.projects.map(toViewModel);
+        store.showFirstRun = false;
       }
-
-      store.raw = payload.projects;
-      store.viewModels = payload.projects.map(toViewModel);
       store._generatedAt = (payload && payload.generatedAt) ? String(payload.generatedAt) : '';
       captureDetectedNames(); // 감지명 캡처(별칭은 loadUiState 후 applyProjectNames)
       store.state.view = 'home'; // 기본 랜딩 = 홈(브리핑). 프로젝트 목록은 '프로젝트' 탭으로.
