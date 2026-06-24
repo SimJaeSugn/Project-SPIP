@@ -133,6 +133,15 @@ contextBridge.exposeInMainWorld('spip', {
     return () => ipcRenderer.removeListener('spip:projectsUpdated', h); // 해제 함수 반환
   },
 
+  // 메일 갱신 push — main(MailWatcher)이 새 메일 감지 시 보내는 'spip:mailUpdated' 중계.
+  //   payload 없음(신호만). 홈이 getMailSummary로 최신 다이제스트를 재조회한다. 해제 함수 반환.
+  onMailUpdated: (cb) => {
+    if (typeof cb !== 'function') return () => {};
+    const h = () => cb();
+    ipcRenderer.on('spip:mailUpdated', h);
+    return () => ipcRenderer.removeListener('spip:mailUpdated', h);
+  },
+
   // 자동 업데이트 진행 상황 구독 — main(autoUpdate.js)이 보내는 'spip:update:status'를 콜백으로 중계.
   //   payload: { status, version?, percent?, transferred?, total?, bytesPerSecond? }. 채널명 하드코딩.
   //   콜백만 받고 ipcRenderer 원본은 노출하지 않음(보안). unsubscribe 함수 반환.

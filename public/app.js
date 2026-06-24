@@ -1046,6 +1046,8 @@ function initBrowser() {
     busyMail: false,             // 추가/수정/삭제/테스트 in-flight
     trayUnsubscribe: null,       // R-21: spip.onTray 구독 해제 함수
     projectsUpdatedUnsubscribe: null, // R-24: spip.onProjectsUpdated 구독 해제 함수
+    mailUpdatedUnsubscribe: null, // 메일 갱신 push(spip.onMailUpdated) 구독 해제 함수
+    mailRefreshTimer: null,       // 홈에서 메일 주기 갱신 타이머
     // 자동 업데이트(사용자 주도) 상태 — 설정 드로어의 "소프트웨어 업데이트" 섹션이 표시.
     update: {
       packaged: null,          // null=미조회, true/false (false면 개발 모드 안내)
@@ -1148,7 +1150,7 @@ function initBrowser() {
     const entering = store._lastView !== v;
     // 재렌더로 노드가 교체되면 스크롤 컨테이너가 새로 생겨 위치가 0으로 초기화된다(설정 모달에서
     //   버튼 클릭 시 스크롤 튐). 교체 전 위치를 저장해 동일 셀렉터에 복원한다.
-    const SCROLL_SEL = ['.modal__body', '.drawer', '.orbit__panel'];
+    const SCROLL_SEL = ['.modal__body', '.drawer', '.orbit__panel', '.dash__main'];
     const savedScroll = {};
     SCROLL_SEL.forEach((sel) => { const e = app.querySelector(sel); if (e) savedScroll[sel] = e.scrollTop; });
     // 검색창은 키 입력마다 debounce(render)로 노드가 교체돼 포커스/캐럿이 사라진다(타이핑이 끊김).
@@ -4460,6 +4462,33 @@ function initBrowser() {
     }
     store.projectsUpdatedUnsubscribe = null;
   }
+
+  /* 메일 실시간 갱신 — 새 메일 감지 push(즉시) + 홈 체류 중 주기 갱신(읽음/도착 반영).
+   *   편집(할 일 입력)·모달 중에는 보류해 포커스/스크롤 방해를 막는다. */
+  function maybeAutoRefreshMail() {
+    if (store.state.view !== 'home' || !bridgeHas('getMailSummary')) return;
+    if (store.busyMailSummary || store.showSettings || store.showHelp || store.todoAdding) return;
+    refreshMailSummary();
+  }
+  function subscribeMailUpdated() {
+    unsubscribeMailUpdated();
+    if (!hasBridge() || typeof spip.onMailUpdated !== 'function') return; // graceful
+    const unsub = spip.onMailUpdated(() => maybeAutoRefreshMail());
+    store.mailUpdatedUnsubscribe = (typeof unsub === 'function') ? unsub : null;
+  }
+  function unsubscribeMailUpdated() {
+    if (typeof store.mailUpdatedUnsubscribe === 'function') {
+      try { store.mailUpdatedUnsubscribe(); } catch (_) { /* ignore */ }
+    }
+    store.mailUpdatedUnsubscribe = null;
+  }
+  function startMailAutoRefresh() {
+    if (store.mailRefreshTimer || !bridgeHas('getMailSummary')) return;
+    store.mailRefreshTimer = setInterval(maybeAutoRefreshMail, 60000);
+  }
+  function stopMailAutoRefresh() {
+    if (store.mailRefreshTimer) { try { clearInterval(store.mailRefreshTimer); } catch (_) { /* ignore */ } store.mailRefreshTimer = null; }
+  }
   /**
    * 라이브 갱신 병합. 변경된 project(들)를 store.raw/viewModels 에 id 로 교체하고 재렌더한다.
    *   - 식별/구조 필드는 watcher 가 건드리지 않으므로 toViewModel 로 전체 재매핑해도 안전.
@@ -5158,6 +5187,9 @@ function initBrowser() {
   subscribeTray();
   // R-24: 상태 주시 라이브 갱신 구독(앱 1회). 부재 시 graceful — 내부 가드.
   subscribeProjectsUpdated();
+  // 메일 실시간 갱신: 새 메일 push 구독 + 홈 주기 갱신(앱 1회).
+  subscribeMailUpdated();
+  startMailAutoRefresh();
   // 자동 업데이트 진행 구독(앱 1회). 부재 시 graceful — 내부 가드.
   subscribeUpdateStatus();
   // 테마 즉시 적용(시스템 기본) + 시스템 테마 변경 구독. ui-state 적재 시 사용자 설정으로 갱신.
@@ -5170,6 +5202,8 @@ function initBrowser() {
     unsubscribeScan();
     unsubscribeTray();
     unsubscribeProjectsUpdated();
+    unsubscribeMailUpdated();
+    stopMailAutoRefresh();
     unsubscribeUpdateStatus();
     stopOrbit(); // 궤도 캔버스 RAF·리스너 정리
   }

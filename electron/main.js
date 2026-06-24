@@ -164,12 +164,22 @@ function notifyMailAuthError(payload) {
   } catch (_) { /* noop */ }
 }
 
+/** 새 메일 감지 시 렌더러(홈)로 갱신 신호 push — 홈이 getMailSummary로 최신 다이제스트 재조회. */
+function pushMailUpdated() {
+  if (win && !win.isDestroyed() && win.webContents && !win.webContents.isDestroyed()) {
+    try { win.webContents.send('spip:mailUpdated', {}); } catch (_) { /* 창 파괴 레이스 격리 */ }
+  }
+}
+
 /** 현재 config.mailAccounts로 메일 감시를 재구성한다(계정 추가/수정/삭제 후 IPC가 호출). */
 function applyMailWatch() {
   if (!ctx || !ctx.mailManager) return;
   const accounts = Array.isArray(ctx.config && ctx.config.mailAccounts) ? ctx.config.mailAccounts : [];
   try {
-    ctx.mailManager.apply(accounts, { onNewMail: notifyNewMail, onAuthError: notifyMailAuthError });
+    ctx.mailManager.apply(accounts, {
+      onNewMail: (payload) => { notifyNewMail(payload); pushMailUpdated(); },
+      onAuthError: notifyMailAuthError,
+    });
   } catch (err) {
     logger.error('메일 감시 재구성 실패', err);
   }
