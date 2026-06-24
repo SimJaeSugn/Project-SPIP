@@ -1064,6 +1064,17 @@ function initBrowser() {
     const SCROLL_SEL = ['.modal__body', '.drawer', '.orbit__panel'];
     const savedScroll = {};
     SCROLL_SEL.forEach((sel) => { const e = app.querySelector(sel); if (e) savedScroll[sel] = e.scrollTop; });
+    // 검색창은 키 입력마다 debounce(render)로 노드가 교체돼 포커스/캐럿이 사라진다(타이핑이 끊김).
+    //   교체 전 활성 검색 입력과 선택 위치를 기억했다가 새 노드에 복원한다(스크롤 복원과 동형).
+    const FOCUS_SEL = ['.topbar__search-input', '.orbit__search'];
+    const ae = (typeof document !== 'undefined') ? document.activeElement : null;
+    let savedFocus = null;
+    for (const sel of FOCUS_SEL) {
+      if (ae && app.contains(ae) && typeof ae.matches === 'function' && ae.matches(sel)) {
+        savedFocus = { sel, start: ae.selectionStart, end: ae.selectionEnd, dir: ae.selectionDirection };
+        break;
+      }
+    }
     // 궤도 뷰를 벗어나면 캔버스 RAF·리스너 정리(누수 방지). 궤도 안의 재렌더에선 유지.
     if (v !== 'orbit' && orb.canvasEl) stopOrbit();
     app.replaceChildren();
@@ -1084,6 +1095,18 @@ function initBrowser() {
     if (store.showHelp) app.appendChild(renderHelp());
     // 저장한 스크롤 위치를 새 컨테이너에 복원(버튼 클릭 등 재렌더 후에도 위치 유지).
     SCROLL_SEL.forEach((sel) => { if (savedScroll[sel] != null) { const e = app.querySelector(sel); if (e) e.scrollTop = savedScroll[sel]; } });
+    // 검색 입력 포커스/캐럿 복원(타이핑 중 재렌더로 포커스가 풀리는 문제 해결).
+    if (savedFocus) {
+      const e = app.querySelector(savedFocus.sel);
+      if (e && typeof e.focus === 'function') {
+        try {
+          e.focus({ preventScroll: true });
+          if (savedFocus.start != null && typeof e.setSelectionRange === 'function') {
+            e.setSelectionRange(savedFocus.start, savedFocus.end, savedFocus.dir || 'none');
+          }
+        } catch (_) { /* setSelectionRange 미지원 입력은 포커스만 */ }
+      }
+    }
     store._lastView = v;
   }
 
