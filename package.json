@@ -1,6 +1,6 @@
 {
   "name": "project-spip",
-  "version": "1.10.6",
+  "version": "1.10.7",
   "description": "PC에 흩어진 VSCode 프로젝트를 스캔해 간략한 설명과 함께 보여주는 로컬 대시보드",
   "type": "commonjs",
   "main": "electron/main.js",

@@ -110,6 +110,43 @@ function digestSocket() {
   return s;
 }
 
+// ── [메일 본문] fetchMessage 멀티바이트 리터럴 회귀(IMAP 리터럴 {N}은 바이트) ──
+function bodySocket(rawMessage) {
+  const s = new EventEmitter();
+  s.written = [];
+  s.setTimeout = () => {}; s.end = () => {}; s.destroy = () => {};
+  s.feedRaw = (str) => s.emit('data', Buffer.from(str, 'utf8'));
+  s.feed = (line) => s.feedRaw(line + '\r\n');
+  s.write = (data) => {
+    s.written.push(data);
+    const tag = String(data).split(' ')[0];
+    process.nextTick(() => {
+      if (/\bLOGIN\b/i.test(data)) s.feed(tag + ' OK LOGIN');
+      else if (/\bEXAMINE\b/i.test(data)) { s.feed('* OK [READ-ONLY] ok'); s.feed(tag + ' OK'); }
+      else if (/UID\s+FETCH/i.test(data)) {
+        // 리터럴 {N}은 **바이트** 길이 — 한글 본문이면 문자 길이보다 큼(이전 문자열 측정 버그 재현).
+        const n = Buffer.byteLength(rawMessage, 'utf8');
+        s.feedRaw('* 7 FETCH (UID 12521 BODY[]<0> {' + n + '}\r\n' + rawMessage + ')\r\n');
+        s.feed(tag + ' OK FETCH completed');
+      } else if (/\bLOGOUT\b/i.test(data)) { s.feed('* BYE'); s.feed(tag + ' OK'); }
+    });
+    return true;
+  };
+  return s;
+}
+
+test('[메일 본문] fetchMessage — 멀티바이트(한글) 리터럴 본문을 바이트 단위로 정확히 수신(타임아웃 회귀)', async () => {
+  const raw = 'Subject: hello\r\nFrom: a@b.com\r\n\r\n안녕하세요 한글 본문입니다 — 멀티바이트 리터럴 테스트';
+  assert.ok(Buffer.byteLength(raw, 'utf8') > raw.length, '한글 포함 — 바이트>문자(회귀 전제)');
+  const sock = bodySocket(raw);
+  // timeoutMs를 짧게: 이전 버그라면 문자 수만큼 못 받아 이 시간 안에 타임아웃 reject 됐다.
+  const client = new ImapClient({ host: 'h', port: 993, user: 'u', pass: 'p', timeoutMs: 2000,
+    connect: () => { process.nextTick(() => sock.feed('* OK ready')); return sock; } });
+  const body = await client.fetchMessage(12521, 'INBOX');
+  assert.ok(body.includes('안녕하세요 한글 본문입니다'), '멀티바이트 본문 전체 수신');
+  assert.ok(body.includes('Subject: hello'), '헤더 포함');
+});
+
 test('fetchUnseenDigest — EXAMINE+SEARCH+ENVELOPE(리터럴 제목 포함) 파싱', async () => {
   const sock = digestSocket();
   const client = new ImapClient({ host: 'h', port: 993, user: 'u', pass: 'p',
