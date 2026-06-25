@@ -105,9 +105,33 @@ if (!gotLock) {
   });
 }
 
+// [메일 뷰어] 격리 이메일 HTML 문서(app://mailbody)가 서빙할 정제 HTML(메인 메모리). getMailMessage가 설정.
+let mailViewHtml = '';
+function setMailViewHtml(html) { mailViewHtml = (typeof html === 'string') ? html : ''; }
+
+/** [메일 뷰어] 격리 이메일 문서 빌드 — 스크립트 없음, 인라인 스타일/이미지 허용은 응답 CSP(security.js)가 통제. */
+function buildMailViewerDoc(html) {
+  const css = 'html,body{margin:0;padding:12px;font:14px/1.65 system-ui,Pretendard,"Apple SD Gothic Neo",sans-serif;'
+    + 'color:#1c1917;background:#fff;word-break:break-word;overflow-wrap:anywhere;}'
+    + 'img{max-width:100%;height:auto;}a{color:#4f46e5;}table{max-width:100%;border-collapse:collapse;}'
+    + '*{max-width:100%;}';
+  const safe = (typeof html === 'string' && html) ? html : '<p style="color:#a8a29e">표시할 본문이 없습니다.</p>';
+  return '<!doctype html><html><head><meta charset="utf-8"><meta name="referrer" content="no-referrer">'
+    + '<style>' + css + '</style></head><body>' + safe + '</body></html>';
+}
+
 /** app:// 자산 요청을 public/ 루트로 안전 매핑(디렉터리 이탈 차단). */
 function registerAppProtocol() {
   protocol.handle('app', (request) => {
+    // [메일 뷰어] app://mailbody/* → 격리된 이메일 HTML 문서(응답 CSP는 onHeadersReceived가 이메일용으로 부여).
+    let host = '';
+    try { host = new URL(request.url).hostname; } catch (_) { /* noop */ }
+    if (host === 'mailbody') {
+      return new Response(buildMailViewerDoc(mailViewHtml), {
+        status: 200,
+        headers: { 'content-type': 'text/html; charset=utf-8' },
+      });
+    }
     // app:// 는 standard scheme이라 'app://favorites.html'의 파일명이 hostname으로 파싱된다.
     //   resolveAppRelPath가 host/pathname을 종합해 올바른 public/ 상대 경로를 돌려준다(순수·테스트됨).
     const pathname = resolveAppRelPath(request.url);
@@ -259,6 +283,8 @@ function onReady() {
       new Notification({ title: String(title || '알림'), body: String(body || '') }).show();
     } catch (err) { logger.warn('토스트 알림 표시 실패'); }
   };
+  // [메일 뷰어] getMailMessage가 정제 HTML을 메인에 보관 → app://mailbody 문서가 격리 렌더(자체 CSP).
+  ctx.setMailViewHtml = setMailViewHtml;
 
   // 보안 webPreferences.
   win = new BrowserWindow({

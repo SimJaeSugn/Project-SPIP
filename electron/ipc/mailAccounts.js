@@ -156,12 +156,16 @@ async function getMailMessage(args, ctx) {
     const client = d.clientFactory({ host: acct.host, port: acct.port, user: acct.user, pass: acct.pass });
     const raw = await client.fetchMessage(uid, 'INBOX');
     const msg = mailBody.parseMessage(raw);
+    // [메일 뷰어] 정제 HTML을 메인에 보관 → 격리 문서(app://mailbody)가 서빙. 렌더러엔 hasHtml만(대용량 회송 회피).
+    const html = (typeof msg.html === 'string') ? msg.html : '';
+    if (ctx && typeof ctx.setMailViewHtml === 'function') { try { ctx.setMailViewHtml(html); } catch (_) { /* noop */ } }
     return {
       ok: true,
       subject: msg.subject ? clampString(String(msg.subject), 300) : null,
       from: msg.from ? clampString(String(msg.from), 200) : null,
       date: msg.date ? clampString(String(msg.date), 64) : null,
       text: typeof msg.text === 'string' ? msg.text : '', // mailBody가 이미 정제(개행 보존)
+      hasHtml: html.length > 0, // 격리 iframe 렌더 가능 여부
     };
   } catch (err) {
     return { ok: false, code: (err && err.authFailed) ? 'AUTH' : 'NETWORK' };

@@ -2590,7 +2590,8 @@ function initBrowser() {
   async function openMailMessage(accountId, uid, known) {
     if (!bridgeHas('getMailMessage') || !Number.isInteger(uid)) return;
     known = (known && typeof known === 'object') ? known : {};
-    store.mailView = { open: true, loading: true, accountId: accountId, uid: uid, meta: null, code: null, known: known };
+    store._mailViewNonce = (store._mailViewNonce || 0) + 1; // 새 메일 → iframe 리로드 키
+    store.mailView = { open: true, loading: true, accountId: accountId, uid: uid, meta: null, code: null, known: known, showImages: false };
     store._mailViewShown = false;
     render();
     var res = await ipc('getMailMessage', accountId, uid);
@@ -2602,8 +2603,18 @@ function initBrowser() {
         from: known.from || res.from,
         date: known.date || res.date,
         text: res.text,
+        hasHtml: !!res.hasHtml, // [메일 뷰어] 격리 iframe(app://mailbody) 렌더 가능 여부
       };
     } else store.mailView.code = (res && res.code) || 'NETWORK';
+    render();
+  }
+  /** [메일 뷰어] 격리 이메일 문서 src — nonce로 리로드, img=1이면 원격 이미지 허용(CSP가 통제). */
+  function mailViewerSrc() {
+    return 'app://mailbody/view?n=' + (store._mailViewNonce || 0) + (store.mailView.showImages ? '&img=1' : '');
+  }
+  function toggleMailImages() {
+    store.mailView.showImages = !store.mailView.showImages;
+    store._mailViewNonce = (store._mailViewNonce || 0) + 1; // 정책 변경 → iframe 리로드
     render();
   }
   function closeMailMessage() {
@@ -2624,10 +2635,34 @@ function initBrowser() {
       if (mv.meta.from) meta.appendChild(el('div', { text: '보낸사람 · ' + mv.meta.from }));
       if (mv.meta.date) meta.appendChild(el('div', { text: '날짜 · ' + mv.meta.date }));
       body.push(meta);
-      body.push(el('pre', {
-        text: (mv.meta.text && mv.meta.text.length) ? mv.meta.text : '(본문 없음)',
-        style: 'white-space:pre-wrap;word-break:break-word;font-family:inherit;font-size:13px;line-height:1.65;color:#1c1917;margin:0;',
-      })); // L-1: textContent(pre). HTML은 mailBody가 태그 제거 후 평문화.
+      if (mv.meta.hasHtml && bridgeHas('getMailMessage')) {
+        // [메일 뷰어] 격리 iframe(app://mailbody, 자체 CSP·sandbox)으로 HTML 렌더. 스크립트 차단·원격이미지 기본 차단.
+        var bar = el('div', { style: 'display:flex;align-items:center;gap:8px;margin-bottom:8px;' });
+        bar.appendChild(el('button', {
+          cls: 'btn btn--sm',
+          text: mv.showImages ? '이미지 숨기기' : '이미지 표시',
+          attrs: { type: 'button', 'aria-label': mv.showImages ? '원격 이미지 숨기기' : '원격 이미지 표시' },
+          on: { click: toggleMailImages },
+        }));
+        bar.appendChild(el('span', { text: mv.showImages ? '원격 이미지를 불러옵니다(발신자가 열람을 알 수 있음).' : '개인정보 보호를 위해 원격 이미지는 기본 차단됩니다.', style: 'font-size:11px;color:#a8a29e;' }));
+        body.push(bar);
+        var frame = el('iframe', {
+          cls: 'mail-frame',
+          attrs: {
+            src: mailViewerSrc(),
+            sandbox: '',                 // 스크립트·폼·팝업·동일출처 전면 차단(최대 제한)
+            referrerpolicy: 'no-referrer',
+            title: '메일 본문',
+            'aria-label': '메일 본문(격리 렌더)',
+          },
+        });
+        body.push(frame);
+      } else {
+        body.push(el('pre', {
+          text: (mv.meta.text && mv.meta.text.length) ? mv.meta.text : '(본문 없음)',
+          style: 'white-space:pre-wrap;word-break:break-word;font-family:inherit;font-size:13px;line-height:1.65;color:#1c1917;margin:0;',
+        })); // L-1: textContent(pre). HTML 파트가 없으면 평문 표시.
+      }
     }
     return buildModal({
       titleId: 'mailmsg-title',

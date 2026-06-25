@@ -50,6 +50,25 @@ test('parseMessage — multipart: text/plain 없으면 html→텍스트', () => 
   assert.ok(!/[<>]/.test(t), '태그 제거됨');
 });
 
+test('[메일 뷰어] sanitizeMailHtml — 스크립트·이벤트핸들러·javascript: 제거, 표시요소 보존', () => {
+  const dirty = '<p style="color:red">안녕</p><img src="https://x/a.png"><a href="http://ok">링크</a>'
+    + '<script>alert(1)</script><div onclick="evil()">x</div><a href="javascript:bad()">j</a><iframe src="http://e"></iframe>';
+  const h = mb.sanitizeMailHtml(dirty);
+  assert.ok(!/<script/i.test(h), '<script> 제거');
+  assert.ok(!/<iframe/i.test(h), '<iframe> 제거');
+  assert.ok(!/onclick/i.test(h), '이벤트 핸들러 제거');
+  assert.ok(!/javascript:/i.test(h), 'javascript: 무력화');
+  // 표시 요소는 보존(이미지·스타일·링크·텍스트).
+  assert.ok(/<img[^>]+a\.png/i.test(h) && /style=/i.test(h) && /안녕/.test(h));
+});
+
+test('[메일 뷰어] parseMessage — html(정제) + text 동시 반환', () => {
+  const raw = 'Content-Type: text/html; charset=utf-8' + CRLF + CRLF + '<p>본문 <b>강조</b></p><script>x()</script>';
+  const r = mb.parseMessage(toLatin1(raw));
+  assert.ok(/<p>본문/.test(r.html) && !/<script/i.test(r.html), 'html: 태그 보존 + 스크립트 제거');
+  assert.strictEqual(r.text, '본문 강조', 'text: 태그 제거 평문');
+});
+
 test('htmlToText — 태그 제거·엔티티·줄바꿈', () => {
   assert.strictEqual(mb.htmlToText('A &amp; B<br>C'), 'A & B\nC');
   const t = mb.htmlToText('<p>안녕</p><div>본문</div>');

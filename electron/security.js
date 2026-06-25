@@ -25,8 +25,48 @@ const CSP_POLICY = [
   "object-src 'none'",
   "base-uri 'none'",
   "form-action 'none'",
+  // [메일 뷰어] 우리 app:// 문서(격리 이메일 뷰어 app://mailbody 포함)만 iframe 임베드 허용.
+  //   app:// 는 standard scheme이라 파일별 host가 달라 origin이 갈린다('self'는 같은 host만) → scheme-source(app:)로 허용.
+  "frame-src app:",
   "frame-ancestors 'none'",
 ].join('; ');
+
+// [메일 뷰어] 격리된 이메일 HTML 문서의 host. 이 URL 응답에는 일반 앱 CSP가 아니라 이메일용 CSP를 부여한다.
+//   → 스트릭트한 앱 CSP를 약화시키지 않고, 이메일 문서에만 스타일/이미지를 허용(스크립트는 항상 금지).
+const MAIL_VIEW_HOST = 'mailbody';
+
+/** url이 격리 이메일 뷰어 문서(app://mailbody/*)인가. */
+function isMailViewUrl(url) {
+  try { return new URL(String(url)).hostname === MAIL_VIEW_HOST; } catch (_) { return false; }
+}
+
+/**
+ * [메일 뷰어] 이메일 문서 전용 CSP. 스크립트 전면 금지(script-src 'none'), 인라인 스타일만 허용,
+ *   이미지는 기본 data:만(원격 차단=트래킹 픽셀 방지). showImages=true면 원격 이미지 허용(사용자 opt-in).
+ * @param {boolean} showImages
+ */
+function buildMailCsp(showImages) {
+  const remote = showImages ? ' https: http:' : '';
+  return [
+    "default-src 'none'",
+    "script-src 'none'",
+    "style-src 'unsafe-inline'",
+    'img-src data:' + remote,
+    'media-src data:' + remote,
+    'font-src data:',
+    "object-src 'none'",
+    "base-uri 'none'",
+    "form-action 'none'",
+    // 우리 앱 문서(app://index.html 등)만 이 이메일 문서를 임베드 가능. app:// 는 host별 origin이 달라 scheme-source 사용.
+    "frame-ancestors app:",
+  ].join('; ');
+}
+
+/** url별 적용할 CSP 문자열. 이메일 뷰어 문서면 이메일 CSP(?img=1 시 원격 이미지 허용), 그 외는 스트릭트 앱 CSP. */
+function cspForUrl(url) {
+  if (isMailViewUrl(url)) return buildMailCsp(/[?&]img=1(?:&|$)/.test(String(url || '')));
+  return CSP_POLICY;
+}
 
 /** CSP 헤더 객체를 만든다(onHeadersReceived용). */
 function buildCspHeader() {
@@ -34,13 +74,18 @@ function buildCspHeader() {
 }
 
 /**
- * 세션 응답 헤더에 CSP를 이중주입한다(EM-M-1).
+ * 세션 응답 헤더에 CSP를 주입한다(EM-M-1). 이메일 뷰어 문서(app://mailbody)에는 격리된 이메일 CSP를,
+ *   그 외 모든 응답에는 스트릭트 앱 CSP를 준다(기존 CSP 헤더는 제거 후 주입 — 대소문자 변형 대비).
  * @param {object} session Electron session(또는 { webRequest:{ onHeadersReceived } } 모킹)
  */
 function applyCspHeaders(session) {
   if (!session || !session.webRequest || typeof session.webRequest.onHeadersReceived !== 'function') return;
   session.webRequest.onHeadersReceived((details, callback) => {
-    const responseHeaders = Object.assign({}, details.responseHeaders, buildCspHeader());
+    const responseHeaders = Object.assign({}, details.responseHeaders);
+    for (const k of Object.keys(responseHeaders)) {
+      if (k.toLowerCase() === 'content-security-policy') delete responseHeaders[k];
+    }
+    responseHeaders['Content-Security-Policy'] = [cspForUrl(details.url)];
     callback({ responseHeaders });
   });
 }
@@ -73,4 +118,4 @@ function hardenWebContents(webContents, opts) {
   });
 }
 
-module.exports = { TRUSTED_ORIGIN, CSP_POLICY, buildCspHeader, applyCspHeaders, hardenWebContents };
+module.exports = { TRUSTED_ORIGIN, CSP_POLICY, buildCspHeader, applyCspHeaders, hardenWebContents, MAIL_VIEW_HOST, isMailViewUrl, buildMailCsp, cspForUrl };

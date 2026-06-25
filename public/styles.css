@@ -771,6 +771,8 @@ textarea.briefing-systemprompt {
 }
 /* 기본 프롬프트를 편집 칸에 불러오는 버튼 — 안내 문구 아래 좌측 정렬. */
 .briefing-systemprompt__load { margin-top: 8px; }
+/* [메일 뷰어] 격리 이메일 본문 iframe(app://mailbody, sandbox + 자체 CSP). */
+.mail-frame { width: 100%; height: 62vh; min-height: 300px; border: 1px solid var(--border); border-radius: 10px; background: #fff; display: block; }
 /* AI에 전달되는 컨텍스트 DATA 설명(접이식). */
 .briefing-context { margin: 8px 0 4px; border: 1px solid var(--border); border-radius: 9px; padding: 8px 12px; background: var(--surface-2); }
 .briefing-context__summary { cursor: pointer; font-size: 12.5px; font-weight: 600; color: var(--t2); }
