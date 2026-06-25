@@ -208,6 +208,8 @@ function registerIpcHandlers(deps) {
   guard('spip:setSortMode', (args) => uiStateIpc.setSortMode(args, ctx));
   // [R-32] 홈 섹션 순서 — 섹션 enum 화이트리스트만(경로·실행 무관). 검증은 메인 normalizeHomeLayout 단일 경계.
   guard('spip:setHomeLayout', (args) => uiStateIpc.setHomeLayout(args, ctx));
+  // [위젯 추가/제거] 숨긴(미적용) 위젯 집합 — 토글 가능 위젯 화이트리스트만. 검증은 메인 normalizeHiddenWidgets.
+  guard('spip:setHiddenWidgets', (args) => uiStateIpc.setHiddenWidgets(args, ctx));
   // 프로젝트 표시 별칭 + 테마(라이트/다크/시스템).
   guard('spip:setProjectName', (args) => uiStateIpc.setProjectName(args, ctx));
   guard('spip:setTheme', (args) => uiStateIpc.setTheme(args, ctx));

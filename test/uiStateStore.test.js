@@ -167,6 +167,30 @@ test('normalizeState/defaultState — homeLayout 기본 순서 포함', () => {
   assert.deepStrictEqual(store.normalizeState({}).homeLayout, store.HOME_SECTION_IDS);
 });
 
+// ── [위젯 추가/제거] hiddenWidgets ──
+
+test('normalizeHiddenWidgets — 토글 위젯 화이트리스트만·중복 제거·featureAdd 불가', () => {
+  assert.deepStrictEqual(store.normalizeHiddenWidgets(['mail', 'mail', 'bogus', 7, 'aiusage']), ['mail', 'aiusage']);
+  assert.deepStrictEqual(store.normalizeHiddenWidgets(['featureAdd']), [], 'featureAdd는 숨길 수 없음');
+  assert.deepStrictEqual(store.normalizeHiddenWidgets(null), []);
+  assert.deepStrictEqual(store.normalizeHiddenWidgets('nope'), []);
+  // 토글 위젯 = HOME_SECTION_IDS − featureAdd
+  assert.deepStrictEqual(store.TOGGLEABLE_WIDGET_IDS, store.HOME_SECTION_IDS.filter((id) => id !== 'featureAdd'));
+});
+
+test('defaultState/normalizeState — hiddenWidgets 기본 빈 배열(전부 표시)', () => {
+  assert.deepStrictEqual(store.defaultState().hiddenWidgets, []);
+  assert.deepStrictEqual(store.normalizeState({}).hiddenWidgets, []);
+});
+
+test('write/read — hiddenWidgets 라운드트립 보존 (C-M-1)', () => {
+  const file = tmpFile();
+  const written = store.write({ hiddenWidgets: ['mail', 'disk'] }, { uiStatePath: file });
+  assert.deepStrictEqual(written.hiddenWidgets, ['mail', 'disk']);
+  const back = store.read({ uiStatePath: file });
+  assert.deepStrictEqual(back.hiddenWidgets, ['mail', 'disk'], 'read 후에도 보존(키 안 버려짐)');
+});
+
 // [C-M-1 게이트] write→read 라운드트립 보존 — homeLayout 키가 normalizeState에서 조용히 버려지지 않음.
 test('write/read — homeLayout 라운드트립 보존 (C-M-1)', () => {
   const file = tmpFile();

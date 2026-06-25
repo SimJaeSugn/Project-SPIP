@@ -34,6 +34,7 @@ function toResponse(state) {
   return {
     favorites: state.favorites, order: state.order, sortMode: state.sortMode, names: state.names,
     theme: state.theme, todos: state.todos, langTrend: state.langTrend, homeLayout: state.homeLayout,
+    hiddenWidgets: state.hiddenWidgets, // [위젯 추가/제거] 숨긴(미적용) 위젯 집합
     briefing: { items: openItems, counters: briefing.counters },
     // [항목3] 연결된 LLM 모델 토큰 사용량 누적(표시·집계 전용 수치만). 정규화된 값 그대로 노출.
     aiUsage: state.aiUsage || uiStateStore.defaultAiUsage(),
@@ -129,6 +130,20 @@ function setHomeLayout(args, ctx) {
   const state = store.read(storeCtx);
   const next = store.write(Object.assign({}, state, { homeLayout }), storeCtx);
   return { ok: true, homeLayout: next.homeLayout };
+}
+
+/**
+ * [위젯 추가/제거] spip:setHiddenWidgets — 숨긴(미적용) 위젯 집합 설정. 토글 가능 위젯 화이트리스트만(단일 신뢰 경계).
+ * @param {object} args { ids:string[] }
+ * @returns {{ok:true, hiddenWidgets}}
+ */
+function setHiddenWidgets(args, ctx) {
+  const ids = (args && typeof args === 'object') ? args.ids : undefined;
+  const hiddenWidgets = uiStateStore.normalizeHiddenWidgets(ids);
+  const { store, storeCtx } = resolveStore(ctx);
+  const state = store.read(storeCtx);
+  const next = store.write(Object.assign({}, state, { hiddenWidgets }), storeCtx);
+  return { ok: true, hiddenWidgets: next.hiddenWidgets };
 }
 
 /**
@@ -279,4 +294,4 @@ function updateLangTrend(args, ctx) {
   return { ok: true, prev: written.langTrend.prev, cur: written.langTrend.cur };
 }
 
-module.exports = { getUiState, setFavorite, setOrder, setSortMode, setHomeLayout, setProjectName, setTheme, addTodo, toggleTodo, removeTodo, setTodoDue, updateLangTrend };
+module.exports = { getUiState, setFavorite, setOrder, setSortMode, setHomeLayout, setHiddenWidgets, setProjectName, setTheme, addTodo, toggleTodo, removeTodo, setTodoDue, updateLangTrend };

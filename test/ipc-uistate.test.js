@@ -100,6 +100,28 @@ test('getUiState — homeLayout 포함(toResponse 노출)', () => {
   assert.strictEqual(r.homeLayout.length, realStore.HOME_SECTION_IDS.length); // 누락 보충
 });
 
+// ── [위젯 추가/제거] setHiddenWidgets ──
+
+test('setHiddenWidgets — 토글 위젯만 정규화·영속·응답', () => {
+  const s = memStore();
+  const ctx = ctxWith(s);
+  const r = uiState.setHiddenWidgets({ ids: ['mail', 'aiusage', 'featureAdd', 'bogus', 9] }, ctx);
+  assert.strictEqual(r.ok, true);
+  assert.deepStrictEqual(r.hiddenWidgets, ['mail', 'aiusage'], 'featureAdd·미지·비문자열 제거');
+  assert.deepStrictEqual(s._get().hiddenWidgets, r.hiddenWidgets);
+});
+
+test('setHiddenWidgets — 비배열/누락 graceful(빈 배열=전부 표시)', () => {
+  const ctx = ctxWith(memStore());
+  assert.deepStrictEqual(uiState.setHiddenWidgets({ ids: 'nope' }, ctx).hiddenWidgets, []);
+  assert.deepStrictEqual(uiState.setHiddenWidgets({}, ctx).hiddenWidgets, []);
+});
+
+test('getUiState — hiddenWidgets 포함(toResponse 노출)', () => {
+  const r = uiState.getUiState(ctxWith(memStore({ hiddenWidgets: ['disk'] })));
+  assert.deepStrictEqual(r.hiddenWidgets, ['disk']);
+});
+
 // ── 할 일(todos) 핸들러 ──
 function todoCtx(store) {
   let n = 0;

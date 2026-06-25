@@ -378,11 +378,52 @@ input, button, select { font-family: inherit; }
 /* [R-32] 홈 섹션 워터폴(masonry) — CSS columns 로 높이 제각각 카드를 빈틈 없이 채운다(Q-B 기본). */
 .home-masonry { column-count: 2; column-gap: 20px; }
 .home-section {
+  position: relative;             /* [위젯 추가/제거] 제거(×) 버튼 absolute 기준 */
   break-inside: avoid;            /* 섹션이 컬럼 경계에서 쪼개지지 않게(겹침/빈칸 0) */
   -webkit-column-break-inside: avoid;
   margin: 0 0 20px;               /* 컬럼 내 세로 간격(기존 2-컬럼 gap:20px 유지) */
 }
 .home-section:first-child { margin-top: 0; }
+/* [위젯 추가/제거] 위젯 제거(×) 버튼 — 평소 숨김, 카드 호버 시 우상단 노출. */
+.widget-remove {
+  position: absolute; top: 8px; right: 8px; z-index: 3;
+  width: 26px; height: 26px; padding: 0; display: flex; align-items: center; justify-content: center;
+  border: 1px solid var(--border); border-radius: 8px; background: var(--panel); cursor: pointer;
+  opacity: 0; transition: opacity .12s ease, background .12s ease; box-shadow: 0 2px 8px rgba(28,25,23,.12);
+}
+.home-section:hover .widget-remove, .widget-remove:focus-visible { opacity: 1; }
+.widget-remove:hover { background: var(--surface-2); }
+/* [위젯 추가/제거] 위젯 갤러리 팝업. */
+.widget-gallery__overlay {
+  position: fixed; inset: 0; z-index: 50; background: rgba(28,25,23,.45);
+  display: flex; align-items: center; justify-content: center; padding: 24px;
+}
+.widget-gallery__panel {
+  width: 100%; max-width: 760px; max-height: 86vh; overflow-y: auto;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 22px 24px;
+  box-shadow: 0 24px 70px rgba(28,25,23,.30);
+}
+.widget-gallery__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
+.widget-gallery__close { border: none; background: none; font-size: 18px; color: var(--t4); cursor: pointer; padding: 2px 6px; border-radius: 6px; }
+.widget-gallery__close:hover { background: var(--surface-2); color: var(--t2); }
+.widget-gallery__grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+@media (max-width: 720px) { .widget-gallery__grid { grid-template-columns: 1fr; } }
+.widget-card {
+  border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: var(--panel);
+  display: flex; flex-direction: column; transition: border-color .12s ease, box-shadow .12s ease;
+}
+.widget-card:not(.widget-card--applied) { cursor: pointer; }
+.widget-card:not(.widget-card--applied):hover { border-color: var(--accent); box-shadow: 0 6px 20px rgba(28,25,23,.12); }
+.widget-card--applied { opacity: .72; }
+.widget-card__preview { background: var(--surface-2); padding: 12px 14px; border-bottom: 1px solid var(--border); min-height: 78px; }
+.widget-card__preview-title { font-size: 11.5px; font-weight: 700; color: var(--t2); margin-bottom: 8px; }
+.widget-card__skeleton { height: 7px; border-radius: 4px; background: #e7e5e4; margin-bottom: 6px; }
+:root[data-theme="dark"] .widget-card__skeleton { background: #3a3531; }
+.widget-card__body { padding: 11px 14px 4px; }
+.widget-card__name { font-size: 13px; font-weight: 600; color: var(--t1); }
+.widget-card__desc { font-size: 11.5px; color: var(--t3); margin-top: 2px; line-height: 1.5; }
+.widget-card__badge { padding: 8px 14px 12px; font-size: 11.5px; font-weight: 600; color: #15803d; }
+.widget-card__add { padding: 8px 14px 12px; font-size: 12px; font-weight: 700; color: var(--accent); }
 /* 드래그 프리뷰: 끌리는 섹션(고스트=드롭 위치 미리보기). */
 .home-section--ghost { opacity: .45; outline: 2px dashed var(--accent); outline-offset: -2px; border-radius: 14px; }
 .home-section--chosen { cursor: grabbing; }

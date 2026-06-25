@@ -645,6 +645,19 @@ function shouldPollCommit(view, visible) {
  */
 const HOME_SECTION_IDS = ['attention', 'productivity', 'activity', 'todos', 'mail', 'disk', 'aiusage', 'featureAdd'];
 
+// [위젯 추가/제거] 토글 가능한 콘텐츠 위젯 메타(갤러리·제거 UI용). 'featureAdd'는 추가 트리거라 제외(항상 표시).
+//   메인 uiStateStore.TOGGLEABLE_WIDGET_IDS 와 동형(드리프트 0 — homeLayout-front 테스트가 교차검증).
+const TOGGLEABLE_WIDGET_IDS = HOME_SECTION_IDS.filter((id) => id !== 'featureAdd');
+const WIDGET_META = {
+  attention: { name: '주의가 필요한 프로젝트', desc: '미커밋·미푸시·방치 프로젝트를 한눈에' },
+  productivity: { name: '주간 생산성', desc: '커밋 빈도 차트와 언어·스택 추세' },
+  activity: { name: '최근 활동 타임라인', desc: '최근 수정된 프로젝트 흐름' },
+  todos: { name: '할 일', desc: '마감·알림이 있는 할 일 목록' },
+  mail: { name: '메일', desc: '안 읽은 메일 다이제스트' },
+  disk: { name: '디스크 회수', desc: '방치 프로젝트 node_modules 정리 후보' },
+  aiusage: { name: '토큰 사용량', desc: 'Claude Code·연결 모델 토큰 추이' },
+};
+
 /**
  * [R-32] 저장된 homeLayout → 렌더 순서로 정규화(순수). 메인 normalizeHomeLayout 과 동일 규칙:
  *   화이트리스트 외 제거·중복 제거·누락 섹션은 기본 순서로 끝에 보충 → 항상 7개 순열.
@@ -1342,6 +1355,10 @@ function initBrowser() {
     mailRefreshTimer: null,       // 홈에서 메일 주기 갱신 타이머
     commitRefreshTimer: null,     // [R-31] 홈에서 커밋 차트 5분 주기 갱신 타이머(홈 이탈/비가시 시 정지)
     homeLayout: HOME_SECTION_IDS.slice(), // [R-32] 홈 섹션 표시 순서(getUiState.homeLayout 적재, 기본=enum 순서)
+    // [위젯 추가/제거] 숨긴(미적용) 위젯 id 배열(getUiState.hiddenWidgets 적재) + 위젯 갤러리 팝업 표시 플래그.
+    hiddenWidgets: [],
+    showWidgetGallery: false,
+    busyWidgets: false,           // setHiddenWidgets in-flight
     // [M13 R-34~R-41] 브리핑 AI — 렌더러 상태(apiKey 평문 절대 미보관). status 는 push 로 갱신.
     briefing: {
       enabled: false,            // getSettings.enabled(opt-in)
@@ -2098,11 +2115,16 @@ function initBrowser() {
     //   각 섹션은 .home-section(data-home-section=enum id) 래퍼로 감싸 SortableJS 가 이동 단위로 잡는다.
     //   레이아웃은 CSS columns(.home-masonry) — 높이가 제각각인 카드를 빈틈 없이 채운다.
     var grid = el('div', { cls: 'home-masonry', style: 'padding:20px 30px 36px;' });
+    var hidden = store.hiddenWidgets || [];
     applyHomeLayout(store.homeLayout).forEach(function (id) {
+      // [위젯 추가/제거] 미적용(숨김) 콘텐츠 위젯은 건너뜀. featureAdd(추가 트리거)는 항상 표시.
+      if (id !== 'featureAdd' && hidden.indexOf(id) >= 0) return;
       var node = renderHomeSection(id, reclaim);
       if (!node) return;
       // data-home-section 은 고정 enum 값만(L-2/L-3: 스캔 유래 신뢰 못 할 데이터 아님). 드래그 이동 단위.
       var cell = el('div', { cls: 'home-section', attrs: { 'data-home-section': id } });
+      // [위젯 추가/제거] featureAdd 외 위젯엔 제거(×) 버튼 오버레이(호버 시 노출).
+      if (id !== 'featureAdd') cell.appendChild(widgetRemoveBtn(id));
       cell.appendChild(node);
       grid.appendChild(cell);
     });
@@ -2111,6 +2133,7 @@ function initBrowser() {
     main.appendChild(wrap);
     root.appendChild(main);
     if (store.state.selectedId) root.appendChild(renderDrawer());
+    if (store.showWidgetGallery) root.appendChild(renderWidgetGallery()); // [위젯 추가/제거] 위젯 갤러리 팝업
     return root;
   }
 
@@ -2880,17 +2903,109 @@ function initBrowser() {
   }
 
   function renderHomeFeatureAdd() {
+    // [위젯 추가/제거] 클릭 시 위젯 갤러리 팝업을 연다(기존 설정 열기 → 위젯 추가로 변경).
+    var avail = (store.hiddenWidgets || []).length; // 추가 가능(미적용) 위젯 수
+    var openGallery = function () { store.showWidgetGallery = true; render(); };
     var card = el('div', {
       style: 'background:#fafafa;border:1.5px dashed #d6d3d1;border-radius:16px;padding:20px;display:flex;align-items:center;gap:13px;cursor:pointer;',
-      attrs: { role: 'button', tabindex: '0', 'aria-label': '기능 추가' },
-      on: { click: function () { openSettings(); } },
+      attrs: { role: 'button', tabindex: '0', 'aria-label': '위젯 추가' },
+      on: { click: openGallery, keydown: function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openGallery(); } } },
     });
     card.appendChild(el('div', { text: '+', style: 'width:34px;height:34px;border-radius:9px;background:#fff;border:1px solid #e7e5e4;display:flex;align-items:center;justify-content:center;color:#a8a29e;font-size:22px;line-height:1;flex:0 0 auto;' }));
     var t = el('div');
-    t.appendChild(el('div', { text: '기능 추가', style: 'font-size:13px;font-weight:600;color:#57534e;' }));
-    t.appendChild(el('div', { text: '스니펫 · 환경설정 동기화 · 배포 모니터링', style: 'font-size:11px;color:#a8a29e;margin-top:2px;' }));
+    t.appendChild(el('div', { text: '위젯 추가', style: 'font-size:13px;font-weight:600;color:#57534e;' }));
+    t.appendChild(el('div', { text: avail > 0 ? ('추가 가능한 위젯 ' + avail + '개 · 클릭해 선택') : '모든 위젯이 적용됨 · 클릭해 둘러보기', style: 'font-size:11px;color:#a8a29e;margin-top:2px;' }));
     card.appendChild(t);
     return card;
+  }
+
+  /** [위젯 추가/제거] 위젯 카드 우상단 제거(×) 버튼 — 호버 시 노출(.home-section:hover .widget-remove). */
+  function widgetRemoveBtn(id) {
+    var meta = WIDGET_META[id] || { name: id };
+    return el('button', {
+      cls: 'widget-remove',
+      attrs: { type: 'button', 'aria-label': meta.name + ' 위젯 홈에서 제거', title: '홈에서 제거' },
+      on: { click: function (e) { e.stopPropagation(); onRemoveWidget(id); } },
+      children: [svg([{ t: 'path', d: 'M18 6L6 18M6 6l12 12' }], { size: 13, stroke: '#78716c', sw: 2 })],
+    });
+  }
+
+  /** [위젯 추가/제거] 위젯 갤러리 팝업 — 모든 토글 위젯을 미리보기로 보여주고, 미적용 위젯을 선택해 홈에 추가. */
+  function renderWidgetGallery() {
+    var hidden = store.hiddenWidgets || [];
+    var close = function () { store.showWidgetGallery = false; render(); };
+    var overlay = el('div', {
+      cls: 'widget-gallery__overlay',
+      on: { click: function (e) { if (e.target === overlay) close(); } },
+    });
+    var panel = el('div', { cls: 'widget-gallery__panel spip-scroll' });
+    var head = el('div', { cls: 'widget-gallery__head' });
+    var titleWrap = el('div');
+    titleWrap.appendChild(el('div', { text: '위젯 추가', style: 'font-size:17px;font-weight:700;color:#1c1917;' }));
+    titleWrap.appendChild(el('div', { text: '홈 대시보드에 표시할 위젯을 고르세요. 이미 적용된 위젯은 카드의 × 로 제거할 수 있습니다.', style: 'font-size:12px;color:#78716c;margin-top:3px;' }));
+    head.appendChild(titleWrap);
+    head.appendChild(el('button', {
+      cls: 'widget-gallery__close', text: '✕', attrs: { type: 'button', 'aria-label': '닫기' }, on: { click: close },
+    }));
+    panel.appendChild(head);
+
+    var gridGal = el('div', { cls: 'widget-gallery__grid' });
+    TOGGLEABLE_WIDGET_IDS.forEach(function (id) {
+      var meta = WIDGET_META[id] || { name: id, desc: '' };
+      var applied = hidden.indexOf(id) < 0;
+      var cardCls = 'widget-card' + (applied ? ' widget-card--applied' : '');
+      var actionAttrs = applied ? {} : { role: 'button', tabindex: '0', 'aria-label': meta.name + ' 홈에 추가' };
+      var card = el('div', {
+        cls: cardCls,
+        attrs: actionAttrs,
+        on: applied ? {} : {
+          click: function () { onAddWidget(id); },
+          keydown: function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onAddWidget(id); } },
+        },
+      });
+      // 미리보기 — 위젯 모양을 대표하는 미니 목업(제목 + 스켈레톤 라인).
+      var prev = el('div', { cls: 'widget-card__preview' });
+      prev.appendChild(el('div', { cls: 'widget-card__preview-title', text: meta.name }));
+      for (var i = 0; i < 3; i++) prev.appendChild(el('div', { cls: 'widget-card__skeleton', style: 'width:' + (90 - i * 18) + '%;' }));
+      card.appendChild(prev);
+      var body = el('div', { cls: 'widget-card__body' });
+      body.appendChild(el('div', { cls: 'widget-card__name', text: meta.name }));
+      body.appendChild(el('div', { cls: 'widget-card__desc', text: meta.desc || '' }));
+      card.appendChild(body);
+      // 상태/액션.
+      if (applied) {
+        card.appendChild(el('div', { cls: 'widget-card__badge', text: '✓ 적용됨' }));
+      } else {
+        card.appendChild(el('div', { cls: 'widget-card__add', text: '+ 홈에 추가' }));
+      }
+      gridGal.appendChild(card);
+    });
+    panel.appendChild(gridGal);
+    overlay.appendChild(panel);
+    return overlay;
+  }
+
+  /** [위젯 추가/제거] hidden 집합 변경 영속(낙관적) — 메인 normalizeHiddenWidgets가 단일 신뢰 경계. */
+  function commitHiddenWidgets(next) {
+    store.hiddenWidgets = next;
+    render();
+    if (!bridgeHas('setHiddenWidgets')) return; // 웹/테스트 graceful
+    store.busyWidgets = true;
+    ipc('setHiddenWidgets', next).then(function (res) {
+      store.busyWidgets = false;
+      if (res && res.ok && Array.isArray(res.hiddenWidgets)) { store.hiddenWidgets = res.hiddenWidgets; render(); }
+    }).catch(function () { store.busyWidgets = false; });
+  }
+  function onAddWidget(id) {
+    if (TOGGLEABLE_WIDGET_IDS.indexOf(id) < 0) return;
+    var next = (store.hiddenWidgets || []).filter(function (x) { return x !== id; }); // 숨김 해제 = 적용
+    commitHiddenWidgets(next);
+  }
+  function onRemoveWidget(id) {
+    if (TOGGLEABLE_WIDGET_IDS.indexOf(id) < 0) return;
+    var cur = store.hiddenWidgets || [];
+    if (cur.indexOf(id) >= 0) return;
+    commitHiddenWidgets(cur.concat([id])); // 숨김 추가 = 제거
   }
 
   function renderDashboard() {
@@ -6297,6 +6412,9 @@ function initBrowser() {
     store.todos = (res && res.ok !== false && Array.isArray(res.todos)) ? res.todos.filter((t) => t && typeof t.id === 'string') : [];
     // [R-32] 홈 섹션 순서 — getUiState 응답의 homeLayout 적재(부재/손상 시 동형 정규화로 기본 순서 보충).
     store.homeLayout = applyHomeLayout(res && res.ok !== false ? res.homeLayout : null);
+    // [위젯 추가/제거] 숨긴(미적용) 위젯 적재 — 토글 가능 위젯 화이트리스트만(부재/손상 시 빈 = 전부 표시).
+    store.hiddenWidgets = (res && res.ok !== false && Array.isArray(res.hiddenWidgets))
+      ? res.hiddenWidgets.filter(function (id) { return TOGGLEABLE_WIDGET_IDS.indexOf(id) >= 0; }) : [];
     // [항목3] 연결된 LLM 모델 토큰 사용량 누적 적재(브리핑 생성 시 메인이 누적·영속).
     store.aiUsage = (res && res.ok !== false && res.aiUsage && typeof res.aiUsage === 'object') ? res.aiUsage : null;
     // [M13] 브리핑 carry-over 항목(open) 적재 — 영속 단일 출처. 실시간 생성상태는 push 로 갱신.
@@ -7049,6 +7167,8 @@ if (typeof module !== 'undefined' && module.exports) {
     // [R-32] 홈 섹션 화이트리스트 + 순서 정규화(렌더러 동형)
     HOME_SECTION_IDS,
     applyHomeLayout,
+    // [위젯 추가/제거] 토글 가능 위젯 목록(메인 동형 교차검증용)
+    TOGGLEABLE_WIDGET_IDS,
     // [R-33] 커밋 차트 기하 모델(순수 — 수치 sanitize·스케일)
     commitChartModel,
     // [M10] 커밋 데이터 동일성 키(diff 가드) + 툴팁 가로위치 + patchRegion 분기(순수)

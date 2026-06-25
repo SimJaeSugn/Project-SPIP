@@ -135,6 +135,8 @@ contextBridge.exposeInMainWorld('spip', {
   setSortMode: (m) => ipcRenderer.invoke('spip:setSortMode', { mode: String(m) }),
   // [R-32] 홈 섹션 순서 — 섹션 id 배열만. 읽기는 getUiState 응답의 homeLayout. 검증은 main normalizeHomeLayout.
   setHomeLayout: (ids) => ipcRenderer.invoke('spip:setHomeLayout', { ids: Array.isArray(ids) ? ids.map(String) : [] }),
+  // [위젯 추가/제거] 숨긴(미적용) 위젯 집합 — id 배열만. 읽기는 getUiState 응답의 hiddenWidgets. 검증은 main normalizeHiddenWidgets.
+  setHiddenWidgets: (ids) => ipcRenderer.invoke('spip:setHiddenWidgets', { ids: Array.isArray(ids) ? ids.map(String) : [] }),
 
   // 프로젝트 표시 별칭(빈 문자열이면 해제) + 테마(light|dark|system).
   setProjectName: (id, name) => ipcRenderer.invoke('spip:setProjectName', { id: String(id), name: name == null ? '' : String(name) }),
