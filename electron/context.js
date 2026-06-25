@@ -21,6 +21,8 @@ const { MailWatcherManager } = require('../lib/mail/mailWatcherManager');
 const { BriefingOrchestrator } = require('../lib/ai/briefingOrchestrator');
 const { createLlmClient } = require('../lib/ai/llmClient');
 const briefingIpc = require('./ipc/briefing');
+const uiStateStore = require('../lib/common/uiStateStore');
+const claudeUsage = require('../lib/ai/claudeUsage');
 
 /**
  * 앱 컨텍스트를 조립해 반환한다.
@@ -49,6 +51,7 @@ function buildContext(opts) {
     stateWatcher,
     mailManager,
     cachePath: opts.cachePath, // 미지정이면 lib가 기본 경로(paths.cachePath) 사용
+    uiStatePath: opts.uiStatePath, // [브리핑 일정] deriveSnapshot이 할 일 마감을 읽을 ui-state 경로(미지정=기본)
     logger,
     loaded,
   };
@@ -69,6 +72,8 @@ function buildContext(opts) {
     makeTestClient: (tempBriefing) => createLlmClient({ getConfig: () => ({ briefing: tempBriefing }), logger }),
     // snapshotProvider·push·isSuppressed는 main.js가 setPush로 주입(webContents 바인딩 필요).
     snapshotProvider: () => deriveSnapshot(ctx),
+    // [브리핑 토큰리포트] 토큰 사용량 요약 제공(연결 모델 누적 + Claude Code 추이). 생성 시점에 1회 호출.
+    usageProvider: makeUsageProvider({ uiStatePath: opts.uiStatePath, logger }),
   });
 
   return ctx;
@@ -118,7 +123,74 @@ function deriveSnapshot(ctx, extra) {
       out.mail.latestUid = (typeof ms.latestUid === 'string' && ms.latestUid) ? ms.latestUid : null;
     }
   } catch (_) { /* graceful */ }
+  // [브리핑 일정] 할 일 마감(dueAt) → deadlines 신호 입력. ui-state에서 읽어 매핑(dueAt 보유 항목만).
+  //   정책(briefingPolicy)이 임박(24h 이내)·경과 미완료를 URGENT deadline 신호로 발화한다. 미완료만 의미 있으나
+  //   done도 그대로 전달(정책이 필터·auto-resolve). 읽기는 작은 로컬 JSON — graceful(실패 시 빈 deadlines).
+  try {
+    const ui = uiStateStore.read({ uiStatePath: ctx && ctx.uiStatePath, logger: ctx && ctx.logger });
+    const todos = Array.isArray(ui.todos) ? ui.todos : [];
+    for (const t of todos) {
+      if (!t || typeof t.id !== 'string' || typeof t.dueAt !== 'number' || !Number.isFinite(t.dueAt)) continue;
+      out.deadlines.push({ id: t.id, name: (typeof t.text === 'string') ? t.text : '', dueAt: t.dueAt, done: t.done === true });
+    }
+  } catch (_) { /* graceful — 빈 deadlines */ }
   return out;
 }
 
-module.exports = { buildContext, deriveSnapshot };
+/** [브리핑 토큰리포트] 토큰 수 압축 표기(1.2k·3.4M). */
+function fmtTok(n) {
+  n = (typeof n === 'number' && Number.isFinite(n) && n > 0) ? Math.floor(n) : 0;
+  if (n < 1000) return String(n);
+  if (n < 1000000) return (n / 1000).toFixed(1) + 'k';
+  return (n / 1000000).toFixed(2) + 'M';
+}
+
+/**
+ * [브리핑 토큰리포트] 사용량 요약 문자열 — 연결 모델 누적(aiUsage) + Claude Code 추이(최근7일 vs 직전7일).
+ *   수치만(본문 비노출). 데이터 없으면 null.
+ */
+function buildUsageSummary(aiUsage, claude) {
+  const parts = [];
+  if (aiUsage && aiUsage.calls > 0) {
+    parts.push('[연결 모델] 누적 ' + fmtTok(aiUsage.totalTokens) + '토큰·' + aiUsage.calls + '회 호출'
+      + (aiUsage.lastModel ? ('(' + aiUsage.lastModel + ')') : ''));
+  }
+  if (claude && claude.available && claude.totals) {
+    const daily = Array.isArray(claude.daily) ? claude.daily : [];
+    const n = daily.length;
+    let r7 = 0; let p7 = 0;
+    for (let i = 0; i < n; i++) {
+      const v = (daily[i] && daily[i].totalTokens) || 0;
+      if (i >= n - 7) r7 += v; else if (i >= n - 14) p7 += v;
+    }
+    const trend = r7 > p7 * 1.1 ? '증가세' : (r7 < p7 * 0.9 ? '감소세' : '비슷');
+    const today = (claude.today && claude.today.totalTokens) || 0;
+    parts.push('[Claude Code] 오늘 ' + fmtTok(today) + '토큰, 최근7일 ' + fmtTok(r7)
+      + '(직전7일 ' + fmtTok(p7) + ', 추세 ' + trend + '), 누적 ' + fmtTok(claude.totals.totalTokens));
+  }
+  return parts.length ? parts.join(' / ') : null;
+}
+
+/**
+ * [브리핑 토큰리포트] usageProvider 팩토리 — 생성 시점에 호출되어 요약 문자열을 반환.
+ *   연결 모델 aiUsage는 ui-state에서 매번 읽고(싸다), Claude Code 집계는 무거운 스캔이라 10분 캐시.
+ * @param {object} deps { uiStatePath?, logger? }
+ * @returns {() => (string|null)}
+ */
+function makeUsageProvider(deps) {
+  deps = deps || {};
+  let claudeCache = null;
+  let claudeAt = 0;
+  const TTL = 10 * 60 * 1000;
+  return function usageProvider() {
+    let aiUsage = null;
+    try { aiUsage = uiStateStore.read({ uiStatePath: deps.uiStatePath, logger: deps.logger }).aiUsage; } catch (_) { /* graceful */ }
+    const nowMs = Date.now();
+    if (!claudeCache || (nowMs - claudeAt) > TTL) {
+      try { claudeCache = claudeUsage.summarizeClaudeUsage({ logger: deps.logger }); claudeAt = nowMs; } catch (_) { /* graceful */ }
+    }
+    return buildUsageSummary(aiUsage, claudeCache);
+  };
+}
+
+module.exports = { buildContext, deriveSnapshot, buildUsageSummary, makeUsageProvider };
