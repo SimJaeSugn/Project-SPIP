@@ -71,6 +71,25 @@ test('decodeMimeHeader — B/Q 인코딩 + 평문', () => {
   assert.strictEqual(decodeMimeHeader(null), null);
 });
 
+test('[메일 인코딩] decodeCharset/normalizeCharset — EUC-KR 등 레거시 정확 디코드', () => {
+  const { decodeCharset, normalizeCharset } = require('../lib/mail/imapProtocol');
+  assert.strictEqual(normalizeCharset('ks_c_5601-1987'), 'euc-kr');
+  assert.strictEqual(normalizeCharset('CP949'), 'euc-kr');
+  assert.strictEqual(normalizeCharset(''), 'utf-8');
+  // '한글'의 EUC-KR 바이트 → 정확 디코드.
+  assert.strictEqual(decodeCharset(Buffer.from([0xC7, 0xD1, 0xB1, 0xDB]), 'ks_c_5601-1987'), '한글');
+  // UTF-8 경로.
+  assert.strictEqual(decodeCharset(Buffer.from('안녕', 'utf8'), 'utf-8'), '안녕');
+  // 미지원 라벨 → utf-8 best-effort(throw 없음).
+  assert.strictEqual(decodeCharset(Buffer.from('hi', 'utf8'), 'x-bogus-charset'), 'hi');
+});
+
+test('[메일 인코딩] decodeMimeHeader — EUC-KR 인코딩워드 제목 디코드', () => {
+  const { decodeMimeHeader } = require('../lib/mail/imapProtocol');
+  const enc = '=?ks_c_5601-1987?B?' + Buffer.from([0xC7, 0xD1, 0xB1, 0xDB]).toString('base64') + '?=';
+  assert.strictEqual(decodeMimeHeader(enc), '한글');
+});
+
 test('parseFetchEnvelope — uid/subject(디코드)/from(이름 우선)', () => {
   const { parseFetchEnvelope } = require('../lib/mail/imapProtocol');
   const line = '* 1 FETCH (UID 34 ENVELOPE ("Wed, 01 Jan 2026" "=?UTF-8?B?7YWM7Iqk7Yq4?=" (("John Doe" NIL "john" "ex.com")) NIL NIL NIL NIL NIL NIL "<id>"))';

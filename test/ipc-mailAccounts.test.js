@@ -143,7 +143,10 @@ test('getMailSummary — 계정 없으면 빈 목록', async () => {
 test('getMailMessage — 성공 시 파싱된 본문 반환', async () => {
   const { ctx } = makeCtx();
   const added = ipc.addMailAccount(VALID, ctx);
-  ctx.mailClientFactory = () => ({ fetchMessage: async () => 'Subject: 제목\r\nFrom: s@x.com\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n본문입니다' });
+  // [메일 인코딩] imapClient는 원시 바이트 보존(latin1)을 반환 — 제목은 RFC2047 인코딩, 본문은 UTF-8 바이트.
+  const subjEnc = '=?UTF-8?B?' + Buffer.from('제목', 'utf8').toString('base64') + '?=';
+  const rawMsg = Buffer.from('Subject: ' + subjEnc + '\r\nFrom: s@x.com\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n본문입니다', 'utf8').toString('latin1');
+  ctx.mailClientFactory = () => ({ fetchMessage: async () => rawMsg });
   const res = await ipc.getMailMessage({ accountId: added.account.id, uid: 5 }, ctx);
   assert.ok(res.ok);
   assert.strictEqual(res.subject, '제목');

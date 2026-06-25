@@ -7,10 +7,13 @@ const assert = require('node:assert');
 const mb = require('../lib/mail/mailBody');
 
 const CRLF = '\r\n';
+// [메일 인코딩] imapClient는 본문을 원시 바이트 보존(latin1 1바이트=1문자)으로 전달한다. 테스트도 같은 계약을
+//   재현: 유니코드 원문을 UTF-8 바이트로 만든 뒤 latin1 문자열로(=바이트 캐리어) 변환해 parseMessage에 넣는다.
+const toLatin1 = (s) => Buffer.from(s, 'utf8').toString('latin1');
 
 test('parseMessage — 평문(UTF-8) + 헤더(RFC2047 제목)', () => {
-  const raw = 'Subject: =?UTF-8?B?7JWI64WV?=' + CRLF + 'From: a@b.com' + CRLF
-    + 'Content-Type: text/plain; charset=utf-8' + CRLF + CRLF + '안녕하세요' + CRLF + '본문';
+  const raw = toLatin1('Subject: =?UTF-8?B?7JWI64WV?=' + CRLF + 'From: a@b.com' + CRLF
+    + 'Content-Type: text/plain; charset=utf-8' + CRLF + CRLF + '안녕하세요' + CRLF + '본문');
   const r = mb.parseMessage(raw);
   assert.strictEqual(r.subject, '안녕');
   assert.strictEqual(r.from, 'a@b.com');
@@ -28,13 +31,20 @@ test('parseMessage — quoted-printable 디코드(soft break)', () => {
   assert.strictEqual(mb.parseMessage(raw).text, 'hi there end');
 });
 
+test('[메일 인코딩] parseMessage — EUC-KR(ks_c_5601-1987) 8bit 본문 정확 디코드(한글 깨짐 회귀)', () => {
+  // '한글'의 EUC-KR 바이트(0xC7D1 0xB1DB)를 latin1 캐리어로 — imapClient가 전달하는 형태.
+  const eucHangul = String.fromCharCode(0xC7, 0xD1, 0xB1, 0xDB);
+  const raw = 'Content-Type: text/html; charset=ks_c_5601-1987' + CRLF + CRLF + '<p>' + eucHangul + '</p>';
+  assert.strictEqual(mb.parseMessage(raw).text, '한글', 'EUC-KR → 정확 디코드(이전엔 깨짐)');
+});
+
 test('parseMessage — multipart: text/plain 우선', () => {
-  const raw = ['Content-Type: multipart/alternative; boundary=XB', '', '--XB', 'Content-Type: text/plain; charset=utf-8', '', '평문 파트', '--XB', 'Content-Type: text/html; charset=utf-8', '', '<p>HTML 파트</p>', '--XB--'].join(CRLF);
+  const raw = toLatin1(['Content-Type: multipart/alternative; boundary=XB', '', '--XB', 'Content-Type: text/plain; charset=utf-8', '', '평문 파트', '--XB', 'Content-Type: text/html; charset=utf-8', '', '<p>HTML 파트</p>', '--XB--'].join(CRLF));
   assert.strictEqual(mb.parseMessage(raw).text, '평문 파트');
 });
 
 test('parseMessage — multipart: text/plain 없으면 html→텍스트', () => {
-  const raw = ['Content-Type: multipart/alternative; boundary=YB', '', '--YB', 'Content-Type: text/html; charset=utf-8', '', '<p>안녕</p><br>줄바꿈', '--YB--'].join(CRLF);
+  const raw = toLatin1(['Content-Type: multipart/alternative; boundary=YB', '', '--YB', 'Content-Type: text/html; charset=utf-8', '', '<p>안녕</p><br>줄바꿈', '--YB--'].join(CRLF));
   const t = mb.parseMessage(raw).text;
   assert.ok(t.indexOf('안녕') >= 0, 'HTML 텍스트 추출');
   assert.ok(!/[<>]/.test(t), '태그 제거됨');
