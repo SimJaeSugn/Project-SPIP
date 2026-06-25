@@ -27,6 +27,20 @@ test('R-35 — briefingAcceptsGen: 비수치 gen 무시(graceful)', () => {
   assert.strictEqual(briefingAcceptsGen(1, 'x'), false);
 });
 
+// ── [연결 모델 사용량] 생성 완료 시 aiUsage 재조회 ──
+test('[연결 모델 사용량] onDone이 refreshAiUsage 호출 + getUiState로 aiUsage 갱신', () => {
+  // onDone 핸들러가 생성 완료 후 aiUsage를 다시 읽도록 배선돼야 한다(부팅 1회만이면 위젯이 안 늘어남).
+  const onDoneIdx = APP_SRC.indexOf('spip.briefing.onDone');
+  assert.ok(onDoneIdx >= 0, 'onDone 구독 존재');
+  const body = APP_SRC.slice(onDoneIdx, onDoneIdx + 500);
+  assert.ok(/refreshAiUsage\(\)/.test(body), 'onDone에서 refreshAiUsage 호출');
+  // refreshAiUsage가 getUiState로 aiUsage를 갱신한다.
+  const fnIdx = APP_SRC.indexOf('async function refreshAiUsage(');
+  assert.ok(fnIdx >= 0, 'refreshAiUsage 정의 존재');
+  const fnBody = APP_SRC.slice(fnIdx, fnIdx + 500);
+  assert.ok(/getUiState/.test(fnBody) && /store\.aiUsage\s*=/.test(fnBody), 'getUiState 응답으로 store.aiUsage 갱신');
+});
+
 // ── R-41 항목 그룹핑 ──
 test('R-41 — briefingGroupItems: urgent→must→good 순서, 미지 분류는 good', () => {
   const items = [

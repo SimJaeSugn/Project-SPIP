@@ -2650,6 +2650,17 @@ function initBrowser() {
   function maybeLoadClaudeUsage() {
     if (bridgeHas('getClaudeUsage') && !store.claudeUsageLoaded && !store.busyClaudeUsage) refreshClaudeUsage();
   }
+  /** [연결 모델 사용량 갱신] 브리핑 생성 완료 후 aiUsage만 좁게 다시 읽어 위젯 반영(다른 store 상태 불변).
+   *   메인이 생성 시 누적·영속하므로, onDone 시 재조회해야 "연결된 모델" 수치가 늘어난다. */
+  async function refreshAiUsage() {
+    if (!bridgeHas('getUiState')) return;
+    var res = await ipc('getUiState');
+    if (!res || res.ok === false || !res.aiUsage || typeof res.aiUsage !== 'object') return;
+    var prev = store.aiUsage;
+    store.aiUsage = res.aiUsage;
+    var changed = !prev || prev.calls !== res.aiUsage.calls || prev.totalTokens !== res.aiUsage.totalTokens;
+    if (changed && store.state.view === 'home') render(); // 변경 시에만 위젯 갱신
+  }
   async function refreshClaudeUsage() {
     if (!bridgeHas('getClaudeUsage') || store.busyClaudeUsage) return;
     store.busyClaudeUsage = true;
@@ -5852,6 +5863,7 @@ function initBrowser() {
       store.briefing.streamText = '';
       store.briefing.items = Array.isArray(p.items) ? p.items.filter(function (x) { return x && typeof x.key === 'string'; }) : [];
       patchBriefing();
+      refreshAiUsage(); // [연결 모델 사용량] 생성 완료 → 누적 토큰 재조회해 위젯 갱신
     }));
     if (typeof spip.briefing.onError === 'function') subs.push(spip.briefing.onError(function (p) {
       if (p && Number.isFinite(p.gen) && !briefingAcceptsGen(store.briefing.gen, p.gen)) return;
