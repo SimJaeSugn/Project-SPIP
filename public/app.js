@@ -2735,7 +2735,10 @@ function initBrowser() {
     row.appendChild(el('span', { text: value, style: HOME_MONO + 'font-size:' + (strong ? '15px;font-weight:700;color:#1c1917' : '12.5px;color:#57534e') + ';font-variant-numeric:tabular-nums;' }));
     return row;
   }
-  /** [백로그2-1] 최근 N일 토큰 사용량 막대 차트(자작 SVG, 외부 라이브러리 0). 라벨·툴팁은 <title> textContent(L-1). */
+  /** [백로그2-1] 최근 N일 토큰 사용량 막대 차트(자작 SVG, 외부 라이브러리 0).
+   *   주간 생산성(커밋) 차트와 동일 인터랙션: 호버·키보드 포커스 시 막대 강조 + 외부 툴팁(날짜·토큰).
+   *   [L-1/M-2] 라벨·툴팁은 textContent 만(innerHTML 금지), 치수·색은 sanitize 수치/고정 팔레트로 setAttribute.
+   *   전체 render 경로에서만 쓰이므로(부분 patchRegion 아님) 노드 교체 시 리스너는 GC — 별도 destroy 불요. */
   function usageBarChart(daily) {
     var days = Array.isArray(daily) ? daily : [];
     var n = days.length || 1;
@@ -2743,30 +2746,61 @@ function initBrowser() {
     for (var i = 0; i < days.length; i++) { var v = (days[i] && days[i].totalTokens) || 0; if (v > max) max = v; }
     var W = 300, H = 46, gap = 1;
     var bw = (W - gap * (n - 1)) / n;
-    var s = document.createElementNS(SVG_NS, 'svg');
-    s.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
-    s.setAttribute('width', '100%'); s.setAttribute('height', String(H));
-    s.setAttribute('preserveAspectRatio', 'none');
-    s.setAttribute('role', 'img');
-    s.setAttribute('aria-label', '최근 ' + n + '일 토큰 사용량');
+    var svgEl = document.createElementNS(SVG_NS, 'svg');
+    svgEl.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+    svgEl.setAttribute('width', '100%'); svgEl.setAttribute('height', String(H));
+    svgEl.setAttribute('preserveAspectRatio', 'none');
+    svgEl.setAttribute('class', 'commit-chart__svg'); // 커밋 차트와 동일 rect 트랜지션·포커스 링 재사용
+    svgEl.setAttribute('role', 'img');
+    svgEl.setAttribute('aria-label', '최근 ' + n + '일 토큰 사용량');
+
+    // 외부 툴팁 div(SVG 외부, textContent 만) — 커밋 차트와 동일 스타일/위치 로직.
+    var tip = el('div', { cls: 'commit-chart__tip' });
+    tip.style.display = 'none';
+    var wrap = el('div', { cls: 'commit-chart__wrap', style: 'margin:8px 0 4px;' });
+
     days.forEach(function (d, idx) {
       var val = (d && d.totalTokens) || 0;
       var h = val > 0 ? Math.max(2, Math.round(val / max * (H - 2))) : 1;
       var x = idx * (bw + gap);
+      var w = Math.max(0.5, bw);
+      var isLast = idx === days.length - 1;
+      var baseFill = isLast ? CHART_PALETTE.barLast : (val > 0 ? CHART_PALETTE.bar : CHART_PALETTE.stub);
       var rect = document.createElementNS(SVG_NS, 'rect');
       rect.setAttribute('x', String(x));
       rect.setAttribute('y', String(H - h));
-      rect.setAttribute('width', String(Math.max(0.5, bw)));
+      rect.setAttribute('width', String(w));
       rect.setAttribute('height', String(h));
       rect.setAttribute('rx', '0.6');
-      rect.setAttribute('fill', idx === days.length - 1 ? '#4f46e5' : (val > 0 ? '#c7d2fe' : '#ece9e6'));
-      var title = document.createElementNS(SVG_NS, 'title');
-      title.textContent = (d && d.date ? d.date : '') + ' · ' + fmtTokens(val) + ' 토큰'; // L-1 textContent
-      rect.appendChild(title);
-      s.appendChild(rect);
+      rect.setAttribute('fill', baseFill);
+      rect.setAttribute('tabindex', '0');   // 키보드 포커스(접근성)
+      rect.setAttribute('role', 'listitem');
+      var label = (d && d.date ? d.date : '·') + ' · ' + fmtTokens(val) + ' 토큰';
+      var titleEl = document.createElementNS(SVG_NS, 'title');
+      titleEl.textContent = label; // L-1 textContent(스크린리더)
+      rect.appendChild(titleEl);
+
+      var showTip = function () {
+        rect.setAttribute('fill', CHART_PALETTE.barHover);  // 강조(커밋 차트와 동일)
+        tip.textContent = label;                             // [M-2] textContent 만
+        tip.style.display = 'block';                         // offsetWidth 실측 위해 먼저 표시
+        var centerRatio = (x + w / 2) / W;
+        var svgRect = svgEl.getBoundingClientRect();
+        var wrapRect = wrap.getBoundingClientRect();
+        var left = tipLeft(centerRatio, svgRect.left, svgRect.width, wrapRect.left, wrapRect.width, tip.offsetWidth || 80);
+        tip.style.left = left + 'px';
+        tip.style.transform = 'translateY(-100%)';           // 세로 띄움(F-3b)
+      };
+      var hideTip = function () { rect.setAttribute('fill', baseFill); tip.style.display = 'none'; };
+      rect.addEventListener('mouseenter', showTip);
+      rect.addEventListener('mouseleave', hideTip);
+      rect.addEventListener('focus', showTip);
+      rect.addEventListener('blur', hideTip);
+      svgEl.appendChild(rect);
     });
-    var wrap = el('div', { style: 'margin:8px 0 4px;' });
-    wrap.appendChild(s);
+
+    wrap.appendChild(svgEl);
+    wrap.appendChild(tip);
     return wrap;
   }
 
