@@ -166,6 +166,17 @@ test('[systemPrompt] override 지정 → 정제된 페르소나 대체 + 출력 
   assert.ok(system.includes(prompt.OUTPUT_CONTRACT), '출력 계약은 사용자 override로 제거 불가');
 });
 
+test('[가이드 상세화] 시스템 프롬프트가 단순 알림이 아닌 상세·기술·아이디어 가이드를 지시', () => {
+  const { system } = prompt.buildPrompt({ items: items([{}]) });
+  assert.ok(/단순 알림에 그치지/.test(system), '단순 알림 지양 명시');
+  assert.ok(/상세/.test(system) && /가이드/.test(system), '상세 가이드 지시');
+  assert.ok(/아이디어/.test(system), '아이디어 측면 조언');
+  assert.ok(/대안|개선/.test(system), '대안·개선 아이디어');
+  // guide 필드 정의는 출력 계약(항상 결합)에 있어 커스텀 페르소나로도 유지된다.
+  const custom = prompt.buildPrompt({ items: items([{}]) }, { systemPrompt: '자유롭게.' });
+  assert.ok(/상세하고 실질적인 가이드/.test(custom.system), '커스텀 페르소나여도 상세 가이드 계약 유지');
+});
+
 test('[systemPrompt] 출력 계약 분리 — 커스텀 프롬프트가 출력 형식·표시전용 안전을 지울 수 없다', () => {
   // 출력 형식·인젝션 방어를 일부러 빠뜨린 페르소나를 넣어도 계약이 강제 결합된다.
   const custom = '자유롭게 답하라.';
