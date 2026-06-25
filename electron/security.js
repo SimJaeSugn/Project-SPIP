@@ -25,19 +25,19 @@ const CSP_POLICY = [
   "object-src 'none'",
   "base-uri 'none'",
   "form-action 'none'",
-  // [메일 뷰어] 우리 app:// 문서(격리 이메일 뷰어 app://mailbody 포함)만 iframe 임베드 허용.
-  //   app:// 는 standard scheme이라 파일별 host가 달라 origin이 갈린다('self'는 같은 host만) → scheme-source(app:)로 허용.
-  "frame-src app:",
+  // [메일 뷰어] 격리 이메일 뷰어(app://index.html?mailview=1 — 메인과 동일 origin)를 같은 origin iframe으로 임베드 허용.
+  "frame-src 'self'",
   "frame-ancestors 'none'",
 ].join('; ');
 
-// [메일 뷰어] 격리된 이메일 HTML 문서의 host. 이 URL 응답에는 일반 앱 CSP가 아니라 이메일용 CSP를 부여한다.
-//   → 스트릭트한 앱 CSP를 약화시키지 않고, 이메일 문서에만 스타일/이미지를 허용(스크립트는 항상 금지).
-const MAIL_VIEW_HOST = 'mailbody';
+// [메일 뷰어] 격리 이메일 뷰어는 메인 페이지와 **동일 origin**(app://index.html)에 ?mailview=1로 서빙한다.
+//   → 'self' 프레이밍이 표준대로 동작(다른 host면 origin이 갈려 frame-src/frame-ancestors가 막힌다).
+//   이 URL 응답에만 이메일용 CSP를 부여해, 앱 전체 스트릭트 CSP는 그대로 유지한다(스크립트는 항상 금지).
+const MAIL_VIEW_PARAM = 'mailview';
 
-/** url이 격리 이메일 뷰어 문서(app://mailbody/*)인가. */
+/** url이 격리 이메일 뷰어 문서(…?mailview=1)인가. */
 function isMailViewUrl(url) {
-  try { return new URL(String(url)).hostname === MAIL_VIEW_HOST; } catch (_) { return false; }
+  try { return new URL(String(url)).searchParams.get(MAIL_VIEW_PARAM) === '1'; } catch (_) { return false; }
 }
 
 /**
@@ -57,8 +57,7 @@ function buildMailCsp(showImages) {
     "object-src 'none'",
     "base-uri 'none'",
     "form-action 'none'",
-    // 우리 앱 문서(app://index.html 등)만 이 이메일 문서를 임베드 가능. app:// 는 host별 origin이 달라 scheme-source 사용.
-    "frame-ancestors app:",
+    "frame-ancestors 'self'", // 같은 origin(메인 app://index.html)만 임베드 가능
   ].join('; ');
 }
 
@@ -118,4 +117,4 @@ function hardenWebContents(webContents, opts) {
   });
 }
 
-module.exports = { TRUSTED_ORIGIN, CSP_POLICY, buildCspHeader, applyCspHeaders, hardenWebContents, MAIL_VIEW_HOST, isMailViewUrl, buildMailCsp, cspForUrl };
+module.exports = { TRUSTED_ORIGIN, CSP_POLICY, buildCspHeader, applyCspHeaders, hardenWebContents, MAIL_VIEW_PARAM, isMailViewUrl, buildMailCsp, cspForUrl };

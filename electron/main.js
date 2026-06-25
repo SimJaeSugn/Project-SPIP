@@ -123,10 +123,12 @@ function buildMailViewerDoc(html) {
 /** app:// 자산 요청을 public/ 루트로 안전 매핑(디렉터리 이탈 차단). */
 function registerAppProtocol() {
   protocol.handle('app', (request) => {
-    // [메일 뷰어] app://mailbody/* → 격리된 이메일 HTML 문서(응답 CSP는 onHeadersReceived가 이메일용으로 부여).
-    let host = '';
-    try { host = new URL(request.url).hostname; } catch (_) { /* noop */ }
-    if (host === 'mailbody') {
+    // [메일 뷰어] app://index.html?mailview=1 → 격리 이메일 HTML 문서(메인과 동일 origin이라 'self' 프레이밍 가능).
+    //   응답 CSP는 onHeadersReceived가 이메일용으로 부여(스크립트 금지·이미지 통제). 메인 페이지(쿼리 없음)는 영향 없음.
+    let isMailView = false;
+    try { isMailView = new URL(request.url).searchParams.get('mailview') === '1'; } catch (_) { /* noop */ }
+    if (isMailView) {
+      if (logger) logger.info('[mailview] 격리 본문 문서 서빙 htmlLen=' + mailViewHtml.length);
       return new Response(buildMailViewerDoc(mailViewHtml), {
         status: 200,
         headers: { 'content-type': 'text/html; charset=utf-8' },

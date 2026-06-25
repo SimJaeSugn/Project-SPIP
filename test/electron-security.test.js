@@ -36,25 +36,25 @@ test('applyCspHeaders — 응답 헤더에 CSP 주입', () => {
 });
 
 test('[메일 뷰어] cspForUrl — 이메일 문서엔 격리 CSP(스크립트 금지), 그 외엔 앱 CSP', () => {
-  // 일반 URL → 스트릭트 앱 CSP.
+  // 일반 URL(메인 페이지) → 스트릭트 앱 CSP.
   assert.strictEqual(security.cspForUrl('app://index.html'), security.CSP_POLICY);
-  // app://mailbody → 이메일 CSP: 스크립트 금지, 인라인 스타일 허용, 원격 이미지 기본 차단.
-  const mc = security.cspForUrl('app://mailbody/view?n=3');
+  // 동일 origin + ?mailview=1 → 이메일 CSP: 스크립트 금지, 인라인 스타일 허용, 원격 이미지 기본 차단.
+  const mc = security.cspForUrl('app://index.html?mailview=1&n=3');
   assert.ok(/script-src 'none'/.test(mc), '스크립트 전면 금지');
   assert.ok(/style-src 'unsafe-inline'/.test(mc), '인라인 스타일 허용');
   assert.ok(/img-src data:(?!.*https)/.test(mc), '원격 이미지 기본 차단(data:만)');
   // ?img=1 → 원격 이미지 허용.
-  const mcImg = security.cspForUrl('app://mailbody/view?n=3&img=1');
+  const mcImg = security.cspForUrl('app://index.html?mailview=1&n=3&img=1');
   assert.ok(/img-src data: https: http:/.test(mcImg), 'opt-in 시 원격 이미지 허용');
-  assert.strictEqual(security.isMailViewUrl('app://mailbody/x'), true);
+  assert.strictEqual(security.isMailViewUrl('app://index.html?mailview=1'), true);
   assert.strictEqual(security.isMailViewUrl('app://index.html'), false);
 });
 
-test('[메일 뷰어] applyCspHeaders — mailbody URL엔 이메일 CSP, 기존 CSP 헤더는 교체', () => {
+test('[메일 뷰어] applyCspHeaders — mailview URL엔 이메일 CSP, 기존 CSP 헤더는 교체', () => {
   let cb = null;
   security.applyCspHeaders({ webRequest: { onHeadersReceived: (f) => { cb = f; } } });
   let out = null;
-  cb({ url: 'app://mailbody/view', responseHeaders: { 'content-security-policy': ['old'] } }, (r) => { out = r; });
+  cb({ url: 'app://index.html?mailview=1', responseHeaders: { 'content-security-policy': ['old'] } }, (r) => { out = r; });
   const csp = out.responseHeaders['Content-Security-Policy'][0];
   assert.ok(/script-src 'none'/.test(csp));
   // 소문자 기존 CSP 헤더는 제거됨(중복 주입 방지).

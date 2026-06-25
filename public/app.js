@@ -2610,7 +2610,8 @@ function initBrowser() {
   }
   /** [메일 뷰어] 격리 이메일 문서 src — nonce로 리로드, img=1이면 원격 이미지 허용(CSP가 통제). */
   function mailViewerSrc() {
-    return 'app://mailbody/view?n=' + (store._mailViewNonce || 0) + (store.mailView.showImages ? '&img=1' : '');
+    // 메인 페이지와 동일 origin(app://index.html)에 ?mailview=1로 — 'self' 프레이밍 가능. 응답 CSP는 메인이 이메일용 부여.
+    return 'app://index.html?mailview=1&n=' + (store._mailViewNonce || 0) + (store.mailView.showImages ? '&img=1' : '');
   }
   function toggleMailImages() {
     store.mailView.showImages = !store.mailView.showImages;
