@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>즐겨찾기 셸프 위젯 코드 리뷰 (SH-1~SH-5)</title>
+<style>
+  :root { --bg:#0b0f14; --panel:#121821; --panel2:#0f141b; --border:#1f2937; --t1:#e5e7eb; --t2:#9ca3af; --t3:#6b7280;
+          --ok:#34d399; --ref:#38bdf8; --warn:#fbbf24; --bad:#f87171; --mono:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--t1); font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Malgun Gothic',sans-serif; line-height:1.6; font-size:14px; }
+  .wrap { max-width:1080px; margin:0 auto; padding:40px 28px 80px; }
+  h1 { font-size:24px; font-weight:700; margin:0 0 6px; letter-spacing:-0.02em; }
+  h2 { font-size:17px; font-weight:650; margin:34px 0 12px; color:var(--t1); border-left:3px solid var(--ref); padding-left:10px; }
+  .sub { color:var(--t2); font-size:13px; margin:0 0 4px; }
+  .verdict { display:inline-flex; align-items:center; gap:8px; font-size:15px; font-weight:700; padding:7px 16px; border-radius:8px; margin:14px 0 2px; }
+  .v-fail { background:rgba(248,113,113,.12); color:var(--bad); border:1px solid rgba(248,113,113,.4); }
+  .v-pass { background:rgba(52,211,153,.12); color:var(--ok); border:1px solid rgba(52,211,153,.35); }
+  .strike { color:var(--t3); text-decoration:line-through; }
+  .meta { color:var(--t3); font-size:12px; font-family:var(--mono); margin-top:8px; }
+  .pill { display:inline-block; font-size:11px; font-weight:700; padding:2px 9px; border-radius:20px; vertical-align:middle; }
+  .p-defect { background:rgba(248,113,113,.15); color:var(--bad); border:1px solid rgba(248,113,113,.4); }
+  .p-fixed { background:rgba(52,211,153,.14); color:var(--ok); border:1px solid rgba(52,211,153,.4); }
+  .p-improve { background:rgba(251,191,36,.13); color:var(--warn); border:1px solid rgba(251,191,36,.38); }
+  .p-minor { background:rgba(156,163,175,.13); color:var(--t2); border:1px solid rgba(156,163,175,.34); }
+  .p-ok { background:rgba(56,189,248,.12); color:var(--ref); border:1px solid rgba(56,189,248,.36); }
+  table { width:100%; border-collapse:collapse; margin:10px 0 6px; font-size:13px; }
+  th, td { text-align:left; padding:9px 11px; border-bottom:1px solid var(--border); vertical-align:top; }
+  th { color:var(--t2); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.04em; background:var(--panel2); }
+  td.loc { font-family:var(--mono); font-size:12px; color:var(--ref); white-space:nowrap; }
+  tr:last-child td { border-bottom:none; }
+  .card { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:18px 20px; margin:12px 0; }
+  .card.pass { border-color:rgba(52,211,153,.35); }
+  code { font-family:var(--mono); font-size:12.5px; background:rgba(148,163,184,.12); padding:1px 6px; border-radius:5px; color:#cbd5e1; }
+  ul { margin:6px 0 6px; padding-left:20px; }
+  li { margin:4px 0; }
+  .legend { display:flex; gap:16px; flex-wrap:wrap; font-size:12px; color:var(--t2); margin:8px 0 0; }
+  .small { font-size:12px; color:var(--t3); }
+  .id { font-family:var(--mono); color:var(--warn); font-weight:700; }
+  svg text { font-family:-apple-system,'Segoe UI',sans-serif; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <p class="sub">코드 품질 리뷰 · Project-SPIP · code-reviewer</p>
+  <h1>즐겨찾기 셸프 위젯 (SH-1~SH-5) — 코드 품질</h1>
+  <div class="verdict v-pass">PASS (재검증) — 정확성 결함 0 · D-1/D-2 해소 확인</div>
+  <p class="meta">대상: lib/shelf/{detectType,pathPolicy,localMeta,ssrfGuard,ogParse,imageCache,urlMeta,scheduler}.js · electron/ipc/shelf.js · lib/common/{uiStateStore,config}.js · electron/ipc/register.js · electron/preload.js · electron/main.js · public/app.js · styles.css<br>
+  1차(FAIL): 정확성 결함 2건 지적 → 수정 후 재검증(PASS). 셸프 IPC 21건(D-1 회귀 2건 포함)·전체 1093건 통과 확인. 동작=qa · 보안=security-reviewer 트랙.</p>
+
+  <div class="card pass">
+    <strong>재검증 결론(2026-06-27, 갱신).</strong> 1차 리뷰에서 FAIL 사유였던 정확성 결함 2건이 모두 해소됐다.
+    <strong>D-1</strong>(동시 refresh 클로버·삭제 부활·add lost-update)은 <code>withWriteLock</code> 직렬화 큐 + <em>write 직전 락 안 재-read·id 머지</em> 패턴으로 차단됐고,
+    <strong>D-2</strong>(버려진 응답 스트림의 미처리 <code>'error'</code> → 메인 크래시)는 <code>defaultFetchRaw</code> resolve 직전 방어 리스너 부착으로 차단됐다.
+    실파일 기반 동시성 회귀 테스트 2종이 실제 경합 경로를 검증하며 전체 스위트 회귀 0.
+    <strong>잔여 정확성 결함 없음 → 최종 PASS.</strong> 선택 개선 6·사소 5는 후속 백로그로 적정(정확성 영향 항목 없음 — 아래 명시).
+    <div class="legend">
+      <span><span class="pill p-fixed">해소</span> 재검증 통과</span>
+      <span><span class="pill p-defect">결함</span> 정확성(1차)</span>
+      <span><span class="pill p-improve">개선</span> 품질 권고</span>
+      <span><span class="pill p-minor">사소</span> 취향·문서</span>
+      <span><span class="pill p-ok">검증</span> 이상無</span>
+    </div>
+  </div>
+
+  <h2>재검증 — 결함 2건 해소 확인</h2>
+  <table>
+    <thead><tr><th>ID</th><th class="loc">수정 위치</th><th>판정 근거(코드 + 테스트)</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><span class="id">D-1</span><br><span class="pill p-fixed">해소</span></td>
+        <td class="loc">electron/ipc/shelf.js:50–60<br>(withWriteLock)<br>:154–179 appendBookmark<br>:194–203 add(url)<br>:344–383 refresh</td>
+        <td><strong>코드:</strong> <code>withWriteLock(ctx, fn)</code>이 <code>uiStatePath</code> 키별 Promise 체인으로 변이 fn을 직렬화(체인 tail은 에러 swallow로 지속). <code>refresh</code>는 느린 crawl/scan을 <em>락 밖</em>에서 수행해 <code>patch</code>만 만들고, write는 <em>락 안에서 최신 상태 재-read → <code>findIndex(id)</code> → 머지 → write</em>(L372–382). <code>idx&lt;0</code>이면 부활시키지 않고 <code>NOT_FOUND</code>(L375). url <code>add</code>는 crawl 후 <code>appendBookmark</code>(락 안 재-read + <code>MAX_SHELF</code> 재확인 + append)로 동시 add의 lost-update·LIMIT 우회 차단(L157). <strong>핵심:</strong> 락 fn 내부는 <em>전부 동기</em>(read/write 사이 await 없음)라 한 변이가 원자적으로 완결되고 다음 변이가 fresh 상태를 읽는다. remove/reorder/folder-add는 락 미사용이나 read↔write 사이 await가 없어 턴당 원자적 — 락 변이의 재-read와 안전 정합(상호 lost-update 불가)임을 데이터흐름으로 확인. <strong>테스트:</strong> shelf-ipc.test.js:235 동시 refresh 2건 → 둘 다 v2(클로버 시 한쪽 v1로 실패), :252 refresh 중 동기 remove → <code>NOT_FOUND</code>·list 0(부활 없음). 둘 다 temp uiStatePath 실파일로 실제 경합 재현.</td>
+      </tr>
+      <tr>
+        <td><span class="id">D-2</span><br><span class="pill p-fixed">해소</span></td>
+        <td class="loc">lib/shelf/urlMeta.js:73–78</td>
+        <td><strong>코드:</strong> 응답 콜백에서 <code>resolve()</code> <em>직전</em> <code>res.on('error', () =&gt; {})</code> 방어 리스너 부착. 상위 <code>withTimeout</code>이 먼저 settle해 스트림이 버려져도, 이후 소켓 타임아웃 <code>req.destroy()</code> 시 <code>res</code>의 <code>'error'</code>가 리스너 없이 throw되어 메인을 죽이던 경로가 막혔다. <code>readCapped</code>가 소비하는 정상 경로에서는 noop 리스너와 <code>finish</code> 리스너가 공존(둘 다 무해, finish는 <code>done</code> 가드로 멱등) → 회귀 없음. <code>req.on('error')</code>/<code>('timeout')</code>·<code>setTimeout</code>은 유지. <strong>판정:</strong> 크래시 경로 제거 확인. (헤더 단계 타임아웃이 소켓·wrapper로 이중인 구조는 남으나 더는 정확성 위험 아님 — 개선 백로그.)</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="card">
+    <strong>테스트 실행 결과(재검증).</strong>
+    <ul>
+      <li><code>node --test test/shelf-ipc.test.js</code> → <strong>21/21 pass</strong> (D-1 회귀 2건 포함).</li>
+      <li><code>node --test "test/**/*.test.js"</code> → <strong>1093 pass / 0 fail</strong> (회귀 0).</li>
+    </ul>
+  </div>
+
+  <h2>후속 백로그 — 정확성 영향 여부 점검</h2>
+  <p class="small">PM 요청: 선택 개선 6·사소 5 중 정확성에 영향 주는 항목이 있는지 확인.</p>
+  <table>
+    <thead><tr><th>항목</th><th>정확성 영향</th><th>비고</th></tr></thead>
+    <tbody>
+      <tr><td>imageCache 총량 상한이 write 경로 미적용</td><td><span class="pill p-ok">없음</span></td><td>remove 시 gc로 결국 정리 — 디스크 상한 지연일 뿐. 백로그 적정.</td></tr>
+      <tr><td>gc와 동시 store 삭제 경쟁</td><td><span class="pill p-ok">없음</span></td><td>배너 그라데이션 폴백(graceful). D-1 직렬 큐로 자연 완화 가능.</td></tr>
+      <tr><td>헤더 단계 타임아웃 중복</td><td><span class="pill p-ok">없음</span></td><td>D-2 방어 리스너로 크래시 경로 제거 후 잔여는 구조 정리(취향).</td></tr>
+      <tr><td>toView가 list마다 파일 read+base64</td><td><span class="pill p-ok">없음</span></td><td>성능/블로킹 이슈. 동작 정확성 무관.</td></tr>
+      <tr><td>denyDirs 매 호출 재구성</td><td><span class="pill p-ok">없음</span></td><td>성능 미세. 결과 동일.</td></tr>
+      <tr><td>reorder vs remove 응답 형태 비대칭</td><td><span class="pill p-ok">없음</span></td><td>계약 일관성(취향). 렌더러 정합 정상.</td></tr>
+      <tr><td>닷파일 ext 오분류 / detectType 2중 구현 / 매직넘버 / 거대 함수 / logger.warn 인자</td><td><span class="pill p-ok">없음</span></td><td>표시·드리프트 위험·가독성. 정확성 무관.</td></tr>
+    </tbody>
+  </table>
+  <div class="card"><strong>판정:</strong> 후속 백로그 11건 중 <strong>정확성에 영향 주는 항목 없음.</strong> 전부 후속 처리 적정.</div>
+
+  <hr style="border:none;border-top:1px solid var(--border);margin:38px 0 8px">
+  <p class="sub">아래는 1차 리뷰 기록(FAIL) — 해소 추적용 보존.</p>
+
+  <h2>1차 정확성 결함 (해소됨 — 기록)</h2>
+  <table>
+    <thead><tr><th>ID / 무엇</th><th class="loc">위치</th><th>왜 문제였나</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><span class="id">D-1</span> <span class="pill p-fixed">해소</span><br>동시 refresh가 stale 전체 배열을 write해 상호 클로버</td>
+        <td class="loc">shelf.js refresh<br>scheduler runBatch<br>main.js:344</td>
+        <td>refresh가 read→<code>await crawl</code>→자기 idx만 갱신한 stale 전체배열 write. 스케줄러가 <code>Promise.all</code>로 N개 동시 실행 → 사이클당 1건만 갱신·나머지 유실, remove 중 부활, 동시 add lost-update. <strong>→ withWriteLock 재-read 머지로 해소.</strong></td>
+      </tr>
+      <tr>
+        <td><span class="id">D-2</span> <span class="pill p-fixed">해소</span><br>버려진 응답 스트림의 미처리 error → 메인 크래시</td>
+        <td class="loc">urlMeta.js defaultFetchRaw</td>
+        <td>헤더 단계 <code>withTimeout(...,null)</code> 레이스로 <code>res</code> 버려질 때 error 리스너 부재 → throw. <strong>→ resolve 직전 <code>res.on('error', noop)</code>로 해소.</strong></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>검증 — 1차에서 이상 없던 영역(유지)</h2>
+  <table>
+    <thead><tr><th>영역</th><th>판정</th><th>근거</th></tr></thead>
+    <tbody>
+      <tr><td>크롤 동시 세마포어 균형</td><td><span class="pill p-ok">검증</span></td>
+        <td><code>_acquireCrawl</code> 항상 +1(즉시/큐 .then), <code>crawl</code> finally 항상 -1. 예외 경로도 누수 없음(urlMeta.js).</td></tr>
+      <tr><td>readCapped 종료 멱등·초과 destroy</td><td><span class="pill p-ok">검증</span></td>
+        <td><code>done</code> 가드로 다중 finish 방지, 초과/리다이렉트/non-html에서 <code>res.destroy()</code>.</td></tr>
+      <tr><td>스케줄러 타이머 정리·멱등</td><td><span class="pill p-ok">검증</span></td>
+        <td>start <code>!stopped</code> 가드·unref, stop 양쪽 clear, tick 4중 게이트, before-quit stop().</td></tr>
+      <tr><td>imageCache fd 누수·매직바이트</td><td><span class="pill p-ok">검증</span></td>
+        <td>openSync→finally closeSync, 0600, validateImage(ct·크기·sniff), toDataUri 재-sniff.</td></tr>
+      <tr><td>ogParse ReDoS·무한루프</td><td><span class="pill p-ok">검증</span></td>
+        <td>{0,4096}·MAX_META·빈매치 lastIndex++, 구분자 배제 문자클래스, 엔티티 화이트리스트.</td></tr>
+      <tr><td>uiStateStore 정규화·schemaVersion 이행</td><td><span class="pill p-ok">검증</span></td>
+        <td>normalizeShelfBookmarks 전수 정규화, undefined&lt;2 함정 명시 분기, 레거시 union 멱등.</td></tr>
+      <tr><td>renderer 구독·리스너 누수</td><td><span class="pill p-ok">검증</span></td>
+        <td>subscribe idempotent, wireShelfSwipe __shelfSwipe 가드, 노드 교체 시 리스너 GC.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>D-1 해소 후 데이터 흐름</h2>
+  <svg width="100%" viewBox="0 0 980 230" role="img" aria-label="withWriteLock 직렬화 후 흐름">
+    <style>
+      .b{fill:#121821;stroke:#1f2937} .t{fill:#e5e7eb;font-size:12px} .m{fill:#9ca3af;font-size:11px;font-family:monospace}
+      .ok{fill:#34d399;font-size:12px;font-weight:700} .ax{stroke:#374151;stroke-width:1}
+    </style>
+    <text class="t" x="20" y="24">refresh(A), refresh(B): 느린 crawl은 락 밖 동시 수행(patch 생성) → write만 withWriteLock으로 직렬화</text>
+    <line class="ax" x1="20" y1="40" x2="960" y2="40" />
+
+    <rect class="b" x="20" y="56" width="430" height="44" rx="8"/>
+    <text class="m" x="34" y="78">① 락 획득: 재-read S0=[A,B] -> findIndex(A) -> 머지 -> write [A',B]</text>
+    <text class="ok" x="34" y="95">A' 영속</text>
+
+    <rect class="b" x="20" y="112" width="430" height="44" rx="8"/>
+    <text class="m" x="34" y="134">② 락 획득(직렬): 재-read S1=[A',B] (fresh) -> findIndex(B) -> write [A',B']</text>
+    <text class="ok" x="34" y="151">A',B' 모두 영속 — 클로버 없음</text>
+
+    <rect class="b" x="20" y="168" width="430" height="44" rx="8"/>
+    <text class="m" x="34" y="190">remove(A) 끼어들면: 락 재-read에서 idx&lt;0</text>
+    <text class="ok" x="34" y="207">NOT_FOUND — 부활 없음</text>
+
+    <line class="ax" x1="490" y1="56" x2="490" y2="212" />
+    <text class="t" x="510" y="120">최종: [A', B']  (또는 remove 시 정합 삭제)</text>
+    <text class="m" x="510" y="146">락 fn 내부 전 구간 동기 -> 턴당 원자</text>
+    <text class="m" x="510" y="168">unlocked sync 변이(remove/reorder/folder-add)도</text>
+    <text class="m" x="510" y="186">await 부재 -> 락 변이와 lost-update 불가</text>
+  </svg>
+
+  <h2>마무리</h2>
+  <div class="card pass">
+    <strong>최종 판정: PASS.</strong> 1차 FAIL 사유 2건(D-1·D-2) 모두 코드·테스트로 해소 확인, 전체 1093건 통과·회귀 0, 잔여 정확성 결함 없음.
+    수정 방향(영속 변이 직렬화 + write 직전 재-read 머지, 응답 스트림 방어 리스너)이 1차 권고와 정확히 일치하며 핵심 비원자성 패턴을 제거했다.
+    후속 백로그 11건은 모두 정확성 무관(성능·일관성·표시)이라 별도 처리 적정. 코드를 직접 수정하지 않았다.
+  </div>
+
+  <p class="meta">생성/갱신: code-reviewer · 보고서 경로 E:\03.프로젝트\Project-SPIP\docs\reviews\shelf_code_review_1.html</p>
+
+</div>
+</body>
+</html>

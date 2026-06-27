@@ -181,6 +181,22 @@ contextBridge.exposeInMainWorld('spip', {
     onError: (cb) => _sub('spip:briefing:error', cb),
   },
 
+  // [SH-2] 즐겨찾기 셸프 위젯 — main이 전부 재검증(렌더러 비신뢰). 인자 1차 고정(String/Array).
+  //   url=urlMeta 크롤(SSRF·og), folder/file=localMeta. main이 전부 재검증·게이트.
+  //   채널명 하드코딩(MUST). onChanged는 단방향 push 구독(unsubscribe 반환).
+  shelf: {
+    list: () => ipcRenderer.invoke('spip:shelf:list'),
+    add: (type, ref) => ipcRenderer.invoke('spip:shelf:add', { type: String(type), ref: String(ref) }),
+    remove: (id) => ipcRenderer.invoke('spip:shelf:remove', { id: String(id) }),
+    reorder: (ids) => ipcRenderer.invoke('spip:shelf:reorder', { ids: Array.isArray(ids) ? ids.map(String) : [] }),
+    open: (id) => ipcRenderer.invoke('spip:shelf:open', { id: String(id) }),
+    refresh: (id) => ipcRenderer.invoke('spip:shelf:refresh', { id: String(id) }),
+    // [SH-4] 자동 재크롤(6시간) 토글 get/set — boolean. list 응답에도 autoRefresh 동봉.
+    getSettings: () => ipcRenderer.invoke('spip:shelf:getSettings'),
+    setSettings: (autoRefresh) => ipcRenderer.invoke('spip:shelf:setSettings', { autoRefresh: !!autoRefresh }),
+    onChanged: (cb) => _sub('spip:shelf:changed', cb),
+  },
+
   // 이벤트 구독(on/send) — 콜백만 받고 ipcRenderer 원본은 노출하지 않음(보안).
   onScanProgress: (cb) => {
     if (typeof cb !== 'function') return () => {};

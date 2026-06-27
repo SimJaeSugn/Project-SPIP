@@ -12,7 +12,8 @@ const realStore = require('../lib/common/uiStateStore');
 
 // 인메모리 store stub (read/write + normalize 실제 로직 재사용).
 function memStore(initial) {
-  let state = realStore.normalizeState(initial || {});
+  // [SH-1 P1] schemaVersion:2 기본 — 이행 union(shelf/shelfWide) 회피(셸프 무관 핸들러 테스트 격리).
+  let state = realStore.normalizeState(Object.assign({ schemaVersion: realStore.SCHEMA_VERSION }, initial || {}));
   return {
     read: () => state,
     write: (s) => { state = realStore.normalizeState(s); return state; },
@@ -79,7 +80,7 @@ test('setHomeLayout — 정규화·영속·응답(중복/미지/비배열 흡수
   // 유효 재정렬 + 중복 + 미지 id + 비문자열 → 정규화가 흡수, 누락 섹션 기본 순서 보충.
   const r = uiState.setHomeLayout({ ids: ['mail', 'attention', 'mail', 'bogus', 7] }, ctx);
   assert.strictEqual(r.ok, true);
-  assert.deepStrictEqual(r.homeLayout, ['mail', 'attention', 'productivity', 'activity', 'todos', 'disk', 'aiusage', 'featureAdd']);
+  assert.deepStrictEqual(r.homeLayout, ['mail', 'attention', 'productivity', 'activity', 'todos', 'disk', 'aiusage', 'shelf', 'shelfWide', 'featureAdd']);
   // 영속 반영 확인(write를 거친 store 상태와 일치).
   assert.deepStrictEqual(s._get().homeLayout, r.homeLayout);
 });

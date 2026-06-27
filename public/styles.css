@@ -430,6 +430,52 @@ input, button, select { font-family: inherit; }
 .home-section--drag { box-shadow: 0 14px 40px rgba(28,25,23,.22); }
 @media (max-width: 980px) { .home-masonry { column-count: 1; } }
 
+/* =====================================================================
+ * [SH-2] 즐겨찾기 셸프 위젯 — 초안(favorites-shelf-widget.dc.html) 디자인 재현.
+ *   레이아웃·색은 app.js 가 CSSOM(node.style)으로 적용(CSP style-src 'self'). 여기엔 애니메이션 keyframes·
+ *   :hover 강조·스크롤바 숨김처럼 인라인으로 못 두는 규칙만 둔다.
+ * ===================================================================== */
+/* shelfWide 변형 — masonry 컬럼 전체폭 스팬. */
+.home-section--wide { column-span: all; -webkit-column-span: all; break-inside: avoid; }
+/* 셸프 행 가로 스크롤바 숨김(드래그/휠로 이동). */
+.shelf-row.no-sb, .no-sb { scrollbar-width: none; -ms-overflow-style: none; }
+.shelf-row.no-sb::-webkit-scrollbar, .no-sb::-webkit-scrollbar { width: 0; height: 0; display: none; }
+/* 패널 hover/active 강조(초안 style-hover 재현). inline box-shadow 를 덮으므로 !important. */
+.shelf-spine:hover { transform: translateY(-4px); filter: brightness(1.07) saturate(1.05); box-shadow: 0 14px 24px -12px rgba(28,25,23,.4) !important; }
+.shelf-exp:hover { box-shadow: 0 18px 36px -12px rgba(28,25,23,.34) !important; }
+.shelf-panel:active { transform: translateY(-1px) scale(.992); }
+.shelf-panel:focus-visible { outline: 2px solid var(--accent, #4f46e5); outline-offset: 2px; }
+.shelf-rm:hover { background: #fee2e2 !important; border-color: #fecaca !important; color: #dc2626 !important; }
+.shelf-open:hover { background: #000 !important; }
+/* [SH-4] 자동 재크롤 토글 스위치 — 기본 OFF 회색, ON indigo. 접근성: role=switch + aria-checked. */
+.shelf-switch {
+  appearance: none; position: relative; width: 34px; height: 19px; flex: none; padding: 0;
+  border: 1px solid #e7e5e4; border-radius: 999px; background: #e7e5e4; cursor: pointer;
+  transition: background .15s ease, border-color .15s ease;
+}
+.shelf-switch--on { background: #4f46e5; border-color: #4f46e5; }
+.shelf-switch__knob {
+  position: absolute; top: 1.5px; left: 1.5px; width: 14px; height: 14px; border-radius: 50%;
+  background: #fff; box-shadow: 0 1px 2px rgba(28,25,23,.3); transition: transform .15s ease;
+}
+.shelf-switch--on .shelf-switch__knob { transform: translateX(15px); }
+.shelf-switch:focus-visible { outline: 2px solid var(--accent, #4f46e5); outline-offset: 2px; }
+.shelf-switch[aria-busy="true"] { opacity: .6; }
+/* 애니메이션. */
+.shelf-unroll { animation: shelfUnroll .46s cubic-bezier(.22,1,.36,1) both; }
+.shelf-growin { animation: shelfGrowIn .3s ease both; }
+.shelf-slideup { animation: shelfSlideUp .2s ease both; }
+.shelf-spin { animation: spipSpin .7s linear infinite; }
+.shelf-sk { background: linear-gradient(90deg, #eeedeb 0%, #f6f5f3 40%, #eeedeb 80%); background-size: 720px 100%; animation: shelfShimmer 1.2s linear infinite; border-radius: 6px; }
+@keyframes shelfUnroll { from { clip-path: inset(0 68% 0 0); transform: translateX(-6px); } to { clip-path: inset(0 0 0 0); transform: none; } }
+@keyframes shelfGrowIn { from { transform: scaleY(.6); transform-origin: bottom; } to { transform: scaleY(1); } }
+@keyframes shelfSlideUp { from { transform: translateY(8px); } to { transform: none; } }
+@keyframes shelfShimmer { 0% { background-position: -360px 0; } 100% { background-position: 360px 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .shelf-unroll, .shelf-growin, .shelf-slideup, .shelf-spin, .shelf-sk { animation: none; }
+  .shelf-switch, .shelf-switch__knob, .shelf-panel { transition: none; }
+}
+
 /* [R-33] 커밋 SVG 차트(자작·외부 0). 막대 강조/툴팁은 chartBars 가 setAttribute/textContent 로 제어. */
 /* [M10-P4] patchRegion 교체 대상 영역(차트 호스트를 감쌈). 레이아웃 영향 없는 단순 래퍼. */
 .commit-chart-region { display: block; }

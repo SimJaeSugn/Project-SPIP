@@ -68,7 +68,7 @@
 </head>
 <body>
 <header>
-  <span class="tag">추적성 매트릭스</span><span class="tag">v1.9</span><span class="tag">현재 단계: M9(R-25~R-33) + M10·M11 후속 + M12 보안·안정성 수정 + M13 브리핑 AI 연동(R-34~R-41·N-08~N-10) + 브리핑 AI 후속(이름 호명·한국어·프롬프트 편집 R-42) 구현·검증 완료 · 테스트 914/914</span>
+  <span class="tag">추적성 매트릭스</span><span class="tag">v1.9</span><span class="tag">현재 단계: M9(R-25~R-33) + M10·M11 후속 + M12 보안·안정성 수정 + M13 브리핑 AI 연동(R-34~R-41·N-08~N-10) + 브리핑 AI 후속(이름 호명·한국어·프롬프트 편집 R-42) + 즐겨찾기 셸프 위젯(SH-1~SH-5) 구현·검증 완료 · 테스트 1093/1093</span>
   <h1>Project-SPIP — 추적성 매트릭스</h1>
   <p>요구가 <b>기획 → 설계 결정/모듈 → 구현 위치 → 검증</b>까지 끊기지 않고 이어지는지를 한 표로 관리하는 1급 산출물.
   PRD의 모든 요구(기능 R-01~R-16, 비기능 N-01~N-07) + M6 백로그(R-17~R-21) + M7(R-22·R-23)를 행으로 가지며, 각 요구를 아키텍처 설계서 §14 매핑·본문 §5~§9 모듈/계약/API·§7 디렉터리 트리(구현 위치)와 검증 기록(QA·코드·보안 PASS)에 연결한다.</p>
@@ -104,7 +104,7 @@
   <div class="note" style="background:rgba(52,211,153,.08);border-color:rgba(52,211,153,.3);color:#bbf7d0;">
     <b>브리핑 AI 후속(v1.9.0) — 이름 호명·한국어·시스템 프롬프트 편집 3건 구현·검증 완료.</b> M13 브리핑 AI 연동의 사용성 후속 3건을 반영했다. ① <b>버그수정 — 프로젝트 이름 호명</b>: 브리핑이 프로젝트를 해시 ID 대신 <b>이름(name)</b>으로 호명하도록, name을 데이터 경로 <b>5단계 전달</b>(<code>briefingPolicy</code>→<code>briefingItems</code>→<code>briefingOrchestrator</code>→<code>electron/context.js</code>→<code>briefingPrompt</code>)하고 프롬프트가 해시 대신 label을 전달(R-37·R-34 후속). ② <b>버그수정 — 한국어 응답 강제</b>: 영어 응답 현상을 시스템 프롬프트에 한국어 응답 지시를 추가해 차단(<code>briefingPrompt.js</code>). ③ <b>신기능 — 시스템 프롬프트 편집(프롬프트 엔지니어링) 설정(신규 요구 <span class="rid">R-42</span>)</b>: 설정에서 브리핑 시스템 프롬프트를 편집(빈 값=시드 <code>DEFAULT_SYSTEM_PROMPT</code>·기본값 복원), config에 <b>0600·8000자 상한</b>으로 영속. <b>구조적 인젝션 방어는 코드로 유지</b>(시스템 프롬프트를 편집해도 sanitize 불변). 검증: 각 건 <b>qa·security PASS</b>(치명/높음 0·인젝션 방어 불변)·전체 <b>914 테스트 통과</b>(891→914·+23·<code>test/ai/*</code>). 검증 보고: <code>qa_briefing_name_1</code>·<code>security_review_briefing_name_1</code>(이름 호명·한국어), <code>qa_systemprompt_1</code>·<code>security_review_systemprompt_1</code>(프롬프트 편집).
   </div>
-  <div class="meta">문서 유형: 추적성 매트릭스 · 작성: 기술 문서 작성자 · 최종 갱신: 2026-06-25 · 현재 단계: <b>전체(MVP+M4+M6+M7+M8+M9+M10·M11 후속+M12 보안·안정성 수정+M13 브리핑 AI) 구현·검증 완료(테스트 914/914)</b> · 입력: PRD v1.0 / architecture.html rev.2 / m4-design.html / m6-design.html rev.2 / m7-design.html rev.2 / m8-design.html / m9-design.html rev.1 / m10-design.html rev.1 / briefing-ai-design.html(ADR-BR-1) / FeatureSpec-briefing-ai.html / adr.html rev.2(ADR-M10-1~4·ADR-BR-1 포함) / S0~S7 + M4 후속 6건 + M6 백로그 5건 + M7 2건 + M8 1건 + M9 9건 + M10·M11 후속 배치 + M13 브리핑 AI 8건+비기능 3건 구현물 / 검증 PASS(MVP S7 + M4·M6·M7·M8 다면검증 + M9 단계별 P1~P8 qa/code/security·통합·최종 + M10·M11 qa·code-review + M13 기획·설계 reviewer·설계/통합 security·qa·code)</div>
+  <div class="meta">문서 유형: 추적성 매트릭스 · 작성: 기술 문서 작성자 · 최종 갱신: 2026-06-27 · 현재 단계: <b>전체(MVP+M4+M6+M7+M8+M9+M10·M11 후속+M12 보안·안정성 수정+M13 브리핑 AI+즐겨찾기 셸프 위젯 SH-1~SH-5) 구현·검증 완료(테스트 1093/1093)</b> · 입력: PRD v1.0 / architecture.html rev.2 / m4-design.html / m6-design.html rev.2 / m7-design.html rev.2 / m8-design.html / m9-design.html rev.1 / m10-design.html rev.1 / briefing-ai-design.html(ADR-BR-1) / FeatureSpec-briefing-ai.html / adr.html rev.2(ADR-M10-1~4·ADR-BR-1 포함) / S0~S7 + M4 후속 6건 + M6 백로그 5건 + M7 2건 + M8 1건 + M9 9건 + M10·M11 후속 배치 + M13 브리핑 AI 8건+비기능 3건 구현물 / 검증 PASS(MVP S7 + M4·M6·M7·M8 다면검증 + M9 단계별 P1~P8 qa/code/security·통합·최종 + M10·M11 qa·code-review + M13 기획·설계 reviewer·설계/통합 security·qa·code)</div>
 </header>
 
 <main>
@@ -121,6 +121,7 @@
     <div class="card" style="border-color:rgba(196,181,253,.45)"><div class="k">M9</div><div class="kpi" style="color:#c4b5fd">9</div><div class="v">R-25~R-33(부분갱신 가드·헤더/메뉴/설정 정리·실시간·드래그·SVG 차트) — <b>구현 완료·검증 통과</b></div></div>
     <div class="card" style="border-color:rgba(52,211,153,.45)"><div class="k">M13 브리핑 AI</div><div class="kpi">11</div><div class="v">R-34~R-41(8) + N-08~N-10(3) — 로컬 LLM·Langchain·스트리밍·이벤트 트리거·carry-over·보안. <b>구현 완료·검증 통과</b></div></div>
     <div class="card" style="border-color:rgba(52,211,153,.45)"><div class="k">브리핑 AI 후속(v1.9.0)</div><div class="kpi">1</div><div class="v">R-42 시스템 프롬프트 편집 + 후속 버그수정 2건(이름 호명·한국어 강제·R-37/R-34 후속). <b>구현 완료·검증 통과</b></div></div>
+    <div class="card" style="border-color:rgba(52,211,153,.45)"><div class="k">즐겨찾기 셸프 위젯</div><div class="kpi">5</div><div class="v">SH-1~SH-5 — URL/폴더/파일 북마크 홈 위젯·main 크롤 SSRF 방어·og:image·6h 스케줄러·2 변형(shelf/shelfWide). 기존 프로젝트 즐겨찾기와 별개 신규 위젯. <b>구현 완료·검증 3종 PASS</b></div></div>
     <div class="card"><div class="k">품질 기준</div><div class="kpi">1</div><div class="v">N-01(성능) — 기능 스토리 아닌 산출물 품질 기준으로 적용</div></div>
     <div class="card"><div class="k">현재 상태</div><div class="kpi" style="font-size:16px;">M9 + M10·M11 후속 + M12 보안·안정성 + M13 브리핑 AI 구현·검증 완료</div><div class="v">전송 Electron IPC. M10 patchRegion·차트 깜빡임 0·툴팁·폴링 무재시도, M11 메일·설정 patchRegion 확장. M12 자동 업데이트 권한 상승 데이터 손실/오염 수정(qa·security PASS). M13 브리핑 AI 연동(R-34~R-41·N-08~N-10 — 로컬 OpenAI호환 LLM·Langchain 스트리밍·이벤트 트리거·carry-over·설정·폴백·opt-in; egress 메인 단독·apiKey 0600·인젝션 8종 방어; 기획·설계 reviewer·설계/통합 security 전부 PASS·qa·code PASS). 브리핑 AI 후속(v1.9.0): 프로젝트 이름 호명(해시→name 5단계 전달·R-37/R-34 후속)·한국어 응답 강제·시스템 프롬프트 편집 설정(R-42·시드/기본값 복원·0600·8000자 상한·구조적 인젝션 방어 코드 유지); qa·security PASS(치명/높음 0·인젝션 방어 불변). 테스트 914/914.</div></div>
   </div>
@@ -746,7 +747,69 @@
   </div>
 </section>
 
+<section id="shelf-trace">
+  <h2>즐겨찾기 셸프 위젯 추적 (SH-1~SH-5 · 신규 기능)</h2>
+  <div class="note" style="background:rgba(52,211,153,.08);border-color:rgba(52,211,153,.3);color:#bbf7d0;">
+    홈 대시보드에 <b>임의 URL·폴더·파일</b> 북마크를 꽂는 신규 위젯. <b>기존 프로젝트 즐겨찾기(R-20·<code>spip:favorites-changed</code>)와 완전 별개</b> — 신규 네임스페이스 <code>spip:shelf:*</code>·신규 영속 키 <code>shelfBookmarks</code>로 독립(기존 favorites 무변경). 설계 정본 <code>docs/architecture/shelf-widget-design.html</code>(ADR-SH-1~5). URL 메타 크롤은 <b>메인 프로세스 단독 egress</b>(렌더러 <code>connect-src 'none'</code> 불변)·SSRF 다층 방어. 검증 3종 PASS(보안 종료게이트 치명/높음 0·QA·코드)·전체 <b>1093 테스트 통과(0 fail)</b>.
+  </div>
+  <div class="tbl-wrap">
+  <table>
+    <tr>
+      <th class="c-id">마일스톤</th>
+      <th class="c-req">요구 (요약)</th>
+      <th class="c-design">설계 결정 / 모듈 (ADR)</th>
+      <th class="c-impl">구현 위치 (실제 파일)</th>
+      <th class="c-verify">검증 (테스트 / 리뷰)</th>
+      <th class="c-status">상태</th>
+    </tr>
+    <tr>
+      <td class="sid">SH-1</td>
+      <td class="req">영속·순수 코어 — <code>shelfBookmarks</code> 안전 영속·정규화·상한, 유형 감지, 민감경로 deny</td>
+      <td>ADR-SH-1(ui-state 키 재사용)·ADR-SH-4(경로 정책). <code>normalizeShelfBookmarks</code>(MAX_SHELF=64·필드 길이상한)·<code>SCHEMA_VERSION 1→2</code> 이행(부재=레거시 union·멱등)·<code>DEFAULT_HIDDEN_WIDGETS</code> 기본숨김·<code>validateHttpUrl</code> 일반화</td>
+      <td class="mono">lib/common/uiStateStore.js·config.js<br>lib/shelf/detectType.js·pathPolicy.js</td>
+      <td class="mono">test/shelf-uistate·shelf-detectType·shelf-pathPolicy·shelf-config-url<br><span class="pass">reviewer 계획 FAIL→정합화→재검증</span></td>
+      <td><span class="pill st-design">구현 완료</span></td>
+    </tr>
+    <tr>
+      <td class="sid">SH-2</td>
+      <td class="req">로컬(폴더/파일) 메타 + IPC + 홈 마운트(2 변형 <code>shelf</code>/<code>shelfWide</code>)</td>
+      <td>SH-A1 초안 UI 이식. <code>localMeta</code>(canonicalize+pathPolicy 게이트)·IPC <code>spip:shelf:*</code>(list/add/remove/reorder/open + getSettings/setSettings·guard)·<code>renderHomeShelf('column'\|'wide')</code> 공유 빌더·<code>shelfWidgetVM</code>(헤드리스)·<code>.home-section--span</code>(column-span:all)</td>
+      <td class="mono">lib/shelf/localMeta.js<br>electron/ipc/shelf.js·register.js·preload.js·main.js<br>public/app.js·styles.css</td>
+      <td class="mono">test/shelf-localMeta·shelf-ipc·shelf-widget<br><span class="pass">QA PASS</span>·<span class="pass">code PASS</span></td>
+      <td><span class="pill st-design">구현 완료</span></td>
+    </tr>
+    <tr>
+      <td class="sid">SH-3</td>
+      <td class="req">URL 크롤(og:title/image/description) + og:image 캐시 — main egress·SSRF 방어</td>
+      <td>ADR-SH-3(main 크롤+SSRF)·ADR-SH-5(자작 og 파서). <code>ssrfGuard</code>(IP 분류·핀·hop 재검증)·<code>ogParse</code>(정규식·매치상한)·<code>imageCache</code>(0600·SVG 제외·≤100KB·data:URI)·<code>urlMeta.crawl</code>(8s·512KB·압축 미요청·hop≤3). 의존성 0(node:https)</td>
+      <td class="mono">lib/shelf/ssrfGuard.js·ogParse.js·imageCache.js·urlMeta.js<br>electron/ipc/shelf.js(add url·bannerImage·열기 분기)</td>
+      <td class="mono">test/shelf-ssrfGuard(IP 분류 전수)·shelf-ogParse·shelf-imageCache·shelf-urlMeta<br><span class="pass">security 종료게이트 PASS(치명/높음 0)</span></td>
+      <td><span class="pill st-design">구현 완료</span></td>
+    </tr>
+    <tr>
+      <td class="sid">SH-4</td>
+      <td class="req">refresh + 6시간 자동 재크롤 스케줄러(기본 ON·끄기 토글) + 라이브 갱신</td>
+      <td>초안 푸터 "6h 자동 재스캔/크롤" 충족(PM #1 기본 ON+토글). <code>spip:shelf:refresh</code>·<code>scheduler</code>(첫 tick 지연·상승세션 스킵·메타 diff)·<code>spip:shelf:changed</code> push → <code>onChanged</code> 재렌더(onMailUpdated 패턴)</td>
+      <td class="mono">lib/shelf/scheduler.js<br>electron/ipc/shelf.js·main.js·config.js(autoRefresh)<br>public/app.js(onChanged·토글 UI)</td>
+      <td class="mono">test/shelf-scheduler(타임박스·diff·토글 off 무동작)·shelf-ipc(refresh)<br><span class="pass">QA·security PASS</span></td>
+      <td><span class="pill st-design">구현 완료</span></td>
+    </tr>
+    <tr>
+      <td class="sid">SH-5</td>
+      <td class="req">마감 폴리시 — 토스트·error/loading 정합·펼침폭 클램프·접근성, 정확성 결함 D-1/D-2 수정</td>
+      <td>D-1 동시 refresh 클로버(<code>withWriteLock</code>+재read 머지·<code>appendBookmark</code>)·D-2 스트림 크래시(<code>res</code> error 리스너) — PM 직접 수정+회귀 2종. CASE 버튼 제거(실데이터 empty/few/many)</td>
+      <td class="mono">electron/ipc/shelf.js·lib/shelf/urlMeta.js<br>public/app.js·styles.css</td>
+      <td class="mono">test/shelf-ipc·shelf-urlMeta(회귀 2종)<br><span class="pass">code PASS(D-1/D-2 수정 후)</span>·전체 1093/1093</td>
+      <td><span class="pill st-design">구현 완료</span></td>
+    </tr>
+  </table>
+  </div>
+  <div class="note">
+    <b>보안 통제 연결(신규 egress 표면).</b> <span class="sid">SSRF</span> URL·og:image 모두 scheme/자격/길이 + DNS IP 분류 게이트 + IP 핀(연결 IP=검증 IP) + 리다이렉트 hop 재검증 + 응답 한도(본문 512KB·이미지 100KB·타임아웃 8s·hop 3·압축 미요청) — <code>lib/shelf/ssrfGuard.js</code>·<code>urlMeta.js</code>. <span class="sid">H-1</span> folder/file는 add·open 양쪽 <code>pathGuard.canonicalize</code>+<code>pathPolicy</code> 재게이트. <span class="sid">H-2</span> 폴더 열기 <code>safeExec</code>(VS Code·절대경로·shell:false·인자 [real]), 파일 열기 <code>shell.openPath</code>(OS 기본앱·PM #2), url <code>shell.openExternal</code>+http/https 재검증. <span class="sid">L-1</span> 크롤/스캔 산출 문자열 전부 textContent·배너만 <code>&lt;img src=data:&gt;</code>. <span class="sid">CSP</span> 렌더러 <code>connect-src 'none'</code> 불변(egress 메인 단독)·배너 data:URI는 기존 <code>img-src data:</code> 허용(무변경). <span class="sid">0600</span> 영속 <code>uiStateStore</code> 재사용·og:image 캐시 별도 0600. <b>새 런타임 의존성 0</b>(node 내장만).
+  </div>
+</section>
+
 </main>
-<footer>Project-SPIP · 추적성 매트릭스 v1.9 · 요구 52건(R 42 + N 10) · MVP 16 + 품질 1 + M4 6 + M6 5 + M7 2 + M8 1 + M9 9 + M13 11(R-34~R-41·N-08~N-10) + 브리핑 AI 후속 1(R-42) · 추적 누락 0 · 전송 Electron IPC(과도기 HTTP 보존) · 현재 단계: M9 + M10·M11 후속 + M12 보안·안정성 수정 + M13 브리핑 AI 연동(R-34~R-41·N-08~N-10) + 브리핑 AI 후속(v1.9.0 — 이름 호명·한국어 강제·시스템 프롬프트 편집 R-42)까지 구현·검증 완료(테스트 914/914·각 건 qa·security PASS·인젝션 방어 불변) · 자족형 HTML 산출물</footer>
+<footer>Project-SPIP · 추적성 매트릭스 v1.9 · 요구 52건(R 42 + N 10) + 셸프 위젯 마일스톤 SH-1~SH-5 · MVP 16 + 품질 1 + M4 6 + M6 5 + M7 2 + M8 1 + M9 9 + M13 11(R-34~R-41·N-08~N-10) + 브리핑 AI 후속 1(R-42) + 셸프 위젯 5(SH-1~SH-5) · 추적 누락 0 · 전송 Electron IPC(과도기 HTTP 보존) · 현재 단계: …M13 브리핑 AI + 브리핑 AI 후속(v1.9.0) + 즐겨찾기 셸프 위젯(SH-1~SH-5 — main 크롤 SSRF 방어·6h 스케줄러·2 변형)까지 구현·검증 완료(테스트 1093/1093·보안/QA/코드 3종 PASS·치명/높음 0) · 자족형 HTML 산출물</footer>
 </body>
 </html>

@@ -25,6 +25,7 @@ const mailAccountsIpc = require('./mailAccounts');
 const insightsIpc = require('./insights');
 const uiStateIpc = require('./uiState');
 const briefingIpc = require('./briefing');
+const shelfIpc = require('./shelf');
 const notifyIpc = require('./notify');
 const autoUpdate = require('../autoUpdate');
 // [P3-4] 신뢰 origin 단일 원천(security.js). 리터럴 이중정의 제거.
@@ -232,6 +233,38 @@ function registerIpcHandlers(deps) {
   guard('spip:briefing:getSettings', (args) => briefingIpc.getSettings(args, ctx));
   guard('spip:briefing:setSettings', (args) => briefingIpc.setSettings(args, ctx));
   guard('spip:briefing:testConnection', (args) => briefingIpc.testConnection(args, ctx));
+
+  // [SH-2/SH-3] 즐겨찾기 셸프 위젯 — shelf.js. folder/file(localMeta)·url(urlMeta 크롤·SSRF·og).
+  //   shell 주입(file=openPath / url=openExternal). add/open 양쪽 pathPolicy 재게이트. main이 id·시각 스탬프.
+  const shelfCtx = () => Object.assign({}, ctx, { shell });
+
+  // [SH-4] 셸프 변경 단방향 push — 메인창 wc에만 화이트리스트 송신(신호만, payload 없음). 렌더러는
+  //   onChanged 수신 시 list() 재조회(onMailUpdated 패턴). 스케줄러/수동 refresh가 메타 변경 시 호출.
+  const broadcastShelf = () => {
+    const mainWc = (typeof getWebContents === 'function') ? getWebContents() : null;
+    if (mainWc && typeof mainWc.isDestroyed === 'function' && !mainWc.isDestroyed() && typeof mainWc.send === 'function') {
+      try { mainWc.send('spip:shelf:changed'); } catch (_) { /* noop */ }
+    }
+  };
+  // [SH-4] main.js 스케줄러가 동일 broadcastShelf를 재사용하도록 콜백 주입(있으면).
+  if (typeof deps.setShelfBroadcast === 'function') {
+    try { deps.setShelfBroadcast(broadcastShelf); } catch (_) { /* noop */ }
+  }
+
+  guard('spip:shelf:list', () => shelfIpc.list(undefined, shelfCtx()));
+  guard('spip:shelf:add', (args) => shelfIpc.add(args, shelfCtx()));
+  guard('spip:shelf:remove', (args) => shelfIpc.remove(args, shelfCtx()));
+  guard('spip:shelf:reorder', (args) => shelfIpc.reorder(args, shelfCtx()));
+  guard('spip:shelf:open', (args) => shelfIpc.open(args, shelfCtx()));
+  // 수동 refresh 성공(메타 변경 가능) 시 다른 창 동기화를 위해 changed push.
+  guard('spip:shelf:refresh', async (args) => {
+    const res = await shelfIpc.refresh(args, shelfCtx());
+    if (res && res.ok) broadcastShelf();
+    return res;
+  });
+  // [SH-4] 자동 재크롤 토글 조회/설정(config.shelfAutoRefresh 영속). list 응답에도 autoRefresh 포함.
+  guard('spip:shelf:getSettings', () => shelfIpc.getSettings(undefined, shelfCtx()));
+  guard('spip:shelf:setSettings', (args) => shelfIpc.setSettings(args, shelfCtx()));
 
   // 자동 업데이트(사용자 주도) — 제어는 autoUpdate.js(electron-updater). 진행 상황은 단방향 push
   //   'spip:update:status'(initAutoUpdate 가 getWebContents 로 메인창에 send). 미패키징은 NOT_PACKAGED.

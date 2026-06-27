@@ -42,12 +42,12 @@
 
   <h1>Project-SPIP — 진행 현황판</h1>
   <p class="sub">PC 내 흩어진 VS Code 프로젝트를 스캔해 인사이트를 보여주는 로컬 대시보드</p>
-  <p class="meta">기준일 2026-06-23 · 현재 단계: <span class="badge done">M11(v1.4.0) 구현 완료</span> · 테스트 525/525 · v1.4.0</p>
+  <p class="meta">기준일 2026-06-27 · 현재 단계: <span class="badge done">즐겨찾기 셸프 위젯(SH-1~SH-5) 구현·검증 완료</span> · 테스트 1093/1093 · (M12 보안·안정성 · M13 브리핑 AI · 브리핑 AI 후속 포함 — 상세 추적은 <a href="../traceability.html" style="color:#38bdf8;">traceability.html</a>·<a href="change-log.html" style="color:#38bdf8;">change-log.html</a>)</p>
 
   <!-- 핵심 지표 -->
   <h2>핵심 지표</h2>
   <div class="grid kpis">
-    <div class="kpi"><div class="v">525</div><div class="l">테스트 통과 / 0 실패</div></div>
+    <div class="kpi"><div class="v">1093</div><div class="l">테스트 통과 / 0 실패</div></div>
     <div class="kpi"><div class="v">100%</div><div class="l">탐지율 (게이트 ≥95%)</div></div>
     <div class="kpi"><div class="v">0.154ms</div><div class="l">필터 (게이트 200ms)</div></div>
     <div class="kpi"><div class="v">0</div><div class="l">외부 의존성</div></div>
@@ -260,6 +260,22 @@
     </table>
   </div>
 
+  <!-- 셸프 위젯 -->
+  <h2>즐겨찾기 셸프 위젯 (SH-1~SH-5) — 구현 완료 · 검증 3종 PASS</h2>
+  <div class="panel">
+    <p style="margin:0 0 10px;font-size:13.5px;color:#cbd5e1;">홈 대시보드에 <b>임의 URL·폴더·파일</b> 북마크를 꽂는 <b>신규 위젯</b>(기존 프로젝트 즐겨찾기 R-20과 완전 별개 — 신규 네임스페이스 <code>spip:shelf:*</code>·신규 키 <code>shelfBookmarks</code>·기존 favorites 무변경). 스파인↔배너 전환·활성 자동 스크롤·드래그/휠 가로 스크롤(초안 충실 이식). URL 메타 크롤은 <b>메인 프로세스 단독 egress</b>(렌더러 <code>connect-src 'none'</code> 불변)·<b>SSRF 다층 방어</b>. 설계 정본: <span class="links"><a href="../architecture/shelf-widget-design.html">shelf-widget-design.html</a></span>(ADR-SH-1~5). 검증 3종 PASS·전체 <b>1093 테스트 통과</b>·새 런타임 의존성 0.</p>
+    <table>
+      <thead><tr><th>마일스톤</th><th>내용</th><th>구현(실제)</th><th>상태</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">SH-1</td><td>영속·순수 코어</td><td><code>uiStateStore</code>(<code>shelfBookmarks</code>·<code>normalizeShelfBookmarks</code>·MAX_SHELF 64·<code>SCHEMA_VERSION 1→2</code> 이행[부재=레거시 union·멱등]·<code>DEFAULT_HIDDEN_WIDGETS</code> 기본숨김·HOME enum shelf/shelfWide)·<code>config.validateHttpUrl</code> 일반화·<code>lib/shelf/{detectType,pathPolicy}.js</code></td><td><span class="badge done">완료</span></td></tr>
+        <tr><td class="mono">SH-2</td><td>로컬 메타 + IPC + 홈 마운트(2 변형)</td><td><code>lib/shelf/localMeta.js</code>(canonicalize+pathPolicy)·<code>electron/ipc/shelf.js</code>(list/add/remove/reorder/open·getSettings/setSettings·guard)·preload <code>window.spip.shelf</code>·<code>public/app.js</code> <code>renderHomeShelf('column'\|'wide')</code>·<code>shelfWidgetVM</code>·<code>styles.css .home-section--span</code></td><td><span class="badge done">완료</span></td></tr>
+        <tr><td class="mono">SH-3</td><td>URL 크롤(SSRF) + og:image</td><td><code>lib/shelf/{ssrfGuard,ogParse,imageCache,urlMeta}.js</code> — IP 분류·핀·hop 재검증·본문 512KB·이미지 100KB(SVG 제외)·타임아웃 8s·압축 미요청·data:URI 배너. add url 활성·열기 분기(url=openExternal+재검증/폴더=VS Code/파일=openPath)</td><td><span class="badge done">완료</span></td></tr>
+        <tr><td class="mono">SH-4</td><td>refresh + 6h 스케줄러 + 라이브</td><td><code>spip:shelf:refresh</code>·<code>lib/shelf/scheduler.js</code>(6h·기본 ON+끄기 토글·첫 tick 지연·상승세션 스킵·메타 diff)·<code>spip:shelf:changed</code> push → 프론트 <code>onChanged</code> 재렌더·토글 UI</td><td><span class="badge done">완료</span></td></tr>
+        <tr><td class="mono">SH-5</td><td>마감 폴리시 + 정확성 결함 수정</td><td>D-1 동시 refresh 클로버(<code>withWriteLock</code>+재read 머지·<code>appendBookmark</code>)·D-2 스트림 크래시(<code>res</code> error 리스너) — PM 직접 수정+회귀 2종. 토스트·empty/loading 정합</td><td><span class="badge done">완료</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
   <!-- 검증 게이트 -->
   <h2>검증 게이트 이력 (전부 PASS)</h2>
   <table>
@@ -295,6 +311,11 @@
       <tr><td>M7 동작·통합(다면)</td><td>qa-engineer</td><td>1회 (474 통과·통합 가능)</td><td><span class="badge pass">통합 가능</span></td><td class="links"><a href="../reviews/m7_qa_1.html">m7_qa_1</a> · 사용자 PC 확인 8건</td></tr>
       <tr><td>M8 구현 (R-24)</td><td>개발·단위테스트</td><td>설계 정본 m8-design.html(rev.1) · 503 테스트 통과(신규 12)</td><td><span class="badge pass">통과</span></td><td class="links"><a href="../architecture/m8-design.html">m8-design.html</a></td></tr>
       <tr><td>M9~M11 (R-25~R-33 · v1.2.0~v1.4.0)</td><td>직접 구현·단위테스트</td><td>하네스 외 직접 개발 — m9-features.test.js 포함 525 테스트 통과</td><td><span class="badge pass">525 통과</span></td><td><code>test/m9-features.test.js</code> 외 단위테스트</td></tr>
+      <tr><td>셸프 위젯 계획(로드맵·IPC 계약)</td><td>reviewer</td><td>1회 (FAIL→정합화→재검증)</td><td><span class="badge pass">PASS</span></td><td class="links"><a href="../reviews/shelf_planning_review_1.html">shelf_planning_review_1</a></td></tr>
+      <tr><td>셸프 위젯 보안 종료 게이트</td><td>security-reviewer</td><td>1회 (치명 0·높음 0 — SSRF·경로·열기·CSP)</td><td><span class="badge pass">PASS</span></td><td class="links"><a href="../reviews/shelf_security_review_1.html">shelf_security_review_1</a></td></tr>
+      <tr><td>셸프 위젯 동작·수용·경계</td><td>qa-engineer</td><td>1회 (CRAWL_PENDING 잔재 제거)</td><td><span class="badge pass">PASS</span></td><td class="links"><a href="../reviews/shelf_qa_1.html">shelf_qa_1</a></td></tr>
+      <tr><td>셸프 위젯 코드 품질</td><td>code-reviewer</td><td>1회 (D-1/D-2 수정 후)</td><td><span class="badge pass">PASS</span></td><td class="links"><a href="../reviews/shelf_code_review_1.html">shelf_code_review_1</a></td></tr>
+      <tr><td>셸프 위젯 정확성 결함 수정</td><td>PM 직접 + 회귀</td><td>D-1 동시 refresh 클로버·D-2 스트림 크래시</td><td><span class="badge pass">해결</span></td><td>회귀 <code>test/shelf-ipc.test.js</code>·<code>test/shelf-urlMeta.test.js</code> · 전체 1093/1093</td></tr>
     </tbody>
   </table>
 
@@ -348,6 +369,13 @@
       <tr><td>협조적 취소</td><td><code>AbortSignal</code> 기반 스캐너 협조적 취소(현재 watchdog가 hang 시 락 강제 해제로 가용성은 보장)</td><td>견고성 개선</td></tr>
       <tr><td>과도기 HTTP 모듈 제거 (P2-2)</td><td>Electron 전환 완료 후 <code>server.js</code>·<code>lib/server/{router,staticHandler,security,apiHandlers,actionHandlers}.js</code>·<code>package.json</code> <code>start:web</code>/<code>serve:http</code> 제거(현재 과도기 보존). 제거 시 HTTP/IPC 코어 중복도 함께 해소</td><td>정리(코드리뷰 P2-2/P3-1)</td></tr>
       <tr><td>EI-L-1 (해소·반영됨)</td><td>IPC 발신자 origin 검증을 접두 매칭→<b>정규 origin 정확 일치</b>로 좁힘(<code>electron/ipc/register.js</code> <code>isTrustedSender</code>). 보안검토 1회차 권고 반영 완료 — 잔여 없음</td><td>심층방어(반영됨)</td></tr>
+      <tr><td colspan="3" style="background:#172033;color:#94a3b8;"><b>셸프 위젯 품질 백로그(code-review 지적 11건 · 정확성 영향 0 · 출시 비차단)</b></td></tr>
+      <tr><td>imageCache 총량 상한 write 경로</td><td>캐시 총량 상한 적용을 write 경로에서도 일관 강제(현재 GC 주기 의존). og:image 디스크 증가 보수적 억제</td><td>견고성</td></tr>
+      <tr><td>imageCache GC 경쟁</td><td>GC와 write/read 동시 접근 시 경쟁 여지 — 락/원자성 보강(현재 정확성 영향 없음, 캐시 미스로 graceful)</td><td>견고성</td></tr>
+      <tr><td>toView 동기 read</td><td>list/add/refresh의 <code>toDataUri</code>가 동기 파일 read — 대량 항목 시 지연 가능. 지연 로드(펼친 항목만 data:URI) 또는 async 전환</td><td>성능</td></tr>
+      <tr><td>detectType 2중 구현</td><td>유형 감지가 메인(<code>lib/shelf/detectType.js</code>)과 렌더러 힌트에 중복 — 단일 출처로 정리(현재 main이 권위 검증이라 안전)</td><td>중복 제거</td></tr>
+      <tr><td>닷파일 확장자 처리</td><td><code>.gitignore</code> 등 닷파일을 확장자로 오인하는 경계 — file/folder 판정 보강</td><td>정확도(경계)</td></tr>
+      <tr><td>기타 코드품질 6+5건 잔여</td><td>code-review가 정확성 영향 없음으로 분류한 나머지 정리 항목(네이밍·중복·소규모 리팩터) — <code>docs/reviews/shelf_code_review_1.html</code> 참조</td><td>정리</td></tr>
     </tbody>
   </table>
 
@@ -379,7 +407,7 @@
   </div>
 
   <footer>
-    Project-SPIP 진행 현황판 · 기준일 2026-06-23 · 현재 단계: M11(v1.4.0) 구현 완료(테스트 525/525) · 작업이 진행되면 이 페이지를 단일 진입점으로 갱신합니다.
+    Project-SPIP 진행 현황판 · 기준일 2026-06-27 · 현재 단계: 즐겨찾기 셸프 위젯(SH-1~SH-5) 구현·검증 완료(테스트 1093/1093·보안/QA/코드 3종 PASS·치명/높음 0) · M12·M13·브리핑 AI 후속 포함 상세 추적은 traceability.html·change-log.html · 작업이 진행되면 이 페이지를 단일 진입점으로 갱신합니다.
   </footer>
 
 </div>

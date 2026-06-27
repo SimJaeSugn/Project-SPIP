@@ -35,6 +35,9 @@ const { initAutoUpdate } = require('./autoUpdate');
 const { Logger, clampString } = require('../lib/common/logger');
 const { detectElevation } = require('../lib/common/elevationGuard');
 const elevationState = require('../lib/common/elevationState');
+const shelfIpc = require('./ipc/shelf');
+const uiStateStore = require('../lib/common/uiStateStore');
+const { createShelfScheduler } = require('../lib/shelf/scheduler');
 
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 const PRELOAD = path.join(__dirname, 'preload.js');
@@ -71,6 +74,9 @@ function contentTypeFor(filePath) {
 let win = null;
 let ctx = null;
 let tray = null;
+// [SH-4] 셸프 자동 재크롤 스케줄러 + changed broadcast(register가 주입).
+let shelfScheduler = null;
+let shelfBroadcast = null;
 // [R-21] 트레이 '종료'·앱 quit 시에만 true. close-to-tray 분기 기준(§9.2).
 let isQuitting = false;
 // 업데이트 설치 재시작(quitAndInstall) 경로 표식 — close 시 Q4(스캔 확인) 건너뛰고 즉시 종료.
@@ -322,7 +328,27 @@ function onReady() {
     // [M7 SEC-M2] 위젯 wc 지연평가 — favorites-changed broadcast 대상(파괴 시 null).
     getFavoritesWidgetWc: () => favoritesWidget.getWebContents(),
     getWin: () => win,
+    // [SH-4] register의 broadcastShelf를 받아 스케줄러가 재사용(동일 채널·화이트리스트).
+    setShelfBroadcast: (fn) => { shelfBroadcast = fn; },
   });
+
+  // [SH-4] 셸프 자동 재크롤 스케줄러 시작 — 6시간 주기, url 북마크 재크롤.
+  //   D-SCHED-1: config.shelfAutoRefresh=false면 tick 무동작(egress 0). D-SCHED-2: elevated 스킵.
+  //   첫 tick은 지연(부팅 영향 0). 변경 시 broadcastShelf로 메인창 push.
+  try {
+    shelfScheduler = createShelfScheduler({
+      isEnabled: () => !(ctx && ctx.config && ctx.config.shelfAutoRefresh === false),
+      isElevated: () => elevationState.isElevated(),
+      getCtx: () => ctx,
+      listBookmarks: (c) => uiStateStore.read({ uiStatePath: c && c.uiStatePath, logger: c && c.logger }).shelfBookmarks,
+      refresh: (id, c) => shelfIpc.refresh({ id }, c),
+      broadcast: () => { if (typeof shelfBroadcast === 'function') shelfBroadcast(); },
+      logger,
+    });
+    shelfScheduler.start();
+  } catch (err) {
+    logger.error('셸프 자동 재크롤 스케줄러 시작 실패 — 자동 재크롤 없이 계속', err);
+  }
 
   // [R-24 상태 주시] 한 번 스캔된 뒤(스냅샷 보유) 재스캔 전까지 git·freshness를 주기 재수집해
   //   변경분을 메인 창에 push('spip:projectsUpdated'). 빈 store(0개)면 tick은 무동작이라 항상 시작해도
@@ -487,6 +513,8 @@ function disposeResources() {
   try { if (ctx && ctx.stateWatcher && typeof ctx.stateWatcher.stop === 'function') ctx.stateWatcher.stop(); } catch (err) { logger.error('워처 정리 실패', err); }
   // 메일 감시 관리자(계정별 타이머) 정리(멱등).
   try { if (ctx && ctx.mailManager && typeof ctx.mailManager.stop === 'function') ctx.mailManager.stop(); } catch (err) { logger.error('메일 감시 정리 실패', err); }
+  // [SH-4] 셸프 자동 재크롤 스케줄러 타이머 정리(멱등).
+  try { if (shelfScheduler && typeof shelfScheduler.stop === 'function') shelfScheduler.stop(); } catch (err) { logger.error('셸프 스케줄러 정리 실패', err); }
   // [M13] 브리핑 오케스트레이터 타이머·in-flight 정리(멱등).
   try { if (ctx && ctx.briefingOrchestrator && typeof ctx.briefingOrchestrator.dispose === 'function') ctx.briefingOrchestrator.dispose(); } catch (err) { logger.error('브리핑 정리 실패', err); }
 }

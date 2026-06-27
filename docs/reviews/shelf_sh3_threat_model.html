@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project-SPIP — 위협 모델링: SH-3 URL 크롤 + og:image (착수 전 게이트)</title>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#1e293b; --text:#e2e8f0; --sub:#94a3b8;
+    --accent:#34d399; --ref:#38bdf8; --line:#334155; --warn:#fbbf24; --danger:#f87171; --purple:#c4b5fd;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:"Segoe UI","Malgun Gothic",system-ui,sans-serif;line-height:1.7;}
+  header{padding:48px 32px 36px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#13203b,#0f172a);}
+  header h1{margin:0 0 10px;font-size:28px;letter-spacing:-0.01em;}
+  header .tag{display:inline-block;background:rgba(248,113,113,.12);color:var(--danger);
+    border:1px solid rgba(248,113,113,.4);border-radius:999px;padding:3px 12px;font-size:13px;margin-right:8px;margin-bottom:6px;}
+  header .tag.sec{background:rgba(52,211,153,.12);color:var(--accent);border-color:rgba(52,211,153,.4);}
+  header p{margin:14px 0 0;color:var(--sub);max-width:1050px;}
+  .meta{margin-top:16px;font-size:13px;color:var(--sub);}
+  main{max-width:1280px;margin:0 auto;padding:32px;}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:24px 28px;margin:22px 0;}
+  h2{margin:0 0 16px;font-size:21px;color:var(--accent);border-left:4px solid var(--accent);padding-left:12px;}
+  h3{font-size:16px;color:var(--ref);margin:22px 0 10px;}
+  h4{font-size:14px;color:var(--text);margin:16px 0 8px;}
+  p{margin:8px 0;}
+  ul,ol{margin:8px 0;padding-left:22px;}
+  li{margin:5px 0;}
+  code{background:#0b1220;color:var(--ref);padding:1px 6px;border-radius:5px;font-size:12.5px;font-family:Consolas,monospace;}
+  pre{background:#0b1220;border:1px solid var(--line);border-radius:8px;padding:14px 16px;overflow:auto;
+    font-family:Consolas,monospace;font-size:12.5px;color:#cbd5e1;line-height:1.55;}
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13px;}
+  th,td{border:1px solid var(--line);padding:9px 11px;text-align:left;vertical-align:top;}
+  th{background:#142035;color:var(--accent);}
+  tr:nth-child(even) td{background:rgba(255,255,255,.02);}
+  .rid{font-family:Consolas,monospace;color:var(--accent);font-weight:700;white-space:nowrap;}
+  .sev{font-size:11px;font-weight:800;padding:2px 9px;border-radius:6px;white-space:nowrap;display:inline-block;}
+  .crit{background:rgba(248,113,113,.18);color:#fca5a5;border:1px solid rgba(248,113,113,.6);}
+  .high{background:rgba(251,146,60,.16);color:#fdba74;border:1px solid rgba(251,146,60,.55);}
+  .mid{background:rgba(251,191,36,.14);color:#fcd34d;border:1px solid rgba(251,191,36,.5);}
+  .low{background:rgba(56,189,248,.14);color:#7dd3fc;border:1px solid rgba(56,189,248,.45);}
+  .stride{font-family:Consolas,monospace;font-size:11px;color:var(--purple);}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;}
+  .card{background:#0b1220;border:1px solid var(--line);border-radius:10px;padding:16px;}
+  .card .k{font-size:12px;color:var(--sub);text-transform:uppercase;letter-spacing:.5px;}
+  .card .v{font-size:22px;margin-top:6px;font-weight:800;}
+  .note{background:rgba(56,189,248,.08);border:1px solid rgba(56,189,248,.3);border-radius:8px;padding:12px 16px;font-size:13.5px;color:#bae6fd;margin:12px 0;}
+  .warn-box{background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.32);border-radius:8px;padding:12px 16px;font-size:13.5px;color:#fde68a;margin:12px 0;}
+  .danger-box{background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.35);border-radius:8px;padding:12px 16px;font-size:13.5px;color:#fecaca;margin:12px 0;}
+  .ok-box{background:rgba(52,211,153,.08);border:1px solid rgba(52,211,153,.32);border-radius:8px;padding:12px 16px;font-size:13.5px;color:#a7f3d0;margin:12px 0;}
+  .legend{display:flex;gap:18px;flex-wrap:wrap;font-size:12.5px;color:var(--sub);margin-top:10px;}
+  .legend span{display:inline-flex;align-items:center;gap:6px;}
+  .sw{width:14px;height:14px;border-radius:3px;display:inline-block;border:1px solid #475569;}
+  svg{max-width:100%;height:auto;display:block;margin:10px auto;}
+  footer{text-align:center;color:var(--sub);font-size:12.5px;padding:30px;border-top:1px solid var(--line);}
+  .toc{columns:2;font-size:13.5px;}
+  .toc a{color:var(--ref);text-decoration:none;}
+  .toc a:hover{text-decoration:underline;}
+  .verdict{display:inline-block;border-radius:999px;padding:4px 16px;font-size:14px;font-weight:800;
+    background:rgba(251,191,36,.16);color:#fcd34d;border:1px solid rgba(251,191,36,.6);}
+  .chk{list-style:none;padding-left:0;}
+  .chk li{padding-left:30px;position:relative;margin:7px 0;}
+  .chk li::before{content:"☐";position:absolute;left:4px;color:var(--accent);font-weight:800;}
+  .mono{font-family:Consolas,monospace;}
+  .modtag{font-family:Consolas,monospace;font-size:11px;font-weight:700;padding:1px 7px;border-radius:5px;background:#13203b;border:1px solid #38bdf8;color:#7dd3fc;white-space:nowrap;}
+</style>
+</head>
+<body>
+<header>
+  <span class="tag">위협 모델링 (착수 전 게이트)</span>
+  <span class="tag sec">security-reviewer</span>
+  <span class="tag">SH-3 · URL 크롤 + og:image</span>
+  <h1>Project-SPIP — SH-3 위협 모델 · 구현 가드 요구 명세(DoD)</h1>
+  <p>본 문서는 <b>코드 리뷰가 아니라 착수 전 위협 모델·요구 정의</b>다. SH-3은 본 앱 최초의 사용자 승인
+  egress 표면(메인 프로세스 → 임의 인터넷 호스트)으로, 렌더러 <code>connect-src 'none'</code>를 유지한 채
+  main에서만 외부 통신을 허용한다. 아래 위협별 등급과 <b>테스트 가능한 가드 요구 체크리스트</b>는
+  backend-dev가 SH-3 구현 시 <b>Definition of Done</b>으로 사용한다. 치명/높음 요구가 하나라도 미충족이면
+  보안 게이트를 통과시키지 않는다.</p>
+  <div class="meta">문서 유형: 위협 모델(STRIDE) + 가드 요구 명세 · 작성: security-reviewer · 작성일 2026-06-27 ·
+  입력: <code>docs/architecture/shelf-widget-design.html</code>(§3·§9·§11·§13, ADR-SH-2/3/5) ·
+  <code>docs/api-contract.md</code>(셸프 절·BLOCKED_HOST) · <code>docs/roadmap.html</code>(SH-3 행) ·
+  선례 실측: <code>lib/common/config.js</code>(validateBriefingUrl) · <code>lib/ai/llmClient.js</code>(egress·에러 고정코드·host만 로그) ·
+  기준 폴더(<code>docs/Development/</code>) 부재 → 표준 보안 체크리스트 + 본 앱 보안 모델(L-1/H-1/H-2/L-3) 준수</div>
+</header>
+
+<main>
+
+<!-- 판정 -->
+<section id="verdict">
+  <h2>판정 · 요약</h2>
+  <p><span class="verdict">판정: 조건부 진행 (CONDITIONAL — 아래 가드 요구 충족 시에만 착수 승인)</span></p>
+  <p>SH-3은 <b>치명(SSRF·DNS rebinding) 위협을 본질적으로 내포</b>한다. 설계(§9.2 IP 분류표·IP 핀·hop 재검증)는
+  방향이 옳고 충분히 구체적이다. 따라서 <b>설계 자체는 게이트 통과 가능</b>하나, 아래 <b>치명 4 + 높음 7</b> 가드
+  요구가 구현·테스트로 증명되어야 종료 게이트(post-implementation security-review)를 통과한다. 본 문서는
+  그 요구를 테스트 가능한 형태로 고정한다.</p>
+  <div class="grid">
+    <div class="card"><div class="k">위협 (치명)</div><div class="v" style="color:#fca5a5;">4</div></div>
+    <div class="card"><div class="k">위협 (높음)</div><div class="v" style="color:#fdba74;">7</div></div>
+    <div class="card"><div class="k">위협 (중간)</div><div class="v" style="color:#fcd34d;">6</div></div>
+    <div class="card"><div class="k">문서 위생 지적</div><div class="v" style="color:#7dd3fc;">1</div></div>
+  </div>
+  <div class="danger-box"><b>착수 전제.</b> ① SSRF는 <b>호스트명 화이트리스트만으로 불충분</b> — 반드시 <b>DNS 확인 후 실제
+  접속 IP를 분류 검사</b>하고 <b>그 IP로 직접 핀 연결</b>(연결 시점 재해석 금지). ② <b>모든 리다이렉트 hop마다</b> URL·IP를
+  재검증(최초 1회 검증은 무효). ③ og:image는 별도 fetch이며 <b>본문 URL과 동일한 SSRF 게이트를 다시</b> 거친다(2차 egress 표면).</div>
+</section>
+
+<!-- 목차 -->
+<section id="toc">
+  <h2>목차</h2>
+  <div class="toc">
+    <p><a href="#assets">1. 보호 자산 · 신뢰 경계</a></p>
+    <p><a href="#flow">2. 크롤 데이터 흐름 (검증 지점)</a></p>
+    <p><a href="#threats">3. 위협 목록 (STRIDE · 등급 · 악용 시나리오)</a></p>
+    <p><a href="#dod">4. 구현 가드 요구 체크리스트 (DoD · 테스트 가능)</a></p>
+    <p><a href="#modules">5. 모듈별 책임 분담 (ssrfGuard/ogParse/imageCache/urlMeta)</a></p>
+    <p><a href="#hygiene">6. 문서 위생 지적</a></p>
+    <p><a href="#tests">7. 필수 테스트 케이스 매트릭스</a></p>
+  </div>
+</section>
+
+<!-- 1. 자산 · 경계 -->
+<section id="assets">
+  <h2>1. 보호 자산 · 신뢰 경계</h2>
+  <table>
+    <tr><th>자산</th><th>위협 시 영향</th><th>경계</th></tr>
+    <tr><td>내부망/루프백 서비스(127.x, 사설망, 다른 로컬 앱·관리 콘솔)</td><td>SSRF로 사용자 PC가 내부망 프록시화 — 인증 없는 내부 API 호출</td><td>main → 임의 인터넷(★ SSRF 표면)</td></tr>
+    <tr><td>클라우드 메타데이터 엔드포인트(169.254.169.254 등)</td><td>IAM 자격·인스턴스 비밀 탈취(클라우드/VM에서 앱 구동 시)</td><td>main → 임의 인터넷</td></tr>
+    <tr><td>메인 프로세스 가용성(이벤트 루프)</td><td>거대 응답·decompression bomb·ReDoS로 main 멈춤(앱 전체 무응답)</td><td>응답 바디·HTML 파서</td></tr>
+    <tr><td>ui-state.json(0600)·appData 이미지 캐시</td><td>data:URI 비대·디스크 고갈·캐시 디렉토리 탈출</td><td>imageCache → FS</td></tr>
+    <tr><td>렌더러 DOM(L-1 불변식)</td><td>크롤된 title/desc/og 문자열 저장형 XSS</td><td>main → IPC → 렌더러</td></tr>
+    <tr><td>사용자 프라이버시(egress 노출)</td><td>6시간 자동 재크롤이 사용자 모르게 외부 호스트에 접속·열람 신호 누출</td><td>scheduler → 인터넷</td></tr>
+  </table>
+</section>
+
+<!-- 2. 흐름 -->
+<section id="flow">
+  <h2>2. 크롤 데이터 흐름 — 검증 지점(가드가 박혀야 할 곳)</h2>
+  <svg viewBox="0 0 980 320" role="img" aria-label="SH-3 크롤 데이터 흐름과 검증 게이트">
+    <!-- renderer -->
+    <rect x="14" y="20" width="150" height="56" rx="8" fill="#1e293b" stroke="#475569"/>
+    <text x="26" y="44" fill="#e2e8f0" font-size="11">사용자 입력 URL</text>
+    <text x="26" y="62" fill="#f87171" font-size="10">(비신뢰)</text>
+
+    <!-- validate -->
+    <rect x="188" y="18" width="140" height="60" rx="8" fill="#13203b" stroke="#34d399"/>
+    <text x="200" y="40" fill="#a7f3d0" font-size="11">G1 validateHttpUrl</text>
+    <text x="200" y="56" fill="#94a3b8" font-size="9">scheme·user:pass@</text>
+    <text x="200" y="70" fill="#94a3b8" font-size="9">길이≤2048</text>
+
+    <!-- dns + ip gate -->
+    <rect x="352" y="18" width="150" height="60" rx="8" fill="#13203b" stroke="#34d399"/>
+    <text x="364" y="40" fill="#a7f3d0" font-size="11">G2 DNS resolve</text>
+    <text x="364" y="56" fill="#94a3b8" font-size="9">+ IP 분류 게이트</text>
+    <text x="364" y="70" fill="#f87171" font-size="9">사설/메타/매핑 차단</text>
+
+    <!-- get with pin -->
+    <rect x="526" y="18" width="150" height="60" rx="8" fill="#1e293b" stroke="#fbbf24"/>
+    <text x="538" y="40" fill="#fbbf24" font-size="11">G3 GET (IP 핀)</text>
+    <text x="538" y="56" fill="#94a3b8" font-size="9">검증IP로 직접 연결</text>
+    <text x="538" y="70" fill="#94a3b8" font-size="9">8s·512KB·identity</text>
+
+    <!-- redirect -->
+    <rect x="700" y="18" width="150" height="60" rx="8" fill="#2a1518" stroke="#f87171"/>
+    <text x="712" y="40" fill="#fca5a5" font-size="11">G4 리다이렉트</text>
+    <text x="712" y="56" fill="#94a3b8" font-size="9">≤3 hop · hop마다</text>
+    <text x="712" y="70" fill="#f87171" font-size="9">G1+G2 재실행</text>
+
+    <!-- ogparse -->
+    <rect x="352" y="140" width="150" height="60" rx="8" fill="#13203b" stroke="#34d399"/>
+    <text x="364" y="162" fill="#a7f3d0" font-size="11">G5 ogParse</text>
+    <text x="364" y="178" fill="#94a3b8" font-size="9">HTML만·매치상한</text>
+    <text x="364" y="192" fill="#94a3b8" font-size="9">sanitize·길이상한</text>
+
+    <!-- og image url -->
+    <rect x="526" y="140" width="150" height="60" rx="8" fill="#13203b" stroke="#34d399"/>
+    <text x="538" y="162" fill="#a7f3d0" font-size="11">G6 og:image URL</text>
+    <text x="538" y="178" fill="#f87171" font-size="9">★ G1+G2 재실행</text>
+    <text x="538" y="192" fill="#94a3b8" font-size="9">(2차 egress)</text>
+
+    <!-- image fetch -->
+    <rect x="700" y="140" width="150" height="60" rx="8" fill="#1e293b" stroke="#fbbf24"/>
+    <text x="712" y="162" fill="#fbbf24" font-size="11">G7 이미지 GET</text>
+    <text x="712" y="178" fill="#94a3b8" font-size="9">image/* · ≤100KB</text>
+    <text x="712" y="192" fill="#f87171" font-size="9">SVG 제외</text>
+
+    <!-- cache -->
+    <rect x="700" y="240" width="150" height="56" rx="8" fill="#1e293b" stroke="#475569"/>
+    <text x="712" y="264" fill="#e2e8f0" font-size="11">G8 imageCache</text>
+    <text x="712" y="282" fill="#94a3b8" font-size="9">0600·해시키·data:URI</text>
+
+    <!-- renderer render -->
+    <rect x="352" y="240" width="280" height="56" rx="8" fill="#13203b" stroke="#38bdf8"/>
+    <text x="364" y="264" fill="#7dd3fc" font-size="11">G9 렌더: textContent만 (L-1) · img src=data:</text>
+    <text x="364" y="282" fill="#94a3b8" font-size="9">크롤 문자열 전부 비신뢰</text>
+
+    <!-- arrows -->
+    <line x1="164" y1="48" x2="188" y2="48" stroke="#475569" stroke-width="2" marker-end="url(#a)"/>
+    <line x1="328" y1="48" x2="352" y2="48" stroke="#475569" stroke-width="2" marker-end="url(#a)"/>
+    <line x1="502" y1="48" x2="526" y2="48" stroke="#475569" stroke-width="2" marker-end="url(#a)"/>
+    <line x1="676" y1="48" x2="700" y2="48" stroke="#f87171" stroke-width="2" marker-end="url(#ar)"/>
+    <line x1="775" y1="78" x2="775" y2="108" stroke="#f87171" stroke-width="1.5" stroke-dasharray="4 3"/>
+    <line x1="775" y1="108" x2="430" y2="108" stroke="#f87171" stroke-width="1.5" stroke-dasharray="4 3"/>
+    <line x1="427" y1="78" x2="427" y2="140" stroke="#475569" stroke-width="2" marker-end="url(#a)"/>
+    <line x1="502" y1="170" x2="526" y2="170" stroke="#475569" stroke-width="2" marker-end="url(#a)"/>
+    <line x1="676" y1="170" x2="700" y2="170" stroke="#fbbf24" stroke-width="2" marker-end="url(#ay)"/>
+    <line x1="775" y1="200" x2="775" y2="240" stroke="#475569" stroke-width="2" marker-end="url(#a)"/>
+    <line x1="700" y1="268" x2="632" y2="268" stroke="#38bdf8" stroke-width="2" marker-end="url(#ab)"/>
+    <text x="440" y="120" fill="#f87171" font-size="9">hop의 새 호스트 → 게이트 재진입</text>
+    <defs>
+      <marker id="a" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#475569"/></marker>
+      <marker id="ar" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#f87171"/></marker>
+      <marker id="ay" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#fbbf24"/></marker>
+      <marker id="ab" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#38bdf8"/></marker>
+    </defs>
+  </svg>
+  <div class="legend">
+    <span><span class="sw" style="background:#34d399"></span>순수 검증 게이트(헤드리스 테스트)</span>
+    <span><span class="sw" style="background:#fbbf24"></span>egress 한도 적용</span>
+    <span><span class="sw" style="background:#f87171"></span>치명 표면(SSRF/리다이렉트)</span>
+    <span><span class="sw" style="background:#38bdf8"></span>렌더 경계(L-1)</span>
+  </div>
+  <div class="warn-box"><b>핵심 통찰.</b> G2(IP 게이트)와 G3(연결)은 <b>같은 IP여야</b> 한다(TOCTOU/rebinding 차단).
+  G1·G2는 ① 최초 URL ② 각 리다이렉트 hop ③ og:image URL — 총 <b>3개 진입점에서 동일하게</b> 호출되어야 한다.
+  하나라도 누락하면 전체 방어가 우회된다.</div>
+</section>
+
+<!-- 3. 위협 -->
+<section id="threats">
+  <h2>3. 위협 목록 (STRIDE · 등급 · 악용 시나리오)</h2>
+  <table>
+    <tr><th>ID</th><th>위협</th><th>STRIDE</th><th>등급</th><th>악용 시나리오 → 충족 가드</th></tr>
+
+    <tr>
+      <td class="rid">T-01</td>
+      <td>SSRF — 사설/루프백/링크로컬/메타데이터 IP로의 크롤</td>
+      <td class="stride">I·E</td>
+      <td><span class="sev crit">치명</span></td>
+      <td>공격자가 <code>http://169.254.169.254/latest/meta-data/</code> 또는 <code>http://127.0.0.1:1234/v1</code>(로컬 LLM)·<code>http://192.168.1.1/admin</code>을 북마크로 붙여넣어 add → main이 내부 서비스 응답을 og 메타로 반사. 클라우드/VM이면 IAM 자격 탈취. → <b>D-SSRF-1~6 전부</b>.</td>
+    </tr>
+    <tr>
+      <td class="rid">T-02</td>
+      <td>DNS rebinding / TOCTOU — 검증 후 연결 전 DNS가 내부 IP로 바뀜</td>
+      <td class="stride">S·I·E</td>
+      <td><span class="sev crit">치명</span></td>
+      <td>공격자 도메인이 1차 resolve엔 공인 IP, 연결 시점엔 127.0.0.1 반환(낮은 TTL). 호스트명 화이트리스트나 "검증 후 재해석"은 우회됨. → <b>D-SSRF-3(IP 핀: 검증한 그 IP로 직접 연결, 연결 시 재해석 금지)</b>.</td>
+    </tr>
+    <tr>
+      <td class="rid">T-03</td>
+      <td>리다이렉트 우회 — 공인 URL이 3xx로 내부 IP·非http 스킴으로 점프</td>
+      <td class="stride">I·E</td>
+      <td><span class="sev crit">치명</span></td>
+      <td>최초 URL만 검증하면 <code>Location: http://169.254.169.254/</code> 또는 <code>Location: file:///etc/passwd</code>로 우회. → <b>D-RDR-1~4(각 hop마다 G1+G2 재검증·스킴 재확인·hop 상한)</b>.</td>
+    </tr>
+    <tr>
+      <td class="rid">T-04</td>
+      <td>og:image 2차 SSRF — 본문은 공인이나 og:image URL이 내부 IP</td>
+      <td class="stride">I·E</td>
+      <td><span class="sev crit">치명</span></td>
+      <td>정상 페이지가 <code>&lt;meta property="og:image" content="http://127.0.0.1:9200/"&gt;</code>를 심어 이미지 fetch가 내부 접속. → <b>D-IMG-1(og:image도 본문과 동일 SSRF 게이트·IP 핀·hop 재검증)</b>.</td>
+    </tr>
+
+    <tr>
+      <td class="rid">T-05</td>
+      <td>IPv4-mapped IPv6 / 비표준 표기 우회(<code>::ffff:127.0.0.1</code>, <code>0x7f.1</code>, <code>017700000001</code>, <code>2130706433</code>)</td>
+      <td class="stride">I·E</td>
+      <td><span class="sev high">높음</span></td>
+      <td>분류기가 IPv4-mapped를 풀지 않거나 8진/16진/정수 표기를 정규화하지 않으면 루프백 차단 우회. → <b>D-SSRF-4(매핑 풀어 재판정)·D-SSRF-5(파싱 정규화)</b>.</td>
+    </tr>
+    <tr>
+      <td class="rid">T-06</td>
+      <td>응답 바디 고갈 — 무한/거대 HTML로 메모리·이벤트루프 점유</td>
+      <td class="stride">D</td>
+      <td><span class="sev high">높음</span></td>
+      <td>악성 호스트가 끝없는 스트림 전송 → main OOM/멈춤. → <b>D-RES-1(스트리밍 누적 512KB 상한, 초과 시 소켓 destroy)·D-RES-2(타임아웃 8s)</b>.</td>
+    </tr>
+    <tr>
+      <td class="rid">T-07</td>
+      <td>Decompression bomb — gzip/br로 작은 응답이 해제 후 폭발</td>
+      <td class="stride">D</td>
+      <td><span class="sev high">높음</span></td>
+      <td>1KB gzip → 해제 시 1GB. 압축 바이트만 세면 상한 무력화. → <b>D-RES-3(<code>Accept-Encoding: identity</code> 압축 미요청; 만약 압축 수신 시 해제 후 누적 바이트로 상한 재확인)</b>.</td>
+    </tr>
+    <tr>
+      <td class="rid">T-08</td>
+      <td>ReDoS — 정규식 og 파서가 악성 HTML에 지수 백트래킹</td>
+      <td class="stride">D</td>
+      <td><span class="sev high">높음</span></td>
+      <td>중첩 인용/속성 폭탄으로 main 이벤트루프 정지. → <b>D-PARSE-1(비탐욕·앵커·역참조 회피)·D-PARSE-2(매치 횟수 상한)·입력 512KB 선행 상한</b>.</td>
+    </tr>
+    <tr>
+      <td class="rid">T-09</td>
+      <td>비http(s) 스킴 / 자격정보 URL(<code>user:pass@</code>)</td>
+      <td class="stride">S·I</td>
+      <td><span class="sev high">높음</span></td>
+      <td><code>javascript:</code>·<code>file:</code>·<code>data:</code> 크롤 시도 또는 자격 누출. → <b>D-URL-1(scheme∈{http,https})·D-URL-2(username/password 비어야)</b>. (열기 단계 openExternal 스킴 재검증은 별도 — D-OPEN-1)</td>
+    </tr>
+    <tr>
+      <td class="rid">T-10</td>
+      <td>이미지 content-type 위조 / SVG 스크립트 내장</td>
+      <td class="stride">I·E</td>
+      <td><span class="sev high">높음</span></td>
+      <td>응답이 <code>image/svg+xml</code>(스크립트 포함) 또는 HTML인데 image로 위장 → data:URI로 렌더 시 위험. → <b>D-IMG-2(content-type image/{png,jpeg,gif,webp}만)·D-IMG-3(SVG 제외)·D-IMG-4(매직바이트 sniff 권장)</b>.</td>
+    </tr>
+    <tr>
+      <td class="rid">T-11</td>
+      <td>자동 재크롤의 은닉 egress — 토글 off인데도 백그라운드 접속</td>
+      <td class="stride">I·R</td>
+      <td><span class="sev high">높음</span></td>
+      <td>6시간 스케줄러가 토글 off에도 tick 동작하면 사용자 모르게 외부 호스트에 주기 접속(프라이버시·열람 신호 누출). → <b>D-SCHED-1(off=완전 무동작)·D-SCHED-2(상승세션 크롤 스킵)</b>.</td>
+    </tr>
+
+    <tr>
+      <td class="rid">T-12</td>
+      <td>저장형 XSS — 크롤된 title/desc/og를 innerHTML로 렌더</td>
+      <td class="stride">E·T</td>
+      <td><span class="sev mid">중간</span></td>
+      <td>L-1 불변식이 있으나 SH-3이 새 표시 필드(title/desc/status)를 도입 → 렌더 경로 회귀 위험. → <b>D-RENDER-1(textContent만)·D-RENDER-2(data:URI MIME 화이트리스트)</b>.</td>
+    </tr>
+    <tr>
+      <td class="rid">T-13</td>
+      <td>data:URI 크기 폭증 — 64항목×100KB가 IPC payload·메모리 압박</td>
+      <td class="stride">D</td>
+      <td><span class="sev mid">중간</span></td>
+      <td>list 일괄 응답이 ~8.6MB. → <b>D-IMG-5(개별 100KB 상한)·D-CACHE-2(총 캐시 용량 상한·GC)·지연 로드(권장)</b>.</td>
+    </tr>
+    <tr>
+      <td class="rid">T-14</td>
+      <td>캐시 경로 탈출 / 파일명 주입 — 해시키 외 값으로 디렉토리 탈출</td>
+      <td class="stride">T·I</td>
+      <td><span class="sev mid">중간</span></td>
+      <td>bannerKey가 검증 없이 파일경로로 쓰이면 <code>../</code> 주입. → <b>D-CACHE-1(키=고정형식 sha256 32hex만, 파일명은 키로만 구성)·확장자 화이트리스트</b>.</td>
+    </tr>
+    <tr>
+      <td class="rid">T-15</td>
+      <td>정보 노출 — 에러/로그에 실경로·해소 IP·전체 URL·스택 누출</td>
+      <td class="stride">I</td>
+      <td><span class="sev mid">중간</span></td>
+      <td>BLOCKED_HOST 응답에 내부 IP를 실으면 내부망 스캐닝 도구화. → <b>D-ERR-1(고정 에러코드만 반환)·D-ERR-2(IP/URL/스택은 로그 전용·host만, llmClient hostOnly 선례)</b>.</td>
+    </tr>
+    <tr>
+      <td class="rid">T-16</td>
+      <td>동시 크롤 고갈 — 다수 add/refresh 병렬로 소켓·메모리 폭주</td>
+      <td class="stride">D</td>
+      <td><span class="sev mid">중간</span></td>
+      <td>스케줄러+수동 refresh가 동시에 64건 크롤. → <b>D-RES-4(동시 크롤 상한·in-flight 큐·배치 watchdog)</b>.</td>
+    </tr>
+    <tr>
+      <td class="rid">T-17</td>
+      <td>쿠키/Authorization 누출 · UA 핑거프린팅</td>
+      <td class="stride">I</td>
+      <td><span class="sev mid">중간</span></td>
+      <td>세션 쿠키·인증 헤더 전송 또는 식별 가능 UA. → <b>D-PRIV-1(쿠키 저장·전송 0)·D-PRIV-2(Authorization 미전송)·D-PRIV-3(고정 최소 UA·Referer 없음)</b>.</td>
+    </tr>
+  </table>
+</section>
+
+<!-- 4. DoD -->
+<section id="dod">
+  <h2>4. 구현 가드 요구 체크리스트 (DoD · 테스트 가능)</h2>
+  <p>각 항목은 <b>테스트로 증명</b>되어야 한다(헤드리스 단위 또는 주입 모킹). <span class="sev crit">치명</span>·<span class="sev high">높음</span>은
+  종료 게이트 <b>차단 조건</b>이다 — 하나라도 미충족이면 SH-3 보안 게이트 FAIL.</p>
+
+  <h3>A. SSRF IP 게이트 <span class="modtag">ssrfGuard</span></h3>
+  <ul class="chk">
+    <li><b>D-SSRF-1</b> <span class="sev crit">치명</span> — IP 분류표 전수 차단: 루프백(127/8, ::1) · 사설(10/8, 172.16/12, 192.168/16, fc00::/7) · 링크로컬(169.254/16, fe80::/10) · 메타데이터(169.254.169.254, 100.100.100.200, fd00:ec2::254) · CGNAT/특수(100.64/10, 0.0.0.0/8, 192.0.0/24, 192.0.2/24) · 멀티캐스트/예약(224/4, 240/4, 255.255.255.255, ff00::/8, ::, 0.0.0.0). <b>테스트: 분류표 각 행 + 경계값(예 10.255.255.255 차단/11.0.0.0 허용) 전수 단위.</b></li>
+    <li><b>D-SSRF-2</b> <span class="sev crit">치명</span> — <code>BLOCKED_HOST</code>는 <b>DNS resolve 후 결과 IP</b> 기준으로 판정한다(호스트명 화이트리스트 불충분). resolve가 복수 IP 반환 시 <b>하나라도</b> 차단 대상이면 거부. <b>테스트: DNS lookup 주입 모킹으로 차단 IP 반환 시 BLOCKED_HOST.</b></li>
+    <li><b>D-SSRF-3</b> <span class="sev crit">치명</span> — <b>IP 핀</b>: 게이트를 통과한 그 IP로 직접 연결한다(<code>options.host=검증IP</code> + <code>servername</code>=원래host + <code>Host</code> 헤더, 또는 <code>lookup</code> 콜백이 검증 IP만 반환). <b>연결 시점 도메인 재해석 금지</b>(DNS rebinding 차단). <b>테스트: lookup 콜백이 검증 IP만 내보내는지·연결 시 재해석 호출 0 확인.</b></li>
+    <li><b>D-SSRF-4</b> <span class="sev high">높음</span> — IPv4-mapped IPv6(<code>::ffff:a.b.c.d</code>)는 IPv4로 풀어 재판정. <b>테스트: <code>::ffff:127.0.0.1</code>·<code>::ffff:169.254.169.254</code> 차단.</b></li>
+    <li><b>D-SSRF-5</b> <span class="sev high">높음</span> — 숫자 IP 직접 입력 및 비표준 표기(8진 <code>017700000001</code>·16진 <code>0x7f000001</code>·정수 <code>2130706433</code>·축약 <code>127.1</code>) 정규화 후 분류 — 또는 <code>new URL().hostname</code>이 정규화하지 못하는 형태는 거부. <b>테스트: 각 표기 입력 시 차단 또는 BAD_INPUT.</b></li>
+    <li><b>D-SSRF-6</b> <span class="sev high">높음</span> — 빈 호스트·<code>0.0.0.0</code>·대괄호 IPv6·후행점(<code>127.0.0.1.</code>) 등 엣지 호스트도 게이트 통과. <b>테스트: 엣지 호스트 집합 차단.</b></li>
+  </ul>
+
+  <h3>B. URL 1차 검증 <span class="modtag">ssrfGuard / config.validateHttpUrl</span></h3>
+  <ul class="chk">
+    <li><b>D-URL-1</b> <span class="sev high">높음</span> — scheme ∈ {http, https}만. 그 외(<code>file:</code>·<code>ftp:</code>·<code>javascript:</code>·<code>data:</code>) 거부. <b>테스트: 비http(s) 입력 거부.</b></li>
+    <li><b>D-URL-2</b> <span class="sev high">높음</span> — <code>username</code>/<code>password</code>(<code>user:pass@host</code>) 비어야 함, 아니면 거부. <b>테스트: 자격 URL 거부.</b> (validateBriefingUrl 선례 일반화 — 반환형 <code>{ok,value,external}</code> 불변, briefing 호출처 회귀 0 확인.)</li>
+    <li><b>D-URL-3</b> <span class="sev mid">중간</span> — 길이 ≤ 2048. 파싱 실패는 <code>BAD_INPUT</code>. <b>테스트: 초과 길이·파싱불가 거부.</b></li>
+  </ul>
+
+  <h3>C. 리다이렉트 <span class="modtag">urlMeta</span></h3>
+  <ul class="chk">
+    <li><b>D-RDR-1</b> <span class="sev crit">치명</span> — 각 hop의 <code>Location</code>을 새 URL로 파싱 후 <b>G1(D-URL-*)+G2(D-SSRF-*) 전부 재실행</b>. 최초 1회 검증은 무효. <b>테스트: 주입 모킹으로 hop2가 내부 IP면 BLOCKED_HOST.</b></li>
+    <li><b>D-RDR-2</b> <span class="sev high">높음</span> — hop 상한 ≤ 3, 초과 시 <code>CRAWL_FAILED</code>. 순환 리다이렉트도 상한으로 종료. <b>테스트: 4 hop·순환 시 실패.</b></li>
+    <li><b>D-RDR-3</b> <span class="sev high">높음</span> — hop의 스킴이 http(s) 아니면 거부(프로토콜 다운그레이드/비http 점프 차단). <b>테스트: <code>Location: file:///</code> 거부.</b></li>
+    <li><b>D-RDR-4</b> <span class="sev mid">중간</span> — 리다이렉트 시 자격·쿠키 비전파(애초에 미전송이므로 자연 충족, 회귀 테스트로 고정).</li>
+  </ul>
+
+  <h3>D. 자원 한도 <span class="modtag">urlMeta</span></h3>
+  <ul class="chk">
+    <li><b>D-RES-1</b> <span class="sev high">높음</span> — 응답 본문 <b>스트리밍 누적</b> 512KB 초과 시 즉시 소켓 destroy(전체 버퍼링 후 검사 금지). <b>테스트: 모킹 스트림이 상한 초과 시 destroy 호출·부분만 보관.</b></li>
+    <li><b>D-RES-2</b> <span class="sev high">높음</span> — 타임아웃 ≤ 8s(연결+응답 전체). 만료 시 abort·<code>CRAWL_FAILED</code>. <b>테스트: 지연 모킹으로 타임아웃 발동.</b></li>
+    <li><b>D-RES-3</b> <span class="sev high">높음</span> — <code>Accept-Encoding: identity</code>로 압축 미요청(decompression bomb 차단). 압축 응답 수신 시 해제 후 누적 바이트로 상한 재확인 또는 거부. <b>테스트: 요청 헤더에 identity·gzip 응답 거부/상한.</b></li>
+    <li><b>D-RES-4</b> <span class="sev mid">중간</span> — 동시 크롤 상한(in-flight 큐) + id별 상한 + 배치 watchdog. <b>테스트: 동시 호출 수 제한 확인.</b></li>
+    <li><b>D-RES-5</b> <span class="sev mid">중간</span> — GET만, <code>Accept: text/html</code>, content-type이 text/html 계열 아니면 본문 미파싱(폴백 메타). <b>테스트: 메서드·비HTML content-type 폴백.</b></li>
+  </ul>
+
+  <h3>E. HTML 파싱 <span class="modtag">ogParse</span></h3>
+  <ul class="chk">
+    <li><b>D-PARSE-1</b> <span class="sev high">높음</span> — 정규식은 비탐욕·앵커 고정·역참조 회피(ReDoS 방어). 입력 512KB 선행 상한 전제. <b>테스트: 병리적 입력(긴 따옴표 폭탄)에 처리시간 선형 유지.</b></li>
+    <li><b>D-PARSE-2</b> <span class="sev high">높음</span> — meta/title 스캔 매치 횟수 상한(예 첫 N개만). <b>테스트: meta 1만개 입력에서 상한 후 중단.</b></li>
+    <li><b>D-PARSE-3</b> <span class="sev mid">중간</span> — 엔티티 디코드는 화이트리스트(<code>&amp;amp; &amp;lt; &amp;gt; &amp;quot; &amp;#39; &amp;#NNN;</code>)만, 숫자 엔티티는 범위 검증. <b>테스트: 알려진 엔티티만 디코드.</b></li>
+    <li><b>D-PARSE-4</b> <span class="sev mid">중간</span> — 모든 추출 문자열 sanitize(C0/DEL·방향성 제어 제거) + 필드별 길이상한. og:image는 절대 URL로 resolve. <b>테스트: 제어문자 제거·길이 절단.</b> (config.sanitizeSystemPrompt 정책 재사용 권장.)</li>
+  </ul>
+
+  <h3>F. og:image 다운로드 <span class="modtag">urlMeta + imageCache</span></h3>
+  <ul class="chk">
+    <li><b>D-IMG-1</b> <span class="sev crit">치명</span> — og:image URL은 본문과 <b>동일 SSRF 게이트(D-URL-*·D-SSRF-*·IP 핀·hop 재검증)</b>를 다시 거친다. <b>테스트: og:image가 내부 IP면 fetch 안 함·bannerKey=null.</b></li>
+    <li><b>D-IMG-2</b> <span class="sev high">높음</span> — content-type ∈ {image/png, image/jpeg, image/gif, image/webp}만. 그 외 거부. <b>테스트: text/html·image/svg+xml content-type 거부.</b></li>
+    <li><b>D-IMG-3</b> <span class="sev high">높음</span> — SVG 완전 제외(<code>image/svg+xml</code> 거부). <b>테스트: SVG content-type·.svg 거부.</b></li>
+    <li><b>D-IMG-4</b> <span class="sev mid">중간</span> — 매직바이트 sniff로 선언 mime과 실제 바이트 일치 검증(content-type 위조 방어, 권장). <b>테스트: PNG 선언+HTML 바이트 거부.</b></li>
+    <li><b>D-IMG-5</b> <span class="sev high">높음</span> — 이미지 크기 ≤ 100KB(스트리밍 누적), 초과 시 거부·<code>bannerKey=null</code>(그라데이션 폴백). <b>테스트: 100KB 초과 거부.</b></li>
+  </ul>
+
+  <h3>G. 캐시·전달 <span class="modtag">imageCache</span></h3>
+  <ul class="chk">
+    <li><b>D-CACHE-1</b> <span class="sev mid">중간</span> — 파일명은 <b>sha256 32hex 키 + 화이트리스트 확장자</b>로만 구성. bannerKey는 <code>/^[0-9a-f]{32}$/</code> 외 거부(경로 탈출·주입 차단). <b>테스트: <code>../</code> 포함 키 거부·정규식 검증.</b></li>
+    <li><b>D-CACHE-2</b> <span class="sev mid">중간</span> — 0600 write(상승세션 보류 정책 정합), 총 캐시 용량 상한 + 미참조 파일 GC. <b>테스트: 권한 0600·상한 초과 GC.</b></li>
+    <li><b>D-CACHE-3</b> <span class="sev mid">중간</span> — <code>toDataUri(bannerKey)</code>는 캐시 파일을 읽어 <b>검증된 mime</b>으로만 data:URI 생성(MIME 화이트리스트·base64 검증). <b>테스트: 알 수 없는 키→null, mime 화이트리스트.</b></li>
+  </ul>
+
+  <h3>H. 렌더 경계 (L-1) <span class="modtag">렌더러 app.js / IPC 응답</span></h3>
+  <ul class="chk">
+    <li><b>D-RENDER-1</b> <span class="sev mid">중간</span> — name/title/sub/desc/status/cat 등 모든 크롤 문자열은 렌더러에서 <code>textContent</code>만. innerHTML 결합 금지. 배너는 <code>&lt;img src="data:…"&gt;</code>(속성 주입). <b>테스트/검토: 렌더 경로 grep로 innerHTML 부재 확인.</b></li>
+    <li><b>D-RENDER-2</b> <span class="sev mid">중간</span> — color는 <code>/^#[0-9a-fA-F]{6}$/</code>만, bannerImage는 <code>data:image/(png|jpeg|gif|webp);base64,</code> 접두 검증. <b>테스트: 비정상 color/data:URI 폐기(정규화).</b></li>
+    <li><b>D-RENDER-3</b> <span class="sev mid">중간</span> — 렌더러 <code>connect-src 'none'</code> 무변경 확인(외부 fetch 0). CSP는 <code>img-src 'self' data:</code> 그대로. <b>테스트/검토: index.html CSP diff 0.</b></li>
+  </ul>
+
+  <h3>I. 프라이버시·스케줄러 <span class="modtag">urlMeta / scheduler</span></h3>
+  <ul class="chk">
+    <li><b>D-PRIV-1</b> <span class="sev mid">중간</span> — 쿠키 저장·전송 0, 리다이렉트 간 쿠키 비전파. <b>테스트: 요청 헤더에 Cookie 부재.</b></li>
+    <li><b>D-PRIV-2</b> <span class="sev mid">중간</span> — Authorization·인증 헤더 미전송. <b>테스트: 헤더 집합에 인증 부재.</b></li>
+    <li><b>D-PRIV-3</b> <span class="sev mid">중간</span> — 고정 최소 User-Agent, Referer 미전송. <b>테스트: UA 고정·Referer 부재.</b></li>
+    <li><b>D-SCHED-1</b> <span class="sev high">높음</span> — 6시간 자동 재크롤 토글 <b>off면 스케줄러 tick 완전 무동작</b>(egress 0). 기본 ON이나 off 시 어떤 외부 접속도 없어야 한다. <b>테스트: 토글 off에서 tick 호출 시 crawl 0회.</b></li>
+    <li><b>D-SCHED-2</b> <span class="sev mid">중간</span> — 상승(elevated) 세션이면 크롤 스킵(불필요 egress 회피)·write 보류. 앱 시작 직후 즉시 tick 금지(첫 tick 지연). <b>테스트: elevated 모킹 시 크롤 스킵.</b></li>
+  </ul>
+
+  <h3>J. 열기·에러 노출 <span class="modtag">electron/ipc/shelf.js</span></h3>
+  <ul class="chk">
+    <li><b>D-OPEN-1</b> <span class="sev high">높음</span> — url 열기는 <code>shell.openExternal</code> 전에 http/https 재검증(임의 스킴을 OS 핸들러로 넘기는 위험 차단). <b>테스트: <code>javascript:</code>·<code>file:</code> ref 열기 거부.</b></li>
+    <li><b>D-ERR-1</b> <span class="sev mid">중간</span> — 응답은 고정 에러코드만(<code>BLOCKED_HOST, CRAWL_FAILED, BAD_INPUT, LIMIT, INTERNAL, UNSUPPORTED_TYPE</code> 등). 실경로·해소 IP·전체 URL·스택 비노출. <b>테스트: 차단 시 code만, IP/URL 부재.</b></li>
+    <li><b>D-ERR-2</b> <span class="sev mid">중간</span> — 로그도 host만(전체 URL·IP·키 비노출). <code>llmClient.hostOnly</code> 선례 재사용. <b>테스트/검토: 로그 인자에 IP/URL 부재.</b></li>
+  </ul>
+</section>
+
+<!-- 5. 모듈 책임 -->
+<section id="modules">
+  <h2>5. 모듈별 책임 분담</h2>
+  <table>
+    <tr><th>모듈</th><th>담당 가드</th><th>책임 요약</th></tr>
+    <tr>
+      <td><code>lib/shelf/ssrfGuard.js</code></td>
+      <td><b>D-SSRF-1~6 · D-URL-1~3</b></td>
+      <td>URL 1차 검증(scheme·자격·길이) + IP 분류표(사설/루프백/링크로컬/메타데이터/CGNAT/멀티캐스트, IPv4-mapped 해제, 비표준 표기 정규화) + DNS resolve 래퍼 + <b>IP 핀</b>(검증 IP만 반환하는 lookup). IP 분류·정규화는 순수→헤드리스 전수 테스트.</td>
+    </tr>
+    <tr>
+      <td><code>lib/shelf/ogParse.js</code></td>
+      <td><b>D-PARSE-1~4</b></td>
+      <td>HTML 바이트 → {title,desc,image,siteName} 경량 추출. 비탐욕·앵커·매치상한(ReDoS 방어), 엔티티 화이트리스트 디코드, sanitize·길이상한, og:image 절대화. 순수→헤드리스. (입력 512KB 상한은 urlMeta가 선행 보장.)</td>
+    </tr>
+    <tr>
+      <td><code>lib/shelf/imageCache.js</code></td>
+      <td><b>D-IMG-2~5(검증부) · D-CACHE-1~3</b></td>
+      <td>og:image 바이트 0600 write/read, mime 화이트리스트(SVG 제외)·매직바이트 sniff·100KB 상한, 파일명=sha256 32hex+확장자 화이트리스트(경로탈출 차단), <code>toDataUri</code>(검증 mime·base64), GC·총량 상한. fs·crypto.</td>
+    </tr>
+    <tr>
+      <td><code>lib/shelf/urlMeta.js</code></td>
+      <td><b>D-RDR-1~4 · D-RES-1~5 · D-IMG-1 · D-PRIV-1~3</b></td>
+      <td>크롤 오케스트레이션: validate→DNS+IP게이트→GET(IP핀·8s·512KB·identity·쿠키/인증/Referer 없음·고정 UA)→리다이렉트 ≤3 hop(<b>각 hop G1+G2 재실행</b>)→ogParse→<b>og:image도 동일 게이트 재진입</b>→imageCache. 폴백 메타. ssrfGuard/ogParse/imageCache·net을 주입 모킹으로 테스트.</td>
+    </tr>
+    <tr>
+      <td colspan="2"><code>lib/shelf/scheduler.js</code> · <code>electron/ipc/shelf.js</code> · 렌더러 <code>app.js</code></td>
+      <td>D-SCHED-1~2(off=무동작·elevated 스킵), D-OPEN-1(openExternal 스킴 재검증)·D-ERR-1~2(고정코드·host만 로그), D-RES-4(동시상한), D-RENDER-1~3(textContent·CSP 무변경)는 오케스트레이션/렌더 계층 책임.</td>
+    </tr>
+  </table>
+</section>
+
+<!-- 6. 문서 위생 -->
+<section id="hygiene">
+  <h2>6. 문서 위생 지적 (구현 전 정정 권장)</h2>
+  <div class="warn-box">
+    <b>H-DOC-1</b> <span class="sev low">낮음(문서)</span> — <b>file 열기 도구 서술 불일치.</b>
+    설계 <code>shelf-widget-design.html</code> <b>§10.3</b>("folder/file → <code>safeExec(resolveTool('code'),[real]…)</code>… 도구 미설정 시 <code>shell.openPath</code> 폴백")와
+    <b>§13 H-2</b>("folder/file 열기는 <code>safeExec</code> 절대경로")는 <b>file도 safeExec(code)로 여는 것</b>처럼 읽힌다.
+    그러나 <b>PM #2 확정·§8 IPC 표·api-contract.md</b>는 <b>file = <code>shell.openPath</code>(OS 기본앱) 항상</b>, folder만 VS Code(safeExec)다.
+    → 구현은 <b>확정본(file=shell.openPath, folder=safeExec)</b>을 따르고, §10.3·§13 prose를 그에 맞게 정정할 것.
+    보안 영향은 낮음이나(둘 다 H-2 규약 내), 구현자가 §10.3을 그대로 따르면 PM 결정과 모순된 동작이 나오므로 착수 전 정정 권장.
+  </div>
+  <div class="note"><b>참고(상충 아님).</b> §10.3은 url 열기 시 <code>shell.openExternal</code> + http/https 재검증을 명시 — 이는 D-OPEN-1과 정합(유지).</div>
+</section>
+
+<!-- 7. 테스트 매트릭스 -->
+<section id="tests">
+  <h2>7. 필수 테스트 케이스 매트릭스 (게이트 증빙)</h2>
+  <table>
+    <tr><th>테스트 파일</th><th>최소 케이스</th><th>커버 가드</th></tr>
+    <tr><td><code>test/shelf-ssrfGuard.test.js</code></td><td>IP 분류표 전 행 + 경계값, IPv4-mapped(<code>::ffff:127.0.0.1</code>), 비표준 표기(8/16진·정수·축약), 메타데이터 IP, 복수 A레코드 중 1개 차단, IP 핀(연결 IP=검증 IP·재해석 0), 자격 URL·비http 스킴 거부</td><td>D-SSRF-1~6, D-URL-1~3</td></tr>
+    <tr><td><code>test/shelf-ogParse.test.js</code></td><td>정상/빈/병리적 HTML, 엔티티 디코드 화이트리스트, 매치상한, 제어문자 sanitize·길이절단, og:image 절대화, 폴백</td><td>D-PARSE-1~4</td></tr>
+    <tr><td><code>test/shelf-urlMeta.test.js</code></td><td>(net 주입 모킹) hop2 내부 IP→BLOCKED_HOST, 4 hop/순환→실패, file: hop 거부, 512KB 초과 소켓 destroy, 타임아웃, identity 헤더, og:image 내부 IP→null, 쿠키/인증/Referer 부재, 고정 UA</td><td>D-RDR-1~4, D-RES-1~5, D-IMG-1, D-PRIV-1~3</td></tr>
+    <tr><td><code>test/shelf-imageCache.test.js</code></td><td>mime 화이트리스트(svg/html 거부), 매직바이트 불일치 거부, 100KB 초과 거부, 키 정규식(<code>../</code> 거부), 0600, toDataUri null/검증 mime, GC·총량 상한</td><td>D-IMG-2~5, D-CACHE-1~3</td></tr>
+    <tr><td><code>test/shelf-scheduler.test.js</code></td><td>토글 off→crawl 0회, elevated→스킵, 첫 tick 지연, 동시 상한</td><td>D-SCHED-1~2, D-RES-4</td></tr>
+    <tr><td><code>test/shelf-ipc.test.js</code> (확장)</td><td>open url 비http 스킴 거부, 고정 에러코드(IP/URL 부재), host만 로그</td><td>D-OPEN-1, D-ERR-1~2</td></tr>
+    <tr><td>회귀</td><td>briefing <code>normalizeBriefing</code> 호출처 그린(validateHttpUrl 일반화), 렌더러 CSP diff 0, 기존 favorites/홈 회귀 0</td><td>D-RENDER-3</td></tr>
+  </table>
+  <div class="ok-box"><b>종료 게이트 통과 기준.</b> 위 매트릭스 전부 그린 + 치명(D-SSRF-1/2/3, D-RDR-1, D-IMG-1) 및 높음 가드
+  전 항목 충족 시에만 post-implementation security-review에서 PASS. SSRF 치명/높음 미해결 시 다음 단계(SH-4) 진행 금지·PM 즉시 보고.</div>
+</section>
+
+</main>
+<footer>
+  Project-SPIP — SH-3 위협 모델 · 가드 요구 명세(DoD) · 2026-06-27 · security-reviewer ·
+  본 문서는 착수 전 게이트 산출물이며 코드를 포함하지 않는다. 구현은 backend-dev가 본 체크리스트를 DoD로 수행하고,
+  종료 후 security-reviewer가 충족을 코드로 검증한다.
+</footer>
+</body>
+</html>

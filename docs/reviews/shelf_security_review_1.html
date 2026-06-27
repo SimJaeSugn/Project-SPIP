@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project-SPIP — 종료 보안 게이트: SH-3 URL 크롤 + SH-4 스케줄러 (코드 검증)</title>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#1e293b; --text:#e2e8f0; --sub:#94a3b8;
+    --accent:#34d399; --ref:#38bdf8; --line:#334155; --warn:#fbbf24; --danger:#f87171; --purple:#c4b5fd;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:"Segoe UI","Malgun Gothic",system-ui,sans-serif;line-height:1.7;}
+  header{padding:48px 32px 36px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#10261c,#0f172a);}
+  header h1{margin:0 0 10px;font-size:28px;letter-spacing:-0.01em;}
+  header .tag{display:inline-block;background:rgba(52,211,153,.12);color:var(--accent);
+    border:1px solid rgba(52,211,153,.4);border-radius:999px;padding:3px 12px;font-size:13px;margin-right:8px;margin-bottom:6px;}
+  header p{margin:14px 0 0;color:var(--sub);max-width:1050px;}
+  .meta{margin-top:16px;font-size:13px;color:var(--sub);}
+  main{max-width:1280px;margin:0 auto;padding:32px;}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:24px 28px;margin:22px 0;}
+  h2{margin:0 0 16px;font-size:21px;color:var(--accent);border-left:4px solid var(--accent);padding-left:12px;}
+  h3{font-size:16px;color:var(--ref);margin:22px 0 10px;}
+  p{margin:8px 0;}
+  ul,ol{margin:8px 0;padding-left:22px;}
+  li{margin:5px 0;}
+  code{background:#0b1220;color:var(--ref);padding:1px 6px;border-radius:5px;font-size:12.5px;font-family:Consolas,monospace;}
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13px;}
+  th,td{border:1px solid var(--line);padding:9px 11px;text-align:left;vertical-align:top;}
+  th{background:#142035;color:var(--accent);}
+  tr:nth-child(even) td{background:rgba(255,255,255,.02);}
+  .rid{font-family:Consolas,monospace;color:var(--accent);font-weight:700;white-space:nowrap;}
+  .pass{font-size:11px;font-weight:800;padding:2px 9px;border-radius:6px;white-space:nowrap;display:inline-block;background:rgba(52,211,153,.16);color:#6ee7b7;border:1px solid rgba(52,211,153,.55);}
+  .fail{font-size:11px;font-weight:800;padding:2px 9px;border-radius:6px;white-space:nowrap;display:inline-block;background:rgba(248,113,113,.18);color:#fca5a5;border:1px solid rgba(248,113,113,.6);}
+  .info{font-size:11px;font-weight:800;padding:2px 9px;border-radius:6px;white-space:nowrap;display:inline-block;background:rgba(56,189,248,.14);color:#7dd3fc;border:1px solid rgba(56,189,248,.45);}
+  .sev{font-size:11px;font-weight:800;padding:2px 9px;border-radius:6px;white-space:nowrap;display:inline-block;}
+  .low{background:rgba(56,189,248,.14);color:#7dd3fc;border:1px solid rgba(56,189,248,.45);}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;}
+  .card{background:#0b1220;border:1px solid var(--line);border-radius:10px;padding:16px;}
+  .card .k{font-size:12px;color:var(--sub);text-transform:uppercase;letter-spacing:.5px;}
+  .card .v{font-size:22px;margin-top:6px;font-weight:800;}
+  .note{background:rgba(56,189,248,.08);border:1px solid rgba(56,189,248,.3);border-radius:8px;padding:12px 16px;font-size:13.5px;color:#bae6fd;margin:12px 0;}
+  .ok-box{background:rgba(52,211,153,.08);border:1px solid rgba(52,211,153,.32);border-radius:8px;padding:12px 16px;font-size:13.5px;color:#a7f3d0;margin:12px 0;}
+  .warn-box{background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.32);border-radius:8px;padding:12px 16px;font-size:13.5px;color:#fde68a;margin:12px 0;}
+  .verdict{display:inline-block;border-radius:999px;padding:5px 18px;font-size:15px;font-weight:800;
+    background:rgba(52,211,153,.16);color:#6ee7b7;border:1px solid rgba(52,211,153,.6);}
+  .mono{font-family:Consolas,monospace;}
+  footer{text-align:center;color:var(--sub);font-size:12.5px;padding:30px;border-top:1px solid var(--line);}
+  .modtag{font-family:Consolas,monospace;font-size:11px;font-weight:700;padding:1px 7px;border-radius:5px;background:#13203b;border:1px solid #38bdf8;color:#7dd3fc;white-space:nowrap;}
+</style>
+</head>
+<body>
+<header>
+  <span class="tag">종료 보안 게이트 (코드 검증)</span>
+  <span class="tag">security-reviewer</span>
+  <span class="tag">SH-3 크롤 + SH-4 스케줄러</span>
+  <h1>Project-SPIP — SH-3/SH-4 종료 보안 게이트 검증</h1>
+  <p>위협 모델(<code>docs/reviews/shelf_sh3_threat_model.html</code>)의 가드 요구(D-코드)가 <b>실제 구현 코드에서
+  올바르게 구현됐는지</b> 출시 게이트로 검증했다. 이번은 위협 모델이 아니라 <b>코드 검증</b>이다 — 각 D-코드를 소스
+  라인 근거 + 테스트 통과로 PASS/FAIL 판정한다. 치명/높음 0건이 게이트 통과 기준.</p>
+  <div class="meta">문서 유형: 종료 보안 검증(코드) · 작성: security-reviewer · 작성일 2026-06-27 ·
+  검증 대상: <code>lib/shelf/{ssrfGuard,urlMeta,imageCache,ogParse,scheduler,detectType}.js</code> ·
+  <code>electron/ipc/shelf.js</code> · <code>public/app.js</code>(렌더) · <code>public/index.html</code>(CSP) ·
+  <code>lib/common/config.js</code>(validateHttpUrl) · 테스트: shelf 6스위트 <b>67/67 그린</b>(전체 1090 그린 보고와 정합)</div>
+</header>
+
+<main>
+
+<section id="verdict">
+  <h2>최종 게이트 판정</h2>
+  <p><span class="verdict">판정: PASS — 치명 0 · 높음 0 · 출시 게이트 통과</span></p>
+  <p>위협 모델의 <b>치명 4 · 높음 7 가드 전부 코드로 구현·테스트로 증명</b>됨. SSRF의 핵심(DNS 결과 IP 기준 판정 +
+  IP 핀 + hop마다 재검증 + og:image 동일 게이트 재진입)이 모두 실제 코드에 존재하고, 헤드리스 단위테스트가 각
+  D-코드를 명시적으로 검증한다. 잔여는 <b>정보성(낮음) 2건</b>(차단 게이트 아님, 강화 권고)뿐이다.</p>
+  <div class="grid">
+    <div class="card"><div class="k">치명 잔여</div><div class="v" style="color:#6ee7b7;">0</div></div>
+    <div class="card"><div class="k">높음 잔여</div><div class="v" style="color:#6ee7b7;">0</div></div>
+    <div class="card"><div class="k">중간 잔여</div><div class="v" style="color:#6ee7b7;">0</div></div>
+    <div class="card"><div class="k">정보(낮음)</div><div class="v" style="color:#7dd3fc;">2</div></div>
+    <div class="card"><div class="k">D-가드 PASS</div><div class="v" style="color:#6ee7b7;">30/30</div></div>
+  </div>
+</section>
+
+<!-- A. SSRF -->
+<section>
+  <h2>A. SSRF IP 게이트 <span class="modtag">ssrfGuard.js</span></h2>
+  <table>
+    <tr><th>가드</th><th>판정</th><th>코드 근거</th></tr>
+    <tr><td class="rid">D-SSRF-1</td><td><span class="pass">PASS</span></td><td><code>BLOCK_V4</code> 분류표(L40-53): 0/8·10/8·100.64/10(100.100.100.200 포함)·127/8·169.254/16(169.254.169.254 포함)·172.16/12·192.0.0/24·192.0.2/24·192.168/16·198.18/15·224/4·240/4(255.255.255.255 포함). IPv6(L99-115): ::1·::·fc00::/7·fe80::/10·ff00::/8. 비정상 표기 보수적 차단(L57,101,124). 테스트: D-SSRF-1 분류표 전수+경계값.</td></tr>
+    <tr><td class="rid">D-SSRF-2</td><td><span class="pass">PASS</span></td><td><code>resolveAndCheck</code>(L165-184): 도메인은 <code>dns.lookup({all:true})</code> 후 <b>전 IP 순회, 하나라도 차단이면 BLOCKED_HOST</b>(L178-181). 호스트명 화이트리스트 의존 없음. 테스트: 복수 IP 중 1개 차단→BLOCKED_HOST.</td></tr>
+    <tr><td class="rid">D-SSRF-3</td><td><span class="pass">PASS</span></td><td><b>IP 핀</b>: <code>pinnedLookup(verifiedIp,family)</code>(L192-203)가 hostname 무시·검증 IP만 반환. <code>buildReqOpts</code>(urlMeta L62)가 이를 <code>lookup</code>으로 주입 → 연결 시점 도메인 재해석 0(rebinding/TOCTOU 차단). IP 리터럴 호스트는 분류 직후 그 IP 그대로 핀. 테스트: pinnedLookup 검증 IP만 반환.</td></tr>
+    <tr><td class="rid">D-SSRF-4</td><td><span class="pass">PASS</span></td><td>IPv4-mapped(<code>::ffff:a.b.c.d</code>)는 <code>expandIpv6</code>가 흡수→<code>classifyIpv6</code>(L102-106)가 IPv4로 풀어 <code>classifyIpv4</code> 재판정. IPv4-compatible(deprecated)도 처리(L108-111). 테스트: <code>::ffff:127.0.0.1</code>·메타데이터 차단.</td></tr>
+    <tr><td class="rid">D-SSRF-5</td><td><span class="pass">PASS</span></td><td>비표준 표기(0x/8진/정수/축약)는 <b>WHATWG <code>new URL().hostname</code>이 정규화</b> 후 <code>classifyHost</code>로 분류(설계 ADR 정합). 정규화 못하는 형태·비IP는 <code>net.isIPv4/6</code> 실패→보수적 차단(L57,124). 테스트: D-SSRF-5 정규화 후 차단.</td></tr>
+    <tr><td class="rid">D-SSRF-6</td><td><span class="pass">PASS</span></td><td><code>stripHost</code>(L20-25) 대괄호·후행점 제거. 빈 호스트(L133)·0.0.0.0(BLOCK_V4)·::·대괄호 IPv6 모두 차단. 테스트: 엣지 호스트 집합.</td></tr>
+  </table>
+</section>
+
+<!-- B. URL 검증 -->
+<section>
+  <h2>B. URL 1차 검증 <span class="modtag">ssrfGuard.validateUrl / config.validateHttpUrl</span></h2>
+  <table>
+    <tr><th>가드</th><th>판정</th><th>코드 근거</th></tr>
+    <tr><td class="rid">D-URL-1</td><td><span class="pass">PASS</span></td><td><code>config.validateHttpUrl</code>(L276~)이 scheme∈{http,https} 강제(briefing 검증 일반화, 반환형 불변·별칭 보존으로 회귀 0). 테스트: scheme 화이트리스트.</td></tr>
+    <tr><td class="rid">D-URL-2</td><td><span class="pass">PASS</span></td><td>username/password 비어야 통과(config L). <code>fetchWithGate</code> 루프가 hop마다 <code>validateUrl</code> 재실행→리다이렉트 자격 URL도 차단. 테스트: user:pass@ 거부.</td></tr>
+    <tr><td class="rid">D-URL-3</td><td><span class="pass">PASS</span></td><td>길이 ≤2048(<code>MAX_URL_LEN</code>), 파싱 실패→<code>BAD_INPUT</code>(ssrfGuard L146-148). 테스트: 초과·파싱불가 거부.</td></tr>
+  </table>
+</section>
+
+<!-- C. 리다이렉트 -->
+<section>
+  <h2>C. 리다이렉트 <span class="modtag">urlMeta.fetchWithGate</span></h2>
+  <table>
+    <tr><th>가드</th><th>판정</th><th>코드 근거</th></tr>
+    <tr><td class="rid">D-RDR-1</td><td><span class="pass">PASS</span></td><td><code>fetchWithGate</code> while 루프(L130-158): <b>각 hop 상단에서 G1(validateUrl)+G2(resolveAndCheck) 재실행</b>(L132-136). Location은 <code>new URL(location, base)</code> 절대화 후 <code>current</code> 갱신·continue(L153-154). 최초 1회 검증 아님. 테스트: hop2 내부 IP→BLOCKED_HOST.</td></tr>
+    <tr><td class="rid">D-RDR-2</td><td><span class="pass">PASS</span></td><td>hop ≤3(<code>MAX_REDIRECTS</code>), 초과→CRAWL_FAILED(L151). 순환도 카운터로 종료. 리다이렉트 응답 바디는 즉시 destroy(L150). 테스트: 4 hop 초과 실패.</td></tr>
+    <tr><td class="rid">D-RDR-3</td><td><span class="pass">PASS</span></td><td>hop의 새 URL도 <code>validateUrl</code>(scheme http/https)을 거쳐 비http(<code>file:</code>·<code>javascript:</code>) 차단. 테스트: Location: file:/// 거부.</td></tr>
+    <tr><td class="rid">D-RDR-4</td><td><span class="pass">PASS</span></td><td>요청에 쿠키/Authorization 미설정(아래 D-PRIV)→hop 간 자격 전파 불가. 테스트: 헤더 위생.</td></tr>
+  </table>
+</section>
+
+<!-- D. 자원 -->
+<section>
+  <h2>D. 자원 한도 <span class="modtag">urlMeta</span></h2>
+  <table>
+    <tr><th>가드</th><th>판정</th><th>코드 근거</th></tr>
+    <tr><td class="rid">D-RES-1</td><td><span class="pass">PASS</span></td><td><code>readCapped</code>(L82-99): 스트리밍 누적 <code>total>limit</code> 시 <code>res.destroy()</code>·부분만 보관·truncated 플래그(L92-93). HTML 512KB(<code>MAX_HTML_BYTES</code>). 전체 버퍼링 후 검사 아님. 테스트: 상한 초과 destroy.</td></tr>
+    <tr><td class="rid">D-RES-2</td><td><span class="pass">PASS</span></td><td>이중 타임아웃: 소켓 <code>timeout:8000</code>+<code>setTimeout</code>(L63,75-76)과 Promise <code>withTimeout</code>(L102-114, body 읽기까지 포함). 만료→destroy·CRAWL_FAILED. 테스트: withTimeout 만료·fetchRaw 거부.</td></tr>
+    <tr><td class="rid">D-RES-3</td><td><span class="pass">PASS</span></td><td><code>Accept-Encoding: identity</code>(L56) 압축 미요청. <b>코드가 어떤 응답도 decompress하지 않음</b>—서버가 무시하고 gzip 보내도 raw 바이트가 512KB로 capped·ogParse에서 무해 폴백(decompression bomb 원천 차단). 테스트: 요청 헤더 identity.</td></tr>
+    <tr><td class="rid">D-RES-4</td><td><span class="pass">PASS</span></td><td>전역 세마포어 <code>MAX_CONCURRENT_CRAWLS=3</code>(L29-41), <code>crawl</code>이 acquire/release(L242-247). 수동 add/refresh·스케줄러 공유(scheduler가 urlMeta.crawl 경유). 테스트: 동시 크롤 ≤3.</td></tr>
+    <tr><td class="rid">D-RES-5</td><td><span class="pass">PASS</span></td><td>GET만(L53), content-type text/html|xhtml 아니면 본문 미파싱·destroy(L167-174). 테스트: 비HTML 폴백.</td></tr>
+  </table>
+</section>
+
+<!-- E. 파서 -->
+<section>
+  <h2>E. HTML 파싱 <span class="modtag">ogParse.js</span></h2>
+  <table>
+    <tr><th>가드</th><th>판정</th><th>코드 근거</th></tr>
+    <tr><td class="rid">D-PARSE-1</td><td><span class="pass">PASS</span></td><td>정규식 비탐욕·문자클래스가 구분자 배제·역참조 없음·<code>{0,N}</code> 상한(<code>attrValue</code> L58, meta 스캔 <code>[^>]{0,4096}</code> L74). 입력 512KB 선행 상한. 빈 매치 무한루프 방어(L79). 테스트: ogParse 스위트.</td></tr>
+    <tr><td class="rid">D-PARSE-2</td><td><span class="pass">PASS</span></td><td>meta 매치 횟수 상한 <code>MAX_META=200</code>(L14,78). 초과 시 break.</td></tr>
+    <tr><td class="rid">D-PARSE-3</td><td><span class="pass">PASS</span></td><td><code>decodeEntities</code>(L25-39): 명명 엔티티 화이트리스트(amp/lt/gt/quot/apos)만, 숫자 엔티티 C0/DEL·서로게이트·범위 검증(L35-36). 미지 엔티티 원문 보존.</td></tr>
+    <tr><td class="rid">D-PARSE-4</td><td><span class="pass">PASS</span></td><td><code>sanitize</code>(L42-53): C0/DEL·방향성 제어·isolate 제거+공백 정규화. 필드별 길이상한(title 200/desc 500/site 120/img 2048). og:image는 sanitize만, 절대화·게이트는 urlMeta(L102).</td></tr>
+  </table>
+</section>
+
+<!-- F. 이미지 -->
+<section>
+  <h2>F. og:image 다운로드 <span class="modtag">urlMeta + imageCache</span></h2>
+  <table>
+    <tr><th>가드</th><th>판정</th><th>코드 근거</th></tr>
+    <tr><td class="rid">D-IMG-1</td><td><span class="pass">PASS</span></td><td><code>fetchImage</code>(L179-189)가 <b>동일 <code>fetchWithGate</code> 재진입</b>(validateUrl+resolveAndCheck+IP핀+hop 재검증). og:image는 <code>new URL(image, base)</code> 절대화 후(_crawl L226). 테스트: og:image 내부 IP→bannerKey=null.</td></tr>
+    <tr><td class="rid">D-IMG-2</td><td><span class="pass">PASS</span></td><td><code>validateImage</code>(L65-73): content-type ∈ <code>MIME_EXT</code>{png,jpeg,gif,webp}만(L69). 테스트: imageCache 스위트.</td></tr>
+    <tr><td class="rid">D-IMG-3</td><td><span class="pass">PASS</span></td><td>SVG는 MIME_EXT 부재→거부. <code>sniffMime</code>도 SVG 미인식→null→불일치 거부(L53,71). 이중 차단.</td></tr>
+    <tr><td class="rid">D-IMG-4</td><td><span class="pass">PASS</span></td><td>매직바이트 sniff(L41-54)로 선언 mime↔실제 일치 검증(L70-71). 위조(PNG 선언+HTML 바이트) 거부. <code>toDataUri</code>도 재sniff(L121).</td></tr>
+    <tr><td class="rid">D-IMG-5</td><td><span class="pass">PASS</span></td><td>스트리밍 100KB(<code>MAX_IMAGE_BYTES</code>): readCapped truncated→null(urlMeta L186) + validateImage 크기 재확인(L67). 테스트: 100KB 초과 거부.</td></tr>
+  </table>
+</section>
+
+<!-- G. 캐시 -->
+<section>
+  <h2>G. 캐시·전달 <span class="modtag">imageCache.js</span></h2>
+  <table>
+    <tr><th>가드</th><th>판정</th><th>코드 근거</th></tr>
+    <tr><td class="rid">D-CACHE-1</td><td><span class="pass">PASS</span></td><td>파일명 = <code>keyFor</code>(sha256 앞 32hex, L36-38) + 화이트리스트 확장자(L89). <code>toDataUri</code>는 <code>KEY_RE=/^[0-9a-f]{32}$/</code> 외 거부(L113)→경로탈출(<code>../</code>) 차단. gc도 KEY_RE/EXT 검증·비정상 파일 정리(L140). 테스트: <code>../</code> 키 거부.</td></tr>
+    <tr><td class="rid">D-CACHE-2</td><td><span class="pass">PASS</span></td><td>0600 write(<code>openSync('w',0o600)</code>+chmod L90-92), dir 0700(L88). 상승세션 저장 보류(L84). 총량 상한 16MB·미참조 GC(오래된 것부터, L129-160). remove 시 gc 호출(shelf.js L220-223).</td></tr>
+    <tr><td class="rid">D-CACHE-3</td><td><span class="pass">PASS</span></td><td><code>toDataUri</code>(L112-123): mime 화이트리스트(EXT_MIME)·크기 재확인·매직 재sniff 후 <code>data:&lt;mime&gt;;base64,</code> 생성. 알 수 없는 키/캐시 미스→null.</td></tr>
+  </table>
+</section>
+
+<!-- H. 렌더 -->
+<section>
+  <h2>H. 렌더 경계 (L-1) <span class="modtag">public/app.js · index.html</span></h2>
+  <table>
+    <tr><th>가드</th><th>판정</th><th>코드 근거</th></tr>
+    <tr><td class="rid">D-RENDER-1</td><td><span class="pass">PASS</span></td><td>셸프 패널(L3559-3604)의 name/title/sub/desc/cat/status/mono/bannerLabel 전부 <code>el({text})</code>(textContent). innerHTML 데이터 결합 없음(파일 전역 grep로 셸프 경로 innerHTML 부재 확인). 배너는 <code>el('img',{attrs:{src:p.bannerImage}})</code>(속성 주입).</td></tr>
+    <tr><td class="rid">D-RENDER-2</td><td><span class="pass">PASS</span></td><td>VM(L3782) <code>hasBanner = bannerImage가 'data:image/'로 시작</code>해야만 img 렌더(prefix 검증). color는 main(ogParse→urlMeta.buildView·정규화 경계)에서만 생성(팔레트/정규식). data:URI는 main toDataUri가 검증 mime로만 생성.</td></tr>
+    <tr><td class="rid">D-RENDER-3</td><td><span class="pass">PASS</span></td><td><code>index.html</code> CSP 무변경: <code>connect-src 'none'</code>·<code>img-src 'self' data:</code> 유지(L13-14). 외부 fetch 0(모든 egress는 main IPC).</td></tr>
+  </table>
+</section>
+
+<!-- I. 프라이버시·스케줄러 -->
+<section>
+  <h2>I. 프라이버시 · 스케줄러 <span class="modtag">urlMeta · scheduler.js</span></h2>
+  <table>
+    <tr><th>가드</th><th>판정</th><th>코드 근거</th></tr>
+    <tr><td class="rid">D-PRIV-1/2/3</td><td><span class="pass">PASS</span></td><td><code>buildReqOpts</code> headers(L54-60): Accept·Accept-Encoding:identity·고정 UA(<code>spip-shelf/1.0</code>)·Host만. <b>Cookie/Authorization/Referer 의도적 미포함</b>. 테스트: 헤더 위생(쿠키/인증/Referer 부재·고정 UA).</td></tr>
+    <tr><td class="rid">D-SCHED-1</td><td><span class="pass">PASS</span></td><td><code>tick</code>(L66-80): <code>if(!isEnabled()) return false</code>(L69)가 <b>네트워크 호출 전</b> 즉시 반환→토글 off 시 egress 0. isEnabled는 <code>config.shelfAutoRefresh!==false</code> 라이브 조회(shelf.js getAutoRefresh L110-112). 테스트: D-SCHED-1 토글 off→crawl 0.</td></tr>
+    <tr><td class="rid">D-SCHED-2</td><td><span class="pass">PASS</span></td><td><code>if(isElevated()) return false</code>(L70) 크롤 스킵. 첫 tick 지연(<code>firstDelayMs=5분</code>, start L86-91). 중복 tick 가드(running L68). stop 멱등·타이머 정리(L95-99)·unref. 테스트: elevated 스킵·start/stop 멱등·중복 방지.</td></tr>
+  </table>
+</section>
+
+<!-- J. 열기·에러 -->
+<section>
+  <h2>J. 열기 · 에러 노출 <span class="modtag">electron/ipc/shelf.js</span></h2>
+  <table>
+    <tr><th>가드</th><th>판정</th><th>코드 근거</th></tr>
+    <tr><td class="rid">D-OPEN-1</td><td><span class="pass">PASS</span></td><td><code>open</code>(L259-265): url은 <code>shell.openExternal</code> 전 <code>config.validateHttpUrl(bm.ref)</code> 재검증→<code>javascript:</code>·<code>file:</code>·커스텀 스킴 차단. folder/file은 add·open 양쪽 <code>pathPolicy.gate</code>(canonicalize+deny 재게이트, L175·268·325)+fs.stat 유형 재확인. file=<code>shell.openPath</code>(OS 기본앱), folder=<code>safeExec([real],{shell:false})</code>(H-2)·in-flight 상한(L294).</td></tr>
+    <tr><td class="rid">D-ERR-1</td><td><span class="pass">PASS</span></td><td>전 핸들러 고정 에러코드만(BLOCKED_HOST/CRAWL_FAILED/BAD_INPUT/LIMIT/NOT_FOUND/UNSUPPORTED_TYPE/PATH_GONE/PATH_DENIED/OPEN_FAILED/INTERNAL). 응답에 실경로·해소 IP·전체 URL·스택 없음(urlMeta는 code만 전파 L154,322).</td></tr>
+    <tr><td class="rid">D-ERR-2</td><td><span class="pass">PASS</span></td><td>로그 위생: scheduler는 일반 메시지만(L75). urlMeta/ssrfGuard는 IP/URL 로깅 없음. (config.js·llmClient hostOnly 선례 정합.) 시크릿/자격 비전송이라 노출 표면 자체 없음.</td></tr>
+  </table>
+</section>
+
+<!-- 정보성 -->
+<section>
+  <h2>잔여 정보성 항목 (낮음 — 차단 게이트 아님, 강화 권고)</h2>
+  <table>
+    <tr><th>ID</th><th>등급</th><th>관찰 · 권고</th></tr>
+    <tr>
+      <td class="rid">I-01</td><td><span class="sev low">낮음</span></td>
+      <td><b>NAT64 프리픽스(<code>64:ff9b::/96</code>) 미분류.</b> IPv4-mapped/compatible은 풀어 재판정하나, NAT64 well-known prefix는 분류표에 없다. NAT64 게이트웨이가 있는 환경에서 이론상 내부 IPv4로 매핑될 수 있다. 단 실제 악용은 NAT64 환경+공격자 통제 DNS가 동시에 필요해 가능성 매우 낮음. <b>권고</b>: <code>classifyIpv6</code>에 <code>64:ff9b::/96</code>(및 로컬 <code>64:ff9b:1::/48</code>) 추가 후 v4 부분 재판정. 현재 게이트 통과에는 영향 없음.</td>
+    </tr>
+    <tr>
+      <td class="rid">I-02</td><td><span class="sev low">낮음</span></td>
+      <td><b>포트 화이트리스트 부재.</b> 공인 IP의 임의 포트(예 <code>http://&lt;public&gt;:22</code>) 접속이 허용된다. 내부망은 IP 분류로 이미 차단되므로 SSRF 위험은 없고, 위협 모델도 포트 제한을 요구하지 않았다(요구 외). 보수적 강화를 원하면 80/443/8080 등 화이트리스트를 둘 수 있으나 정상 og 호스트의 비표준 포트를 깰 수 있어 <b>현행 유지 권고</b>(정보 기록용).</td>
+    </tr>
+  </table>
+  <div class="note">두 항목 모두 위협 모델 D-가드 요구 밖이며, 치명/높음이 아니다. 출시 게이트 차단 사유가 아니다. I-01은 차기 강화 백로그로 기록 권고.</div>
+</section>
+
+<!-- 종합 -->
+<section>
+  <h2>종합 · 게이트 결론</h2>
+  <div class="ok-box">
+    <b>치명/높음 0건.</b> 위협 모델의 치명 가드(D-SSRF-1/2/3, D-RDR-1, D-IMG-1)와 높음 가드(D-SSRF-4/5, D-URL-1/2, D-RES-1/2/3, D-PARSE-1/2, D-IMG-2/3/5, D-OPEN-1, D-SCHED-1) <b>전부 코드 구현+테스트 증명</b>. 셸프 보안 테스트 67/67 그린(전체 1090 정합). SH-3/SH-4 <b>출시 보안 게이트 PASS</b>.
+  </div>
+  <div class="warn-box">
+    <b>문서 위생(이전 위협모델 H-DOC-1 후속 확인).</b> 설계 §10.3·§13의 file 열기 prose가 <code>safeExec(code)</code>로 남아 있던 모순은
+    <b>구현에서는 올바르게 해소</b>됨 — <code>shelf.js</code> open(L278-285)은 file=<code>shell.openPath</code>(OS 기본앱), folder=safeExec(VS Code)로 PM #2 확정과 정합. 설계 문서 prose만 차기에 정정하면 된다(코드 영향 없음).
+  </div>
+  <p><b>유지 권고(회귀 방어).</b> ① SSRF 분류표·IP 핀·hop 재검증 테스트는 회귀 가드로 영구 유지. ② 향후 리다이렉트/이미지
+  처리에 압축 해제(zlib)나 새 스킴을 도입할 경우 본 게이트 재실행 필수. ③ I-01(NAT64)은 백로그.</p>
+</section>
+
+</main>
+<footer>
+  Project-SPIP — SH-3/SH-4 종료 보안 게이트(코드 검증) · 2026-06-27 · security-reviewer ·
+  판정 PASS(치명 0·높음 0) · 근거: 소스 라인 + shelf 6스위트 67/67 그린 · 코드 미수정(검증 전용).
+</footer>
+</body>
+</html>

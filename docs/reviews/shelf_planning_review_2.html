@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>재검증 보고 — 즐겨찾기 셸프 위젯 계획 2회차</title>
+<style>
+  :root{--bg:#0f172a;--panel:#1e293b;--text:#e2e8f0;--sub:#94a3b8;--accent:#34d399;
+    --ref:#38bdf8;--line:#334155;--warn:#fbbf24;--danger:#f87171;--purple:#c4b5fd;}
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:"Segoe UI","Malgun Gothic",system-ui,sans-serif;line-height:1.7;}
+  header{padding:42px 32px 30px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#13203b,#0f172a);}
+  header h1{margin:0 0 8px;font-size:26px;}
+  header .tag{display:inline-block;border-radius:999px;padding:3px 12px;font-size:13px;margin-right:8px;}
+  .tag-pass{background:rgba(52,211,153,.14);color:#6ee7b7;border:1px solid rgba(52,211,153,.5);}
+  .tag-n{background:rgba(56,189,248,.12);color:#7dd3fc;border:1px solid rgba(56,189,248,.4);}
+  header p{margin:12px 0 0;color:var(--sub);max-width:1000px;}
+  main{max-width:1180px;margin:0 auto;padding:30px;}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px 26px;margin:20px 0;}
+  h2{margin:0 0 14px;font-size:20px;color:var(--accent);border-left:4px solid var(--accent);padding-left:12px;}
+  h3{font-size:15px;color:var(--ref);margin:20px 0 8px;}
+  p{margin:8px 0;}
+  ul,ol{margin:8px 0;padding-left:22px;}
+  li{margin:5px 0;}
+  code{background:#0b1220;color:var(--ref);padding:1px 6px;border-radius:5px;font-size:12.5px;font-family:Consolas,monospace;}
+  table{width:100%;border-collapse:collapse;margin:12px 0;font-size:13px;}
+  th,td{border:1px solid var(--line);padding:9px 11px;text-align:left;vertical-align:top;}
+  th{background:#142035;color:var(--accent);}
+  tr:nth-child(even) td{background:rgba(255,255,255,.02);}
+  .pass{color:#6ee7b7;font-weight:800;white-space:nowrap;}
+  .fail{color:#fca5a5;font-weight:800;white-space:nowrap;}
+  .resid{color:#fcd34d;font-weight:800;white-space:nowrap;}
+  .pri{font-family:Consolas,monospace;font-weight:800;white-space:nowrap;}
+  .p3{color:#7dd3fc;}
+  .note{background:rgba(56,189,248,.08);border:1px solid rgba(56,189,248,.3);border-radius:8px;padding:12px 16px;font-size:13px;color:#bae6fd;margin:12px 0;}
+  .warn-box{background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.32);border-radius:8px;padding:12px 16px;font-size:13px;color:#fde68a;margin:12px 0;}
+  .ok-box{background:rgba(52,211,153,.08);border:1px solid rgba(52,211,153,.32);border-radius:8px;padding:12px 16px;font-size:13px;color:#a7f3d0;margin:12px 0;}
+  .mono{font-family:Consolas,monospace;font-size:12px;color:#cbd5e1;}
+  footer{text-align:center;color:var(--sub);font-size:12px;padding:26px;border-top:1px solid var(--line);}
+  .verdict{display:inline-block;font-size:22px;font-weight:800;padding:4px 18px;border-radius:10px;
+    background:rgba(52,211,153,.14);color:#6ee7b7;border:1px solid rgba(52,211,153,.5);}
+</style>
+</head>
+<body>
+<header>
+  <span class="tag tag-pass">판정: PASS</span>
+  <span class="tag tag-n">재검증 2회차</span>
+  <h1>재검증 보고 — 즐겨찾기 셸프 위젯 계획</h1>
+  <p>1회차 FAIL 지적(P1·P2·P3·경미)에 대한 tech-lead 반영을 재검증한다. 변경 문서:
+  <code>docs/roadmap.html</code> §<code>#shelf-roadmap</code> · <code>docs/architecture/shelf-widget-design.html</code>(SSOT).
+  <code>docs/api-contract.md</code>는 무변경(1회차 PASS 유지). 1회차 보고: <code>docs/reviews/shelf_planning_review_1.html</code>.</p>
+  <div class="mono" style="margin-top:10px;color:#94a3b8;">작성: reviewer · 2026-06-27 · 저장: docs/reviews/shelf_planning_review_2.html</div>
+</header>
+
+<main>
+
+<section>
+  <h2>0. 최종 판정</h2>
+  <p><span class="verdict">PASS — 구현 착수 가능</span></p>
+  <p><b>요약.</b> 1회차 FAIL 구동 항목(P1·P2-96KB·P3)이 모두 정확히 반영됐다. 특히 코디네이터가 지목한 두 확인점
+  — <b>P1의 <code>undefined</code> 레거시 포섭</b>과 <b>P2의 96KB 잔존</b> — 은 깨끗이 통과한다. 운영 산출물(로드맵 빌드
+  단계 + IPC 계약)은 PM 확정과 100% 일치해 그대로 구현 가능하다. 다만 SSOT의 <b>file 열기 기술이 2개 비운영 prose
+  위치(§10.3·§13)에서 미정정 잔존</b>한다 — 비차단(문서 위생) 잔여로 분류하고 정리를 권고한다.</p>
+  <table>
+    <tr><th style="width:54px;">포인트</th><th>재검증 항목</th><th style="width:110px;">1회차</th><th style="width:90px;">2회차</th></tr>
+    <tr><td>P1</td><td>SCHEMA_VERSION 이행을 빌드 deliverable로 승격 + <code>undefined</code> 포섭 + 테스트 4케이스</td><td class="resid">조건부</td><td class="pass">PASS</td></tr>
+    <tr><td>P2</td><td>og:image 100KB 통일(96KB 잔존 0)</td><td class="fail">FAIL</td><td class="pass">PASS</td></tr>
+    <tr><td>P2'</td><td>SSOT file 열기 정합(PM #2 = OS 기본앱)</td><td class="fail">FAIL</td><td class="resid">대부분 PASS · 잔여 2곳</td></tr>
+    <tr><td>P3</td><td>validateHttpUrl 회귀 테스트 deliverable 명시</td><td class="fail">FAIL</td><td class="pass">PASS</td></tr>
+    <tr><td>경미</td><td>동시추가 허용 표기 · CSP 출처 정정</td><td class="resid">권고</td><td class="pass">PASS</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>1. 재검증 상세</h2>
+
+  <h3>P1 — SCHEMA_VERSION 이행 <span class="pass">[PASS]</span></h3>
+  <p>로드맵 SH-1 <code>uiStateStore.js</code> 행(line 494)이 <b>빌드 deliverable</b>로 승격됐고, 1회차 지적을 정확히 포섭한다:
+  ① 입력 <code>obj.schemaVersion</code> 판독 ② <code>schemaVersion &lt; 2</code> <b>또는 부재(undefined)(=레거시)</b>면
+  <code>['shelf','shelfWide']</code>를 <code>hiddenWidgets</code>에 union(멱등) ③ 출력 <code>schemaVersion=2</code>. 사용자가
+  이미 unhide한 v2 파일은 재숨김 안 함(의도 보존). <code>SCHEMA_VERSION 1→2</code> 명시.
+  <b>핵심 함정인 <code>undefined &lt; 2 === false</code>를 본문에서 명시 경고하고 "undefined를 명시적으로 레거시로 분기"</b>로
+  못박았다 — 코디네이터 확인점 충족. 테스트(line 500)도 (a)구버전 union (b)<b>schemaVersion 부재(undefined) 레거시</b>
+  (c)v2 unhide 재숨김 안 함 (d)v2 무변경 4케이스를 전수 명시. 실측 코드(<code>normalizeState</code>가 입력
+  schemaVersion을 안 읽음)와의 간극이 빌드 단계에서 정확히 해소됐다.</p>
+
+  <h3>P2 — og:image 100KB 통일 <span class="pass">[PASS]</span></h3>
+  <p>설계 SSOT 전수 grep 결과 <b>96KB 잔존 0</b>. §2 품질카드·§9 크롤 SVG·§11 본문·§13 응답한도·ADR-SH-2 결과·
+  §16 리스크표 모두 <b>100KB</b>로 통일됐고 §16 Q1은 "[해소] 100KB·SVG 제외 확정(PM #4)"로 마감. 로드맵 측도 100KB 일관.
+  코디네이터 확인점(96KB 잔존 없음) 충족.</p>
+
+  <h3>P2' — SSOT file 열기 정합 <span class="resid">[대부분 PASS · 잔여 2곳]</span></h3>
+  <p><b>정정 확인:</b> §2 다이어그램(line 232 "파일→OS 기본앱"), §8 IPC표(line 470 "file=<code>shell.openPath</code>(OS 기본앱
+  — PM #2 확정)"), §16 Q4(line 773 "[해소] 파일=OS 기본앱(<code>shell.openPath</code>) 항상")가 PM #2로 정정됐다.</p>
+  <div class="warn-box"><b>잔여(비차단).</b> SSOT의 <b>비운영 prose 2곳이 미정정</b>이다:
+  <ul>
+    <li><b>§10.3 line 591</b>: "folder/file → <code>safeExec(resolveTool('code'),[real],...)</code> ... 도구 미설정 시
+      <code>shell.openPath</code> 폴백" — <b>file</b>까지 VS Code 우선으로 기술(PM #2와 모순).</li>
+    <li><b>§13 H-2 line 635</b>: "<b>folder/file</b> 열기는 <code>safeExec</code> 절대경로·<code>shell:false</code>..." —
+      file이 여전히 safeExec 기반으로 기술(PM #2와 모순).</li>
+  </ul>
+  이 두 줄은 "열기 정책" 상세·보안 체크리스트라 security-reviewer/구현자가 직접 참조할 가능성이 있어 정리가 바람직하다.
+  다만 <b>운영 구현 지침(로드맵 SH-2 line 519: "file → <code>shell.openPath(real)</code>(OS 기본앱)" + IPC 계약 §셸프)이
+  명확·정확</b>해 빌드는 올바르게 진행 가능하다 → <b>비차단 잔여</b>로 분류.</div>
+
+  <h3>P3 — validateHttpUrl 회귀 <span class="pass">[PASS]</span></h3>
+  <p>로드맵 SH-1이 (line 496) 반환형 <code>{ok,value,external}</code> 불변 + <code>validateBriefingUrl</code> 별칭/래퍼
+  무변경을 명시하고, 테스트 deliverable로 (line 501) <code>validateHttpUrl</code> 단위(scheme/임베디드 자격/길이/maxLen
+  경계·반환형) + (line 502) <b>기존 <code>test/ai/config-briefing.test.js</code> 그린 유지</b>를 못박았다. 회귀 안전망이
+  계획에 명시됨 — 통과.</p>
+
+  <h3>경미 — 표기 정리 <span class="pass">[PASS]</span></h3>
+  <p>CSP 출처가 설계 머리말(line 92)에서 "<code>public/index.html</code>(CSP meta — img-src data:)"로 정정됨.
+  스케줄러 기본값 §12(line 624)·§16 Q2(line 771)가 "기본 ON + 끄기 토글(PM #1)"로 해소. og:image 96KB 불일치 정합 완료.</p>
+</section>
+
+<section>
+  <h2>2. 잔여 반영 항목 (비차단)</h2>
+  <table>
+    <tr><th style="width:70px;">우선</th><th style="width:150px;">무엇</th><th style="width:170px;">위치</th><th>문제 / 권고</th></tr>
+    <tr>
+      <td class="pri p3">권장(비차단)</td>
+      <td>SSOT file 열기 prose 정정</td>
+      <td>설계 §10.3 line 591 · §13 H-2 line 635</td>
+      <td><b>문제:</b> 두 줄이 file 열기를 여전히 VS Code/<code>safeExec(code)</code> 기반으로 기술 — PM #2(file=OS 기본앱
+        <code>shell.openPath</code> 항상) 및 이미 정정된 §2/§8/§16과 모순. <b>권고:</b> §10.3은 "folder →
+        <code>safeExec(code)</code> / <b>file → <code>shell.openPath</code>(OS 기본앱, PM #2)</b>"로 분기 기술,
+        §13 H-2는 "<b>folder</b> 열기는 <code>safeExec</code>... / file은 <code>shell.openPath</code>"로 분리.
+        운영 빌드 지침은 이미 정확하므로 구현 착수를 막지 않으나, SSOT 일관성·SH-3 보안 게이트 입력 정확도를 위해
+        함께 정리 권장.</td>
+    </tr>
+  </table>
+  <div class="ok-box"><b>결론.</b> 1회차 FAIL 구동 항목(P1·P2-96KB·P3) 전부 해소, 코디네이터 지목 확인점(undefined 포섭·96KB
+  잔존) 통과. 운영 산출물(로드맵 빌드 단계 + IPC 계약)이 PM 확정과 일치해 <b>구현 착수 가능 — 최종 PASS</b>.
+  잔여 2곳(§10.3·§13)은 비차단 문서 위생 항목으로, SH-3(egress·열기 보안 게이트) 착수 전 정리하면 충분하다.</div>
+</section>
+
+</main>
+<footer>Project-SPIP · reviewer 재검증 보고 · 즐겨찾기 셸프 위젯 계획 2회차 · 판정 PASS(비차단 잔여 1건) · 2026-06-27</footer>
+</body>
+</html>

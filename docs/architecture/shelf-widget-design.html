@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project-SPIP — 아키텍처 설계: 즐겨찾기 셸프 위젯 (SH)</title>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#1e293b; --text:#e2e8f0; --sub:#94a3b8;
+    --accent:#34d399; --ref:#38bdf8; --line:#334155; --warn:#fbbf24; --danger:#f87171; --purple:#c4b5fd;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:"Segoe UI","Malgun Gothic",system-ui,sans-serif;line-height:1.7;}
+  header{padding:48px 32px 36px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#13203b,#0f172a);}
+  header h1{margin:0 0 10px;font-size:30px;letter-spacing:-0.01em;}
+  header .tag{display:inline-block;background:rgba(52,211,153,.12);color:var(--accent);
+    border:1px solid rgba(52,211,153,.4);border-radius:999px;padding:3px 12px;font-size:13px;margin-right:8px;margin-bottom:6px;}
+  header p{margin:14px 0 0;color:var(--sub);max-width:1050px;}
+  .meta{margin-top:16px;font-size:13px;color:var(--sub);}
+  main{max-width:1280px;margin:0 auto;padding:32px;}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:24px 28px;margin:22px 0;}
+  h2{margin:0 0 16px;font-size:21px;color:var(--accent);border-left:4px solid var(--accent);padding-left:12px;}
+  h3{font-size:16px;color:var(--ref);margin:22px 0 10px;}
+  h4{font-size:14px;color:var(--text);margin:16px 0 8px;}
+  p{margin:8px 0;}
+  ul,ol{margin:8px 0;padding-left:22px;}
+  li{margin:5px 0;}
+  code{background:#0b1220;color:var(--ref);padding:1px 6px;border-radius:5px;font-size:12.5px;font-family:Consolas,monospace;}
+  pre{background:#0b1220;border:1px solid var(--line);border-radius:8px;padding:14px 16px;overflow:auto;
+    font-family:Consolas,monospace;font-size:12.5px;color:#cbd5e1;line-height:1.55;}
+  pre .k{color:#c4b5fd;} pre .s{color:#6ee7b7;} pre .c{color:#64748b;} pre .n{color:#fcd34d;}
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13px;}
+  th,td{border:1px solid var(--line);padding:9px 11px;text-align:left;vertical-align:top;}
+  th{background:#142035;color:var(--accent);}
+  tr:nth-child(even) td{background:rgba(255,255,255,.02);}
+  .rid{font-family:Consolas,monospace;color:var(--accent);font-weight:700;white-space:nowrap;}
+  .nid{font-family:Consolas,monospace;color:var(--warn);font-weight:700;white-space:nowrap;}
+  .pill{font-size:11px;font-weight:700;padding:2px 9px;border-radius:6px;white-space:nowrap;display:inline-block;}
+  .must{background:rgba(248,113,113,.16);color:#fca5a5;border:1px solid rgba(248,113,113,.5);}
+  .should{background:rgba(251,191,36,.16);color:#fcd34d;border:1px solid rgba(251,191,36,.5);}
+  .could{background:rgba(56,189,248,.16);color:#7dd3fc;border:1px solid rgba(56,189,248,.45);}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;}
+  .card{background:#0b1220;border:1px solid var(--line);border-radius:10px;padding:16px;}
+  .card .k{font-size:12px;color:var(--sub);text-transform:uppercase;letter-spacing:.5px;}
+  .card .v{font-size:14px;margin-top:6px;}
+  .note{background:rgba(56,189,248,.08);border:1px solid rgba(56,189,248,.3);border-radius:8px;padding:12px 16px;font-size:13.5px;color:#bae6fd;margin:12px 0;}
+  .warn-box{background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.32);border-radius:8px;padding:12px 16px;font-size:13.5px;color:#fde68a;margin:12px 0;}
+  .danger-box{background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.35);border-radius:8px;padding:12px 16px;font-size:13.5px;color:#fecaca;margin:12px 0;}
+  .ok-box{background:rgba(52,211,153,.08);border:1px solid rgba(52,211,153,.32);border-radius:8px;padding:12px 16px;font-size:13.5px;color:#a7f3d0;margin:12px 0;}
+  .legend{display:flex;gap:18px;flex-wrap:wrap;font-size:12.5px;color:var(--sub);margin-top:10px;}
+  .legend span{display:inline-flex;align-items:center;gap:6px;}
+  .sw{width:14px;height:14px;border-radius:3px;display:inline-block;border:1px solid #475569;}
+  svg{max-width:100%;height:auto;display:block;margin:10px auto;}
+  footer{text-align:center;color:var(--sub);font-size:12.5px;padding:30px;border-top:1px solid var(--line);}
+  .mono{font-family:Consolas,monospace;font-size:12px;color:#cbd5e1;}
+  .toc{columns:2;font-size:13.5px;}
+  .toc a{color:var(--ref);text-decoration:none;}
+  .toc a:hover{text-decoration:underline;}
+  .adr{border:1px solid var(--purple);border-left:4px solid var(--purple);border-radius:12px;padding:0;margin:18px 0;overflow:hidden;background:rgba(196,181,253,.05);}
+  .adr__head{background:rgba(196,181,253,.10);padding:12px 18px;border-bottom:1px solid var(--line);}
+  .adr__head .id{font-family:Consolas,monospace;font-weight:800;color:var(--purple);font-size:15px;}
+  .adr__body{padding:16px 20px;}
+  .status{display:inline-block;border-radius:999px;padding:2px 12px;font-size:12px;font-weight:700;
+    background:rgba(52,211,153,.16);color:#6ee7b7;border:1px solid rgba(52,211,153,.5);}
+  .trace{font-size:12px;color:var(--sub);}
+  .trace b{color:var(--ref);}
+  .chk{list-style:none;padding-left:0;}
+  .chk li{padding-left:26px;position:relative;}
+  .chk li::before{content:"✓";position:absolute;left:4px;color:var(--accent);font-weight:800;}
+</style>
+</head>
+<body>
+<header>
+  <span class="tag">아키텍처 설계서</span>
+  <span class="tag">배치: 즐겨찾기 셸프 위젯</span>
+  <span class="tag">SH-D / SH-IPC / SH-SEC</span>
+  <h1>Project-SPIP — 즐겨찾기 셸프 위젯 아키텍처</h1>
+  <p>홈 대시보드("홈·브리핑")에 <b>임의의 URL·폴더·파일</b>을 한 "셸프"에 꽂아 두는 새 위젯을 추가한다.
+  스파인(접힘)↔배너(펼침) 전환, 활성 카드 자동 스크롤, 드래그/휠 가로 스크롤은 초안
+  <code>favorites-shelf-widget.dc.html</code>의 동작을 그대로 옮긴다. <b>URL 메타데이터(og:image·title·
+  description) 크롤링은 메인 프로세스에서 실제로 수행</b>한다 — 이 위젯은 렌더러 <code>connect-src 'none'</code>를
+  유지한 채 외부 네트워크를 <b>main에서만</b> 허용하는, 본 앱 최초의 사용자 승인 egress 표면이다.
+  <b>코드가 아니라 청사진</b>이다 — 시그니처·스키마·의사코드·다이어그램까지만 정의하고 구현은 개발팀에 위임한다.</p>
+  <div class="meta">문서 유형: 아키텍처 설계서 · 작성: 수석 아키텍트 · 작성일 2026-06-27 ·
+  입력 초안: <code>docs/design/favorites-shelf-widget.dc.html</code>(기능·레이아웃·디자인의 단일 진실) ·
+  <code>docs/design/home-briefing-dashboard.md</code> ·
+  재사용 인프라(실측): <code>electron/ipc/register.js</code>(guard) · <code>electron/preload.js</code> ·
+  <code>lib/common/uiStateStore.js</code> · <code>lib/common/{pathGuard,safeExec,config}.js</code> ·
+  <code>electron/main.js</code>(app:// 프로토콜) · <code>public/index.html</code>(CSP meta — img-src data:) · <code>electron/ipc/{actions,insights}.js</code> ·
+  형식 기준: <code>briefing-ai-design.html</code> · 기준 폴더(<code>docs/Design/</code>·<code>docs/Templates/</code>) 부재 → 표준 다크 스타일</div>
+</header>
+
+<main>
+
+<!-- ── 0. 목차 ── -->
+<section id="toc">
+  <h2>목차</h2>
+  <div class="toc">
+    <p><a href="#overview">1. 개요 · 범위 · 아키텍처 동인</a></p>
+    <p><a href="#quality">2. 품질 속성 요구</a></p>
+    <p><a href="#system">3. 시스템 컨텍스트 · 신뢰 경계</a></p>
+    <p><a href="#software">4. 소프트웨어 아키텍처 · 모듈 경계</a></p>
+    <p><a href="#tree">5. 디렉토리 구조 · 파일 변경 지도</a></p>
+    <p><a href="#mount">6. 홈 마운트 · 렌더러 통합</a></p>
+    <p><a href="#data">7. 데이터 모델 · 영속</a></p>
+    <p><a href="#ipc">8. IPC 계약</a></p>
+    <p><a href="#crawl">9. URL 크롤링 서브시스템(main) · SSRF 방어</a></p>
+    <p><a href="#local">10. 폴더/파일 메타 수집 · 경로 정책</a></p>
+    <p><a href="#img">11. og:image 캐시 · 전달</a></p>
+    <p><a href="#sched">12. 자동 재크롤 스케줄러(6시간)</a></p>
+    <p><a href="#secchk">13. 보안 불변식 체크리스트</a></p>
+    <p><a href="#adr">14. ADR — 핵심 결정</a></p>
+    <p><a href="#milestones">15. 마일스톤 분해(증분 · 테스트 동반)</a></p>
+    <p><a href="#risks">16. 리스크 · 가정 · 미해결 질문</a></p>
+  </div>
+</section>
+
+<!-- ── 1. 개요 ── -->
+<section id="overview">
+  <h2>1. 개요 · 범위 · 아키텍처 동인</h2>
+  <p>홈(<code>store.state.view==='home'</code>)의 카드 그리드(<code>renderHomeSection</code>)에 합류하는 새 위젯
+  <b>"즐겨찾기 셸프"</b>를 설계한다. 책 셸프에 책등(스파인)을 꽂듯 즐겨찾기를 가로로 늘어놓고, 활성 항목만
+  배너 카드로 펼쳐 보여준다. 항목은 <b>프로젝트 id가 아니라 임의의 URL/폴더/파일 경로</b>를 직접 가리킨다.</p>
+
+  <div class="note"><b>기존 "프로젝트 즐겨찾기 위젯"과 완전 분리.</b> <code>electron/favoritesWidget.js</code>·
+  <code>public/favorites.*</code>·<code>uiState.setFavorite</code>·<code>spip:favorites-changed</code> 는 프로젝트
+  id 기반 별도 기능이며 <b>일절 건드리지 않는다</b>. 본 위젯은 신규 네임스페이스 <code>spip:shelf:*</code>·
+  신규 영속 키 <code>shelfBookmarks</code>로 독립한다.</div>
+
+  <h3>1.1 범위</h3>
+  <table>
+    <tr><th>포함(In)</th><th>제외(Out)</th></tr>
+    <tr>
+      <td>
+        <ul>
+          <li>3-유형(URL/폴더/파일) 북마크 추가·삭제·재정렬·열기</li>
+          <li>URL 실제 크롤링(og:title/image/description, &lt;title&gt;, meta description)</li>
+          <li>폴더/파일 실제 메타 수집(파일 수·용량·언어·수정시각)</li>
+          <li>스파인↔배너 전환, 활성 자동 스크롤, 드래그/휠 가로 스크롤, 토스트, empty/loading/error</li>
+          <li>6시간 자동 재크롤/재스캔(초안 푸터 문구)</li>
+        </ul>
+      </td>
+      <td>
+        <ul>
+          <li><b>상단 CASE 버튼(없음/1/2/10)</b> — 제거. 실제 데이터로 empty/few/many 렌더(확정)</li>
+          <li>북마크 폴더·태그·검색·동기화(클라우드)</li>
+          <li>og:image 리사이즈/썸네일 생성(이미지 라이브러리 미도입 — §11)</li>
+          <li>인증 필요 URL·로그인 세션 크롤링</li>
+          <li>기존 프로젝트 즐겨찾기와의 연동/병합</li>
+        </ul>
+      </td>
+    </tr>
+  </table>
+
+  <h3>1.2 아키텍처 동인(요구 → 결정)</h3>
+  <table>
+    <tr><th>ID</th><th>동인(요구/제약)</th><th>출처</th><th>좌우된 결정</th></tr>
+    <tr><td class="rid">SH-A1</td><td>초안 UI/UX(스파인·배너·자동스크롤·드래그)를 그대로 구현</td><td>dc.html</td><td>순수 VM <code>shelfWidgetVM</code> + <code>wireSwipe</code>/<code>focusActive</code> 포팅(§6)</td></tr>
+    <tr><td class="rid">SH-A2</td><td>임의 URL/폴더/파일 북마크(프로젝트 id 아님)</td><td>지시</td><td>신규 스키마 <code>shelfBookmarks</code>, ref=원본 경로/URL(§7)</td></tr>
+    <tr><td class="rid">SH-A3</td><td>URL 메타 크롤링을 main에서 실제 수행</td><td>승인</td><td>egress 신뢰 경계 신설 + SSRF 방어 서브시스템(§3·§9)</td></tr>
+    <tr><td class="rid">SH-A4</td><td>렌더러 <code>connect-src 'none'</code> 유지</td><td>CSP 불변식</td><td>모든 네트워크는 main IPC 핸들러; 이미지는 data: URI 전달(§9·§11)</td></tr>
+    <tr><td class="rid">SH-A5</td><td>새 런타임 의존성 0 (cheerio 등 금지)</td><td>CLAUDE.md</td><td>node:https + 자작 경량 og 파서·자작 SSRF IP 분류(§9, ADR-SH-5)</td></tr>
+    <tr><td class="rid">SH-A6</td><td>임의 경로지만 H-1/H-2/L-1 불변식 유지</td><td>보안 모델</td><td>자기참조 화이트리스트 + 민감경로 deny 게이트(§10, ADR-SH-4)</td></tr>
+    <tr><td class="rid">SH-A7</td><td>0600 영속·상승세션 write 보류·정규화 상한</td><td>보안 모델</td><td>uiStateStore 인프라 재사용(§7, ADR-SH-1)</td></tr>
+  </table>
+</section>
+
+<!-- ── 2. 품질 속성 ── -->
+<section id="quality">
+  <h2>2. 품질 속성 요구</h2>
+  <div class="grid">
+    <div class="card"><div class="k">보안(최우선)</div><div class="v">main egress는 http/https + SSRF 차단 + 크기/타임아웃/리다이렉트 상한. 렌더러는 textContent만(L-1). 임의 경로는 canonicalize + 민감경로 deny.</div></div>
+    <div class="card"><div class="k">성능</div><div class="v">홈 진입 시 셸프는 캐시된 메타로 즉시 렌더(네트워크 0). 크롤은 add/refresh/스케줄러에서만. 크롤 1건 타임박스 ≤ 8s, 이미지 ≤ 100KB.</div></div>
+    <div class="card"><div class="k">유지보수성</div><div class="v">순수 함수(detectType·ogParse·ssrfGuard·pathPolicy·shelfWidgetVM)를 fs/net과 분리 → 헤드리스 단위테스트.</div></div>
+    <div class="card"><div class="k">견고성</div><div class="v">크롤/스캔 실패는 graceful — 항목은 폴백 메타로 꽂히고 error 상태 토스트. 손상 영속은 빈 셸프로 폴백.</div></div>
+    <div class="card"><div class="k">확장성(데이터)</div><div class="v">셸프 항목 상한 <code>MAX_SHELF=64</code>. 텍스트 필드 길이 상한. og:image 바이트는 ui-state 밖 별도 캐시(1MB 상한 보호).</div></div>
+    <div class="card"><div class="k">호환성</div><div class="v">CommonJS·바닐라·번들러 없음. electron-builder files(electron/·lib/·public/)에 자동 포함. 새 의존성 0.</div></div>
+  </div>
+</section>
+
+<!-- ── 3. 시스템 컨텍스트 · 신뢰 경계 ── -->
+<section id="system">
+  <h2>3. 시스템 컨텍스트 · 신뢰 경계</h2>
+  <p>본 위젯은 앱에 <b>새로운 신뢰 경계</b>를 도입한다: 메인 프로세스 → <b>임의 인터넷 호스트</b>(사용자가 붙여넣은 URL).
+  이 경계가 SSRF·악성 응답의 입구이므로 다이어그램에 명시한다. 이후 <code>security-reviewer</code>의 위협 모델링 입력이다.</p>
+
+  <svg viewBox="0 0 980 520" role="img" aria-label="시스템 컨텍스트 및 신뢰 경계 다이어그램">
+    <!-- renderer boundary -->
+    <rect x="20" y="30" width="300" height="460" rx="12" fill="#0b1220" stroke="#334155"/>
+    <text x="34" y="54" fill="#38bdf8" font-size="13" font-family="Consolas">렌더러 (app://index.html)</text>
+    <text x="34" y="72" fill="#64748b" font-size="11" font-family="Consolas">contextIsolation · sandbox · CSP</text>
+    <text x="34" y="88" fill="#f87171" font-size="11" font-family="Consolas">connect-src 'none' (외부 fetch 불가)</text>
+    <rect x="40" y="104" width="260" height="86" rx="8" fill="#1e293b" stroke="#475569"/>
+    <text x="52" y="126" fill="#e2e8f0" font-size="12">renderHomeShelf() + shelfWidgetVM()</text>
+    <text x="52" y="146" fill="#94a3b8" font-size="11">스파인/배너 · 자동스크롤 · 드래그</text>
+    <text x="52" y="166" fill="#94a3b8" font-size="11">렌더: textContent만 (L-1)</text>
+    <text x="52" y="184" fill="#94a3b8" font-size="11">배너: &lt;img src="data:..."&gt; (img-src data:)</text>
+    <rect x="40" y="206" width="260" height="56" rx="8" fill="#0f172a" stroke="#475569"/>
+    <text x="52" y="228" fill="#e2e8f0" font-size="12">window.spip.shelf.*</text>
+    <text x="52" y="246" fill="#94a3b8" font-size="11">preload allowlist (채널 하드코딩)</text>
+
+    <!-- IPC gate -->
+    <rect x="350" y="200" width="120" height="120" rx="10" fill="#142035" stroke="#34d399"/>
+    <text x="365" y="250" fill="#34d399" font-size="12">guard()</text>
+    <text x="360" y="270" fill="#94a3b8" font-size="10">senderFrame</text>
+    <text x="360" y="285" fill="#94a3b8" font-size="10">origin=app://</text>
+    <text x="360" y="300" fill="#94a3b8" font-size="10">{ok,code}</text>
+
+    <!-- main boundary -->
+    <rect x="500" y="30" width="300" height="460" rx="12" fill="#0b1220" stroke="#334155"/>
+    <text x="514" y="54" fill="#38bdf8" font-size="13" font-family="Consolas">메인 프로세스 (Node)</text>
+    <rect x="516" y="70" width="270" height="92" rx="8" fill="#1e293b" stroke="#475569"/>
+    <text x="528" y="92" fill="#e2e8f0" font-size="12">electron/ipc/shelf.js</text>
+    <text x="528" y="110" fill="#94a3b8" font-size="11">list/add/remove/reorder/open/refresh</text>
+    <text x="528" y="128" fill="#94a3b8" font-size="11">입력 재검증 · 영속 · 폴백</text>
+    <text x="528" y="148" fill="#94a3b8" font-size="11">shelfStore (uiStateStore 키)</text>
+
+    <rect x="516" y="178" width="270" height="74" rx="8" fill="#1e293b" stroke="#fbbf24"/>
+    <text x="528" y="200" fill="#fbbf24" font-size="12">lib/shelf/urlMeta.js (크롤)</text>
+    <text x="528" y="218" fill="#94a3b8" font-size="11">ssrfGuard · ogParse · imageCache</text>
+    <text x="528" y="236" fill="#94a3b8" font-size="11">node:https / node:http</text>
+
+    <rect x="516" y="268" width="270" height="62" rx="8" fill="#1e293b" stroke="#475569"/>
+    <text x="528" y="290" fill="#e2e8f0" font-size="12">lib/shelf/localMeta.js (스캔)</text>
+    <text x="528" y="308" fill="#94a3b8" font-size="11">pathGuard · pathPolicy · fs</text>
+
+    <rect x="516" y="346" width="270" height="58" rx="8" fill="#1e293b" stroke="#475569"/>
+    <text x="528" y="368" fill="#e2e8f0" font-size="12">open: shell.openExternal / safeExec</text>
+    <text x="528" y="386" fill="#94a3b8" font-size="11">url→브라우저, 폴더→VS Code, 파일→OS 기본앱 (H-2)</text>
+
+    <!-- external -->
+    <rect x="836" y="120" width="124" height="80" rx="10" fill="#2a1518" stroke="#f87171"/>
+    <text x="850" y="150" fill="#f87171" font-size="12">임의 인터넷</text>
+    <text x="850" y="168" fill="#94a3b8" font-size="10">웹 호스트(HTML)</text>
+    <text x="850" y="184" fill="#94a3b8" font-size="10">og:image 바이트</text>
+
+    <rect x="836" y="320" width="124" height="80" rx="10" fill="#101a2e" stroke="#475569"/>
+    <text x="850" y="350" fill="#e2e8f0" font-size="12">로컬 FS</text>
+    <text x="850" y="368" fill="#94a3b8" font-size="10">폴더·파일·appData</text>
+    <text x="850" y="384" fill="#94a3b8" font-size="10">ui-state.json(0600)</text>
+
+    <!-- arrows -->
+    <line x1="300" y1="234" x2="350" y2="248" stroke="#34d399" stroke-width="2" marker-end="url(#a)"/>
+    <line x1="470" y1="248" x2="516" y2="116" stroke="#34d399" stroke-width="2" marker-end="url(#a)"/>
+    <line x1="786" y1="215" x2="836" y2="170" stroke="#f87171" stroke-width="2.5" marker-end="url(#ar)"/>
+    <text x="792" y="200" fill="#f87171" font-size="10">★신뢰 경계</text>
+    <line x1="786" y1="300" x2="836" y2="350" stroke="#38bdf8" stroke-width="2" marker-end="url(#ab)"/>
+    <line x1="786" y1="375" x2="836" y2="365" stroke="#38bdf8" stroke-width="2" marker-end="url(#ab)"/>
+
+    <defs>
+      <marker id="a" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#34d399"/></marker>
+      <marker id="ar" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#f87171"/></marker>
+      <marker id="ab" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#38bdf8"/></marker>
+    </defs>
+  </svg>
+  <div class="legend">
+    <span><span class="sw" style="background:#34d399"></span>신뢰 IPC(검증된 origin)</span>
+    <span><span class="sw" style="background:#f87171"></span>비신뢰 egress(SSRF 표면 — 방어 집중)</span>
+    <span><span class="sw" style="background:#38bdf8"></span>로컬 FS I/O</span>
+  </div>
+  <div class="danger-box"><b>핵심 위협(security-reviewer 입력).</b> ① SSRF — 내부망/메타데이터 IP로의 크롤(§9.2). ② 악성 응답 —
+  거대 HTML/이미지·무한 리다이렉트·decompression bomb. ③ 경로 — 임의 경로 북마크의 민감 경로 열람/실행(§10).
+  ④ 저장형 XSS — 크롤로 받은 title/desc를 innerHTML 렌더(L-1로 차단). ⑤ 정보노출 — og:image/data: URI 크기로 ui-state 비대(§11로 분리).</div>
+</section>
+
+<!-- ── 4. 소프트웨어 아키텍처 ── -->
+<section id="software">
+  <h2>4. 소프트웨어 아키텍처 · 모듈 경계</h2>
+  <p>의존성 방향은 항상 <b>바깥(Electron/IPC/net/fs) → 안(순수 로직)</b> 단방향이다. 순수 모듈은 Electron·net·fs를
+  import하지 않아 <code>node --test</code>로 헤드리스 검증된다(F-3 컨벤션). 부수효과 모듈은 순수 모듈을 조립한다.</p>
+
+  <svg viewBox="0 0 960 430" role="img" aria-label="모듈 경계 및 의존성 방향">
+    <!-- layer labels -->
+    <text x="20" y="28" fill="#34d399" font-size="13">① 부수효과 경계 (Electron · net · fs)</text>
+    <rect x="20" y="40" width="210" height="64" rx="8" fill="#1e293b" stroke="#475569"/><text x="32" y="66" fill="#e2e8f0" font-size="12">electron/ipc/shelf.js</text><text x="32" y="86" fill="#94a3b8" font-size="10">guard 경유 · ctx 주입</text>
+    <rect x="250" y="40" width="210" height="64" rx="8" fill="#1e293b" stroke="#fbbf24"/><text x="262" y="66" fill="#fbbf24" font-size="12">lib/shelf/urlMeta.js</text><text x="262" y="86" fill="#94a3b8" font-size="10">node:https 크롤 오케스트레이션</text>
+    <rect x="480" y="40" width="210" height="64" rx="8" fill="#1e293b" stroke="#475569"/><text x="492" y="66" fill="#e2e8f0" font-size="12">lib/shelf/localMeta.js</text><text x="492" y="86" fill="#94a3b8" font-size="10">fs 폴더/파일 메타</text>
+    <rect x="710" y="40" width="230" height="64" rx="8" fill="#1e293b" stroke="#475569"/><text x="722" y="66" fill="#e2e8f0" font-size="12">lib/shelf/imageCache.js</text><text x="722" y="86" fill="#94a3b8" font-size="10">appData 0600 · data: URI</text>
+
+    <text x="20" y="158" fill="#34d399" font-size="13">② 순수 로직 (헤드리스 테스트)</text>
+    <rect x="20" y="170" width="170" height="60" rx="8" fill="#0b1220" stroke="#34d399"/><text x="32" y="194" fill="#a7f3d0" font-size="12">detectType.js</text><text x="32" y="214" fill="#94a3b8" font-size="10">유형감지·입력검증</text>
+    <rect x="205" y="170" width="170" height="60" rx="8" fill="#0b1220" stroke="#34d399"/><text x="217" y="194" fill="#a7f3d0" font-size="12">ogParse.js</text><text x="217" y="214" fill="#94a3b8" font-size="10">HTML 메타 추출</text>
+    <rect x="390" y="170" width="170" height="60" rx="8" fill="#0b1220" stroke="#34d399"/><text x="402" y="194" fill="#a7f3d0" font-size="12">ssrfGuard.js</text><text x="402" y="214" fill="#94a3b8" font-size="10">IP 분류·URL 검증</text>
+    <rect x="575" y="170" width="170" height="60" rx="8" fill="#0b1220" stroke="#34d399"/><text x="587" y="194" fill="#a7f3d0" font-size="12">pathPolicy.js</text><text x="587" y="214" fill="#94a3b8" font-size="10">민감경로 deny 게이트</text>
+    <rect x="760" y="170" width="180" height="60" rx="8" fill="#0b1220" stroke="#34d399"/><text x="772" y="194" fill="#a7f3d0" font-size="12">shelfWidgetVM (app.js)</text><text x="772" y="214" fill="#94a3b8" font-size="10">패널 뷰모델(렌더러측)</text>
+
+    <text x="20" y="288" fill="#34d399" font-size="13">③ 재사용 공용(기존 — 무수정 또는 소폭 확장)</text>
+    <rect x="20" y="300" width="150" height="54" rx="8" fill="#13203b" stroke="#38bdf8"/><text x="32" y="332" fill="#7dd3fc" font-size="11">pathGuard</text>
+    <rect x="185" y="300" width="150" height="54" rx="8" fill="#13203b" stroke="#38bdf8"/><text x="197" y="332" fill="#7dd3fc" font-size="11">safeExec</text>
+    <rect x="350" y="300" width="180" height="54" rx="8" fill="#13203b" stroke="#38bdf8"/><text x="362" y="332" fill="#7dd3fc" font-size="11">uiStateStore(확장)</text>
+    <rect x="545" y="300" width="180" height="54" rx="8" fill="#13203b" stroke="#38bdf8"/><text x="557" y="332" fill="#7dd3fc" font-size="11">config.validateHttpUrl</text>
+    <rect x="740" y="300" width="200" height="54" rx="8" fill="#13203b" stroke="#38bdf8"/><text x="752" y="332" fill="#7dd3fc" font-size="11">register.guard · preload</text>
+
+    <!-- arrows down -->
+    <line x1="125" y1="104" x2="105" y2="170" stroke="#475569" stroke-width="1.5" marker-end="url(#d)"/>
+    <line x1="355" y1="104" x2="290" y2="170" stroke="#475569" stroke-width="1.5" marker-end="url(#d)"/>
+    <line x1="355" y1="104" x2="475" y2="170" stroke="#475569" stroke-width="1.5" marker-end="url(#d)"/>
+    <line x1="585" y1="104" x2="650" y2="170" stroke="#475569" stroke-width="1.5" marker-end="url(#d)"/>
+    <defs><marker id="d" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#475569"/></marker></defs>
+  </svg>
+
+  <table>
+    <tr><th>모듈</th><th>책임</th><th>의존(허용)</th><th>테스트</th></tr>
+    <tr><td><code>lib/shelf/detectType.js</code></td><td>입력 문자열 → url|folder|file 감지, 유형별 유효성(초안 <code>detectType</code>/<code>isValidInput</code>/<code>hasExt</code> 포팅)</td><td>없음(순수)</td><td>헤드리스</td></tr>
+    <tr><td><code>lib/shelf/ssrfGuard.js</code></td><td>URL 검증(http/https·자격거부·길이) + IP 분류(사설/루프백/링크로컬/메타데이터/ULA) + DNS lookup 래퍼·IP 핀</td><td>node:dns, node:net(IP 파싱)</td><td>IP 분류는 헤드리스</td></tr>
+    <tr><td><code>lib/shelf/ogParse.js</code></td><td>HTML 바이트 → {title,desc,image,siteName} 추출(정규식 경량 파서·엔티티 디코드·sanitize)</td><td>없음(순수)</td><td>헤드리스</td></tr>
+    <tr><td><code>lib/shelf/urlMeta.js</code></td><td>크롤 오케스트레이션: 검증→GET(리다이렉트·상한)→ogParse→og:image 별도 fetch→imageCache. 폴백 메타 생성</td><td>node:https/http, ssrfGuard, ogParse, imageCache</td><td>주입 모킹</td></tr>
+    <tr><td><code>lib/shelf/localMeta.js</code></td><td>폴더/파일 canonicalize→stat→메타(파일수·용량·언어·mtime). 폴더 카운트는 얕은 순회+예산</td><td>fs, pathGuard, pathPolicy</td><td>주입/임시디렉토리</td></tr>
+    <tr><td><code>lib/shelf/pathPolicy.js</code></td><td>민감/시스템 경로 deny 게이트(드라이브 루트·시스템 디렉토리·자격 디렉토리)</td><td>node:os, node:path(순수)</td><td>헤드리스</td></tr>
+    <tr><td><code>lib/shelf/imageCache.js</code></td><td>og:image 바이트 appData 캐시(0600) write/read, mime 검증, data: URI 빌드, GC(상한 초과 정리)</td><td>fs, paths, crypto(해시)</td><td>임시디렉토리</td></tr>
+    <tr><td><code>electron/ipc/shelf.js</code></td><td>IPC 핸들러 6종 + 입력 재검증 + 영속 + 폴백. ctx 주입(store/config/shell/toolRegistry/logger)</td><td>위 lib/shelf, uiStateStore</td><td>ctx 모킹</td></tr>
+  </table>
+  <div class="note"><b>uiStateStore 확장은 영속 신뢰 경계의 단일 정규화 지점.</b> 새 <code>normalizeShelfBookmarks(input)</code>를
+  추가하되 <code>lib/shelf</code>에 의존하지 않는다(브리핑 키와 동일 원칙 — 자기완결적 상수). IPC 핸들러가 만든
+  객체도 write 시 이 정규화를 다시 통과한다(공격자 입력 가정).</div>
+</section>
+
+<!-- ── 5. 디렉토리 / 파일 변경 ── -->
+<section id="tree">
+  <h2>5. 디렉토리 구조 · 파일 변경 지도</h2>
+  <pre><span class="c"># 신규 (NEW)</span>
+lib/shelf/
+├─ detectType.js        <span class="c"># 순수: 유형감지·입력검증</span>
+├─ ssrfGuard.js         <span class="c"># SSRF: URL 검증 + IP 분류 + DNS 핀</span>
+├─ ogParse.js           <span class="c"># 순수: HTML 메타 경량 파서</span>
+├─ urlMeta.js           <span class="c"># main: 크롤 오케스트레이션</span>
+├─ localMeta.js         <span class="c"># main: 폴더/파일 메타(fs)</span>
+├─ pathPolicy.js        <span class="c"># 순수: 민감경로 deny 게이트</span>
+├─ imageCache.js        <span class="c"># main: og:image appData 캐시·data:URI</span>
+└─ scheduler.js         <span class="c"># main: 6시간 재크롤 타이머(opt-in)</span>
+electron/ipc/shelf.js   <span class="c"># IPC 핸들러 6종</span>
+test/shelf-detectType.test.js
+test/shelf-ssrfGuard.test.js
+test/shelf-ogParse.test.js
+test/shelf-pathPolicy.test.js
+test/shelf-localMeta.test.js
+test/shelf-ipc.test.js
+test/shelf-uistate.test.js   <span class="c"># normalizeShelfBookmarks 정규화·상한</span>
+
+<span class="c"># 수정 (MODIFY)</span>
+lib/common/uiStateStore.js  <span class="c"># + shelfBookmarks 정규화/기본값/write</span>
+lib/common/config.js        <span class="c"># validateBriefingUrl → validateHttpUrl 일반화(공유) + 셸프 크롤 상한 상수(선택)</span>
+electron/ipc/register.js    <span class="c"># + spip:shelf:* guard 등록 + shelf-changed broadcast 헬퍼</span>
+electron/preload.js         <span class="c"># + window.spip.shelf.{list,add,remove,reorder,open,refresh,onChanged}</span>
+electron/main.js            <span class="c"># + shelf ctx wiring(shell/toolRegistry/win/wc) + scheduler 초기화</span>
+public/app.js               <span class="c"># + HOME_SECTION_IDS 'shelf' + renderHomeSection case + renderHomeShelf + shelfWidgetVM</span>
+public/styles.css           <span class="c"># (선택) 셸프 스파인/배너 스타일 — 인라인 우선이면 생략</span></pre>
+  <div class="warn-box"><b>HOME_SECTION_IDS 동기화.</b> <code>'shelf'</code>는 <code>lib/common/uiStateStore.js</code>와
+  <code>public/app.js</code> <b>두 곳의 enum에 동일하게</b> 추가해야 한다(현재 동형 유지 컨벤션). <code>normalizeHomeLayout</code>가
+  누락 섹션을 기본순서 끝에 자동 보충하므로 기존 저장값은 마이그레이션 없이 합류한다.</div>
+</section>
+
+<!-- ── 6. 홈 마운트 ── -->
+<section id="mount">
+  <h2>6. 홈 마운트 · 렌더러 통합</h2>
+  <p>홈은 이미 구현된 마소너리 카드 그리드다(<code>renderHome</code> → <code>applyHomeLayout</code> →
+  <code>renderHomeSection(id)</code>). 셸프는 새 섹션 id <code>'shelf'</code>로 합류한다 — 별도 창/뷰가 아니라
+  <b>홈의 한 카드</b>다(SH-A1).</p>
+  <ol>
+    <li><code>HOME_SECTION_IDS</code>에 <code>'shelf'</code> 추가(양쪽 enum). 위치는 기본순서상
+      <code>activity</code> 뒤 권장(상호작용 위젯 군집). 토글 가능(=featureAdd 아님 → 위젯 갤러리로 숨김/표시).</li>
+    <li><code>renderHomeSection</code>의 <code>switch</code>에 <code>case 'shelf': return renderHomeShelf();</code> 추가.</li>
+    <li><code>renderHomeShelf()</code>는 <code>shelfWidgetVM(store.shelf, active, composer)</code>(순수)가 만든 plain
+      object를 받아 dc.html 마크업을 <code>el({text})</code>(textContent)로 빌드. 배너 이미지는
+      <code>el('img',{attrs:{src:dataUri}})</code>(img-src data: 허용).</li>
+    <li>가로 스크롤 행에 <code>wireSwipe(el)</code>(드래그/휠)·<code>focusActive(id)</code>(활성 자동 스크롤)를
+      초안 로직 그대로 부착. <code>ref</code> 콜백 대신 마운트 후 querySelector로 행 노드 획득.</li>
+    <li>store 확장: <code>store.shelf</code>(목록 캐시), <code>store.shelfActive</code>(펼친 id),
+      <code>store.shelfComposer</code>({type,input,state:'idle'|'loading'|'error'}).</li>
+    <li>라이브 갱신: 스케줄러/refresh가 <code>spip:shelf:changed</code> push → <code>onShelfChanged</code> 구독이
+      <code>store.shelf</code> 갱신 후 홈이면 재렌더(메일 <code>onMailUpdated</code> 패턴과 동일).</li>
+  </ol>
+  <div class="note"><b>레이아웃 주의.</b> 마소너리는 CSS columns라 카드 폭이 컬럼 폭으로 제한된다. 셸프는 카드 안에서
+  <code>overflow-x:auto</code>로 가로 스크롤하므로 좁은 컬럼에서도 동작하지만, dc의 펼친 배너(290px)가 컬럼보다
+  넓을 수 있다. → 셸프 카드는 <b>컬럼 스팬(전체폭) 옵션</b>을 검토(또는 펼침폭을 컬럼에 맞춰 클램프). 미해결 §16-Q3.</div>
+
+  <h4>renderer 동작 로직(초안 → 실제 매핑)</h4>
+  <table>
+    <tr><th>초안(dc) 메서드</th><th>실제 구현 위치</th><th>변경점</th></tr>
+    <tr><td><code>detectType/isValidInput</code></td><td>입력 미리보기는 렌더러(즉시 UX), <b>권위 검증은 main</b></td><td>렌더러는 힌트만; main이 재감지·재검증</td></tr>
+    <tr><td><code>onUrlInput</code>(setTimeout 더미 크롤)</td><td><code>spip:shelf:add</code> 호출 → 실제 크롤/스캔</td><td>loading은 IPC 대기 중 표시, 결과로 항목 추가</td></tr>
+    <tr><td><code>DB/folderMeta/fileMeta</code>(더미)</td><td>main 크롤/스캔 결과로 대체</td><td>렌더러는 메타 가공 안 함(표시만)</td></tr>
+    <tr><td><code>wireSwipe/focusActive/animateScroll</code></td><td>그대로 포팅(순수 DOM)</td><td>없음</td></tr>
+    <tr><td><code>remove/flash(toast)</code></td><td><code>spip:shelf:remove</code> + 토스트</td><td>낙관적 제거 후 실패 시 복구</td></tr>
+    <tr><td>CASE 버튼/loadCase</td><td><b>삭제</b></td><td>empty/few/many는 실제 <code>store.shelf.length</code>로 분기</td></tr>
+  </table>
+</section>
+
+<!-- ── 7. 데이터 모델 ── -->
+<section id="data">
+  <h2>7. 데이터 모델 · 영속</h2>
+  <p>북마크 목록은 <code>ui-state.json</code>(0600)의 신규 키 <code>shelfBookmarks</code>에 저장한다(ADR-SH-1).
+  og:image <b>바이트는 저장하지 않고</b> 캐시 키(해시)만 둔다 — 1MB 상한·정규화 비용 보호(§11).</p>
+
+  <h3>7.1 엔트리 스키마(정규화 후)</h3>
+  <pre>ShelfBookmark = {
+  <span class="k">id</span>:        string,   <span class="c">// 'b' + 6~32 hex. main 생성(crypto.randomBytes). 렌더러 시각 비신뢰</span>
+  <span class="k">type</span>:      'url' | 'folder' | 'file',
+  <span class="k">ref</span>:       string,   <span class="c">// url=원본 URL(검증된 http/https) / folder·file=canonicalize된 실경로</span>
+  <span class="c">// ── 크롤/스캔 캐시 메타(표시용 · 전부 sanitize·길이상한 · L-1 textContent 렌더) ──</span>
+  <span class="k">name</span>:      string,   <span class="c">// 스파인 라벨(브랜드/폴더명/파일명)  ≤ 120</span>
+  <span class="k">title</span>:     string,   <span class="c">// 배너 제목  ≤ 200</span>
+  <span class="k">sub</span>:       string,   <span class="c">// host 또는 tidy 경로  ≤ 200</span>
+  <span class="k">desc</span>:      string,   <span class="c">// 설명  ≤ 500</span>
+  <span class="k">color</span>:     string,   <span class="c">// '#RRGGBB' 형식만(정규식). 배너 그라데이션·스파인 배경</span>
+  <span class="k">mono</span>:      string,   <span class="c">// 1~4자 모노 라벨</span>
+  <span class="k">cat</span>:       string,   <span class="c">// 카테고리 칩  ≤ 32</span>
+  <span class="k">status</span>:    string,   <span class="c">// '200 · 120ms' / '128개 파일 · 12MB' 등  ≤ 80</span>
+  <span class="k">bannerKey</span>: string|null, <span class="c">// og:image 캐시 키(sha256 32hex) 또는 null. 바이트는 별도 파일</span>
+  <span class="k">lastChecked</span>: number|null, <span class="c">// ms epoch. main 스탬프</span>
+  <span class="k">addedAt</span>:   number,   <span class="c">// ms epoch. main 스탬프</span>
+  <span class="k">order</span>:     number    <span class="c">// 정렬 키(reorder가 갱신). 또는 배열 순서 자체로 표현</span>
+}</pre>
+  <div class="note"><b>order 표현.</b> 배열 순서 = 표시 순서로 두고 <code>reorder(ids)</code>가 배열을 재배열하는
+  방식을 권장(별도 order 필드 불요, 프로젝트 <code>setOrder</code>와 동형). 위 <code>order</code> 필드는 선택.</div>
+
+  <h3>7.2 정규화 규칙 — <code>normalizeShelfBookmarks(input)</code></h3>
+  <ul>
+    <li>비배열 → <code>[]</code>. 항목 <code>MAX_SHELF = 64</code> 상한, 초과분 절단.</li>
+    <li><code>id</code>: <code>/^b[0-9a-f]{6,32}$/</code> 외 폐기. 중복 id 제거.</li>
+    <li><code>type</code>: 화이트리스트 외 폐기.</li>
+    <li><code>ref</code>: url은 <code>validateHttpUrl</code> 통과만(http/https·자격거부·≤2048). folder/file은 비어있지 않은 문자열(열기 시 재-canonicalize·재게이트 — §10).</li>
+    <li>텍스트 필드: <code>sanitizeText</code>(C0/DEL·방향성 제어 제거 + trim + 필드별 길이상한). 빈 문자열 허용(폴백 표시).</li>
+    <li><code>color</code>: <code>/^#[0-9a-fA-F]{6}$/</code> 외 → 기본색. <code>bannerKey</code>: 32hex 외 → null.</li>
+    <li>수치(addedAt/lastChecked): 유한수만, 아니면 null.</li>
+    <li>schemaVersion 폴백: 키 부재/구버전 → <code>defaultState()</code>가 <code>shelfBookmarks:[]</code> 제공(브리핑 키와 동일 graceful).</li>
+  </ul>
+
+  <h3>7.3 영속 흐름</h3>
+  <p>read: <code>uiStateStore.read()</code> → 정규화된 <code>shelfBookmarks</code> 포함. write:
+  <code>uiStateStore.write(state)</code>가 0600 원자적 쓰기·<b>상승세션 write 보류</b>·1MB 상한·깊이 가드를
+  그대로 적용. IPC <code>list</code>는 read 결과에 <code>imageCache.toDataUri(bannerKey)</code>를 붙여 반환(저장본엔 키만).</p>
+</section>
+
+<!-- ── 8. IPC 계약 ── -->
+<section id="ipc">
+  <h2>8. IPC 계약</h2>
+  <p>모든 채널은 <code>register.js</code>의 <code>guard(channel, fn)</code>를 경유(senderFrame origin=app:// 정확 일치,
+  고정 <code>{ok,code}</code>). preload는 채널명을 하드코딩해 <code>window.spip.shelf</code>로 노출. main이 인자를
+  <b>전부 재검증</b>(렌더러 비신뢰). 응답에 og:image 바이트는 list/add/refresh에서 data: URI로만 포함.</p>
+  <table>
+    <tr><th>채널</th><th>preload 표면</th><th>요청 shape</th><th>응답 shape</th><th>main 동작·검증</th></tr>
+    <tr>
+      <td class="nid">spip:shelf:list</td><td><code>shelf.list()</code></td><td>—</td>
+      <td><code>{ok:true, bookmarks:[ShelfBookmarkView]}</code></td>
+      <td>read → 각 항목에 <code>bannerImage</code>(data:URI) 부착. 실패 graceful 빈 목록.</td>
+    </tr>
+    <tr>
+      <td class="nid">spip:shelf:add</td><td><code>shelf.add(type, ref)</code></td>
+      <td><code>{type:string, ref:string}</code></td>
+      <td><code>{ok:true, bookmark}</code> | <code>{ok:false, code}</code></td>
+      <td>① type∈화이트리스트 ② detectType 재확인 ③ url→<code>crawl</code>(§9) / folder·file→<code>localMeta</code>(§10) ④ 메타 채워 영속 ⑤ 상한 초과=<code>LIMIT</code>.</td>
+    </tr>
+    <tr>
+      <td class="nid">spip:shelf:remove</td><td><code>shelf.remove(id)</code></td>
+      <td><code>{id:string}</code></td><td><code>{ok:true, bookmarks}</code></td>
+      <td>id 형식검증→해당 항목 제거→영속. bannerKey 이미지 캐시 GC 대상 표시.</td>
+    </tr>
+    <tr>
+      <td class="nid">spip:shelf:reorder</td><td><code>shelf.reorder(ids)</code></td>
+      <td><code>{ids:string[]}</code></td><td><code>{ok:true}</code></td>
+      <td>현존 id의 순열만 채택(누락/외래 id 무시)→배열 재배열→영속.</td>
+    </tr>
+    <tr>
+      <td class="nid">spip:shelf:open</td><td><code>shelf.open(id)</code></td>
+      <td><code>{id:string}</code></td><td><code>{ok:true, code:'OPENING'}</code> | <code>{ok:false, code}</code></td>
+      <td>id 역참조→type 분기(열기 시점 <code>canonicalize</code>+pathPolicy 재게이트): url=<code>shell.openExternal</code>(http/https 재검증) / <b>folder=<code>safeExec</code>(VS Code, H-2)</b> / <b>file=<code>shell.openPath</code>(OS 기본앱 — PM #2 확정)</b>.</td>
+    </tr>
+    <tr>
+      <td class="nid">spip:shelf:refresh</td><td><code>shelf.refresh(id)</code></td>
+      <td><code>{id:string}</code></td><td><code>{ok:true, bookmark}</code> | <code>{ok:false, code}</code></td>
+      <td>단건 재크롤/재스캔→메타 갱신·lastChecked 스탬프→영속. in-flight 상한.</td>
+    </tr>
+    <tr>
+      <td class="nid">spip:shelf:changed<br><span class="trace">(push)</span></td><td><code>shelf.onChanged(cb)</code></td>
+      <td>—</td><td>payload 없음(신호만)</td>
+      <td>스케줄러/refresh 후 main이 메인창 wc에 단방향 push. 렌더러는 <code>list()</code> 재조회. (favorites-changed/mailUpdated 패턴)</td>
+    </tr>
+  </table>
+  <div class="note"><b>고정 에러코드(L-3, 내부정보 비노출).</b> <code>FORBIDDEN, INTERNAL, BAD_INPUT, LIMIT,
+  NOT_FOUND, UNSUPPORTED_TYPE, CRAWL_FAILED, BLOCKED_HOST(SSRF), PATH_GONE, PATH_DENIED, OPEN_FAILED</code>.
+  스택·실경로·해소 IP는 로그로만.</div>
+  <pre><span class="c">// preload 인자 1차 고정(예시 — main이 재검증)</span>
+shelf: {
+  list:    () => invoke('spip:shelf:list'),
+  add:     (type, ref) => invoke('spip:shelf:add', { type:String(type), ref:String(ref) }),
+  remove:  (id) => invoke('spip:shelf:remove', { id:String(id) }),
+  reorder: (ids) => invoke('spip:shelf:reorder', { ids: Array.isArray(ids)?ids.map(String):[] }),
+  open:    (id) => invoke('spip:shelf:open', { id:String(id) }),
+  refresh: (id) => invoke('spip:shelf:refresh', { id:String(id) }),
+  onChanged: (cb) => _sub('spip:shelf:changed', cb),
+}</pre>
+</section>
+
+<!-- ── 9. 크롤링 ── -->
+<section id="crawl">
+  <h2>9. URL 크롤링 서브시스템(main) · SSRF 방어</h2>
+  <p>렌더러 <code>connect-src 'none'</code>는 유지된다. 크롤은 <b>main의 <code>lib/shelf/urlMeta.crawl(url)</code></b>가
+  <code>node:https</code>/<code>node:http</code>로 수행한다. SSRF가 본 기능 최대 위험이므로 다층 방어한다.</p>
+
+  <svg viewBox="0 0 960 250" role="img" aria-label="크롤 데이터 플로우">
+    <rect x="14" y="40" width="120" height="58" rx="8" fill="#1e293b" stroke="#475569"/><text x="26" y="65" fill="#e2e8f0" font-size="11">사용자 입력 URL</text><text x="26" y="84" fill="#94a3b8" font-size="10">(렌더러)</text>
+    <rect x="160" y="40" width="120" height="58" rx="8" fill="#13203b" stroke="#34d399"/><text x="172" y="62" fill="#a7f3d0" font-size="11">validateHttpUrl</text><text x="172" y="80" fill="#94a3b8" font-size="9">scheme·자격·길이</text>
+    <rect x="306" y="40" width="120" height="58" rx="8" fill="#13203b" stroke="#34d399"/><text x="318" y="62" fill="#a7f3d0" font-size="11">DNS resolve</text><text x="318" y="80" fill="#94a3b8" font-size="9">+ IP 분류 게이트</text>
+    <rect x="452" y="40" width="120" height="58" rx="8" fill="#1e293b" stroke="#fbbf24"/><text x="464" y="62" fill="#fbbf24" font-size="11">GET (IP 핀)</text><text x="464" y="80" fill="#94a3b8" font-size="9">타임아웃·크기상한</text>
+    <rect x="598" y="40" width="120" height="58" rx="8" fill="#1e293b" stroke="#fbbf24"/><text x="610" y="62" fill="#fbbf24" font-size="11">리다이렉트 hop</text><text x="610" y="80" fill="#94a3b8" font-size="9">각 hop 재검증 ×N</text>
+    <rect x="744" y="40" width="120" height="58" rx="8" fill="#13203b" stroke="#34d399"/><text x="756" y="62" fill="#a7f3d0" font-size="11">ogParse</text><text x="756" y="80" fill="#94a3b8" font-size="9">메타 추출·sanitize</text>
+
+    <rect x="306" y="150" width="120" height="58" rx="8" fill="#13203b" stroke="#34d399"/><text x="318" y="172" fill="#a7f3d0" font-size="11">og:image URL</text><text x="318" y="190" fill="#94a3b8" font-size="9">재검증(SSRF)</text>
+    <rect x="452" y="150" width="120" height="58" rx="8" fill="#1e293b" stroke="#fbbf24"/><text x="464" y="172" fill="#fbbf24" font-size="11">이미지 GET</text><text x="464" y="190" fill="#94a3b8" font-size="9">image/* · ≤100KB</text>
+    <rect x="598" y="150" width="140" height="58" rx="8" fill="#1e293b" stroke="#475569"/><text x="610" y="172" fill="#e2e8f0" font-size="11">imageCache write</text><text x="610" y="190" fill="#94a3b8" font-size="9">appData 0600 · 키</text>
+
+    <line x1="134" y1="69" x2="160" y2="69" stroke="#475569" stroke-width="2" marker-end="url(#c)"/>
+    <line x1="280" y1="69" x2="306" y2="69" stroke="#475569" stroke-width="2" marker-end="url(#c)"/>
+    <line x1="426" y1="69" x2="452" y2="69" stroke="#475569" stroke-width="2" marker-end="url(#c)"/>
+    <line x1="572" y1="69" x2="598" y2="69" stroke="#475569" stroke-width="2" marker-end="url(#c)"/>
+    <line x1="718" y1="69" x2="744" y2="69" stroke="#475569" stroke-width="2" marker-end="url(#c)"/>
+    <line x1="804" y1="98" x2="420" y2="150" stroke="#475569" stroke-width="1.5" marker-end="url(#c)"/>
+    <line x1="426" y1="179" x2="452" y2="179" stroke="#475569" stroke-width="2" marker-end="url(#c)"/>
+    <line x1="572" y1="179" x2="598" y2="179" stroke="#475569" stroke-width="2" marker-end="url(#c)"/>
+    <defs><marker id="c" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#475569"/></marker></defs>
+  </svg>
+
+  <h3>9.1 요청 정책</h3>
+  <ul>
+    <li>메서드 GET만. 헤더 최소화(고정 User-Agent, <code>Accept: text/html</code>, <code>no-referrer</code> 의미).</li>
+    <li>타임아웃 ≤ 8s(연결+응답). 응답 본문 크기 상한 512KB(초과 시 소켓 destroy). <code>content-type</code>이 <code>text/html</code> 계열 아니면 본문 미파싱(폴백 메타).</li>
+    <li>리다이렉트 최대 3 hop, <b>각 hop마다 §9.2 재검증</b>(Location URL 파싱→스킴·자격·DNS·IP 게이트). 무한 루프·credential leak 방지.</li>
+    <li>압축 응답은 크기 상한을 <b>해제 후 누적 바이트</b> 기준으로도 재확인(decompression bomb 방지) — 또는 <code>Accept-Encoding: identity</code>로 압축 비요청(단순·안전, 권장).</li>
+    <li>쿠키 저장·전송 없음. 인증 헤더 없음.</li>
+  </ul>
+
+  <h3>9.2 SSRF IP 게이트 — <code>ssrfGuard</code></h3>
+  <p><code>validateBriefingUrl</code>(http/https·자격거부·길이)을 일반화한 <code>validateHttpUrl</code>로 1차 검증 후,
+  <b>호스트명을 DNS resolve해 결과 IP를 검사</b>한다. 다음에 해당하는 IP가 하나라도 있으면 <code>BLOCKED_HOST</code>로 거부:</p>
+  <table>
+    <tr><th>분류</th><th>IPv4</th><th>IPv6</th></tr>
+    <tr><td>루프백</td><td>127.0.0.0/8</td><td>::1</td></tr>
+    <tr><td>사설</td><td>10/8, 172.16/12, 192.168/16</td><td>fc00::/7 (ULA)</td></tr>
+    <tr><td>링크로컬</td><td>169.254.0.0/16</td><td>fe80::/10</td></tr>
+    <tr><td>클라우드 메타데이터</td><td>169.254.169.254, 100.100.100.200</td><td>fd00:ec2::254</td></tr>
+    <tr><td>CGNAT/특수</td><td>100.64/10, 0.0.0.0/8, 192.0.0/24, 192.0.2/24</td><td>::, ::ffff:0:0/96(매핑 IPv4는 풀어서 재판정)</td></tr>
+    <tr><td>멀티캐스트/예약</td><td>224/4, 240/4, 255.255.255.255</td><td>ff00::/8</td></tr>
+  </table>
+  <ul>
+    <li><b>DNS rebinding/TOCTOU 완화</b>: resolve로 얻어 게이트를 통과한 <b>그 IP로 직접 연결</b>(<code>https.request({ lookup })</code>의 lookup을 검증된 IP만 반환하도록 핀, 또는 <code>options.host=검증IP</code> + <code>servername=원래host</code> + <code>Host</code> 헤더). 연결 시점에 도메인을 다시 해석하지 않는다.</li>
+    <li>리다이렉트 hop의 새 호스트도 동일 절차 반복.</li>
+    <li>숫자 IP 직접 입력(<code>http://10.0.0.1</code>)도 동일 게이트에 걸린다(파싱→분류).</li>
+  </ul>
+
+  <h3>9.3 ogParse(순수)</h3>
+  <p>정규식 기반 경량 추출(cheerio 미도입, ADR-SH-5). 추출 우선순위: <code>og:title</code> → <code>&lt;title&gt;</code>,
+  <code>og:description</code> → <code>&lt;meta name=description&gt;</code>, <code>og:image</code>(절대 URL로 resolve),
+  <code>og:site_name</code> → host. 기본 HTML 엔티티만 디코드(<code>&amp;amp; &amp;lt; &amp;gt; &amp;quot; &amp;#39; &amp;#NNN;</code>).
+  결과는 전부 sanitize·길이상한 후 반환 — 신뢰불가 문자열이므로 렌더러에서 textContent로만 표시(L-1).
+  파싱 실패/빈 메타 시 <code>fallback(host)</code>(초안 로직)로 폴백.</p>
+  <div class="warn-box"><b>정규식 파서 한계.</b> 비정상/거대 HTML에 대해 ReDoS·과매칭 위험 → 입력 바이트는 이미 512KB로
+  상한, 정규식은 비탐욕·앵커·캡처 최소화로 작성하고 매치 횟수 상한(예: meta 태그 첫 N개만 스캔)을 둔다.</div>
+</section>
+
+<!-- ── 10. 로컬 메타 ── -->
+<section id="local">
+  <h2>10. 폴더/파일 메타 수집 · 경로 정책</h2>
+  <p>임의 경로 북마크는 프로젝트가 아니므로 <code>scanRoots</code> 화이트리스트 강제는 부적절하다(사용자가 직접 추가).
+  대신 <b>canonicalize(H-1) + 민감경로 deny 게이트 + 자기참조 화이트리스트</b>의 3중 정책을 쓴다(ADR-SH-4).</p>
+  <h3>10.1 add/refresh 시 수집(<code>localMeta</code>)</h3>
+  <ul>
+    <li><code>pathGuard.canonicalize(ref)</code> → 실경로(심링크/junction 해소·NFC). null이면 <code>PATH_GONE</code>.</li>
+    <li><code>pathPolicy.isDenied(real)</code> 통과 검사 — 통과(=거부) 시 <code>PATH_DENIED</code>.</li>
+    <li><code>fs.stat</code>로 유형 확인: folder=isDirectory, file=isFile. 불일치 시 type 자동 보정 또는 거부.</li>
+    <li>folder 메타: 얕은 순회(<code>maxDepth</code>·<code>maxEntries</code>·<code>budgetMs</code> 예산, 기존 size 수집기 규약 차용)로 파일 수·용량 근사. 예산 초과 시 partial 표기.</li>
+    <li>file 메타: 확장자→언어/모노/색(초안 <code>fileMeta</code> 맵 포팅), 크기·mtime.</li>
+    <li><b>ref에는 canonicalize된 실경로를 저장</b>(표시는 <code>tidyPath</code>로 ~ 치환).</li>
+  </ul>
+  <h3>10.2 민감경로 deny 게이트 — <code>pathPolicy.isDenied(real)</code></h3>
+  <table>
+    <tr><th>거부 대상</th><th>예</th></tr>
+    <tr><td>드라이브/파일시스템 루트</td><td><code>C:\</code>, <code>D:\</code>, <code>/</code></td></tr>
+    <tr><td>OS 시스템 디렉토리</td><td><code>%WINDIR%</code>(C:\Windows\**), <code>/etc</code>, <code>/sys</code>, <code>/proc</code>, <code>/dev</code>, <code>/usr</code>, <code>/bin</code>, <code>/System</code>(macOS)</td></tr>
+    <tr><td>자격/비밀 디렉토리</td><td><code>~/.ssh</code>, <code>~/.aws</code>, <code>~/.gnupg</code>, <code>~/.config/gh</code> 등(접두 매칭, 폴드)</td></tr>
+    <tr><td>해소 실패</td><td>canonicalize=null</td></tr>
+  </table>
+  <p>비교는 <code>pathGuard.foldForCompare</code>로 폴드(대소문자 비민감 FS 일관). 시스템 디렉토리는 <b>접두(하위 포함)</b>
+  매칭으로 차단. 사용자 홈 일반 하위(프로젝트·문서 등)는 허용된다.</p>
+  <h3>10.3 열기(open) 정책</h3>
+  <ul>
+    <li>저장된 <code>ref</code>(실경로)를 <b>열기 시점에 재-canonicalize·재-게이트</b>(TOCTOU 축소). 저장 후 경로가 시스템 디렉토리로 바뀌었으면 거부.</li>
+    <li><b>folder</b> → <code>safeExec(resolveTool('code'), [real], {shell:false, detached:true})</code>(VS Code, H-2, 기존 <code>openInVsCode</code>와 동일 규약). 도구 미설정/실패 시 <code>shell.openPath(real)</code> 폴백(OS 기본앱).</li>
+    <li><b>file</b> → <code>shell.openPath(real)</code>(OS 기본앱, PM #2 확정 — file은 항상 기본앱, VS Code 강제 안 함).</li>
+    <li>url → <code>shell.openExternal(ref)</code>. 단 <b>http/https 재검증</b> 필수(<code>javascript:</code>·<code>file:</code>·커스텀 스킴 차단 — openExternal는 임의 스킴을 OS 핸들러로 넘길 수 있어 위험).</li>
+    <li>실행 인자는 <code>[real]</code> 고정(사용자 args 없음). id별 in-flight 상한.</li>
+  </ul>
+</section>
+
+<!-- ── 11. og:image ── -->
+<section id="img">
+  <h2>11. og:image 캐시 · 전달</h2>
+  <p>렌더러는 외부 이미지를 직접 받을 수 없다(<code>img-src 'self' data:</code>; <code>connect-src 'none'</code>).
+  현재 CSP가 <b><code>data:</code>를 허용</b>하므로(실측 <code>public/index.html</code> CSP meta — <code>img-src 'self' data:</code>), main이 다운로드한
+  og:image를 <b>data: URI로 렌더러에 전달</b>한다(ADR-SH-2). 바이트는 ui-state에 넣지 않고 appData 캐시 파일에 둔다.</p>
+  <ul>
+    <li>fetch: §9.2 SSRF 게이트 통과한 og:image URL만. <code>content-type</code>이 <code>image/(png|jpeg|gif|webp|svg+xml?)</code>이어야 함. <span class="pill should">SVG 주의</span> SVG는 스크립트 내장 가능 → data: URI로 &lt;img&gt;에 넣으면 Chromium이 스크립트 실행 안 함(이미지 컨텍스트)이나 보수적으로 <b>SVG 제외</b> 권장.</li>
+    <li>크기 상한 <b>100KB</b>(PM #4 확정, 초과 시 거부 → <code>bannerKey=null</code>, 그라데이션 배너 폴백). 이미지 리사이즈는 의존성 0 제약상 미수행(§16-Q1 해소).</li>
+    <li>저장: <code>imageCache</code>가 <code>appData/shelf-images/&lt;sha256(refURL)&gt;.&lt;ext&gt;</code>로 0600 write. 키=해시.</li>
+    <li>전달: <code>list/add/refresh</code> 응답에서 <code>toDataUri(bannerKey)</code>(파일 읽어 base64 + 검증된 mime)로 <code>bannerImage</code> 필드 생성. 저장본엔 키만(payload 비대 방지: 64항목×100KB×1.34 ≈ 8.6MB 최악 — list는 일괄이므로 <span class="pill could">지연 로드</span> 검토: 펼친 항목만 data: URI, 스파인은 색만).</li>
+    <li>GC: 북마크에서 참조되지 않는 캐시 파일은 주기/remove 시 정리. 총 캐시 용량 상한.</li>
+  </ul>
+  <div class="note"><b>대안(미채택, ADR-SH-2 참조).</b> app:// 예약 라우트(<code>app://shelf-img/&lt;key&gt;</code>)로 캐시 디렉토리
+  서빙 → 지연/브라우저 캐시 유리하나 보안 민감한 프로토콜 핸들러를 수정해야 한다. MVP는 data: URI(프로토콜 무수정).
+  목록이 커져 payload가 부담되면 app:// 라우트로 전환(2차).</div>
+</section>
+
+<!-- ── 12. 스케줄러 ── -->
+<section id="sched">
+  <h2>12. 자동 재크롤 스케줄러(6시간)</h2>
+  <p>초안 푸터 "6시간마다 자동으로 다시 스캔·크롤링" 문구를 충족. <code>lib/shelf/scheduler.js</code>가 main에서
+  <code>setInterval(6h)</code>로 북마크를 순회 재수집한다.</p>
+  <ul>
+    <li>저빈도·타임박스: 항목당 크롤 ≤ 8s, 동시 1건(직렬) 또는 소수 병렬 + in-flight 상한. 전체 배치 watchdog.</li>
+    <li>변경분만 영속(메타 diff). 갱신 후 <code>spip:shelf:changed</code> push → 홈 재렌더.</li>
+    <li>상승세션(elevated)이면 write 보류(uiStateStore가 자동 처리) — 크롤 자체는 스킵 권장(불필요 egress 회피).</li>
+    <li><b>기본값: ON + 끄기 토글(설정 영속) — PM #1 확정(Q2 해소).</b> 백그라운드 자동 egress가 사용자 모르게 발생하므로 on/off 설정을 제공하되, 기본은 켜짐이며 사용자가 끌 수 있다. 토글 off면 스케줄러 tick은 무동작(수동 refresh만). 앱 실행 중에만 동작(데몬/백그라운드 상주 아님).</li>
+    <li>앱 시작 직후 즉시 실행 금지(부팅 지연 회피) — 첫 tick은 지연 후.</li>
+  </ul>
+</section>
+
+<!-- ── 13. 보안 체크리스트 ── -->
+<section id="secchk">
+  <h2>13. 보안 불변식 체크리스트</h2>
+  <ul class="chk">
+    <li><b>L-1</b> 크롤/스캔 산출 문자열(title·desc·og·name·status)은 전부 <code>textContent</code>로만 렌더. innerHTML 금지. 배너는 <code>&lt;img src=data:&gt;</code>(속성 주입, 마크업 주입 아님).</li>
+    <li><b>H-1</b> folder/file는 add·open 양쪽에서 <code>pathGuard.canonicalize</code> + 폴드 비교. ref는 실경로 저장.</li>
+    <li><b>H-2</b> <b>folder</b> 열기는 <code>safeExec</code> 절대경로·<code>shell:false</code>·인자 <code>[real]</code> 고정(VS Code), .bat/.cmd 차단 그대로. <b>file</b>은 <code>shell.openPath</code>(OS 기본앱, PM #2) — 외부 프로세스 spawn 아님. 양쪽 모두 열기 시점 canonicalize+pathPolicy 재게이트.</li>
+    <li><b>경로 deny</b> <code>pathPolicy</code> 민감/시스템 경로 차단(드라이브 루트·시스템·자격 디렉토리).</li>
+    <li><b>SSRF</b> URL·og:image 모두 scheme/자격/길이 + DNS IP 분류 게이트 + IP 핀 + hop 재검증.</li>
+    <li><b>CSP</b> 렌더러 <code>connect-src 'none'</code> 유지(외부 fetch 0). 모든 egress는 main IPC. <code>img-src data:</code> 활용(현 CSP 무변경).</li>
+    <li><b>IPC</b> 전 채널 <code>guard</code>(senderFrame origin) 경유. preload 채널 하드코딩. main 인자 재검증.</li>
+    <li><b>영속</b> 0600 원자적 쓰기·상승세션 write 보류·1MB/깊이 상한(uiStateStore 재사용). og:image 바이트는 ui-state 밖 캐시(0600).</li>
+    <li><b>L-3</b> 고정 에러코드만 반환. 실경로·해소 IP·스택은 로그 전용.</li>
+    <li><b>응답 한도</b> 크롤 본문 512KB·이미지 100KB·타임아웃 8s·리다이렉트 3·압축 미요청(bomb 방지).</li>
+    <li><b>의존성</b> 새 런타임 의존성 0(node 내장만). 셸프 항목 64·텍스트 길이 상한.</li>
+    <li><b>openExternal</b> url은 http/https 재검증 후에만 외부 열기(임의 스킴 차단).</li>
+  </ul>
+</section>
+
+<!-- ── 14. ADR ── -->
+<section id="adr">
+  <h2>14. ADR — 핵심 결정</h2>
+  <p>본 위젯의 결정은 자족성을 위해 이 문서에 둔다(프로젝트 표준 <code>adr.html</code>에는 요약 1줄 추가 권장).</p>
+
+  <div class="adr">
+    <div class="adr__head"><span class="id">ADR-SH-1</span> <span class="status">승인</span> — 북마크 영속 위치</div>
+    <div class="adr__body">
+      <p><b>맥락.</b> 임의 URL/폴더/파일 북마크 목록을 0600·정규화·상한·상승세션 보류로 안전 영속해야 한다.</p>
+      <p><b>대안.</b> ① <code>ui-state.json</code> 신규 키 <code>shelfBookmarks</code>(기존 인프라 재사용) ② 별도 <code>shelf.json</code> 신규 store ③ <code>config.json</code>에 저장.</p>
+      <p><b>결정.</b> ①. <code>uiStateStore</code>에 <code>normalizeShelfBookmarks</code> 추가.</p>
+      <p><b>근거.</b> 원자적 쓰기·1MB/깊이 가드·상승세션 보류·schemaVersion 폴백이 이미 검증됨. todos/briefing 신규 키 추가 선례 동일. ②는 동일 인프라를 재구현하는 중복. ③ config는 CLI/스캔 설정 영역이라 부적합. <b>og:image 바이트는 제외</b>(별도 캐시)해 1MB 상한 보호.</p>
+      <p><b>결과.</b> +구현·테스트 최소, 일관성. −ui-state 단일 파일에 책임 증가(항목 상한 64로 완화). <span class="trace">추적: <b>SH-A2·SH-A7</b></span></p>
+    </div>
+  </div>
+
+  <div class="adr">
+    <div class="adr__head"><span class="id">ADR-SH-2</span> <span class="status">승인</span> — og:image 렌더러 전달 방식</div>
+    <div class="adr__body">
+      <p><b>맥락.</b> 렌더러는 외부 이미지를 직접 못 받는다(connect-src 'none'). 현 CSP는 <code>img-src 'self' data:</code>.</p>
+      <p><b>대안.</b> ① main 다운로드→<b>data: URI</b> 전달(캐시는 appData 파일) ② app:// 예약 라우트로 캐시 서빙 ③ og:image 미렌더(그라데이션 배너만).</p>
+      <p><b>결정.</b> ① data: URI(MVP). 목록 비대 시 펼친 항목만 data: URI(지연), 추후 ②로 확장 가능.</p>
+      <p><b>근거.</b> 현 CSP 무변경(data: 이미 허용), 보안 민감한 프로토콜 핸들러 수정 회피. ②는 깔끔하나 프로토콜 표면 확대. ③은 승인된 og:image 기능 상실.</p>
+      <p><b>결과.</b> +프로토콜 무수정·빠른 구현. −일괄 list payload 증가(지연 로드·64·100KB 상한으로 완화). <span class="trace">추적: <b>SH-A3·SH-A4</b></span></p>
+    </div>
+  </div>
+
+  <div class="adr">
+    <div class="adr__head"><span class="id">ADR-SH-3</span> <span class="status">승인</span> — 크롤을 main에서 수행 + SSRF 방어</div>
+    <div class="adr__body">
+      <p><b>맥락.</b> og 메타를 실제로 가져오려면 외부 네트워크가 필요. 렌더러는 차단됨.</p>
+      <p><b>대안.</b> ① main <code>node:https</code> 크롤(+SSRF 게이트) ② 렌더러 fetch(CSP 완화) ③ 크롤 없이 host 기반 더미 메타.</p>
+      <p><b>결정.</b> ①. egress는 main 단독, 다층 SSRF 방어.</p>
+      <p><b>근거.</b> ②는 connect-src 'none' 불변식 파괴(앱 전체 보안 약화) — 불가. ③은 사용자 승인 기능(실제 og) 미충족. main 한정 egress는 LLM/IMAP/updater 선례와 일관.</p>
+      <p><b>결과.</b> +불변식 유지·실제 메타. −SSRF/응답 방어 구현·테스트 부담(신뢰 경계 신설). <span class="trace">추적: <b>SH-A3·SH-A4·SH-A5</b></span></p>
+    </div>
+  </div>
+
+  <div class="adr">
+    <div class="adr__head"><span class="id">ADR-SH-4</span> <span class="status">승인</span> — 임의 경로 북마크 보안 정책</div>
+    <div class="adr__body">
+      <p><b>맥락.</b> 사용자가 직접 추가하는 폴더/파일은 프로젝트가 아니라 <code>scanRoots</code> 화이트리스트가 없다.</p>
+      <p><b>대안.</b> ① <code>scanRoots</code> 강제(추가 불가능해짐) ② 무검증 canonicalize 후 그대로 열기 ③ <b>canonicalize + 민감경로 deny 게이트 + 자기참조 화이트리스트(열기 시 재검증)</b>.</p>
+      <p><b>결정.</b> ③.</p>
+      <p><b>근거.</b> ①은 기능 자체를 막음(부적절). ②는 시스템/자격 경로 열람·실행 위험. ③은 H-1 정신(canonicalize 단일 진실)을 유지하면서 임의 경로를 허용하되 위험 경로만 차단. 열기 시 재-canonicalize·재게이트로 TOCTOU 축소.</p>
+      <p><b>결과.</b> +유연성+안전 균형. −deny 목록 유지보수(플랫폼별). <span class="trace">추적: <b>SH-A2·SH-A6</b></span></p>
+    </div>
+  </div>
+
+  <div class="adr">
+    <div class="adr__head"><span class="id">ADR-SH-5</span> <span class="status">승인</span> — HTML 메타 파싱 방식</div>
+    <div class="adr__body">
+      <p><b>맥락.</b> og 태그 추출에 HTML 파싱 필요. 새 런타임 의존성 0 원칙.</p>
+      <p><b>대안.</b> ① 자작 경량 정규식 파서 ② cheerio/parse5 등 의존성 추가 ③ 렌더러 DOMParser(불가 — main에 DOM 없음).</p>
+      <p><b>결정.</b> ① 자작 <code>ogParse</code>(meta/title만 대상, 비탐욕·매치상한·엔티티 일부 디코드).</p>
+      <p><b>근거.</b> ②는 CLAUDE.md 의존성 0 위배. ③ main은 DOM 없음. og/meta 추출은 정규식으로 충분(완전 파서 불요). 입력 512KB 상한+매치상한으로 ReDoS 완화.</p>
+      <p><b>결과.</b> +의존성 0. −일부 비정상 HTML 추출 누락(폴백 메타로 graceful). <span class="trace">추적: <b>SH-A5</b></span></p>
+    </div>
+  </div>
+</section>
+
+<!-- ── 15. 마일스톤 ── -->
+<section id="milestones">
+  <h2>15. 마일스톤 분해(증분 · 각 단계 테스트 동반)</h2>
+  <table>
+    <tr><th>마일스톤</th><th>범위</th><th>테스트</th><th>독립 가치</th></tr>
+    <tr>
+      <td><b>SH-M1 영속·순수 코어</b></td>
+      <td><code>uiStateStore.normalizeShelfBookmarks</code> + <code>defaultState</code>/write 확장, <code>detectType.js</code>, <code>pathPolicy.js</code>, <code>config.validateHttpUrl</code> 일반화. UI/IPC 없음.</td>
+      <td>shelf-uistate(정규화·상한·폴백), shelf-detectType(유형감지·검증), shelf-pathPolicy(deny 케이스)</td>
+      <td>안전 영속·검증 토대 완성. 회귀 0.</td>
+    </tr>
+    <tr>
+      <td><b>SH-M2 로컬(폴더/파일) + 홈 마운트</b></td>
+      <td><code>localMeta.js</code>, <code>electron/ipc/shelf.js</code>(list/add/remove/reorder/open — <b>folder·file만</b>), preload <code>shelf.*</code>, register 등록, <code>HOME_SECTION_IDS 'shelf'</code> + <code>renderHomeShelf</code> + <code>shelfWidgetVM</code> + wireSwipe/focusActive 포팅.</td>
+      <td>shelf-localMeta(임시디렉토리 메타), shelf-ipc(ctx 모킹: 검증·폴백·코드), shelfWidgetVM 순수 단위. 수동 GUI 스모크.</td>
+      <td>URL 없이도 폴더/파일 셸프 사용 가능(완결 기능).</td>
+    </tr>
+    <tr>
+      <td><b>SH-M3 URL 크롤 + og:image</b></td>
+      <td><code>ssrfGuard.js</code>, <code>ogParse.js</code>, <code>urlMeta.js</code>, <code>imageCache.js</code>, add에 url 유형 활성, data: URI 전달.</td>
+      <td>shelf-ssrfGuard(IP 분류 표 전수), shelf-ogParse(샘플 HTML·엔티티·폴백), urlMeta(주입 모킹: 리다이렉트·상한·차단호스트). 이미지 mime/크기 거부.</td>
+      <td>승인된 핵심 기능(실제 og 크롤) 완성.</td>
+    </tr>
+    <tr>
+      <td><b>SH-M4 refresh + 스케줄러 + 라이브</b></td>
+      <td><code>spip:shelf:refresh</code>, <code>scheduler.js</code>(6h, in-flight/watchdog), <code>spip:shelf:changed</code> push + <code>onChanged</code> 재렌더, 캐시 GC.</td>
+      <td>scheduler(타임박스·diff·elevated 스킵 모킹), refresh ipc. 수동 라이브 갱신 스모크.</td>
+      <td>자동 최신화(초안 푸터 충족).</td>
+    </tr>
+    <tr>
+      <td><b>SH-M5 마감 폴리시(선택)</b></td>
+      <td>토스트·error/loading 상태 정합, 펼침폭 컬럼 클램프, 지연 이미지 로드, 접근성(키보드 포커스).</td>
+      <td>수동 GUI. VM 상태 분기 단위.</td>
+      <td>UX 완성도.</td>
+    </tr>
+  </table>
+  <div class="note">각 마일스톤은 독립 커밋/PR 가능. SH-M1·M2는 보안 표면이 로컬(저위험)이라 우선, <b>SH-M3(egress)는
+  security-reviewer 위협 모델링 후</b> 진행 권장. 전 스위트 그린·기존 favorites/홈 회귀 0 유지.</div>
+</section>
+
+<!-- ── 16. 리스크 ── -->
+<section id="risks">
+  <h2>16. 리스크 · 가정 · 미해결 질문</h2>
+  <h3>가정</h3>
+  <ul>
+    <li>홈 대시보드·<code>renderHomeSection</code>·<code>HOME_SECTION_IDS</code>·위젯 갤러리는 이미 구현됨(실측 확인). 셸프는 새 섹션으로 합류.</li>
+    <li>현 CSP <code>img-src 'self' data:</code>·<code>connect-src 'none'</code> 유지(실측). data: URI 배너가 동작.</li>
+    <li>사용자가 단일·로컬·신뢰 사용자(앱 보안 모델 전제). 크롤 대상 URL은 사용자가 의도적으로 추가.</li>
+  </ul>
+  <h3>리스크 · 완화</h3>
+  <table>
+    <tr><th>리스크</th><th>영향</th><th>완화</th></tr>
+    <tr><td>SSRF 우회(DNS rebinding·IPv6 매핑·신규 메타데이터 IP)</td><td>내부망 접근</td><td>IP 핀(연결 IP=검증 IP)·hop 재검증·IPv4-mapped 풀어 재판정·분류표 테스트 전수. security-reviewer 검토 게이트.</td></tr>
+    <tr><td>이미지 리사이즈 불가(의존성 0)로 큰 배너 거부</td><td>일부 og:image 미표시</td><td>100KB 상한 + 그라데이션 폴백. 화질보다 안전·단순 우선.</td></tr>
+    <tr><td>list payload 비대(data: URI ×64)</td><td>IPC 지연/메모리</td><td>펼친 항목만 data: URI(지연 로드)·상한. 부담 시 app:// 라우트(ADR-SH-2 ②) 전환.</td></tr>
+    <tr><td>마소너리 컬럼 폭 &lt; 펼친 배너 폭</td><td>레이아웃 깨짐</td><td>셸프 카드 전체폭 스팬 또는 펼침폭 클램프(Q3).</td></tr>
+    <tr><td>정규식 og 파서 ReDoS/오추출</td><td>main 멈춤/빈 메타</td><td>입력 512KB·매치상한·비탐욕 패턴. 실패는 폴백.</td></tr>
+    <tr><td>외장/네트워크 드라이브 canonicalize 지연</td><td>add 지연</td><td>타임박스·in-flight 상한·graceful 실패.</td></tr>
+  </table>
+  <h3>미해결 질문 — <span style="color:#6ee7b7;">전부 PM 확정으로 해소(2026-06-27)</span></h3>
+  <ol>
+    <li><b>Q1 — og:image 상한·SVG.</b> <span style="color:#6ee7b7;">[해소]</span> 상한 <b>100KB</b>·SVG 제외 확정(PM #4). 리사이즈 미지원 수용.</li>
+    <li><b>Q2 — 6시간 자동 재크롤 기본값.</b> <span style="color:#6ee7b7;">[해소]</span> <b>기본 ON + 끄기 토글(설정 영속)</b> 확정(PM #1). 앱 실행 중에만 동작.</li>
+    <li><b>Q3 — 셸프 카드 폭.</b> <span style="color:#6ee7b7;">[해소]</span> <b>2 변형 모두 제공</b> — 전체폭 스팬(<code>shelfWide</code>)·일반 컬럼(<code>shelf</code>) 등록, 사용자가 골라 추가(PM #3). 동일 셸프 데이터·로직 공유, 폭만 다름. 동시 추가 허용.</li>
+    <li><b>Q4 — file 열기 도구.</b> <span style="color:#6ee7b7;">[해소]</span> 파일=<b>OS 기본앱(<code>shell.openPath</code>) 항상</b>, 폴더=VS Code, URL=외부 브라우저(PM #2). 초안 "편집기에서 열기" 라벨은 "열기"로 일반화.</li>
+    <li><b>Q5 — 항목 상한.</b> <span style="color:#6ee7b7;">[해소]</span> <code>MAX_SHELF=64</code> 확정(PM #4).</li>
+  </ol>
+</section>
+
+</main>
+<footer>
+  Project-SPIP — 즐겨찾기 셸프 위젯 아키텍처 설계서 · 2026-06-27 · 본 문서는 청사진이며 실행 코드를 포함하지 않는다.
+  구현은 개발팀(team-dev)이 마일스톤 단위로 수행한다. SSRF/egress 표면은 security-reviewer 위협 모델링 입력이다.
+</footer>
+</body>
+</html>

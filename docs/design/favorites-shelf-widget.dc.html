@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<style>
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{background:#f6f6f5;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;}
+  ::selection{background:#c7d2fe;}
+  input,button{font-family:inherit;}
+  input:focus{outline:none;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  @keyframes slideUp{from{transform:translateY(8px);}to{transform:none;}}
+  @keyframes growIn{from{transform:scaleY(.6);transform-origin:bottom;}to{transform:scaleY(1);}}
+  @keyframes unroll{from{clip-path:inset(0 68% 0 0);transform:translateX(-6px);}to{clip-path:inset(0 0 0 0);transform:none;}}
+  @keyframes shimmer{0%{background-position:-360px 0;}100%{background-position:360px 0;}}
+  .sk{background:linear-gradient(90deg,#eeedeb 0%,#f6f5f3 40%,#eeedeb 80%);background-size:720px 100%;animation:shimmer 1.2s linear infinite;border-radius:6px;}
+  .no-sb{scrollbar-width:none;-ms-overflow-style:none;}
+  .no-sb::-webkit-scrollbar{width:0;height:0;display:none;}
+</style>
+</helmet>
+
+<div data-screen-label="즐겨찾기 위젯 · 셸프" style="min-height:100vh;background:#f6f6f5;font-family:'Geist','Pretendard',system-ui,sans-serif;color:#1c1917;padding:30px 20px 60px;">
+<div style="max-width:640px;margin:0 auto;">
+
+  <div style="background:#fff;border:1px solid #e7e5e4;border-radius:18px;overflow:hidden;box-shadow:0 1px 2px rgba(28,25,23,.04);">
+
+    <!-- header -->
+    <div style="display:flex;align-items:center;gap:12px;padding:18px 20px 16px;border-bottom:1px solid #f2f1ef;">
+      <div style="width:34px;height:34px;border-radius:10px;background:#eef2ff;display:flex;align-items:center;justify-content:center;flex:none;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" stroke-width="1.7"><path d="M4 19.5V5a2 2 0 0 1 2-2h11a1 1 0 0 1 1 1v15"></path><path d="M6 17h12"></path><path d="M9 3v14"></path></svg>
+      </div>
+      <div style="flex:1;min-width:0;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="font-size:15.5px;font-weight:600;letter-spacing:-.015em;">즐겨찾기 셸프</span>
+          <span style="font-family:'Geist Mono',monospace;font-size:11px;font-weight:600;color:#78716c;background:#f3f2f0;border:1px solid #e7e5e4;padding:1px 7px;border-radius:6px;">{{ count }}</span>
+        </div>
+        <div style="font-size:11.5px;color:#a8a29e;margin-top:2px;">사이트·폴더·파일을 한 셸프에서 즐겨찾기</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:4px;flex:none;">
+        <span style="font-size:9.5px;font-weight:600;letter-spacing:.04em;color:#c0bdb8;margin-right:3px;">CASE</span>
+        <sc-for list="{{ cases }}" as="c" hint-placeholder-count="4">
+          <button onClick="{{ c.onClick }}" style="{{ c.style }}">{{ c.label }}</button>
+        </sc-for>
+      </div>
+    </div>
+
+    <!-- composer -->
+    <div style="padding:16px 20px 4px;">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:9px;">
+        <span style="font-size:9.5px;font-weight:600;letter-spacing:.04em;color:#c0bdb8;margin-right:2px;">유형</span>
+        <sc-for list="{{ types }}" as="t" hint-placeholder-count="3">
+          <button onClick="{{ t.onClick }}" style="{{ t.style }}">{{ t.label }}</button>
+        </sc-for>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;background:#fafaf9;border:1.5px solid {{ inputBorder }};border-radius:12px;padding:0 12px 0 14px;height:46px;transition:border-color .15s;">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#a8a29e" stroke-width="2" style="flex:none;"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"></path><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"></path></svg>
+        <input value="{{ cUrl }}" onChange="{{ onUrlInput }}" placeholder="{{ inputPlaceholder }}" style="flex:1;min-width:0;border:none;background:none;font-size:13.5px;color:#1c1917;height:100%;font-family:'Geist','Pretendard',sans-serif;">
+        <sc-if value="{{ cLoading }}" hint-placeholder-val="{{ false }}">
+          <div style="width:16px;height:16px;border:2px solid #e7e5e4;border-top-color:#4f46e5;border-radius:50%;animation:spin .7s linear infinite;flex:none;"></div>
+        </sc-if>
+        <sc-if value="{{ cIdle }}" hint-placeholder-val="{{ true }}">
+          <span style="font-family:'Geist Mono',monospace;font-size:10px;color:#c9c6c2;letter-spacing:.04em;flex:none;">⌘V</span>
+        </sc-if>
+      </div>
+
+      <sc-if value="{{ cLoading }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;align-items:center;gap:7px;margin:9px 2px 2px;font-family:'Geist Mono',monospace;font-size:11px;color:#a8a29e;">
+          <span style="width:6px;height:6px;border-radius:50%;background:#4f46e5;flex:none;"></span>{{ crawlingLabel }}
+        </div>
+      </sc-if>
+      <sc-if value="{{ cError }}" hint-placeholder-val="{{ false }}">
+        <div style="margin-top:9px;border:1px solid #fde2c8;background:#fff8f0;border-radius:11px;padding:11px 13px;display:flex;align-items:center;gap:10px;animation:slideUp .2s ease both;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#b45309" stroke-width="2" style="flex:none;"><path d="M12 9v4M12 17h.01"></path><path d="M10.3 3.86l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3.14l-8-14a2 2 0 0 0-3.4 0z"></path></svg>
+          <span style="font-size:12px;color:#92400e;font-weight:500;">{{ errMsg }}</span>
+        </div>
+      </sc-if>
+    </div>
+
+    <!-- ===== SHELF ===== -->
+    <div style="padding:14px 20px 8px;">
+      <sc-if value="{{ hasItems }}" hint-placeholder-val="{{ true }}">
+      <div class="no-sb" ref="{{ rowRef }}" style="position:relative;display:flex;gap:6px;height:278px;overflow-x:auto;overflow-y:hidden;padding-bottom:2px;touch-action:pan-x;">
+        <sc-for list="{{ panels }}" as="p" hint-placeholder-count="6">
+          <div onClick="{{ p.onClick }}" data-fid="{{ p.id }}" style="{{ p.outerStyle }}" style-hover="{{ p.hoverStyle }}" style-active="transform:translateY(-1px) scale(.992);">
+
+            <!-- collapsed spine face -->
+            <sc-if value="{{ p.collapsed }}" hint-placeholder-val="{{ true }}">
+              <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;padding:13px 0;">
+                <div style="width:30px;height:30px;border-radius:9px;background:rgba(255,255,255,.22);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;font-family:'Geist Mono',monospace;font-size:15px;font-weight:600;color:#fff;flex:none;">{{ p.mono }}</div>
+                <div style="flex:1;display:flex;align-items:center;justify-content:center;min-height:0;">
+                  <div style="writing-mode:vertical-rl;transform:rotate(180deg);font-size:12.5px;font-weight:600;letter-spacing:.01em;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-height:150px;">{{ p.name }}</div>
+                </div>
+                <div style="width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.55);flex:none;"></div>
+              </div>
+            </sc-if>
+
+            <!-- expanded face -->
+            <sc-if value="{{ p.expanded }}" hint-placeholder-val="{{ false }}">
+              <div style="position:absolute;inset:0;display:flex;flex-direction:column;overflow:hidden;animation:unroll .46s cubic-bezier(.22,1,.36,1) both;">
+                <!-- og banner -->
+                <div style="position:relative;height:92px;flex:none;overflow:hidden;{{ p.bannerStyle }}">
+                  <div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,0) 30%,rgba(0,0,0,.28) 100%);"></div>
+                  <span style="position:absolute;left:13px;top:11px;font-family:'Geist Mono',monospace;font-size:9px;font-weight:600;letter-spacing:.05em;color:#fff;background:rgba(28,25,23,.4);backdrop-filter:blur(4px);padding:2px 7px;border-radius:6px;">{{ p.bannerLabel }}</span>
+                  <div style="position:absolute;left:13px;bottom:-19px;width:46px;height:46px;border-radius:12px;background:{{ p.color }};border:3px solid #fff;display:flex;align-items:center;justify-content:center;font-family:'Geist Mono',monospace;font-size:20px;font-weight:600;color:#fff;box-shadow:0 4px 10px rgba(28,25,23,.18);">{{ p.mono }}</div>
+                </div>
+                <!-- body -->
+                <div style="flex:1;background:#fff;padding:26px 16px 14px;display:flex;flex-direction:column;min-width:0;overflow:hidden;">
+                  <div style="display:flex;align-items:flex-start;gap:8px;">
+                    <div style="flex:1;min-width:0;">
+                      <div style="font-size:14px;font-weight:600;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#1c1917;">{{ p.title }}</div>
+                      <div style="font-family:'Geist Mono',monospace;font-size:10.5px;color:#a8a29e;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ p.sub }}</div>
+                    </div>
+                    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:6px;background:#f7f7f6;color:#78716c;border:1px solid #ececea;flex:none;white-space:nowrap;">{{ p.cat }}</span>
+                  </div>
+                  <p style="margin:9px 0 0;font-size:12px;color:#57534e;line-height:1.55;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">{{ p.desc }}</p>
+                  <div style="flex:1;"></div>
+                  <div style="display:flex;align-items:center;gap:8px;margin-top:12px;padding-top:11px;border-top:1px solid #f4f3f1;">
+                    <span style="display:inline-flex;align-items:center;gap:5px;font-family:'Geist Mono',monospace;font-size:10px;color:#a8a29e;white-space:nowrap;flex:1;min-width:0;"><span style="width:5px;height:5px;border-radius:50%;background:#22c55e;flex:none;"></span>{{ p.status }}</span>
+                    <button onClick="{{ p.remove }}" title="삭제" style="appearance:none;border:1px solid #e7e5e4;background:#fff;width:32px;height:32px;border-radius:9px;cursor:pointer;color:#a8a29e;display:flex;align-items:center;justify-content:center;flex:none;" style-hover="background:#fee2e2;border-color:#fecaca;color:#dc2626;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 7h14M9 7V5h6v2M7 7l1 13h8l1-13"></path></svg></button>
+                    <button onClick="{{ p.open }}" style="appearance:none;border:1px solid #1c1917;background:#1c1917;color:#fff;font-size:12px;font-weight:600;height:32px;padding:0 13px;border-radius:9px;cursor:pointer;flex:none;display:inline-flex;align-items:center;gap:6px;" style-hover="background:#000;">{{ p.openLabel }}<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M7 17L17 7M9 7h8v8"></path></svg></button>
+                  </div>
+                </div>
+              </div>
+            </sc-if>
+          </div>
+        </sc-for>
+
+        <!-- crawl-in placeholder spine -->
+        <sc-if value="{{ cLoading }}" hint-placeholder-val="{{ false }}">
+          <div style="width:58px;flex:none;border-radius:13px;background:#f1f0ee;border:1.5px dashed #d6d3d1;display:flex;flex-direction:column;align-items:center;padding:13px 0;animation:growIn .3s ease both;">
+            <div class="sk" style="width:30px;height:30px;border-radius:9px;flex:none;"></div>
+            <div style="flex:1;display:flex;align-items:center;"><div class="sk" style="width:11px;height:96px;border-radius:6px;"></div></div>
+          </div>
+        </sc-if>
+      </div>
+      </sc-if>
+
+      <sc-if value="{{ isEmpty }}" hint-placeholder-val="{{ false }}">
+        <div style="text-align:center;padding:30px 16px;border:1.5px dashed #e2e0dd;border-radius:14px;background:#fafaf9;">
+          <div style="font-size:13px;font-weight:600;color:#57534e;">셸프가 비어 있어요</div>
+          <div style="font-size:11.5px;color:#a8a29e;margin-top:3px;">URL·폴더·파일 경로를 붙여넣어 첫 즐겨찾기를 꽂아보세요</div>
+        </div>
+      </sc-if>
+    </div>
+
+    <!-- footer hint -->
+    <div style="display:flex;align-items:center;justify-content:center;gap:7px;padding:12px 20px 14px;border-top:1px solid #f2f1ef;background:#fafaf9;font-size:11px;color:#a8a29e;">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"></circle><path d="M12 8v4l3 2"></path></svg>
+      즐겨찾기는 6시간마다 자동으로 다시 스캔·크롤링돼 정보가 갱신됩니다
+    </div>
+  </div>
+
+</div>
+
+<sc-if value="{{ toast }}" hint-placeholder-val="{{ false }}">
+<div style="position:fixed;left:50%;bottom:28px;transform:translateX(-50%);z-index:40;background:#1c1917;color:#fff;font-size:12.5px;font-weight:500;padding:10px 16px;border-radius:11px;box-shadow:0 14px 34px rgba(28,25,23,.3);display:flex;align-items:center;gap:9px;animation:slideUp .2s ease both;">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#86efac" stroke-width="2.6"><path d="M5 12l4 4 10-10"></path></svg>{{ toast }}
+</div>
+</sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:680,&quot;height&quot;:620}}">
+class Component extends DCLogic {
+  DB = {
+    'github.com':            { brand:'GitHub',         title:'GitHub · 코드 호스팅', desc:'레포지토리 호스팅과 PR·이슈 기반 협업 플랫폼.', color:'#1c1917', mono:'G', cat:'개발' },
+    'vercel.com':            { brand:'Vercel',         title:'Vercel — 프론트엔드 클라우드', desc:'Next.js를 만든 팀의 배포·호스팅 클라우드.', color:'#0f172a', mono:'▲', cat:'개발' },
+    'developer.mozilla.org': { brand:'MDN',            title:'MDN Web Docs', desc:'웹 표준 API와 HTML·CSS·JS 공식 레퍼런스.', color:'#1d4ed8', mono:'M', cat:'문서' },
+    'linear.app':            { brand:'Linear',         title:'Linear — 이슈 트래킹', desc:'스프린트와 이슈를 빠르게 관리하는 도구.', color:'#5b51d8', mono:'L', cat:'생산성' },
+    'figma.com':             { brand:'Figma',          title:'Figma 인터페이스 디자인', desc:'브라우저에서 함께 작업하는 UI 디자인 툴.', color:'#c4502e', mono:'F', cat:'디자인' },
+    'notion.so':             { brand:'Notion',         title:'Notion — 워크스페이스', desc:'문서·위키·DB를 한곳에서 다루는 워크스페이스.', color:'#171717', mono:'N', cat:'생산성' },
+    'stackoverflow.com':     { brand:'Stack Overflow', title:'Stack Overflow', desc:'개발자 Q&A 커뮤니티.', color:'#c4622d', mono:'S', cat:'개발' },
+    'npmjs.com':             { brand:'npm',            title:'npm 레지스트리', desc:'Node.js 패키지 검색과 배포.', color:'#bb2e2e', mono:'n', cat:'개발' },
+    'react.dev':             { brand:'React',          title:'React 공식 문서', desc:'React 학습 가이드와 API 레퍼런스.', color:'#1a8cb8', mono:'⚛', cat:'문서' },
+    'tailwindcss.com':       { brand:'Tailwind',       title:'Tailwind CSS 문서', desc:'유틸리티 우선 CSS 프레임워크 레퍼런스.', color:'#1f8fa3', mono:'T', cat:'문서' },
+    'news.ycombinator.com':  { brand:'Hacker News',    title:'Hacker News', desc:'스타트업·기술 뉴스 애그리게이터.', color:'#c4622d', mono:'Y', cat:'뉴스' },
+    'dribbble.com':          { brand:'Dribbble',       title:'Dribbble 디자인 영감', desc:'디자이너 작업물을 공유하는 커뮤니티.', color:'#c4477f', mono:'D', cat:'디자인' },
+  };
+
+CASES = {
+    empty: [],
+    one:   [['url','https://github.com','오늘']],
+    two:   [['url','https://github.com','오늘'],['folder','/Users/dev/projects/spip-scanner','오늘']],
+    full:  [
+      ['folder','/Users/dev/projects/spip-scanner','오늘'],
+      ['url','https://github.com','오늘'],
+      ['folder','~/work/design-system','어제'],
+      ['file','/Users/dev/projects/spip-scanner/src/App.tsx','어제'],
+      ['url','https://developer.mozilla.org','어제'],
+      ['folder','/Users/dev/sandbox/py-data-tools','3일 전'],
+      ['file','~/notes/roadmap.md','3일 전'],
+      ['url','https://figma.com','5일 전'],
+      ['file','/Users/dev/projects/spip-scanner/package.json','5일 전'],
+      ['url','https://react.dev','1주 전'],
+    ],
+  };
+
+  caseFavs(seed){ return (this.CASES[seed]||[]).map((a,i)=>this.makeItem(a[0], a[1], i+1, a[2])); }
+
+  state = (()=>{ const f=this.caseFavs('full'); return { cUrl:'', cType:'url', cState:'idle', demo:'full', active:f[0]?f[0].id:null, toast:'', favorites:f }; })();
+
+  wireSwipe(el){
+    if(!el) return;
+    this._row = el;
+    if(el.__swipe) return;
+    el.__swipe = true;
+    let down=false, startX=0, startScroll=0, moved=0, pid=null;
+    el.style.cursor='grab';
+    el.addEventListener('pointerdown',(e)=>{
+      if(e.button && e.button!==0) return;
+      down=true; moved=0; startX=e.clientX; startScroll=el.scrollLeft; pid=e.pointerId;
+      el.style.cursor='grabbing'; el.style.scrollBehavior='auto';
+    });
+    el.addEventListener('pointermove',(e)=>{
+      if(!down) return;
+      const dx=e.clientX-startX;
+      if(Math.abs(dx)>3 && pid!=null){ try{ el.setPointerCapture(pid); }catch(_){ } }
+      if(Math.abs(dx)>moved) moved=Math.abs(dx);
+      el.scrollLeft = startScroll - dx;
+    });
+    const end=()=>{ down=false; el.style.cursor='grab'; el.style.scrollBehavior='smooth'; };
+    el.addEventListener('pointerup',end);
+    el.addEventListener('pointercancel',end);
+    el.addEventListener('pointerleave',()=>{ if(down) end(); });
+    // suppress the click that follows a real drag
+    el.addEventListener('click',(e)=>{ if(moved>6){ e.preventDefault(); e.stopPropagation(); } }, true);
+    // wheel → horizontal scroll
+    el.addEventListener('wheel',(e)=>{
+      if(Math.abs(e.deltaY)>Math.abs(e.deltaX)){ el.scrollLeft += e.deltaY; e.preventDefault(); }
+    }, { passive:false });
+  }
+
+  loadCase(seed){
+    clearTimeout(this._t);
+    const f=this.caseFavs(seed);
+    this.setState({ demo:seed, favorites:f, active:f[0]?f[0].id:null, cUrl:'', cState:'idle' });
+  }
+
+  // ---- multi-type item factory: url | folder | file ----
+  makeItem(type, ref, id, checked){
+    if(type==='folder') return this.folderItem(ref, id, checked);
+    if(type==='file')   return this.fileItem(ref, id, checked);
+    return this.urlItem(ref, id, checked);
+  }
+  urlItem(url, id, checked){
+    const host=this.hostOf(url); const d=this.match(host)||this.fallback(host);
+    const ms=60+Math.floor(Math.random()*120);
+    return { id, type:'url', ref:url, name:d.brand, sub:host, title:d.title, desc:d.desc, color:d.color, mono:d.mono, cat:d.cat,
+      status:'200 · '+ms+'ms · '+checked, bannerLabel:'og:image',
+      openLabel:'열기', openMsg:host+' 새 탭에서 여는 중…' };
+  }
+  folderItem(path, id, checked){
+    const name=this.lastSeg(path)||path; const m=this.folderMeta(name);
+    return { id, type:'folder', ref:path, name, sub:this.tidyPath(path), title:name, desc:m.desc, color:m.color, mono:name.charAt(0).toUpperCase(), cat:m.cat,
+      status:m.files+'개 파일 · '+m.size+' · 수정 '+checked, bannerLabel:'디렉토리',
+      openLabel:'VS Code에서 열기', openMsg:name+' 폴더를 VS Code에서 여는 중…' };
+  }
+  fileItem(path, id, checked){
+    const name=this.lastSeg(path)||path; const ext=(name.split('.').pop()||'').toLowerCase();
+    const m=this.fileMeta(ext); const h=this.hash(name);
+    return { id, type:'file', ref:path, name, sub:this.tidyPath(path), title:name, desc:m.desc, color:m.color, mono:m.mono, cat:m.lang,
+      status:((1+h%400)/10).toFixed(1)+'KB · 수정 '+checked, bannerLabel:'파일',
+      openLabel:'편집기에서 열기', openMsg:name+' 파일을 편집기에서 여는 중…' };
+  }
+  folderMeta(name){
+    const stacks=[
+      {k:/react|next|web|ui|design|front/i, cat:'React · TS', color:'#2563eb', desc:'VS Code 프로젝트 · React + TypeScript'},
+      {k:/py|python|ml|data|tool/i,         cat:'Python',     color:'#2f8f4e', desc:'VS Code 프로젝트 · Python 패키지'},
+      {k:/api|server|go|svc|backend/i,      cat:'Go · API',   color:'#0e7490', desc:'VS Code 프로젝트 · 백엔드 서비스'},
+      {k:/.*/,                               cat:'프로젝트',   color:'#6d28d9', desc:'로컬 디렉토리 · VS Code 워크스페이스'},
+    ];
+    const st=stacks.find(x=>x.k.test(name))||stacks[stacks.length-1]; const h=this.hash(name);
+    return { cat:st.cat, color:st.color, desc:st.desc, files:20+h%280, size:((10+h%900)/10).toFixed(1)+'MB' };
+  }
+  fileMeta(ext){
+    const map={
+      ts:{lang:'TypeScript',mono:'TS',color:'#2563eb'}, tsx:{lang:'TypeScript',mono:'TSX',color:'#2563eb'},
+      js:{lang:'JavaScript',mono:'JS',color:'#a98a13'}, jsx:{lang:'JavaScript',mono:'JSX',color:'#a98a13'},
+      py:{lang:'Python',mono:'PY',color:'#2f8f4e'}, md:{lang:'Markdown',mono:'MD',color:'#525252'},
+      json:{lang:'JSON',mono:'{}',color:'#9a6700'}, css:{lang:'CSS',mono:'CSS',color:'#0e7490'},
+      html:{lang:'HTML',mono:'<>',color:'#c4502e'}, go:{lang:'Go',mono:'GO',color:'#0e7490'}, sh:{lang:'Shell',mono:'SH',color:'#3f6212'},
+    };
+    const d=map[ext]||{lang:(ext?ext.toUpperCase():'파일'),mono:(ext?ext.slice(0,3).toUpperCase():'F'),color:'#57534e'};
+    return { lang:d.lang, mono:d.mono, color:d.color, desc:d.lang+' 파일' };
+  }
+  lastSeg(p){ return (p||'').replace(/[\/\\]+$/,'').split(/[\/\\]/).pop()||''; }
+  tidyPath(p){ return (p||'').replace(/^\/Users\/[^\/]+/,'~').replace(/^\/home\/[^\/]+/,'~'); }
+  hash(s){ let h=0; for(let i=0;i<(s||'').length;i++){ h=(h*31+s.charCodeAt(i))>>>0; } return h; }
+  detectType(raw){
+    const s=(raw||'').trim(); if(!s) return null;
+    if(/^https?:\/\//i.test(s)) return 'url';
+    if(/^(\/|~|\.\.?\/|[a-zA-Z]:\\|\\\\)/.test(s)) return /[\/\\]$/.test(s)?'folder':(this.hasExt(s)?'file':'folder');
+    if(/^[\w.-]+\.[a-z]{2,}([\/?#]|$)/i.test(s)) return 'url';
+    return null;
+  }
+  hasExt(s){ return /\.[a-zA-Z0-9]{1,8}$/.test(this.lastSeg(s)); }
+  isValidInput(type, raw){
+    const s=(raw||'').trim();
+    if(type==='url') return this.isValid(s);
+    return s.length>1 && /[\/\\]/.test(s);
+  }
+  hostOf(raw){ let s=(raw||'').trim(); if(!/^https?:\/\//i.test(s)) s='https://'+s; try{ return new URL(s).hostname.replace(/^www\./,''); }catch(_){ return ''; } }
+  isValid(raw){ const h=this.hostOf(raw); return !!h && h.includes('.') && h.length>3; }
+  match(host){ if(!host) return null; const k=Object.keys(this.DB).find(k=>host===k||host.endsWith('.'+k)||host.endsWith(k)); return k?this.DB[k]:null; }
+  fallback(host){
+    const part=(host.split('.').slice(-2,-1)[0])||host;
+    const brand=part.charAt(0).toUpperCase()+part.slice(1);
+    const pal=['#4f46e5','#0f766e','#9333ea','#b45309','#0369a1','#be123c'];
+    const color=pal[(part.charCodeAt(0)||0)%pal.length];
+    return { brand, title:host, desc:'페이지 메타 정보를 불러왔습니다.', color, mono:brand.charAt(0).toUpperCase(), cat:'기타' };
+  }
+
+  setType(t){ this.setState({ cType:t }); }
+  onUrlInput(e){
+    const v=e.target.value; clearTimeout(this._t);
+    const type = this.detectType(v) || this.state.cType;
+    if(!v.trim()){ this.setState({ cUrl:v, cType:type, cState:'idle' }); return; }
+    this.setState({ cUrl:v, cType:type, cState:'loading' });
+    this._t=setTimeout(()=>{
+      if(!this.isValidInput(this.state.cType, this.state.cUrl)){ this.setState({ cState:'error' }); return; }
+      const id=Date.now();
+      const item=this.makeItem(this.state.cType, this.state.cUrl.trim(), id, '방금');
+      this.setState(s=>({ favorites:[...s.favorites, item], active:id, cUrl:'', cState:'idle' }));
+      this.flash(item.name+' 셸프에 꽂힘');
+    }, 800+Math.random()*350);
+  }
+  setActive(id){ this.setState({ active:id }); setTimeout(()=>this.focusActive(id), 60); }
+  focusActive(id){
+    const row=this._row; if(!row) return;
+    const el=row.querySelector('[data-fid="'+id+'"]'); if(!el) return;
+    const n=this.state.favorites.length;
+    const spineW=Math.max(42, 58 - Math.max(0, n-6)*3);
+    const lead = 2*(spineW + 6); // keep 2 spines to the left → expanded sits 3rd
+    const target = Math.max(0, Math.min(row.scrollWidth - row.clientWidth, el.offsetLeft - lead));
+    this.animateScroll(row, target, 460);
+  }
+  animateScroll(row, to, dur){
+    const from=row.scrollLeft, dist=to-from;
+    if(Math.abs(dist)<1) return;
+    const t0=performance.now();
+    row.style.scrollBehavior='auto';
+    const ease=(p)=>1-Math.pow(1-p,3);
+    const step=(now)=>{
+      const p=Math.min(1,(now-t0)/dur);
+      row.scrollLeft = from + dist*ease(p);
+      if(p<1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+    // guarantee final position even if rAF is throttled
+    clearTimeout(this._scEnd);
+    this._scEnd = setTimeout(()=>{ if(Math.abs(row.scrollLeft - to) > 2) row.scrollLeft = to; }, dur + 90);
+  }
+  remove(id,name){ this.setState(s=>{ const left=s.favorites.filter(f=>f.id!==id); return { favorites:left, active: s.active===id ? (left[0]?left[0].id:null) : s.active }; }); this.flash(name+' 삭제됨'); }
+  flash(m){ this.setState({ toast:m }); clearTimeout(this._toast); this._toast=setTimeout(()=>this.setState({ toast:'' }),1900); }
+
+  renderVals(){
+    const s=this.state, favs=s.favorites;
+    const spineW = Math.max(42, 58 - Math.max(0, favs.length-6)*3);
+    const cases=[
+      {seed:'empty',label:'없음'},{seed:'one',label:'1개'},
+      {seed:'two',label:'2개'},{seed:'full',label:'10개'},
+    ].map(c=>({
+      label:c.label, onClick:()=>this.loadCase(c.seed),
+      style:'appearance:none;cursor:pointer;font-size:11px;font-weight:600;padding:4px 9px;border-radius:7px;transition:all .12s;'
+        +(s.demo===c.seed?'background:#1c1917;color:#fff;border:1px solid #1c1917;':'background:#fff;color:#78716c;border:1px solid #e7e5e4;'),
+    }));
+    const panels=favs.map(f=>{
+      const exp = s.active===f.id;
+      return {
+        id:f.id, type:f.type,
+        mono:f.mono, name:f.name, title:f.title, sub:f.sub, desc:f.desc, cat:f.cat, color:f.color,
+        status:f.status, bannerLabel:f.bannerLabel, openLabel:f.openLabel,
+        collapsed:!exp, expanded:exp,
+        onClick:()=>this.setActive(f.id),
+        open:(e)=>{ if(e&&e.stopPropagation)e.stopPropagation(); this.flash(f.openMsg); },
+        remove:(e)=>{ if(e&&e.stopPropagation)e.stopPropagation(); this.remove(f.id,f.name); },
+        bannerStyle:'background:linear-gradient(135deg,'+f.color+' 0%,'+f.color+'cc 100%);',
+        hoverStyle: exp
+          ? 'box-shadow:0 18px 36px -12px rgba(28,25,23,.34);'
+          : 'transform:translateY(-4px);filter:brightness(1.07) saturate(1.05);box-shadow:0 14px 24px -12px rgba(28,25,23,.4);',
+        outerStyle:'position:relative;height:100%;border-radius:13px;overflow:hidden;cursor:pointer;will-change:transform;transition:transform .2s cubic-bezier(.22,1,.36,1),box-shadow .2s ease,filter .2s ease;'
+          +(exp?'flex:1 0 290px;':'flex:0 0 '+spineW+'px;')
+          +(exp
+              ? 'box-shadow:0 14px 30px -12px rgba(28,25,23,.28);border:1px solid #e7e5e4;background:#fff;'
+              : 'background:'+f.color+';box-shadow:inset -8px 0 14px -10px rgba(0,0,0,.35);'),
+      };
+    });
+    const tdef=[
+      {t:'url',label:'URL'},{t:'folder',label:'폴더'},{t:'file',label:'파일'},
+    ];
+    const types=tdef.map(d=>({
+      label:d.label, onClick:()=>this.setType(d.t),
+      style:'appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;padding:5px 11px;border-radius:8px;transition:all .12s;'
+        +(s.cType===d.t?'background:#1c1917;color:#fff;border:1px solid #1c1917;':'background:#fff;color:#78716c;border:1px solid #e7e5e4;'),
+    }));
+    const placeholder = s.cType==='folder' ? '/Users/you/projects/my-app  · 폴더 경로'
+                      : s.cType==='file'   ? '/Users/you/notes/todo.md  · 파일 경로'
+                      : 'https://… 링크를 붙여넣어 셸프에 꽂기';
+    const scanWord = s.cType==='url' ? '크롤링 중' : '스캔 중';
+    const ref = s.cType==='url' ? (this.hostOf(s.cUrl)||'…') : (this.lastSeg(s.cUrl)||'…');
+    const errMsg = s.cType==='url' ? '연결할 수 없어요 — URL을 확인해 주세요.'
+                 : s.cType==='folder' ? '폴더를 찾을 수 없어요 — 경로를 확인해 주세요.'
+                 : '파일을 찾을 수 없어요 — 경로를 확인해 주세요.';
+    return {
+      count:favs.length,
+      cUrl:s.cUrl, onUrlInput:(e)=>this.onUrlInput(e),
+      types, inputPlaceholder:placeholder, errMsg,
+      inputBorder: s.cState==='idle'?'#e7e5e4':(s.cState==='error'?'#f0b27a':'#c7d2fe'),
+      cIdle:s.cState==='idle', cLoading:s.cState==='loading', cError:s.cState==='error',
+      crawlingLabel:scanWord+' · '+ref,
+      rowRef:(el)=>this.wireSwipe(el),
+      panels, cases,
+      hasItems: favs.length>0 || s.cState==='loading',
+      isEmpty: favs.length===0 && s.cState!=='loading',
+      toast:s.toast,
+    };
+  }
+}
+</script>
+</body>
+</html>

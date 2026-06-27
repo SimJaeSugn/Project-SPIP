@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QA 검증 보고 — 즐겨찾기 셸프 위젯 (SH-1~SH-5)</title>
+<style>
+  :root{--bg:#0f172a;--panel:#1e293b;--text:#e2e8f0;--sub:#94a3b8;--accent:#34d399;
+    --ref:#38bdf8;--line:#334155;--warn:#fbbf24;--danger:#f87171;--purple:#c4b5fd;}
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:"Segoe UI","Malgun Gothic",system-ui,sans-serif;line-height:1.7;}
+  header{padding:42px 32px 30px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#13203b,#0f172a);}
+  header h1{margin:0 0 8px;font-size:26px;}
+  header .tag{display:inline-block;border-radius:999px;padding:3px 12px;font-size:13px;margin-right:8px;}
+  .tag-pass{background:rgba(52,211,153,.14);color:#6ee7b7;border:1px solid rgba(52,211,153,.5);}
+  .tag-n{background:rgba(56,189,248,.12);color:#7dd3fc;border:1px solid rgba(56,189,248,.4);}
+  header p{margin:12px 0 0;color:var(--sub);max-width:1000px;}
+  main{max-width:1180px;margin:0 auto;padding:30px;}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px 26px;margin:20px 0;}
+  h2{margin:0 0 14px;font-size:20px;color:var(--accent);border-left:4px solid var(--accent);padding-left:12px;}
+  h3{font-size:15px;color:var(--ref);margin:20px 0 8px;}
+  p{margin:8px 0;}
+  ul,ol{margin:8px 0;padding-left:22px;}
+  li{margin:5px 0;}
+  code{background:#0b1220;color:var(--ref);padding:1px 6px;border-radius:5px;font-size:12.5px;font-family:Consolas,monospace;}
+  table{width:100%;border-collapse:collapse;margin:12px 0;font-size:13px;}
+  th,td{border:1px solid var(--line);padding:9px 11px;text-align:left;vertical-align:top;}
+  th{background:#142035;color:var(--accent);}
+  tr:nth-child(even) td{background:rgba(255,255,255,.02);}
+  .pass{color:#6ee7b7;font-weight:800;white-space:nowrap;}
+  .fail{color:#fca5a5;font-weight:800;white-space:nowrap;}
+  .resid{color:#fcd34d;font-weight:800;white-space:nowrap;}
+  .pri{font-family:Consolas,monospace;font-weight:800;white-space:nowrap;}
+  .sev-low{color:#7dd3fc;font-weight:800;}
+  .note{background:rgba(56,189,248,.08);border:1px solid rgba(56,189,248,.3);border-radius:8px;padding:12px 16px;font-size:13px;color:#bae6fd;margin:12px 0;}
+  .warn-box{background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.32);border-radius:8px;padding:12px 16px;font-size:13px;color:#fde68a;margin:12px 0;}
+  .ok-box{background:rgba(52,211,153,.08);border:1px solid rgba(52,211,153,.32);border-radius:8px;padding:12px 16px;font-size:13px;color:#a7f3d0;margin:12px 0;}
+  .mono{font-family:Consolas,monospace;font-size:12px;color:#cbd5e1;}
+  footer{text-align:center;color:var(--sub);font-size:12px;padding:26px;border-top:1px solid var(--line);}
+  .verdict{display:inline-block;font-size:22px;font-weight:800;padding:4px 18px;border-radius:10px;
+    background:rgba(52,211,153,.14);color:#6ee7b7;border:1px solid rgba(52,211,153,.5);}
+  .chk{list-style:none;padding-left:0;}
+  .chk li{padding-left:26px;position:relative;}
+  .chk li::before{content:"☐";position:absolute;left:0;color:#7dd3fc;font-size:15px;}
+</style>
+</head>
+<body>
+<header>
+  <span class="tag tag-pass">판정: PASS (잔여 LOW 1건)</span>
+  <span class="tag tag-n">QA 종합검증 1회차</span>
+  <h1>QA 검증 보고 — 즐겨찾기 셸프 위젯 (SH-1~SH-5)</h1>
+  <p>동작·통합 정합성·수용 기준 충족만 검증한다(코드 품질=code-reviewer, 보안=security-reviewer 별도).
+  기준: 초안 <code>docs/design/favorites-shelf-widget.dc.html</code> · PM 확정 ·
+  <code>docs/api-contract.md</code> §셸프 · <code>docs/architecture/shelf-widget-design.html</code> ·
+  <code>docs/roadmap.html</code> #shelf-roadmap.</p>
+  <div class="mono" style="margin-top:10px;color:#94a3b8;">작성: qa-engineer · 2026-06-27 · 저장: docs/reviews/shelf_qa_1.html · 검증 방식: 코드 교차대조 + node --test 전수 + 경험적 실행 스크립트</div>
+</header>
+
+<main>
+
+<section>
+  <h2>0. 최종 판정</h2>
+  <p><span class="verdict">PASS — 출시 가능</span></p>
+  <p><b>요약.</b> 전체 테스트 <b>1090/1090 그린</b>(셸프 전용 129개 포함). 7개 검증 항목 중 6개 완전 PASS,
+  1개(상태별 UX)는 동작은 PASS이나 <b>SH-2 시절 <code>CRAWL_PENDING</code> 잔재 코드/문구 3곳</b>이 남아 있어
+  <b>LOW 1건</b>으로 분류한다. 이 잔재는 <b>백엔드가 해당 코드를 절대 반환하지 않아 사용자에게 노출되지 않는
+  죽은 코드</b>이므로 동작 차단성은 없다(출시 비차단). FE↔BE 경계면 shape는 14필드가 정확히 일치하고,
+  핵심 쟁점이던 <b>신규 설치 기본 숨김</b>은 backend가 <code>DEFAULT_HIDDEN_WIDGETS</code>로 확실히 해결했음을
+  코드+테스트+경험적 실행으로 3중 확정했다.</p>
+  <table>
+    <tr><th style="width:48px;">항목</th><th>검증 대상</th><th style="width:110px;">판정</th></tr>
+    <tr><td>1</td><td>전체 빌드/테스트 (node --test)</td><td class="pass">PASS</td></tr>
+    <tr><td>2</td><td>경계면 교차 비교 (FE↔BE shape)</td><td class="pass">PASS</td></tr>
+    <tr><td>3</td><td>상태별 UX (empty/few/many·loading·error 매핑)</td><td class="resid">PASS · LOW 1</td></tr>
+    <tr><td>4</td><td>2변형 + 기본 숨김 (신규·레거시)</td><td class="pass">PASS</td></tr>
+    <tr><td>5</td><td>열기 동작 분기 (file/folder/url)</td><td class="pass">PASS</td></tr>
+    <tr><td>6</td><td>토글 영속·라이브 반영</td><td class="pass">PASS</td></tr>
+    <tr><td>7</td><td>GUI 스모크</td><td class="resid">헤드리스 — 코드/테스트 대체 + 체크리스트 산출</td></tr>
+    <tr><td>—</td><td>초안 대비 레이아웃/디자인 충실도 (CASE 버튼만 제거)</td><td class="pass">PASS</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>1. 전체 빌드/테스트 — <span class="pass">PASS</span></h2>
+  <p><code>npm test</code>(<code>node --test test/**/*.test.js</code>) 실제 실행 결과:</p>
+  <div class="mono">tests 1090 · pass 1090 · fail 0 · cancelled 0 · skipped 0 · duration_ms ≈ 1846</div>
+  <p>셸프 전용 테스트는 <b>12개 파일에 129개</b>로 핵심 경계 전수 커버:</p>
+  <table>
+    <tr><th>파일</th><th>개수</th><th>커버</th></tr>
+    <tr><td><code>shelf-ipc.test.js</code></td><td>19</td><td>list/add/remove/reorder/open/refresh·에러코드·shape</td></tr>
+    <tr><td><code>shelf-widget.test.js</code></td><td>22</td><td>뷰모델·상태분기·컴포저·자동재크롤뷰·에러메시지</td></tr>
+    <tr><td><code>shelf-ssrfGuard.test.js</code></td><td>13</td><td>SSRF·IP핀·hop 재검증</td></tr>
+    <tr><td><code>shelf-urlMeta.test.js</code></td><td>13</td><td>크롤·og 파싱·게이트</td></tr>
+    <tr><td><code>shelf-uistate.test.js</code></td><td>9</td><td>정규화·이행 4케이스·기본숨김 시드</td></tr>
+    <tr><td><code>shelf-{detectType,imageCache,scheduler,pathPolicy,ogParse,localMeta,config-url}</code></td><td>53</td><td>유형감지·이미지캐시(100KB/SVG)·스케줄러·경로정책</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>2. 경계면 교차 비교 (FE↔BE shape) — <span class="pass">PASS</span></h2>
+  <p><code>electron/ipc/shelf.js</code> <code>toView()</code> 출력 ↔ <code>docs/api-contract.md</code> §108
+  <code>ShelfBookmarkView</code> ↔ <code>public/app.js</code> <code>shelfPanelsVM()</code> 소비부를 동시 대조.</p>
+  <ul>
+    <li><b>응답 14필드 정확 일치(경험적 확인):</b> <code>id·type·ref·name·title·sub·desc·color·mono·cat·status·bannerImage·lastChecked·addedAt</code>
+    — <code>toView</code> 키 집합 = 계약 shape 키 집합(스크립트로 정렬·동등 확인).</li>
+    <li><b><code>list().autoRefresh</code>:</b> backend <code>list</code>가 <code>autoRefresh:getAutoRefresh(ctx)</code> 동봉,
+    FE <code>refreshShelf</code>가 <code>res.autoRefresh</code>를 <code>store.shelf.autoRefresh</code>로 적재 — 합치.</li>
+    <li><b><code>bannerImage</code>:</b> 저장본은 <code>bannerKey</code>만, 응답에서만 <code>imageCache.toDataUri</code>로 부착.
+    folder/file은 <code>bannerKey:null</code> → <code>bannerImage:null</code>(경험적 확인) → FE 그라데이션 폴백. 일치.</li>
+    <li><b><code>bannerLabel</code>/<code>openLabel</code>:</b> 이 둘은 <u>응답 shape에 없고 FE가 type으로 파생</u>한다
+    (<code>shelfPanelsVM</code> L789-790: folder='디렉토리'/'VS Code에서 열기', file='파일'/'편집기에서 열기',
+    url='og:image'/'열기'). 계약과 모순 없음(파생값) — <b>버그 아님</b>.</li>
+    <li><b>preload 채널·인자 1차 고정:</b> <code>window.spip.shelf.*</code> 8개 메서드가 api-contract §149 의사코드와
+    채널명·인자(String/Array 캐스팅)까지 동일.</li>
+    <li><b>에러코드 enum:</b> 계약 §135 11종(FORBIDDEN/INTERNAL/BAD_INPUT/LIMIT/NOT_FOUND/UNSUPPORTED_TYPE/
+    CRAWL_FAILED/BLOCKED_HOST/PATH_GONE/PATH_DENIED/OPEN_FAILED)을 backend가 반환, FE <code>shelfAddErrorMessage</code>가
+    전부 한국어 매핑 + default 폴백.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>3. 상태별 UX — <span class="resid">PASS · LOW 1건</span></h2>
+  <ul>
+    <li><b>empty/few/many 분기:</b> <code>shelfStateFlags</code>가 <code>{count,hasItems,isEmpty}</code> 산출.
+    isEmpty → <code>shelfEmpty()</code>, hasItems → 패널 행. "many"는 <code>shelfSpineW(n)</code>가 6개 초과부터
+    칸당 3px 축소(최소 42px)로 시각 대응 — 초안 spineW 그대로.</li>
+    <li><b>loading 플레이스홀더:</b> 최초 list 적재 중(<code>!loaded &amp;&amp; busy &amp;&amp; 0건</code>)은 스켈레톤 스파인 4개,
+    컴포저 입력 중(<code>cState==='loading'</code>)은 행 끝에 <code>shelfLoadingSpine()</code> 추가 + 스피너 + crawlingLabel.</li>
+    <li><b>입력 idle/loading/error:</b> <code>shelfComposerVM</code>이 placeholder·테두리색·상태라벨 분기, error는
+    <code>role="alert"</code> 슬라이드업 박스.</li>
+    <li><b>error 매핑 한국어:</b> BLOCKED_HOST/CRAWL_FAILED/PATH_DENIED/PATH_GONE/BAD_INPUT/LIMIT/UNSUPPORTED_TYPE/
+    NOT_FOUND/OPEN_FAILED/INTERNAL/FORBIDDEN 전부 친화 문구 + type별 default.</li>
+  </ul>
+  <div class="warn-box"><b>BUG-SHELF-01 (LOW, frontend) — <code>CRAWL_PENDING</code> 잔재.</b>
+  SH-3에서 URL 크롤이 구현돼 backend는 <code>CRAWL_PENDING</code>을 <u>더 이상 반환하지 않는다</u>(코드 전수 확인:
+  <code>shelf.js</code> add/refresh는 crawl 결과코드 BLOCKED_HOST/CRAWL_FAILED/BAD_INPUT만 반환). 그런데 다음 3곳에
+  잔재가 남음:
+  <ul>
+    <li><code>public/app.js:729</code> — <code>case 'CRAWL_PENDING': return 'URL 즐겨찾기는 곧 지원돼요…'</code>
+    (도달 불가 죽은 코드 + URL이 이미 지원되므로 문구가 사실과 반대).</li>
+    <li><code>electron/ipc/shelf.js:8-9</code> — 파일 docstring이 SH-2 시절 "add/refresh에서 <code>CRAWL_PENDING</code> 반환"을
+    현재 동작인 양 서술(stale 주석).</li>
+    <li><code>test/shelf-widget.test.js:95-96</code> — 죽은 분기 문구를 검증하는 테스트(통과하지만 stale).</li>
+  </ul>
+  <b>기대:</b> SH-3 완료 시 잔재 제거. <b>실제:</b> 3곳 잔존. <b>재현:</b> backend가 반환하지 않으므로 UI 노출은
+  재현 불가 — 코드 grep <code>"CRAWL_PENDING"</code>로만 확인됨. <b>심각도 LOW</b>(비차단·죽은 코드).
+  ※ "죽은 코드/문구 정리"는 code-reviewer 영역과 겹치나, 수용 기준이 명시적으로 "CRAWL_PENDING 잔재 없음"을
+  요구하므로 QA가 기록한다.</div>
+</section>
+
+<section>
+  <h2>4. 2변형 + 기본 숨김 (신규·레거시) — <span class="pass">PASS</span></h2>
+  <p>frontend가 한때 "신규 설치 기본숨김 미해결"로 표기했던 쟁점을 코드+테스트+경험적 실행으로 <b>해결 확정</b>:</p>
+  <ul>
+    <li><b>신규 설치 기본 숨김:</b> <code>uiStateStore.defaultState()</code>가
+    <code>hiddenWidgets: DEFAULT_HIDDEN_WIDGETS.slice()</code>로 시드, <code>DEFAULT_HIDDEN_WIDGETS === SHELF_WIDGET_IDS
+    === ['shelf','shelfWide']</code>. 경험적: <code>defaultState().hiddenWidgets</code>에 shelf·shelfWide 둘 다 포함 확인.</li>
+    <li><b>레거시 기본 숨김(이행):</b> <code>normalizeState</code>가 <code>schemaVersion&lt;2</code> 또는 <u>부재(undefined)</u>를
+    레거시로 분기해 <code>unionShelfHidden</code> 적용. 경험적: v1·undefined 둘 다 union 숨김 확인.</li>
+    <li><b>이행 4케이스 테스트 통과:</b> ①v1→union ②undefined→union ③v2 un-hide→재숨김 안함(멱등) ④v2 무변경→멱등.
+    경험적으로 v2 un-hide 시 재숨김 안 됨 확인(사용자 선택 존중).</li>
+    <li><b>HOME enum 동형(10섹션):</b> <code>uiStateStore.HOME_SECTION_IDS</code> ↔ <code>app.js</code> L648
+    동일 10개(<code>attention·productivity·activity·todos·mail·disk·aiusage·shelf·shelfWide·featureAdd</code>),
+    <code>homeLayout-equivalence</code> 테스트가 교차검증.</li>
+    <li><b>2변형 렌더:</b> <code>shelf</code>=일반 컬럼, <code>shelfWide</code>=<code>home-section--wide</code>(column-span:all)로
+    전체폭. 둘 다 <code>renderHomeShelf()</code> 공유 — 위젯 갤러리에서 골라 추가.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>5. 열기 동작 분기 — <span class="pass">PASS</span></h2>
+  <p>주입 ctx(mock shell/safeExec/resolveBin) + 실제 temp 폴더·파일로 경험적 실행:</p>
+  <ul>
+    <li><b>file → <code>shell.openPath(real)</code></b>: OS 기본앱. 호출 인자가 저장 실경로와 일치 확인.</li>
+    <li><b>folder → <code>safeExec(code, [real], {shell:false, detached:true})</code></b>: VS Code, 인자 <code>[real]</code>
+    고정·<code>shell:false</code> 확인. 도구 미설정 시 <code>shell.openPath</code> 폴백 경로 존재.</li>
+    <li><b>url → <code>shell.openExternal(v.value)</code></b>: <code>config.validateHttpUrl</code>로 http/https 재검증 후 열기
+    (javascript:/file: 등 임의 스킴 차단).</li>
+    <li>열기 시점 <code>pathPolicy.gate</code> 재-canonicalize + <code>fs.statSync</code> 유형 재확인(TOCTOU 축소),
+    id별 in-flight 상한(<code>MAX_INFLIGHT_OPEN=2</code>).</li>
+  </ul>
+</section>
+
+<section>
+  <h2>6. 토글 영속·라이브 반영 — <span class="pass">PASS</span></h2>
+  <ul>
+    <li><b>영속:</b> <code>setSettings</code>가 <code>config.persistConfigKeys({shelfAutoRefresh})</code>로 0600 영속,
+    <code>DEFAULTS.shelfAutoRefresh=true</code>.</li>
+    <li><b>list 초기값:</b> <code>list().autoRefresh = getAutoRefresh(ctx)</code> — 경험적으로 false 설정 후 list 반영 확인.</li>
+    <li><b>라이브 반영(다음 tick):</b> register.js <code>shelfCtx()</code>는 얕은 복사라 <code>.config</code>가 같은 참조.
+    <code>setSettings</code>의 <code>ctx.config.shelfAutoRefresh=val</code> 변이를 scheduler <code>isEnabled:()=>!(ctx.config.shelfAutoRefresh===false)</code>가
+    동일 객체에서 즉시 읽음. 경험적으로 setSettings(false) 직후 <code>getAutoRefresh</code>·<code>list</code> 모두 false 확인.</li>
+    <li><b>스케줄러 게이트:</b> D-SCHED-1(off→tick 즉시 return·egress 0), D-SCHED-2(elevated 스킵), 첫 tick 지연,
+    동시 크롤은 urlMeta 전역 세마포어 공유 — 코드·테스트(shelf-scheduler 7개) 확인.</li>
+    <li><b>setSettings BAD_INPUT:</b> boolean 외 입력은 <code>{ok:false,code:'BAD_INPUT'}</code>(경험적 확인).</li>
+  </ul>
+</section>
+
+<section>
+  <h2>7. 초안 대비 충실도 + CASE 버튼 제거 — <span class="pass">PASS</span></h2>
+  <ul>
+    <li><b>CASE 버튼 제거:</b> 초안 <code>favorites-shelf-widget.dc.html</code> L51-52의 상단 데모 CASE 스위처는
+    <code>app.js</code>에 부재(셸프 관련 CASE 코드 0건). 정확히 제거됨.</li>
+    <li><b>헤더:</b> 아이콘(책장 SVG)+제목('즐겨찾기 셸프')+개수 배지(<code>shelfHeader(count)</code>).</li>
+    <li><b>컴포저:</b> 유형 토글 URL/폴더/파일(aria-pressed), 입력 placeholder·테두리·⌘V 힌트, idle/loading(스피너)/
+    error(alert) 상태.</li>
+    <li><b>셸프:</b> 접힌 스파인(세로 이름·mono 칩)↔활성 펼침(<code>shelf-unroll</code> 배너+제목+desc+cat+status),
+    가로 드래그(<code>pointerdown/move</code>·click 억제)+휠→가로 스크롤, 활성 자동 스크롤(<code>focusShelfActive</code>+
+    <code>animateShelfScroll</code> ease-out, lead 2스파인).</li>
+    <li><b>empty/loading 플레이스홀더/푸터 힌트/토스트:</b> <code>shelfEmpty</code>·스켈레톤 스파인·
+    <code>shelfFooter</code>(자동재크롤 스위치+힌트)·<code>toast</code>(추가/삭제/열기 피드백) 모두 구현.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>8. GUI 스모크 — <span class="resid">헤드리스 (코드/테스트 대체)</span></h2>
+  <div class="note">본 검증 환경은 <b>헤드리스</b>라 <code>npm start</code> 실기 GUI 스모크 불가. Electron 메인 프로세스의
+  창 생성·디스플레이가 없어 실행해도 무의미. 따라서 위 1~7의 코드 교차대조 + node --test 1090 전수 + 경험적 실행
+  스크립트(open/toggle/이행/shape)로 동작을 확인했다. 아래는 <b>사용자가 실기에서 확인할 스모크 체크리스트</b>다.</div>
+  <ul class="chk">
+    <li>위젯 갤러리에서 '즐겨찾기 셸프'·'즐겨찾기 셸프 (와이드)'가 <b>기본 숨김</b> 상태로 보이고, 추가하면 홈에 나타난다.</li>
+    <li>shelfWide 추가 시 카드가 <b>전체폭</b>으로 스팬된다.</li>
+    <li>유형=폴더로 실제 폴더 경로 입력 → 스캔 중 표시 후 스파인 추가, 활성 펼침에 디렉토리 메타 표시.</li>
+    <li>유형=파일로 파일 경로 입력 → 파일 메타(크기·수정시각) 표시.</li>
+    <li>유형=URL로 사이트 붙여넣기 → 크롤링 중 → og:image 배너(있으면) 또는 색 그라데이션.</li>
+    <li>스파인 클릭 시 펼쳐지고 활성 카드가 <b>자동으로 적정 위치로 스크롤</b>된다.</li>
+    <li>셸프 행을 <b>마우스 드래그</b>하면 가로 스크롤, 드래그 직후 클릭으로 잘못 활성화되지 않는다.</li>
+    <li><b>휠(세로)</b>로 셸프 가로 스크롤된다.</li>
+    <li>폴더 항목 열기 → <b>VS Code</b>로 열림(미설정 시 OS 기본앱).</li>
+    <li>파일 항목 열기 → <b>OS 기본앱</b>으로 열림.</li>
+    <li>URL 항목 열기 → <b>외부 브라우저</b>로 열림.</li>
+    <li>항목 삭제 → 즉시 사라지고 토스트 표시.</li>
+    <li>푸터 자동재크롤 스위치 토글 → 상태/힌트 문구 즉시 변경, 앱 재시작 후에도 유지(영속).</li>
+    <li>잘못된 경로/주소 입력 → 한국어 에러 박스(시스템/민감 경로는 거부).</li>
+    <li>잘못된 URL("곧 지원돼요" 문구가 절대 나오면 안 됨 — BUG-SHELF-01 회귀 확인).</li>
+  </ul>
+</section>
+
+<section>
+  <h2>9. 버그 목록</h2>
+  <table>
+    <tr><th style="width:130px;">ID</th><th>증상 / 위치</th><th style="width:90px;">심각도</th><th style="width:90px;">담당</th></tr>
+    <tr>
+      <td class="pri">BUG-SHELF-01</td>
+      <td><code>CRAWL_PENDING</code> 잔재(죽은 코드+stale 문구) 3곳: <code>app.js:729</code>(도달불가 분기·사실과 반대 문구),
+      <code>shelf.js:8-9</code>(stale docstring), <code>shelf-widget.test.js:95-96</code>(죽은 분기 검증 테스트).
+      backend 미반환으로 사용자 노출 없음.</td>
+      <td class="sev-low">LOW</td>
+      <td>frontend</td>
+    </tr>
+  </table>
+  <div class="note">debugger 회부 대상 없음 — 발견 항목은 원인이 명확한 정적 잔재(간헐/경쟁 조건 아님)다.</div>
+</section>
+
+<section>
+  <h2>10. 영역 경계 안내</h2>
+  <p>본 보고는 <b>동작·통합·수용 기준</b>만 다룬다. 다음은 타 검증자 영역이라 본 보고에서 판정하지 않았다:</p>
+  <ul>
+    <li><b>code-reviewer</b> — BUG-SHELF-01의 "죽은 코드 정리" 범위, 렌더 함수 가독성/중복.</li>
+    <li><b>security-reviewer</b> — SSRF·pathGuard·safeExec·CSP·og:image 매직바이트 등 보안 불변식
+    (별도 <code>shelf_sh3_threat_model.html</code> 존재).</li>
+  </ul>
+</section>
+
+</main>
+<footer>QA 검증 보고 · 즐겨찾기 셸프 위젯 SH-1~SH-5 · qa-engineer · 2026-06-27 · node --test 1090/1090 green</footer>
+</body>
+</html>

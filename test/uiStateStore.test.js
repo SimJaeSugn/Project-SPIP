@@ -151,8 +151,8 @@ test('normalizeHomeLayout — 비배열/손상 → 기본 순서 전체 복원',
 test('normalizeHomeLayout — 화이트리스트 외/중복 제거 + 누락 보충(끝)', () => {
   const r = store.normalizeHomeLayout(['mail', 'attention', 'mail', 'bogus', 42, 'mail']);
   // 유효 순서 보존(mail, attention) → 중복·미지·비문자열 제거 → 누락 섹션 기본 순서로 끝에 보충
-  assert.deepStrictEqual(r, ['mail', 'attention', 'productivity', 'activity', 'todos', 'disk', 'aiusage', 'featureAdd']);
-  // 항상 화이트리스트 전체(8개)의 순열
+  assert.deepStrictEqual(r, ['mail', 'attention', 'productivity', 'activity', 'todos', 'disk', 'aiusage', 'shelf', 'shelfWide', 'featureAdd']);
+  // 항상 화이트리스트 전체의 순열
   assert.strictEqual(r.length, store.HOME_SECTION_IDS.length);
   assert.deepStrictEqual(r.slice().sort(), store.HOME_SECTION_IDS.slice().sort());
 });
@@ -178,14 +178,17 @@ test('normalizeHiddenWidgets — 토글 위젯 화이트리스트만·중복 제
   assert.deepStrictEqual(store.TOGGLEABLE_WIDGET_IDS, store.HOME_SECTION_IDS.filter((id) => id !== 'featureAdd'));
 });
 
-test('defaultState/normalizeState — hiddenWidgets 기본 빈 배열(전부 표시)', () => {
-  assert.deepStrictEqual(store.defaultState().hiddenWidgets, []);
-  assert.deepStrictEqual(store.normalizeState({}).hiddenWidgets, []);
+test('defaultState/normalizeState — hiddenWidgets 시드(셸프 기본 숨김) / v2 입력은 무시드', () => {
+  // [SH-1 PM#3] 신규 설치 기본 숨김 시드 — 셸프 2변형이 기본 숨김.
+  assert.deepStrictEqual(store.defaultState().hiddenWidgets, ['shelf', 'shelfWide']);
+  // [SH-1 P1] 명시적 v2 입력(hiddenWidgets 키 없음)은 이행 union·시드 미적용 — 사용자 상태 그대로(빈).
+  assert.deepStrictEqual(store.normalizeState({ schemaVersion: 2 }).hiddenWidgets, []);
 });
 
 test('write/read — hiddenWidgets 라운드트립 보존 (C-M-1)', () => {
   const file = tmpFile();
-  const written = store.write({ hiddenWidgets: ['mail', 'disk'] }, { uiStatePath: file });
+  // [SH-1 P1] schemaVersion:2 명시 — 이행 union 회피(순수 라운드트립 의도 보존).
+  const written = store.write({ schemaVersion: 2, hiddenWidgets: ['mail', 'disk'] }, { uiStatePath: file });
   assert.deepStrictEqual(written.hiddenWidgets, ['mail', 'disk']);
   const back = store.read({ uiStatePath: file });
   assert.deepStrictEqual(back.hiddenWidgets, ['mail', 'disk'], 'read 후에도 보존(키 안 버려짐)');
@@ -194,7 +197,7 @@ test('write/read — hiddenWidgets 라운드트립 보존 (C-M-1)', () => {
 // [C-M-1 게이트] write→read 라운드트립 보존 — homeLayout 키가 normalizeState에서 조용히 버려지지 않음.
 test('write/read — homeLayout 라운드트립 보존 (C-M-1)', () => {
   const file = tmpFile();
-  const custom = ['mail', 'attention', 'productivity', 'activity', 'todos', 'disk', 'aiusage', 'featureAdd'];
+  const custom = ['mail', 'attention', 'productivity', 'activity', 'todos', 'disk', 'aiusage', 'shelf', 'shelfWide', 'featureAdd'];
   const written = store.write({ homeLayout: custom }, { uiStatePath: file });
   assert.deepStrictEqual(written.homeLayout, custom, 'write 반환에 정규화된 homeLayout 보존');
   const back = store.read({ uiStatePath: file });

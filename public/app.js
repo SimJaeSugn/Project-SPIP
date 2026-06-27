@@ -643,7 +643,9 @@ function shouldPollCommit(view, visible) {
  *   배열 순서 = 기본 순서. renderHome 7섹션과 1:1. 보안 단일 신뢰 경계는 메인 normalizeHomeLayout —
  *   여기 검증은 UX 편의(드래그 DOM에서 읽은 data-id 필터링)일 뿐, 보안 의존 금지.
  */
-const HOME_SECTION_IDS = ['attention', 'productivity', 'activity', 'todos', 'mail', 'disk', 'aiusage', 'featureAdd'];
+// [SH-2] 즐겨찾기 셸프 위젯 2변형('shelf'=일반 컬럼, 'shelfWide'=전체폭 스팬)을 featureAdd 앞에 추가.
+//   둘은 동일 셸프 데이터·로직 공유(폭만 다름)·둘 다 기본 숨김(메인 uiStateStore가 첫 실행 시 hiddenWidgets 시드).
+const HOME_SECTION_IDS = ['attention', 'productivity', 'activity', 'todos', 'mail', 'disk', 'aiusage', 'shelf', 'shelfWide', 'featureAdd'];
 
 // [위젯 추가/제거] 토글 가능한 콘텐츠 위젯 메타(갤러리·제거 UI용). 'featureAdd'는 추가 트리거라 제외(항상 표시).
 //   메인 uiStateStore.TOGGLEABLE_WIDGET_IDS 와 동형(드리프트 0 — homeLayout-front 테스트가 교차검증).
@@ -656,6 +658,8 @@ const WIDGET_META = {
   mail: { name: '메일', desc: '안 읽은 메일 다이제스트' },
   disk: { name: '디스크 회수', desc: '방치 프로젝트 node_modules 정리 후보' },
   aiusage: { name: '토큰 사용량', desc: 'Claude Code·연결 모델 토큰 추이' },
+  shelf: { name: '즐겨찾기 셸프', desc: '사이트·폴더·파일을 한 셸프에서 즐겨찾기' },
+  shelfWide: { name: '즐겨찾기 셸프 (와이드)', desc: '셸프를 전체폭으로 — 더 많은 즐겨찾기를 한눈에' },
 };
 
 /**
@@ -671,6 +675,145 @@ function applyHomeLayout(layout) {
   }
   for (const id of HOME_SECTION_IDS) if (!seen.has(id)) out.push(id);
   return out;
+}
+
+/* =====================================================================
+ * [SH-2] 즐겨찾기 셸프 위젯 — 순수 뷰모델/헬퍼(헤드리스 테스트 대상).
+ *   표시 메타(name/title/sub/desc/color/mono/cat/status/bannerImage)는 main 이 ShelfBookmarkView 로
+ *   완비해 내려주므로(api-contract §"즐겨찾기 셸프 위젯") 프론트는 레이아웃·상태 분기만 순수 계산한다.
+ *   모든 표시 문자열은 렌더 시 textContent 전용(L-1). 배너는 data:URI <img> 또는 색 그라데이션 폴백.
+ * ===================================================================== */
+
+/** 스파인 폭(px) — 항목이 6개를 넘어가면 칸마다 3px 좁힘(최소 42). 초안 spineW 그대로. */
+function shelfSpineW(n) {
+  const count = (typeof n === 'number' && n >= 0) ? n : 0;
+  return Math.max(42, 58 - Math.max(0, count - 6) * 3);
+}
+/** 펼친 카드가 3번째에 오도록 좌측에 스파인 2칸을 남기는 자동스크롤 lead(px). 초안 lead 그대로. */
+function shelfLead(n) {
+  return 2 * (shelfSpineW(n) + 6);
+}
+/** 입력 문자열 → 유형 자동 감지(url|folder|file|null). 초안 detectType 포팅(main 이 add 시 재확인). */
+function shelfDetectType(raw) {
+  const s = (raw == null ? '' : String(raw)).trim();
+  if (!s) return null;
+  if (/^https?:\/\//i.test(s)) return 'url';
+  if (/^(\/|~|\.\.?\/|[a-zA-Z]:\\|\\\\)/.test(s)) {
+    if (/[\/\\]$/.test(s)) return 'folder';
+    return shelfHasExt(s) ? 'file' : 'folder';
+  }
+  if (/^[\w.-]+\.[a-z]{2,}([\/?#]|$)/i.test(s)) return 'url';
+  return null;
+}
+function shelfLastSeg(p) {
+  return (p == null ? '' : String(p)).replace(/[\/\\]+$/, '').split(/[\/\\]/).pop() || '';
+}
+function shelfHasExt(s) {
+  return /\.[a-zA-Z0-9]{1,8}$/.test(shelfLastSeg(s));
+}
+function shelfHostOf(raw) {
+  let s = (raw == null ? '' : String(raw)).trim();
+  if (!s) return '';
+  if (!/^https?:\/\//i.test(s)) s = 'https://' + s;
+  try { return new URL(s).hostname.replace(/^www\./, ''); } catch (_) { return ''; }
+}
+/** 클라이언트측 1차 유효성(UX 가드 — 진짜 검증은 main). url=호스트 형태, folder/file=경로 구분자 포함. */
+function shelfIsValidInput(type, raw) {
+  const s = (raw == null ? '' : String(raw)).trim();
+  if (type === 'url') { const h = shelfHostOf(s); return !!h && h.includes('.') && h.length > 3; }
+  return s.length > 1 && /[\/\\]/.test(s);
+}
+/** add/open 실패 코드(고정 enum L-3) → 사용자 친화 한국어 메시지. url add 는 실제 크롤이라
+ *  실패 시 BLOCKED_HOST/CRAWL_FAILED 등으로 매핑된다(SH-3 실연결 — CRAWL_PENDING 잔재 없음). */
+function shelfAddErrorMessage(code, type) {
+  switch (code) {
+    case 'CRAWL_FAILED':  return '연결할 수 없어요 — URL을 확인해 주세요.';
+    case 'BLOCKED_HOST':  return '이 주소는 보안상 추가할 수 없어요.';
+    case 'PATH_GONE':     return (type === 'file' ? '파일' : '폴더') + '을 찾을 수 없어요 — 경로를 확인해 주세요.';
+    case 'PATH_DENIED':   return '이 경로는 추가할 수 없어요 — 시스템/민감 경로는 제외돼요.';
+    case 'UNSUPPORTED_TYPE': return '지원하지 않는 유형이에요.';
+    case 'LIMIT':         return '셸프가 가득 찼어요 — 오래된 즐겨찾기를 정리해 주세요.';
+    case 'BAD_INPUT':     return type === 'url' ? '주소 형식을 확인해 주세요.' : '경로 형식을 확인해 주세요.';
+    case 'NOT_FOUND':     return '항목을 찾을 수 없어요.';
+    case 'OPEN_FAILED':   return '열지 못했어요 — 잠시 후 다시 시도해 주세요.';
+    case 'INTERNAL':      return '문제가 생겼어요 — 잠시 후 다시 시도해 주세요.';
+    case 'FORBIDDEN':     return '요청이 거부됐어요.';
+    default:              return type === 'url' ? '연결할 수 없어요 — URL을 확인해 주세요.'
+                              : (type === 'file' ? '파일을 찾을 수 없어요 — 경로를 확인해 주세요.'
+                              : '폴더를 찾을 수 없어요 — 경로를 확인해 주세요.');
+  }
+}
+/**
+ * 컴포저(유형 토글·입력 placeholder·테두리·상태 라벨) 뷰모델(순수).
+ * @param {{cType:string, cUrl:string, cState:string}} c
+ */
+function shelfComposerVM(c) {
+  c = c || {};
+  const cType = (c.cType === 'folder' || c.cType === 'file') ? c.cType : 'url';
+  const cState = (c.cState === 'loading' || c.cState === 'error') ? c.cState : 'idle';
+  const placeholder = cType === 'folder' ? '/Users/you/projects/my-app  · 폴더 경로'
+                    : cType === 'file'   ? '/Users/you/notes/todo.md  · 파일 경로'
+                    : 'https://… 링크를 붙여넣어 셸프에 꽂기';
+  const scanWord = cType === 'url' ? '크롤링 중' : '스캔 중';
+  const ref = cType === 'url' ? (shelfHostOf(c.cUrl) || '…') : (shelfLastSeg(c.cUrl) || '…');
+  return {
+    cType, cState,
+    types: ['url', 'folder', 'file'].map((t) => ({ t, label: t === 'url' ? 'URL' : (t === 'folder' ? '폴더' : '파일'), active: cType === t })),
+    inputPlaceholder: placeholder,
+    inputBorder: cState === 'idle' ? '#e7e5e4' : (cState === 'error' ? '#f0b27a' : '#c7d2fe'),
+    cIdle: cState === 'idle', cLoading: cState === 'loading', cError: cState === 'error',
+    crawlingLabel: scanWord + ' · ' + ref,
+  };
+}
+/**
+ * 셸프 패널(스파인↔펼침) 뷰모델 배열(순수). bookmarks=ShelfBookmarkView[].
+ *   각 패널은 collapsed/expanded 와 레이아웃 폭(spineW)만 계산하고, 표시 문자열은 원본을 그대로 전달
+ *   (렌더 시 textContent). banner 는 bannerImage 유무로 image|gradient 분기 플래그만 둔다.
+ */
+function shelfPanelsVM(bookmarks, activeId) {
+  const list = Array.isArray(bookmarks) ? bookmarks : [];
+  const spineW = shelfSpineW(list.length);
+  // 활성 id 가 현존하지 않으면 첫 항목을 활성으로 폴백.
+  let active = activeId;
+  if (!list.some((b) => b && b.id === active)) active = list.length ? list[0].id : null;
+  return list.map((b) => {
+    b = b || {};
+    const expanded = b.id === active;
+    const hasBanner = typeof b.bannerImage === 'string' && b.bannerImage.indexOf('data:image/') === 0;
+    return {
+      id: b.id, type: b.type,
+      mono: b.mono || '', name: b.name || '', title: b.title || '', sub: b.sub || '',
+      desc: b.desc || '', cat: b.cat || '', status: b.status || '',
+      color: shelfSafeColor(b.color),
+      bannerImage: hasBanner ? b.bannerImage : null,
+      bannerLabel: b.type === 'folder' ? '디렉토리' : (b.type === 'file' ? '파일' : 'og:image'),
+      openLabel: b.type === 'folder' ? 'VS Code에서 열기' : (b.type === 'file' ? '편집기에서 열기' : '열기'),
+      collapsed: !expanded, expanded, spineW,
+    };
+  });
+}
+/** '#RRGGBB' 형식만 허용(속성 인젝션 차단) — 그 외 기본 indigo 폴백. */
+function shelfSafeColor(c) {
+  return (typeof c === 'string' && /^#[0-9a-fA-F]{6}$/.test(c)) ? c : '#4f46e5';
+}
+/** 상태 분기 플래그(순수). 로딩 중에도 셸프 행을 보여 placeholder 스파인을 노출(초안 hasItems). */
+function shelfStateFlags(bookmarks, cState) {
+  const n = Array.isArray(bookmarks) ? bookmarks.length : 0;
+  const loading = cState === 'loading';
+  return { count: n, hasItems: n > 0 || loading, isEmpty: n === 0 && !loading };
+}
+/** [SH-4] 자동 재크롤 토글 뷰모델(순수). 기본 ON(undefined/true → on). 푸터 힌트·스위치 라벨·aria 계산. */
+function shelfAutoRefreshView(autoRefresh) {
+  const on = autoRefresh !== false;
+  return {
+    on,
+    label: '자동 재크롤',
+    hint: on
+      ? '즐겨찾기는 6시간마다 자동으로 다시 스캔·크롤링돼 정보가 갱신됩니다'
+      : '자동 재크롤이 꺼져 있어요 — 정보가 자동으로 갱신되지 않습니다',
+    ariaLabel: '자동 재크롤 ' + (on ? '켜짐' : '꺼짐') + ' — 클릭해 ' + (on ? '끄기' : '켜기'),
+    switchClass: 'shelf-switch' + (on ? ' shelf-switch--on' : ''),
+  };
 }
 
 /**
@@ -1359,6 +1502,24 @@ function initBrowser() {
     hiddenWidgets: [],
     showWidgetGallery: false,
     busyWidgets: false,           // setHiddenWidgets in-flight
+    // [SH-2] 즐겨찾기 셸프 위젯 — 렌더러 상태. 데이터는 spip.shelf.list()로 적재, 변경 push(onChanged) 시 재조회.
+    shelf: {
+      bookmarks: [],              // ShelfBookmarkView[] (main 이 표시 메타 완비)
+      active: null,               // 펼친(활성) 항목 id
+      loaded: false,              // list() 1회 적재 표식
+      busy: false,                // list/add in-flight
+      cType: 'url',               // 컴포저 유형 토글(url|folder|file)
+      cUrl: '',                   // 컴포저 입력(컨트롤드)
+      cState: 'idle',             // 컴포저 상태(idle|loading|error)
+      cErr: null,                 // 마지막 add 에러 메시지(error 상태 표시용)
+      autoRefresh: true,          // [SH-4] 자동 재크롤(6시간) 토글 — list 응답 autoRefresh 로 초기 적재(기본 ON)
+      busyAuto: false,            // setSettings in-flight
+      _focusPending: false,       // 활성 변경 후 마운트 시 자동 스크롤 1회 트리거
+      _addTimer: null,            // 디바운스 add 타이머
+      _addSeq: 0,                 // add 경합 가드(취소분 무시)
+      unsub: null,                // onChanged 구독 해제
+      subscribed: false,
+    },
     // [M13 R-34~R-41] 브리핑 AI — 렌더러 상태(apiKey 평문 절대 미보관). status 는 push 로 갱신.
     briefing: {
       enabled: false,            // getSettings.enabled(opt-in)
@@ -2058,6 +2219,7 @@ function initBrowser() {
     maybeLoadMailSummary();
     maybeLoadCommitActivity();
     maybeLoadClaudeUsage();
+    maybeLoadShelf();
     var vms = store.viewModels || [];
     var g = homeGreeting(store.now);
     var kpis = homeKpis(vms);
@@ -2122,7 +2284,8 @@ function initBrowser() {
       var node = renderHomeSection(id, reclaim);
       if (!node) return;
       // data-home-section 은 고정 enum 값만(L-2/L-3: 스캔 유래 신뢰 못 할 데이터 아님). 드래그 이동 단위.
-      var cell = el('div', { cls: 'home-section', attrs: { 'data-home-section': id } });
+      //   [SH-2] shelfWide 는 masonry 컬럼 전체폭 스팬(.home-section--wide → column-span:all).
+      var cell = el('div', { cls: 'home-section' + (id === 'shelfWide' ? ' home-section--wide' : ''), attrs: { 'data-home-section': id } });
       // [위젯 추가/제거] featureAdd 외 위젯엔 제거(×) 버튼 오버레이(호버 시 노출).
       if (id !== 'featureAdd') cell.appendChild(widgetRemoveBtn(id));
       cell.appendChild(node);
@@ -2148,6 +2311,8 @@ function initBrowser() {
       case 'mail':         return renderHomeMail();
       case 'disk':         return renderHomeDisk(reclaim);
       case 'aiusage':      return renderHomeAiUsage();
+      case 'shelf':        return renderHomeShelf();
+      case 'shelfWide':    return renderHomeShelf();
       case 'featureAdd':   return renderHomeFeatureAdd();
       default:             return null;
     }
@@ -3051,6 +3216,449 @@ function initBrowser() {
     var cur = store.hiddenWidgets || [];
     if (cur.indexOf(id) >= 0) return;
     commitHiddenWidgets(cur.concat([id])); // 숨김 추가 = 제거
+  }
+
+  /* =====================================================================
+   * [SH-2] 즐겨찾기 셸프 위젯 — 홈 카드(셸프 스파인↔펼침). 'shelf'/'shelfWide' 두 변형이 공유.
+   *   데이터/로직은 window.spip.shelf.* IPC(api-contract). 표시 메타는 main 이 ShelfBookmarkView 로 완비.
+   *   모든 표시 문자열은 el({text}) = textContent(L-1). 배너는 data:URI <img>(img-src 'self' data:) 폴백 그라데이션.
+   *   인라인 style 속성 0 — el()/svg() 가 CSSOM(node.style.cssText)으로만 적용(CSP style-src 'self').
+   * ===================================================================== */
+
+  // 중첩 네임스페이스(spip.shelf) 어댑터 — briefing 패턴과 동형. 미배포(웹/테스트) 환경 graceful 폴백.
+  function shelfBridge() { return (spip && spip.shelf && typeof spip.shelf === 'object') ? spip.shelf : null; }
+  function bridgeHasShelf(m) { var b = shelfBridge(); return !!(b && typeof b[m] === 'function'); }
+  async function shelfIpc(method) {
+    var b = shelfBridge();
+    if (!b || typeof b[method] !== 'function') return bridgeMissing();
+    var rest = Array.prototype.slice.call(arguments, 1);
+    try { return await b[method].apply(b, rest); }
+    catch (err) { return { ok: false, code: 'INTERNAL', message: (err && err.message) ? err.message : 'IPC 오류' }; }
+  }
+
+  /** 셸프 데이터 1회 적재(홈 진입 시). 부재(웹/테스트) 시 loaded 만 세워 빈 셸프로 graceful. */
+  function maybeLoadShelf() {
+    if (bridgeHasShelf('list') && !store.shelf.loaded && !store.shelf.busy) refreshShelf();
+  }
+  async function refreshShelf() {
+    if (!bridgeHasShelf('list') || store.shelf.busy) return;
+    store.shelf.busy = true;
+    var res = await shelfIpc('list');
+    store.shelf.busy = false;
+    store.shelf.loaded = true;
+    var list = (res && res.ok && Array.isArray(res.bookmarks)) ? res.bookmarks.filter(function (b) { return b && typeof b.id === 'string'; }) : [];
+    store.shelf.bookmarks = list;
+    // [SH-4] list 응답에 동봉된 자동 재크롤 토글 초기 상태 적재(별도 호출 없이 1회 읽힘).
+    if (res && typeof res.autoRefresh === 'boolean') store.shelf.autoRefresh = res.autoRefresh;
+    if (!list.some(function (b) { return b.id === store.shelf.active; })) store.shelf.active = list.length ? list[0].id : null;
+    if (store.state.view === 'home') patchShelfSection();
+  }
+  /** [SH-4] 자동 재크롤 토글 — 낙관적 반영 후 setSettings 영속. 실패 시 롤백·토스트. boolean 외 main BAD_INPUT. */
+  async function shelfSetAutoRefresh(next) {
+    next = !!next;
+    if (!bridgeHasShelf('setSettings')) { store.shelf.autoRefresh = next; patchShelfSection(); return; } // graceful(영속 불가)
+    if (store.shelf.busyAuto) return;
+    store.shelf.autoRefresh = next; store.shelf.busyAuto = true; // 낙관적
+    patchShelfSection();
+    var res = await shelfIpc('setSettings', next);
+    store.shelf.busyAuto = false;
+    if (res && res.ok && typeof res.autoRefresh === 'boolean') {
+      store.shelf.autoRefresh = res.autoRefresh; // 메인 확정값으로 정합
+    } else {
+      store.shelf.autoRefresh = !next; // 롤백
+      toast('설정을 바꾸지 못했어요', true);
+    }
+    patchShelfSection();
+  }
+  /** 변경 push(spip:shelf:changed) 구독 — main 신호 시 list() 재조회(onMailUpdated 패턴). */
+  function subscribeShelfChanged() {
+    if (store.shelf.subscribed) return;
+    var b = shelfBridge();
+    if (!b || typeof b.onChanged !== 'function') return;
+    store.shelf.subscribed = true;
+    var unsub = b.onChanged(function () { refreshShelf(); });
+    store.shelf.unsub = (typeof unsub === 'function') ? unsub : null;
+  }
+  function unsubscribeShelfChanged() {
+    if (typeof store.shelf.unsub === 'function') { try { store.shelf.unsub(); } catch (_) { /* ignore */ } }
+    store.shelf.unsub = null; store.shelf.subscribed = false;
+  }
+
+  // ── 컴포저 동작 ──
+  function shelfSetType(t) {
+    if (t !== 'url' && t !== 'folder' && t !== 'file') return;
+    clearTimeout(store.shelf._addTimer); store.shelf._addSeq++; // 보류 add 취소
+    store.shelf.cType = t; store.shelf.cState = 'idle'; store.shelf.cErr = null;
+    patchShelfSection();
+  }
+  function shelfOnInput(e) {
+    var v = e && e.target ? e.target.value : '';
+    clearTimeout(store.shelf._addTimer);
+    var type = shelfDetectType(v) || store.shelf.cType;
+    store.shelf.cUrl = v; store.shelf.cType = type; store.shelf.cErr = null;
+    if (!String(v).trim()) { store.shelf.cState = 'idle'; patchShelfSection(); return; }
+    store.shelf.cState = 'loading';
+    patchShelfSection();
+    var seq = ++store.shelf._addSeq;
+    store.shelf._addTimer = setTimeout(function () {
+      if (seq !== store.shelf._addSeq) return; // 입력이 더 들어옴 → 취소분
+      var t = store.shelf.cType, ref = String(store.shelf.cUrl).trim();
+      if (!shelfIsValidInput(t, ref)) { store.shelf.cState = 'error'; store.shelf.cErr = shelfAddErrorMessage('BAD_INPUT', t); patchShelfSection(); return; }
+      shelfAdd(t, ref, seq);
+    }, 800);
+  }
+  function shelfOnInputKey(e) {
+    if (!e || e.key !== 'Enter') return;
+    e.preventDefault();
+    clearTimeout(store.shelf._addTimer);
+    var t = store.shelf.cType, ref = String(store.shelf.cUrl).trim();
+    if (!ref) return;
+    if (!shelfIsValidInput(t, ref)) { store.shelf.cState = 'error'; store.shelf.cErr = shelfAddErrorMessage('BAD_INPUT', t); patchShelfSection(); return; }
+    store.shelf.cState = 'loading'; patchShelfSection();
+    shelfAdd(t, ref, ++store.shelf._addSeq);
+  }
+  async function shelfAdd(type, ref, seq) {
+    if (!bridgeHasShelf('add')) {
+      store.shelf.cState = 'error'; store.shelf.cErr = '이 환경에서는 즐겨찾기를 추가할 수 없어요.'; patchShelfSection(); return;
+    }
+    store.shelf.busy = true;
+    var res = await shelfIpc('add', type, ref);
+    if (seq !== store.shelf._addSeq) { store.shelf.busy = false; return; } // 사용자가 계속 입력/취소
+    store.shelf.busy = false;
+    if (res && res.ok && res.bookmark && typeof res.bookmark.id === 'string') {
+      var bk = res.bookmark;
+      var exists = store.shelf.bookmarks.some(function (b) { return b && b.id === bk.id; });
+      store.shelf.bookmarks = exists
+        ? store.shelf.bookmarks.map(function (b) { return (b && b.id === bk.id) ? bk : b; })
+        : store.shelf.bookmarks.concat([bk]);
+      store.shelf.active = bk.id;
+      store.shelf._focusPending = true;
+      store.shelf.cUrl = ''; store.shelf.cState = 'idle'; store.shelf.cErr = null; store.shelf.loaded = true;
+      patchShelfSection();
+      toast((bk.name || '즐겨찾기') + ' 셸프에 꽂힘');
+    } else {
+      store.shelf.cState = 'error';
+      store.shelf.cErr = shelfAddErrorMessage(res && res.code, type);
+      patchShelfSection();
+    }
+  }
+  // ── 항목 동작 ──
+  function shelfSetActive(id) {
+    store.shelf.active = id;
+    store.shelf._focusPending = true; // 마운트 시 자동 스크롤 1회(활성 클릭 시에도 재중앙)
+    patchShelfSection();
+  }
+  async function shelfRemove(id, name) {
+    if (!bridgeHasShelf('remove')) return;
+    // 낙관적 제거(즉시 반영) — 응답으로 정합.
+    store.shelf.bookmarks = store.shelf.bookmarks.filter(function (b) { return b && b.id !== id; });
+    if (store.shelf.active === id) store.shelf.active = store.shelf.bookmarks.length ? store.shelf.bookmarks[0].id : null;
+    patchShelfSection();
+    toast((name || '즐겨찾기') + ' 삭제됨');
+    var res = await shelfIpc('remove', id);
+    if (res && res.ok && Array.isArray(res.bookmarks)) {
+      store.shelf.bookmarks = res.bookmarks.filter(function (b) { return b && typeof b.id === 'string'; });
+      if (!store.shelf.bookmarks.some(function (b) { return b.id === store.shelf.active; })) {
+        store.shelf.active = store.shelf.bookmarks.length ? store.shelf.bookmarks[0].id : null;
+      }
+      patchShelfSection();
+    } else if (res && res.ok === false) {
+      refreshShelf(); // 실패 → 재조회로 정합 복구
+      toast('삭제하지 못했어요', true);
+    }
+  }
+  async function shelfOpen(id) {
+    if (!bridgeHasShelf('open')) return;
+    var res = await shelfIpc('open', id);
+    if (res && res.ok) toast('여는 중…');
+    else toast(shelfAddErrorMessage(res && res.code), true);
+  }
+
+  /** 셸프 영역만 부분 갱신(.shelf-region). 컴포저 캐럿 보존(.shelf-input ∈ FOCUS_SEL). 위젯 'shelf' 재배선. */
+  function patchShelfSection() {
+    if (typeof document === 'undefined') { render(); return; }
+    var regions = document.querySelectorAll('.shelf-region');
+    if (!regions.length) return; // 홈 아님/위젯 숨김 → no-op
+    Array.prototype.forEach.call(regions, function (region) {
+      RG.preserve.patchRegion(region, function () { return renderShelfCard(); }, {
+        widgets: ['shelf'],
+        preserveFocus: true,
+        fallback: function () { render(); },
+      });
+    });
+  }
+
+  // ── 셸프 행 임퍼러티브 배선(가로 드래그/휠 스크롤 + 활성 자동 스크롤) ──
+  function wireShelfSwipe(el) {
+    if (!el || el.__shelfSwipe) return;
+    el.__shelfSwipe = true;
+    var down = false, startX = 0, startScroll = 0, moved = 0, pid = null;
+    el.style.cursor = 'grab';
+    el.addEventListener('pointerdown', function (e) {
+      if (e.button && e.button !== 0) return;
+      down = true; moved = 0; startX = e.clientX; startScroll = el.scrollLeft; pid = e.pointerId;
+      el.style.cursor = 'grabbing'; el.style.scrollBehavior = 'auto';
+    });
+    el.addEventListener('pointermove', function (e) {
+      if (!down) return;
+      var dx = e.clientX - startX;
+      if (Math.abs(dx) > 3 && pid != null) { try { el.setPointerCapture(pid); } catch (_) { /* ignore */ } }
+      if (Math.abs(dx) > moved) moved = Math.abs(dx);
+      el.scrollLeft = startScroll - dx;
+    });
+    var end = function () { down = false; el.style.cursor = 'grab'; el.style.scrollBehavior = 'smooth'; };
+    el.addEventListener('pointerup', end);
+    el.addEventListener('pointercancel', end);
+    el.addEventListener('pointerleave', function () { if (down) end(); });
+    // 실제 드래그 뒤따르는 click 억제(스파인 활성 오발동 방지).
+    el.addEventListener('click', function (e) { if (moved > 6) { e.preventDefault(); e.stopPropagation(); } }, true);
+    // 휠 세로 → 가로 스크롤.
+    el.addEventListener('wheel', function (e) {
+      if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) { el.scrollLeft += e.deltaY; e.preventDefault(); }
+    }, { passive: false });
+  }
+  function focusShelfActive(row, id) {
+    if (!row || id == null) return;
+    var elp = null, kids = row.children;
+    for (var i = 0; i < kids.length; i++) {
+      if (kids[i].getAttribute && kids[i].getAttribute('data-fid') === String(id)) { elp = kids[i]; break; }
+    }
+    if (!elp) return;
+    var lead = shelfLead(store.shelf.bookmarks.length);
+    var target = Math.max(0, Math.min(row.scrollWidth - row.clientWidth, elp.offsetLeft - lead));
+    animateShelfScroll(row, target, 460);
+  }
+  function animateShelfScroll(row, to, dur) {
+    var from = row.scrollLeft, dist = to - from;
+    if (Math.abs(dist) < 1) return;
+    if (typeof requestAnimationFrame !== 'function') { row.scrollLeft = to; return; }
+    var t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+    row.style.scrollBehavior = 'auto';
+    var ease = function (p) { return 1 - Math.pow(1 - p, 3); };
+    var step = function (now) {
+      var p = Math.min(1, (now - t0) / dur);
+      row.scrollLeft = from + dist * ease(p);
+      if (p < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+    // rAF 스로틀돼도 최종 위치 보장.
+    clearTimeout(row.__scEnd);
+    row.__scEnd = setTimeout(function () { if (Math.abs(row.scrollLeft - to) > 2) row.scrollLeft = to; }, dur + 90);
+  }
+
+  // ── 렌더 ──
+  function renderHomeShelf() {
+    var region = el('div', { cls: 'shelf-region' });
+    region.appendChild(renderShelfCard());
+    return region;
+  }
+  function renderShelfCard() {
+    var vm = shelfComposerVM(store.shelf);
+    var flags = shelfStateFlags(store.shelf.bookmarks, store.shelf.cState);
+    var panels = shelfPanelsVM(store.shelf.bookmarks, store.shelf.active);
+    var card = el('div', { style: 'background:#fff;border:1px solid #e7e5e4;border-radius:18px;overflow:hidden;box-shadow:0 1px 2px rgba(28,25,23,.04);' });
+    card.appendChild(shelfHeader(flags.count));
+    card.appendChild(shelfComposer(vm));
+    card.appendChild(shelfBody(panels, flags));
+    card.appendChild(shelfFooter());
+    return card;
+  }
+  function shelfHeader(count) {
+    var head = el('div', { style: 'display:flex;align-items:center;gap:12px;padding:18px 20px 16px;border-bottom:1px solid #f2f1ef;' });
+    var ico = el('div', { style: 'width:34px;height:34px;border-radius:10px;background:#eef2ff;display:flex;align-items:center;justify-content:center;flex:none;' });
+    ico.appendChild(svg([{ t: 'path', d: 'M4 19.5V5a2 2 0 0 1 2-2h11a1 1 0 0 1 1 1v15' }, { t: 'path', d: 'M6 17h12' }, { t: 'path', d: 'M9 3v14' }], { size: 18, stroke: '#4f46e5', sw: 1.7 }));
+    head.appendChild(ico);
+    var mid = el('div', { style: 'flex:1;min-width:0;' });
+    var titleRow = el('div', { style: 'display:flex;align-items:center;gap:8px;' });
+    titleRow.appendChild(el('span', { text: '즐겨찾기 셸프', style: 'font-size:15.5px;font-weight:600;letter-spacing:-.015em;' }));
+    titleRow.appendChild(el('span', { text: String(count), style: HOME_MONO + 'font-size:11px;font-weight:600;color:#78716c;background:#f3f2f0;border:1px solid #e7e5e4;padding:1px 7px;border-radius:6px;' }));
+    mid.appendChild(titleRow);
+    mid.appendChild(el('div', { text: '사이트·폴더·파일을 한 셸프에서 즐겨찾기', style: 'font-size:11.5px;color:#a8a29e;margin-top:2px;' }));
+    head.appendChild(mid);
+    return head;
+  }
+  function shelfComposer(vm) {
+    var wrap = el('div', { style: 'padding:16px 20px 4px;' });
+    var typeRow = el('div', { style: 'display:flex;align-items:center;gap:6px;margin-bottom:9px;' });
+    typeRow.appendChild(el('span', { text: '유형', style: 'font-size:9.5px;font-weight:600;letter-spacing:.04em;color:#c0bdb8;margin-right:2px;' }));
+    vm.types.forEach(function (t) {
+      typeRow.appendChild(el('button', {
+        text: t.label,
+        attrs: { type: 'button', 'aria-pressed': String(t.active), 'aria-label': '유형 ' + t.label },
+        style: 'appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;padding:5px 11px;border-radius:8px;transition:all .12s;'
+          + (t.active ? 'background:#1c1917;color:#fff;border:1px solid #1c1917;' : 'background:#fff;color:#78716c;border:1px solid #e7e5e4;'),
+        on: { click: function () { shelfSetType(t.t); } },
+      }));
+    });
+    wrap.appendChild(typeRow);
+    var inputBox = el('div', { style: 'display:flex;align-items:center;gap:10px;background:#fafaf9;border:1.5px solid ' + vm.inputBorder + ';border-radius:12px;padding:0 12px 0 14px;height:46px;transition:border-color .15s;' });
+    inputBox.appendChild(svg([{ t: 'path', d: 'M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1' }, { t: 'path', d: 'M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1' }], { size: 17, stroke: '#a8a29e', sw: 2 }));
+    var input = el('input', {
+      cls: 'shelf-input',
+      style: 'flex:1;min-width:0;border:none;background:none;font-size:13.5px;color:#1c1917;height:100%;font-family:Geist,Pretendard,sans-serif;',
+      attrs: { type: 'text', 'aria-label': '즐겨찾기 추가 — URL·폴더·파일 경로', placeholder: vm.inputPlaceholder, spellcheck: 'false', autocomplete: 'off' },
+      on: { input: shelfOnInput, keydown: shelfOnInputKey },
+    });
+    input.value = store.shelf.cUrl; // 컨트롤드(캐럿은 patchRegion preserve 로 보존)
+    inputBox.appendChild(input);
+    if (vm.cLoading) inputBox.appendChild(el('div', { cls: 'shelf-spin', style: 'width:16px;height:16px;border:2px solid #e7e5e4;border-top-color:#4f46e5;border-radius:50%;flex:none;' }));
+    else if (vm.cIdle) inputBox.appendChild(el('span', { text: '⌘V', style: HOME_MONO + 'font-size:10px;color:#c9c6c2;letter-spacing:.04em;flex:none;' }));
+    wrap.appendChild(inputBox);
+    if (vm.cLoading) {
+      var ll = el('div', { style: 'display:flex;align-items:center;gap:7px;margin:9px 2px 2px;' + HOME_MONO + 'font-size:11px;color:#a8a29e;' });
+      ll.appendChild(el('span', { style: 'width:6px;height:6px;border-radius:50%;background:#4f46e5;flex:none;' }));
+      ll.appendChild(el('span', { text: vm.crawlingLabel }));
+      wrap.appendChild(ll);
+    }
+    if (vm.cError) {
+      var eb = el('div', { cls: 'shelf-slideup', attrs: { role: 'alert' }, style: 'margin-top:9px;border:1px solid #fde2c8;background:#fff8f0;border-radius:11px;padding:11px 13px;display:flex;align-items:center;gap:10px;' });
+      eb.appendChild(svg([{ t: 'path', d: 'M12 9v4M12 17h.01' }, { t: 'path', d: 'M10.3 3.86l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3.14l-8-14a2 2 0 0 0-3.4 0z' }], { size: 16, stroke: '#b45309', sw: 2 }));
+      eb.appendChild(el('span', { text: store.shelf.cErr || '', style: 'font-size:12px;color:#92400e;font-weight:500;' }));
+      wrap.appendChild(eb);
+    }
+    return wrap;
+  }
+  function shelfBody(panels, flags) {
+    var wrap = el('div', { style: 'padding:14px 20px 8px;' });
+    var loading = store.shelf.cState === 'loading';
+    // 최초 list 적재 중(데이터 0) → 스켈레톤 스파인.
+    if (!store.shelf.loaded && store.shelf.busy && store.shelf.bookmarks.length === 0) {
+      var skRow = el('div', { cls: 'no-sb', style: 'display:flex;gap:6px;height:278px;overflow:hidden;' });
+      for (var s = 0; s < 4; s++) skRow.appendChild(shelfLoadingSpine());
+      wrap.appendChild(skRow);
+      return wrap;
+    }
+    if (flags.hasItems) {
+      var row = el('div', { cls: 'shelf-row no-sb', attrs: { role: 'list', 'aria-label': '즐겨찾기 셸프' }, style: 'position:relative;display:flex;gap:6px;height:278px;overflow-x:auto;overflow-y:hidden;padding-bottom:2px;touch-action:pan-x;' });
+      panels.forEach(function (p) { row.appendChild(shelfPanel(p)); });
+      if (loading) row.appendChild(shelfLoadingSpine());
+      wrap.appendChild(row);
+    } else if (flags.isEmpty) {
+      wrap.appendChild(shelfEmpty());
+    }
+    return wrap;
+  }
+  function shelfPanel(p) {
+    var outer = 'position:relative;height:100%;border-radius:13px;overflow:hidden;cursor:pointer;will-change:transform;transition:transform .2s cubic-bezier(.22,1,.36,1),box-shadow .2s ease,filter .2s ease;'
+      + (p.expanded
+        ? 'flex:1 0 290px;box-shadow:0 14px 30px -12px rgba(28,25,23,.28);border:1px solid #e7e5e4;background:#fff;'
+        : 'flex:0 0 ' + p.spineW + 'px;background:' + p.color + ';box-shadow:inset -8px 0 14px -10px rgba(0,0,0,.35);');
+    var panel = el('div', {
+      cls: 'shelf-panel ' + (p.expanded ? 'shelf-exp' : 'shelf-spine'),
+      attrs: { 'data-fid': p.id, role: 'listitem', tabindex: '0', 'aria-expanded': String(p.expanded), 'aria-label': p.name + (p.expanded ? ' (펼침)' : '') },
+      style: outer,
+      on: {
+        click: function () { shelfSetActive(p.id); },
+        keydown: function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); shelfSetActive(p.id); } },
+      },
+    });
+    if (p.collapsed) panel.appendChild(shelfSpineFace(p));
+    else panel.appendChild(shelfExpandedFace(p));
+    return panel;
+  }
+  function shelfSpineFace(p) {
+    var face = el('div', { style: 'position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;padding:13px 0;' });
+    face.appendChild(el('div', { text: p.mono, style: 'width:30px;height:30px;border-radius:9px;background:rgba(255,255,255,.22);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;' + HOME_MONO + 'font-size:15px;font-weight:600;color:#fff;flex:none;' }));
+    var nameWrap = el('div', { style: 'flex:1;display:flex;align-items:center;justify-content:center;min-height:0;' });
+    nameWrap.appendChild(el('div', { text: p.name, style: 'writing-mode:vertical-rl;transform:rotate(180deg);font-size:12.5px;font-weight:600;letter-spacing:.01em;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-height:150px;' }));
+    face.appendChild(nameWrap);
+    face.appendChild(el('div', { style: 'width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.55);flex:none;' }));
+    return face;
+  }
+  function shelfExpandedFace(p) {
+    var exp = el('div', { cls: 'shelf-unroll', style: 'position:absolute;inset:0;display:flex;flex-direction:column;overflow:hidden;' });
+    // og 배너(url=data:URI 이미지 / folder·file=색 그라데이션 폴백)
+    var bannerBase = 'position:relative;height:92px;flex:none;overflow:hidden;';
+    var banner;
+    if (p.bannerImage) {
+      banner = el('div', { style: bannerBase });
+      // SH-5: 이미지 깨짐/지연 graceful — 로드 실패 시 색 그라데이션으로 폴백(빈 배너 방지).
+      var bimg = el('img', {
+        attrs: { src: p.bannerImage, alt: '', loading: 'lazy' },
+        style: 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;',
+        on: { error: function () { bimg.style.display = 'none'; banner.style.background = 'linear-gradient(135deg,' + p.color + ' 0%,' + p.color + 'cc 100%)'; } },
+      });
+      banner.appendChild(bimg);
+    } else {
+      banner = el('div', { style: bannerBase + 'background:linear-gradient(135deg,' + p.color + ' 0%,' + p.color + 'cc 100%);' });
+    }
+    banner.appendChild(el('div', { style: 'position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,0) 30%,rgba(0,0,0,.28) 100%);' }));
+    banner.appendChild(el('span', { text: p.bannerLabel, style: 'position:absolute;left:13px;top:11px;' + HOME_MONO + 'font-size:9px;font-weight:600;letter-spacing:.05em;color:#fff;background:rgba(28,25,23,.4);backdrop-filter:blur(4px);padding:2px 7px;border-radius:6px;' }));
+    banner.appendChild(el('div', { text: p.mono, style: 'position:absolute;left:13px;bottom:-19px;width:46px;height:46px;border-radius:12px;background:' + p.color + ';border:3px solid #fff;display:flex;align-items:center;justify-content:center;' + HOME_MONO + 'font-size:20px;font-weight:600;color:#fff;box-shadow:0 4px 10px rgba(28,25,23,.18);' }));
+    exp.appendChild(banner);
+    // 본문
+    var body = el('div', { style: 'flex:1;background:#fff;padding:26px 16px 14px;display:flex;flex-direction:column;min-width:0;overflow:hidden;' });
+    var topRow = el('div', { style: 'display:flex;align-items:flex-start;gap:8px;' });
+    var titleCol = el('div', { style: 'flex:1;min-width:0;' });
+    titleCol.appendChild(el('div', { text: p.title, style: 'font-size:14px;font-weight:600;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#1c1917;' }));
+    titleCol.appendChild(el('div', { text: p.sub, style: HOME_MONO + 'font-size:10.5px;color:#a8a29e;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;' }));
+    topRow.appendChild(titleCol);
+    topRow.appendChild(el('span', { text: p.cat, style: 'font-size:10px;font-weight:600;padding:2px 8px;border-radius:6px;background:#f7f7f6;color:#78716c;border:1px solid #ececea;flex:none;white-space:nowrap;' }));
+    body.appendChild(topRow);
+    body.appendChild(el('p', { text: p.desc, style: 'margin:9px 0 0;font-size:12px;color:#57534e;line-height:1.55;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;' }));
+    body.appendChild(el('div', { style: 'flex:1;' }));
+    var foot = el('div', { style: 'display:flex;align-items:center;gap:8px;margin-top:12px;padding-top:11px;border-top:1px solid #f4f3f1;' });
+    var status = el('span', { style: 'display:inline-flex;align-items:center;gap:5px;' + HOME_MONO + 'font-size:10px;color:#a8a29e;white-space:nowrap;flex:1;min-width:0;' });
+    status.appendChild(el('span', { style: 'width:5px;height:5px;border-radius:50%;background:#22c55e;flex:none;' }));
+    status.appendChild(el('span', { text: p.status, style: 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;' }));
+    foot.appendChild(status);
+    var rm = el('button', {
+      cls: 'shelf-rm', attrs: { type: 'button', title: '삭제', 'aria-label': p.name + ' 삭제' },
+      style: 'appearance:none;border:1px solid #e7e5e4;background:#fff;width:32px;height:32px;border-radius:9px;cursor:pointer;color:#a8a29e;display:flex;align-items:center;justify-content:center;flex:none;',
+      on: { click: function (e) { e.stopPropagation(); shelfRemove(p.id, p.name); } },
+    });
+    rm.appendChild(svg([{ t: 'path', d: 'M5 7h14M9 7V5h6v2M7 7l1 13h8l1-13' }], { size: 14, stroke: 'currentColor', sw: 2 }));
+    foot.appendChild(rm);
+    var ob = el('button', {
+      cls: 'shelf-open', attrs: { type: 'button', 'aria-label': p.name + ' ' + p.openLabel },
+      style: 'appearance:none;border:1px solid #1c1917;background:#1c1917;color:#fff;font-size:12px;font-weight:600;height:32px;padding:0 13px;border-radius:9px;cursor:pointer;flex:none;display:inline-flex;align-items:center;gap:6px;',
+      on: { click: function (e) { e.stopPropagation(); shelfOpen(p.id); } },
+    });
+    ob.appendChild(el('span', { text: p.openLabel }));
+    ob.appendChild(svg([{ t: 'path', d: 'M7 17L17 7M9 7h8v8' }], { size: 13, stroke: 'currentColor', sw: 2.4 }));
+    foot.appendChild(ob);
+    body.appendChild(foot);
+    exp.appendChild(body);
+    return exp;
+  }
+  function shelfLoadingSpine() {
+    var sp = el('div', { cls: 'shelf-growin', style: 'width:58px;flex:none;border-radius:13px;background:#f1f0ee;border:1.5px dashed #d6d3d1;display:flex;flex-direction:column;align-items:center;padding:13px 0;' });
+    sp.appendChild(el('div', { cls: 'shelf-sk', style: 'width:30px;height:30px;border-radius:9px;flex:none;' }));
+    var mid = el('div', { style: 'flex:1;display:flex;align-items:center;' });
+    mid.appendChild(el('div', { cls: 'shelf-sk', style: 'width:11px;height:96px;border-radius:6px;' }));
+    sp.appendChild(mid);
+    return sp;
+  }
+  function shelfEmpty() {
+    var box = el('div', { style: 'text-align:center;padding:30px 16px;border:1.5px dashed #e2e0dd;border-radius:14px;background:#fafaf9;' });
+    box.appendChild(el('div', { text: '셸프가 비어 있어요', style: 'font-size:13px;font-weight:600;color:#57534e;' }));
+    box.appendChild(el('div', { text: 'URL·폴더·파일 경로를 붙여넣어 첫 즐겨찾기를 꽂아보세요', style: 'font-size:11.5px;color:#a8a29e;margin-top:3px;' }));
+    return box;
+  }
+  function shelfFooter() {
+    var av = shelfAutoRefreshView(store.shelf.autoRefresh);
+    var f = el('div', { style: 'display:flex;align-items:center;gap:10px;padding:12px 20px 14px;border-top:1px solid #f2f1ef;background:#fafaf9;' });
+    // 좌: 자동 재크롤 안내(상태에 따라 문구 변경) — 시계 아이콘.
+    var hint = el('div', { style: 'display:flex;align-items:center;gap:7px;flex:1;min-width:0;font-size:11px;color:#a8a29e;' });
+    hint.appendChild(svg([{ t: 'circle', cx: '12', cy: '12', r: '9' }, { t: 'path', d: 'M12 8v4l3 2' }], { size: 13, stroke: 'currentColor', sw: 2 }));
+    hint.appendChild(el('span', { text: av.hint, style: 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;' }));
+    f.appendChild(hint);
+    // 우: 자동 재크롤 켜기/끄기 토글(SH-4).
+    f.appendChild(shelfAutoToggle(av));
+    return f;
+  }
+  function shelfAutoToggle(av) {
+    var wrap = el('div', { style: 'display:flex;align-items:center;gap:7px;flex:none;' });
+    wrap.appendChild(el('span', { text: av.label, style: 'font-size:10.5px;font-weight:600;color:#78716c;' }));
+    var sw = el('button', {
+      cls: av.switchClass,
+      attrs: { type: 'button', role: 'switch', 'aria-checked': String(av.on), 'aria-label': av.ariaLabel },
+      on: { click: function () { shelfSetAutoRefresh(!store.shelf.autoRefresh); } },
+    });
+    if (store.shelf.busyAuto) sw.setAttribute('aria-busy', 'true');
+    sw.appendChild(el('span', { cls: 'shelf-switch__knob' }));
+    wrap.appendChild(sw);
+    return wrap;
   }
 
   function renderDashboard() {
@@ -6794,7 +7402,7 @@ function initBrowser() {
     // ── RG-2: preserve(노드 보존 — 포커스/캐럿/스크롤 캡처·복원) ──
     //   기존 render() 인라인 복원 로직을 동작 동일하게 흡수(로직 변경 없이 위치만). 회귀 0.
     const SCROLL_SEL = ['.settings-pane', '.modal__body', '.drawer', '.orbit__panel', '.dash__main'];
-    const FOCUS_SEL = ['.topbar__search-input', '.orbit__search'];
+    const FOCUS_SEL = ['.topbar__search-input', '.orbit__search', '.shelf-input', '.shelf-switch'];
     const preserve = {
       /** 재렌더 전 스냅샷(활성 입력의 포커스/캐럿 + 스크롤 위치). */
       capture(rootEl) {
@@ -6988,6 +7596,26 @@ function initBrowser() {
     },
     destroy: (inst) => { if (inst && typeof inst.destroy === 'function') { try { inst.destroy(); } catch (_) { /* ignore */ } } },
   });
+  // [SH-2] 셸프 행 위젯 — 가로 드래그/휠 스크롤 배선 + 활성 변경 시 자동 스크롤(_focusPending).
+  //   행 요소는 render/patch 마다 새로 만들어지므로(__shelfSwipe 가드) 핸들러 누수 0. 스코프 내 .shelf-row
+  //   전부 배선(shelf+shelfWide 동시 표시 대응). 인스턴스 미보유(리스너는 노드와 함께 GC) → init 은 null 반환.
+  RG.widget.define({
+    id: 'shelf',
+    init: (root) => {
+      if (typeof document === 'undefined') return null;
+      const scope = root || document;
+      if (typeof scope.querySelectorAll !== 'function') return null;
+      const rows = scope.querySelectorAll('.shelf-row');
+      if (!rows.length) return null;
+      for (let i = 0; i < rows.length; i++) wireShelfSwipe(rows[i]);
+      if (store.shelf._focusPending && store.shelf.active != null) {
+        for (let j = 0; j < rows.length; j++) focusShelfActive(rows[j], store.shelf.active);
+        store.shelf._focusPending = false;
+      }
+      return null;
+    },
+    destroy: () => { /* 리스너는 교체된 노드와 함께 GC — 별도 정리 불필요 */ },
+  });
 
   /** [M10-P4] 커밋 차트 영역만 부분 갱신 — builderFn 은 빈 호스트만(차트는 commitChart 위젯 소유).
    *   영역 부재/오류/deferred 시 patchRegion 내부에서 안전 처리(fallback=render / coalesce 보류). */
@@ -7115,6 +7743,8 @@ function initBrowser() {
   // 메일 실시간 갱신: 새 메일 push 구독 + 홈 주기 갱신(앱 1회).
   subscribeMailUpdated();
   startMailAutoRefresh();
+  // [SH-2] 셸프 변경 push 구독(앱 1회) — main 신호 시 list() 재조회. 부재 시 graceful no-op.
+  subscribeShelfChanged();
   startTodoDueWatch(); // [백로그2-4] 할 일 마감 도래 토스트·시각 알림 감시(앱 1회).
   // [백로그2-2] 메일 변화 이벤트 구독 — 의존 위젯(히어로 KPI '안 읽은 메일'·브리핑)이 즉시 반응.
   //   스트리밍 중엔 스트림을 끊지 않도록 메일·브리핑 영역만 부분 교체, 그 외엔 전체 재구성으로 KPI까지 동시 반영.
@@ -7142,6 +7772,7 @@ function initBrowser() {
     unsubscribeProjectsUpdated();
     unsubscribeMailUpdated();
     stopMailAutoRefresh();
+    unsubscribeShelfChanged(); // [SH-2] 셸프 변경 push 구독 해제
     stopTodoDueWatch(); // [백로그2-4] 마감 감시 타이머 정리
     stopCommitAutoRefresh(); // [R-31] 커밋 폴링 타이머 정리
     unsubscribeBriefing();   // [M13] 브리핑 push 구독 해제
@@ -7214,6 +7845,19 @@ if (typeof module !== 'undefined' && module.exports) {
     applyHomeLayout,
     // [위젯 추가/제거] 토글 가능 위젯 목록(메인 동형 교차검증용)
     TOGGLEABLE_WIDGET_IDS,
+    // [SH-2] 즐겨찾기 셸프 위젯 순수 뷰모델/헬퍼(헤드리스 테스트)
+    shelfSpineW,
+    shelfLead,
+    shelfDetectType,
+    shelfHostOf,
+    shelfLastSeg,
+    shelfIsValidInput,
+    shelfAddErrorMessage,
+    shelfComposerVM,
+    shelfPanelsVM,
+    shelfSafeColor,
+    shelfStateFlags,
+    shelfAutoRefreshView,
     // [R-33] 커밋 차트 기하 모델(순수 — 수치 sanitize·스케일)
     commitChartModel,
     // [M10] 커밋 데이터 동일성 키(diff 가드) + 툴팁 가로위치 + patchRegion 분기(순수)

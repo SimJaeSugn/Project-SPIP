@@ -462,7 +462,123 @@
   </table>
 </section>
 
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<!-- 즐겨찾기 셸프 위젯 — 코드베이스 수준 개발 로드맵 (tech-lead, 2026-06-27)   -->
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<section id="shelf-roadmap" style="border-color:#c4b5fd;">
+  <h2 style="color:#c4b5fd;border-left-color:#c4b5fd;">SHELF. 즐겨찾기 셸프 위젯 — 개발 로드맵</h2>
+  <p>설계 단일 진실: <code>docs/architecture/shelf-widget-design.html</code>(ADR-SH-1~5) · 초안:
+  <code>docs/design/favorites-shelf-widget.dc.html</code> · IPC 계약: <code>docs/api-contract.md</code> §셸프.
+  설계 마일스톤 SH-M1~M5를 <b>코드베이스 수준 단계</b>로 구체화한다. 각 단계는 독립 커밋 가능,
+  단계 종료 시 <code>npm test</code> 전 그린 + 기존 favorites/홈 회귀 0을 DoD로 한다.</p>
+
+  <div class="note"><b>PM 확정 결정(본 로드맵 전제).</b>
+  ① 6시간 자동 재크롤 = 기본 <b>ON</b> + 끄기 토글(설정 영속) · main 스케줄러(앱 실행 중만).
+  ② 열기: 파일=OS 기본앱(<code>shell.openPath</code>), 폴더=VS Code(기존 open 경로 재사용), URL=외부 브라우저(<code>shell.openExternal</code>, http/https 재검증).
+  ③ 홈 위젯 <b>2 변형 모두 제공</b> — 전체폭 스팬(<code>shelfWide</code>) · 일반 컬럼(<code>shelf</code>). 동일 셸프 데이터·로직 공유, 폭만 다름.
+  ④ 한도: og:image data:URI ≤100KB·SVG 제외, <code>MAX_SHELF=64</code>. 상단 CASE 버튼 제거(실데이터 empty/few/many 분기).</div>
+
+  <h3>의존성 흐름 (단계 게이트)</h3>
+  <pre><span class="c"># 안→밖, 좌→우 순서. SH-1은 모든 것의 토대. SH-3(egress)는 security-reviewer 위협모델링 게이트 후 착수.</span>
+SH-1 영속·순수코어 ──┬─► SH-2 로컬+홈마운트(2변형) ──► SH-4 refresh+스케줄러+라이브 ──► SH-5 마감 폴리시
+                     └─► SH-3 URL크롤+og:image ────────────┘ (SH-2·SH-3 병렬 가능, add 통합은 SH-3에서)</pre>
+
+  <h3>SH-1 · 영속 · 순수 코어 <span class="pill role-be">backend-dev</span> <span class="pill sec">보안: 저(로컬)</span></h3>
+  <table>
+    <tr><th style="width:180px;">만들/고칠 것</th><th>구체 변경 지점</th></tr>
+    <tr><td><code>lib/common/uiStateStore.js</code> (MODIFY)</td><td>
+      · <code>normalizeShelfBookmarks(input)</code> 신규(자기완결 상수 — <code>lib/shelf</code> 미의존). <code>SHELF_ID_RE=/^b[0-9a-f]{6,32}$/</code>, <code>SHELF_TYPES=Set(['url','folder','file'])</code>, <code>MAX_SHELF=64</code>, 필드별 길이상한(name≤120/title≤200/sub≤200/desc≤500/cat≤32/status≤80), <code>color</code> <code>/^#[0-9a-f]{6}$/i</code>, <code>bannerKey</code> 32hex|null, 수치 유한성, 중복 id 제거·초과 절단.<br>
+      · <code>defaultState()</code>에 <code>shelfBookmarks:[]</code> 추가 + <code>normalizeState()</code>가 <code>obj.shelfBookmarks</code>를 정규화해 포함.<br>
+      · <b>HOME_SECTION_IDS에 <code>'shelf'</code>·<code>'shelfWide'</code> 추가</b>(activity 뒤 권장) → <code>normalizeHomeLayout</code>가 기존 저장값에 자동 합류.<br>
+      · <b>기본 숨김 시드</b>: <code>DEFAULT_HIDDEN_WIDGETS=['shelf','shelfWide']</code> 도입, <code>defaultState().hiddenWidgets</code>에 시드(신규 설치=갤러리에만, 홈 미노출).<br>
+      · <b>★ 기존 사용자 1회 이행(빌드 deliverable — normalizeState 변경 필수)</b>: 실측 <code>normalizeState</code>(uiStateStore.js:177-191)는 입력 <code>obj.schemaVersion</code>을 <b>읽지 않고</b> 출력을 항상 상수로 덮어쓴다 → 현 코드로는 이행 불가. 따라서 <code>normalizeState</code>를 다음으로 변경한다: ① 입력 <code>obj.schemaVersion</code>을 먼저 판독 ② <code>schemaVersion &lt; 2</code> <b>또는 부재(undefined)</b>(=레거시)면 <code>['shelf','shelfWide']</code>를 <code>hiddenWidgets</code>에 <b>union</b>(멱등 — 이미 있으면 무변경) ③ 출력 <code>schemaVersion=2</code>로 마이그레이트. 사용자가 이미 unhide(추가)한 v2 파일은 재숨김하지 않음(의도 보존). <code>SCHEMA_VERSION 1→2</code> 상향. <span class="pill sec">부재(undefined)&lt;2===false 함정 주의 — undefined를 명시적으로 레거시로 분기</span><br>
+      · module.exports에 신규 심볼 공개.</td></tr>
+    <tr><td><code>lib/common/config.js</code> (MODIFY)</td><td>· <code>validateBriefingUrl</code>을 일반 <code>validateHttpUrl(input,{maxLen})</code>로 일반화(공유) — <b>반환형 <code>{ok,value,external}</code> 불변</b>, 기존 <code>validateBriefingUrl</code>은 별칭/래퍼로 무변경 유지(<code>normalizeBriefing</code> 호출처 회귀 0). 셸프 크롤 상한 상수(SHELF_CRAWL_*)는 SH-3에서 lib/shelf로 둘 수도 있음(선택).</td></tr>
+    <tr><td><code>lib/shelf/detectType.js</code> (NEW · 순수)</td><td>초안 <code>detectType</code>/<code>isValidInput</code>/<code>hasExt</code>/<code>lastSeg</code> 포팅. <code>{type,valid}</code> 반환. Electron/fs/net 미import.</td></tr>
+    <tr><td><code>lib/shelf/pathPolicy.js</code> (NEW · 순수)</td><td><code>isDenied(realPath)</code> — 드라이브/FS 루트·OS 시스템 디렉터리(Windows\\**, /etc·/sys·/proc·/dev·/usr·/bin·/System) 접두 매칭·자격 디렉터리(~/.ssh·~/.aws·~/.gnupg·~/.config/gh). <code>pathGuard.foldForCompare</code>로 폴드 비교. node:os·node:path만.</td></tr>
+    <tr><td>테스트</td><td>
+      · <code>test/shelf-uistate.test.js</code> — <code>normalizeShelfBookmarks</code> 정규화·상한·폴백, <b>SCHEMA_VERSION 이행 전수</b>: (a) 구버전(<code>schemaVersion:1</code>) → shelf id union (b) <b>schemaVersion 부재(undefined) 레거시 파일</b> → union(부재=레거시 취급) (c) v2 + 사용자가 이미 unhide한 파일 → 재숨김 안 함(멱등·의도 보존) (d) v2 정상 파일 → 무변경.<br>
+      · <b>★ <code>test/shelf-config-httpurl.test.js</code>(또는 기존 config 테스트 확장) — <code>validateHttpUrl</code> 단위(scheme/임베디드 자격/길이/maxLen 경계·반환형 <code>{ok,value,external}</code>)</b>.<br>
+      · <b>회귀 보존: 기존 <code>test/ai/config-briefing.test.js</code> 그린 유지</b>(<code>validateBriefingUrl</code> 별칭 시그니처·반환형 불변 — 일반화로 briefing이 조용히 깨지지 않음 보장).<br>
+      · <code>test/shelf-detectType.test.js</code>, <code>test/shelf-pathPolicy.test.js</code>(deny 케이스 플랫폼별). 마커 병기(SH-*).</td></tr>
+  </table>
+  <p><b>DoD:</b> 신규 순수 모듈 헤드리스 테스트 그린 · <code>normalizeShelfBookmarks</code>가 공격자 입력(과대/비정상 타입/거대 문자열)에 graceful · 기존 uiState 테스트 회귀 0 · UI/IPC 없음(토대만).</p>
+
+  <h3>SH-2 · 로컬(폴더/파일) IPC + 홈 마운트(2 변형) <span class="pill role-be">backend-dev</span> <span class="pill role-fe">frontend-dev</span> <span class="pill sec">보안: 중(경로)</span></h3>
+  <table>
+    <tr><th style="width:180px;">만들/고칠 것</th><th>구체 변경 지점</th></tr>
+    <tr><td><code>lib/shelf/localMeta.js</code> (NEW · main)</td><td><code>collect(ref,type,ctx)</code>: <code>pathGuard.canonicalize</code>→null이면 PATH_GONE · <code>pathPolicy.isDenied</code>→PATH_DENIED · <code>fs.stat</code>로 folder/file 유형 확인(불일치 보정/거부). folder=얕은 순회(maxDepth·maxEntries·budgetMs 예산, config.size 규약 차용)로 파일수·용량 근사·partial 표기. file=확장자→언어/모노/색(초안 <code>fileMeta</code> 포팅)·크기·mtime. ref엔 canonicalize 실경로 저장.</td></tr>
+    <tr><td><code>electron/ipc/shelf.js</code> (NEW)</td><td>핸들러 <b>list/add/remove/reorder/open</b>(이 단계는 folder·file만; url은 SH-3에서 활성). ctx 주입(store=uiStateStore wrapper·config·shell·pathGuard·safeExec·toolRegistry·imageCache(SH-3)·logger). 인자 전부 재검증·고정 에러코드. add: type 화이트리스트→detectType 재확인→localMeta→정규화 영속→상한 LIMIT. open: §아래 열기 정책. write 시 <code>normalizeShelfBookmarks</code> 재통과.</td></tr>
+    <tr><td><code>electron/ipc/register.js</code> (MODIFY)</td><td><code>spip:shelf:list/add/remove/reorder/open</code> guard 등록(refresh는 SH-4). <code>broadcastShelf()</code> 헬퍼(메인 wc만 화이트리스트 — favorites broadcast 패턴) + ctx에 shell·pathGuard·safeExec·imageCache 주입.</td></tr>
+    <tr><td><code>electron/preload.js</code> (MODIFY)</td><td><code>window.spip.shelf={list,add,remove,reorder,open,refresh,onChanged}</code> 노출(채널 하드코딩, 인자 1차 String/Array 강제). onChanged=<code>_sub('spip:shelf:changed',cb)</code>.</td></tr>
+    <tr><td><code>electron/main.js</code> (MODIFY)</td><td>shelf ctx wiring(shell·toolRegistry·win/wc·imageCache). SH-4에서 scheduler 초기화 추가.</td></tr>
+    <tr><td><code>public/app.js</code> (MODIFY · FE)</td><td>· <code>HOME_SECTION_IDS</code>에 <code>'shelf'</code>·<code>'shelfWide'</code> 추가(메인 enum과 동형) + <code>WIDGET_META</code> 2 항목(셸프/셸프(전체폭)).<br>
+      · <code>renderHomeSection</code> switch에 <code>case 'shelf': return renderHomeShelf('column');</code>·<code>case 'shelfWide': return renderHomeShelf('wide');</code>.<br>
+      · <code>renderHomeShelf(variant)</code> — 공유 빌더. 순수 <code>shelfWidgetVM(store.shelf,active,composer)</code>가 만든 plain object를 <code>el({text})</code>(textContent·L-1)로 빌드. 배너만 <code>el('img',{attrs:{src:dataUri}})</code>(img-src data:). 스타일은 <code>node.style.cssText</code>(CSSOM — CSP style-src 'self' 무관, 기존 패턴).<br>
+      · <code>wide</code> 변형: <code>.home-section</code> 셀에 <code>column-span:all</code> 클래스(<code>styles.css</code>에 <code>.home-section--span{column-span:all}</code> 추가)로 마소너리 전체폭 스팬. <code>column</code>은 컬럼폭 내(펼침폭 클램프).<br>
+      · 마운트 후 querySelector로 행 노드 획득해 <code>wireSwipe(el)</code>·<code>focusActive(id)</code>·<code>animateScroll</code> 초안 그대로 포팅(ref 콜백 미사용).<br>
+      · store 확장: <code>store.shelf</code>·<code>store.shelfActive</code>·<code>store.shelfComposer{type,input,state}</code>. 부트 시 <code>shelf.list()</code> 1회 적재(getUiState와 별도 IPC).<br>
+      · 컴포저(유형 토글·입력·idle/loading/error)·empty/loading 플레이스홀더·푸터·토스트·낙관적 제거. CASE 버튼 없음(<code>store.shelf.length</code>로 분기).</td></tr>
+    <tr><td>테스트</td><td><code>test/shelf-localMeta.test.js</code>(임시디렉토리 메타·예산·partial), <code>test/shelf-ipc.test.js</code>(ctx 모킹: 검증 체인·폴백·에러코드·열기 분기). <code>shelfWidgetVM</code> 순수 단위(empty/few/many·active 분기) — app.js에서 분리해 헤드리스 가능하게(window.SPIP_TEST export 등 기존 패턴). 수동 GUI 스모크.</td></tr>
+  </table>
+  <div class="warn-box"><b>열기(open) 정책(PM #2 — 이 단계 folder/file).</b> 저장 ref를 <b>열기 시점에 재-canonicalize·재-pathPolicy 게이트</b>(TOCTOU 축소). folder → <code>safeExec(resolveTool('code'),[real],{shell:false,detached:true})</code>(기존 <code>openInVsCode</code> 규약, H-2). file → <code>shell.openPath(real)</code>(OS 기본앱). 인자 <code>[real]</code> 고정·id별 in-flight 상한.</div>
+  <p><b>DoD:</b> URL 없이 폴더/파일 셸프 완결 동작 · 2 변형 모두 갤러리에서 추가/제거·홈 렌더 · L-1 전수(textContent) · IPC 전 채널 guard·재검증 · 헤드리스 테스트 그린 · <span class="pill qa">qa-engineer</span>·<span class="pill cr">code-reviewer</span> 통과. 경로 표면 변경이므로 <span class="pill sr">security-reviewer</span> 권장.</p>
+
+  <h3>SH-3 · URL 크롤 + og:image <span class="pill role-be">backend-dev</span> <span class="pill sec">보안: 고(egress·SSRF) — 게이트</span></h3>
+  <div class="danger-box"><b>보안 게이트.</b> 본 단계는 앱 최초 사용자 승인 egress 표면(main→임의 인터넷)이다. <b>착수 전 security-reviewer 위협 모델링</b>, 종료 후 <span class="pill sr">security-reviewer</span> 필수. SSRF 치명/높음 미해결 시 다음 단계 진행 금지·PM 즉시 보고.</div>
+  <table>
+    <tr><th style="width:180px;">만들/고칠 것</th><th>구체 변경 지점</th></tr>
+    <tr><td><code>lib/shelf/ssrfGuard.js</code> (NEW)</td><td><code>validateHttpUrl</code>(config 공유) 1차 + 호스트 DNS resolve → IP 분류 게이트(루프백/사설/링크로컬/메타데이터169.254.169.254·100.100.100.200/CGNAT/멀티캐스트, IPv4-mapped 풀어 재판정) → 해당 시 BLOCKED_HOST. <b>IP 핀</b>(검증 IP로 직접 연결·연결시 재해석 금지). node:dns·node:net(IP파싱)만 — IP 분류는 헤드리스.</td></tr>
+    <tr><td><code>lib/shelf/ogParse.js</code> (NEW · 순수)</td><td>HTML 바이트→{title,desc,image,siteName} 정규식 경량 추출(ADR-SH-5). og:* 우선→&lt;title&gt;/meta description. 엔티티 일부 디코드·매치상한·비탐욕(ReDoS 완화). 전부 sanitize·길이상한. 실패→<code>fallback(host)</code>(초안 로직).</td></tr>
+    <tr><td><code>lib/shelf/imageCache.js</code> (NEW · main)</td><td>og:image 바이트 appData(<code>shelf-images/&lt;sha256(refURL)&gt;.&lt;ext&gt;</code>) 0600 write/read. mime 화이트리스트(png/jpeg/gif/webp — <b>SVG 제외</b>), <b>크기 ≤100KB</b>, <code>toDataUri(bannerKey)</code>(base64+검증 mime), GC(미참조 파일·총량 상한). fs·crypto.</td></tr>
+    <tr><td><code>lib/shelf/urlMeta.js</code> (NEW · main)</td><td><code>crawl(url,ctx)</code> 오케스트레이션: validate→DNS+IP게이트→GET(IP핀·타임아웃8s·본문≤512KB·<code>Accept-Encoding: identity</code>·쿠키/인증 없음)→리다이렉트 ≤3 hop(각 hop 재검증)→ogParse→og:image 절대화·재검증·fetch(image/*·≤100KB)→imageCache. 폴백 메타 생성. node:https/http·ssrfGuard·ogParse·imageCache(주입 모킹).</td></tr>
+    <tr><td><code>electron/ipc/shelf.js</code> (MODIFY)</td><td>add에 url 유형 활성(crawl 결과로 메타 채움). list/add 응답에 <code>bannerImage</code>(data:URI) 부착(<code>imageCache.toDataUri</code>) — 저장본엔 bannerKey만. open url → <code>shell.openExternal(ref)</code> + <b>http/https 재검증</b>(javascript:/file:/커스텀 스킴 차단).</td></tr>
+    <tr><td>테스트</td><td><code>test/shelf-ssrfGuard.test.js</code>(IP 분류표 전수·IPv4-mapped·숫자 IP 직접입력), <code>test/shelf-ogParse.test.js</code>(샘플 HTML·엔티티·폴백·매치상한), urlMeta(주입 모킹: 리다이렉트 hop 재검증·상한 초과 소켓 destroy·BLOCKED_HOST), imageCache(mime/크기 거부·data:URI).</td></tr>
+  </table>
+  <p><b>DoD:</b> 실제 og 크롤 동작 · SSRF 분류표 전수 그린 · 응답 한도(512KB/100KB/8s/3hop/압축 미요청) 강제 · 렌더러 <code>connect-src 'none'</code> 무변경 확인 · <span class="pill sr">security-reviewer</span> 치명/높음 0 · <span class="pill qa">qa</span>·<span class="pill cr">code-review</span> 통과.</p>
+
+  <h3>SH-4 · refresh + 6시간 스케줄러 + 라이브 갱신 <span class="pill role-be">backend-dev</span> <span class="pill role-fe">frontend-dev</span> <span class="pill sec">보안: 고(자동 egress)</span></h3>
+  <table>
+    <tr><th style="width:180px;">만들/고칠 것</th><th>구체 변경 지점</th></tr>
+    <tr><td><code>electron/ipc/shelf.js</code> (MODIFY)</td><td><code>spip:shelf:refresh(id)</code> — 단건 재크롤/재스캔→메타·lastChecked 갱신→영속. in-flight 상한.</td></tr>
+    <tr><td><code>lib/shelf/scheduler.js</code> (NEW · main)</td><td><code>setInterval(6h)</code> 북마크 순회 재수집(직렬 또는 소수 병렬·항목 ≤8s·배치 watchdog). <b>기본 ON</b> + 끄기 토글(설정 영속 — config.shelf.autoRefresh 또는 uiState 키). 첫 tick 지연(부팅 회피). 상승세션이면 크롤 스킵. 변경분만 영속(메타 diff) 후 <code>spip:shelf:changed</code> push.</td></tr>
+    <tr><td><code>lib/common/config.js</code> (MODIFY)</td><td><code>shelf:{autoRefresh:true}</code> DEFAULTS + normalize. 토글 설정 채널(또는 기존 설정 채널 확장) — 끄기 토글 영속.</td></tr>
+    <tr><td><code>electron/main.js</code> (MODIFY)</td><td>scheduler 초기화·dispose(앱 종료 시 clearInterval). <code>spip:shelf:changed</code>는 broadcastShelf로 메인 wc push.</td></tr>
+    <tr><td><code>public/app.js</code> (MODIFY · FE)</td><td><code>spip.shelf.onChanged(cb)</code> 구독 → <code>store.shelf=await list()</code> 후 홈이면 재렌더(onMailUpdated 패턴). refresh 버튼(선택)·자동재크롤 <b>끄기 토글 UI</b>(설정 또는 위젯 푸터). 구독 해제 함수 보관.</td></tr>
+    <tr><td>테스트</td><td><code>test/shelf-scheduler.test.js</code>(타임박스·diff·elevated 스킵·토글 off 시 무동작 — 타이머/주입 모킹), refresh ipc. 수동 라이브 갱신 스모크.</td></tr>
+  </table>
+  <p><b>DoD:</b> 6시간 자동 최신화(초안 푸터 충족)·토글로 끌 수 있음 · 라이브 push 재렌더 동작 · 캐시 GC · <span class="pill qa">qa</span>·<span class="pill cr">code-review</span>·<span class="pill sr">security-reviewer</span>(자동 egress) 통과.</p>
+
+  <h3>SH-5 · 마감 폴리시(선택) <span class="pill role-fe">frontend-dev</span></h3>
+  <p>토스트·error/loading 정합, 펼침폭 컬럼 클램프 검수, 지연 이미지 로드(list는 스파인 색만·펼친 항목만 data:URI — payload 완화), 접근성(키보드 포커스·aria). 테스트: VM 상태 분기 단위 + 수동 GUI. DoD: UX 완성도·접근성 기본 충족.</p>
+
+  <h3>reviewer 검증 정합성 포인트(필독)</h3>
+  <ul>
+    <li><b>2 변형 등록 + 기본 숨김 이행.</b> <code>HOME_SECTION_IDS</code>에 <code>'shelf'</code>·<code>'shelfWide'</code> 추가 시 <code>normalizeHomeLayout</code> 백필이 <b>기존 사용자 홈에 두 셸프를 즉시 노출</b>한다(기본 hiddenWidgets에 없으므로). PM #3은 "사용자가 골라 추가"이므로 <b>기본 숨김</b>이어야 한다. 신규 설치=<code>defaultState().hiddenWidgets</code> 시드로 해결되나, <b>기존 영속 사용자</b>는 hiddenWidgets에 shelf id가 없어 그대로 노출됨 → 1회 이행 필요(<code>SCHEMA_VERSION</code> 2로 올려 <code>normalizeState</code>에서 구버전 감지 시 shelf id를 hiddenWidgets에 union). 이 이행 로직과 enum 동형(app.js↔uiStateStore) 일치를 중점 검증.</li>
+    <li><b>두 변형 동시 추가 — PM #3 확정: 허용.</b> 상호배타 미강제(둘 다 추가 시 동일 셸프 2개 표시 가능). 데이터·IPC는 단일 <code>shelfBookmarks</code> 공유라 정합. 둘 다 기본 숨김, 사용자가 골라 추가.</li>
+    <li><b>og:image 상한 = 100KB (정합 완료).</b> 설계 SSOT(§2·§9·§11)도 100KB로 정정됨 — 코드·테스트·계약·로드맵·설계 5문서 통일. SVG 제외.</li>
+    <li><b>CSP 무변경.</b> 배너는 data:URI(<code>img-src 'self' data:</code> 기존 허용)·렌더 스타일은 CSSOM(<code>style.cssText</code> — <code>style-src 'self'</code> 무관). 마크업 style 속성/innerHTML 금지(L-1) 준수 확인.</li>
+    <li><b>egress 신규 표면.</b> SSRF IP 핀(연결 IP=검증 IP)·hop 재검증·압축 미요청. <code>validateHttpUrl</code> 일반화가 기존 briefing 호출을 깨지 않는지 회귀 확인.</li>
+    <li><b>경로 표면.</b> add·open 양쪽 canonicalize+pathPolicy 재게이트, 열기 인자 <code>[real]</code> 고정, file=openPath/folder=safeExec(VS Code) 분기(PM #2) 일치.</li>
+  </ul>
+
+  <h3>태스크 분해(역할·의존성)</h3>
+  <table>
+    <tr><th style="width:90px;">태스크</th><th>범위</th><th style="width:120px;">역할</th><th style="width:90px;">의존</th></tr>
+    <tr><td class="nid">#3 백엔드</td><td>상위 — SH-1(uiState·detectType·pathPolicy·config 일반화)·SH-2(localMeta·ipc·register·preload·main wiring)·SH-3(ssrfGuard·ogParse·imageCache·urlMeta·add url·열기 정책)·SH-4(refresh·scheduler·broadcast)</td><td><span class="pill role-be">backend-dev</span></td><td>—</td></tr>
+    <tr><td class="nid">#3-a</td><td>SH-1 영속·순수 코어(서브)</td><td><span class="pill role-be">backend-dev</span></td><td>—</td></tr>
+    <tr><td class="nid">#3-b</td><td>SH-2 localMeta + IPC(folder/file) + register/preload/main</td><td><span class="pill role-be">backend-dev</span></td><td>#3-a</td></tr>
+    <tr><td class="nid">#3-c</td><td>SH-3 크롤/SSRF/og:image(security 게이트)</td><td><span class="pill role-be">backend-dev</span></td><td>#3-a · security-reviewer 위협모델링</td></tr>
+    <tr><td class="nid">#3-d</td><td>SH-4 refresh·6h 스케줄러·broadcast·토글 영속</td><td><span class="pill role-be">backend-dev</span></td><td>#3-b · #3-c</td></tr>
+    <tr><td class="nid">#4 프론트</td><td>상위 — 셸프 UI 전체 + 2변형 홈 마운트 + shelfWidgetVM 분리 + 라이브 구독 + 끄기 토글 UI</td><td><span class="pill role-fe">frontend-dev</span></td><td>API 계약 합의</td></tr>
+    <tr><td class="nid">#4-a</td><td>SH-2 FE: HOME enum·WIDGET_META·renderHomeShelf(2변형)·shelfWidgetVM·wireSwipe/focusActive·컴포저·empty/loading/toast·styles.css span</td><td><span class="pill role-fe">frontend-dev</span></td><td>#3-b 계약</td></tr>
+    <tr><td class="nid">#4-b</td><td>SH-4 FE: onChanged 라이브 재렌더·refresh 버튼·자동재크롤 끄기 토글 UI</td><td><span class="pill role-fe">frontend-dev</span></td><td>#4-a · #3-d</td></tr>
+    <tr><td class="nid">#5 검증</td><td>단계별 qa(수용·경계)·code-review(코드변경 시)·security-review(SH-2 경로/SH-3·4 egress 필수)·난항버그 debugger</td><td><span class="pill qa">qa</span> <span class="pill cr">cr</span> <span class="pill sr">sr</span></td><td>각 단계 종료</td></tr>
+  </table>
+  <div class="note"><b>인터페이스 먼저.</b> <code>window.spip.shelf.*</code> 계약(<code>docs/api-contract.md</code> §셸프)을 backend↔frontend 합의 후에만 #3-b/#4-a 병렬 착수. ShelfBookmarkView shape(특히 <code>bannerImage</code> data:URI 유무·status 문자열·열기 라벨)가 경계면 단일 진실.</div>
+</section>
+
 </main>
-<footer>Project-SPIP · 개발 로드맵 v1.0 · 8단계(S0~S7) · MVP 16건 · 외부 의존성 0 · 입력: architecture rev.2 / adr / PRD §12.1 / traceability · 자족형 HTML · 본 문서는 로드맵이며 구현 코드 미포함</footer>
+<footer>Project-SPIP · 개발 로드맵 v1.0 · 8단계(S0~S7) · MVP 16건 + 즐겨찾기 셸프 위젯(SH-1~5) · 외부 의존성 0 · 입력: architecture rev.2 / shelf-widget-design / adr / PRD §12.1 / traceability · 자족형 HTML · 본 문서는 로드맵이며 구현 코드 미포함</footer>
 </body>
 </html>
