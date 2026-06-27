@@ -446,6 +446,7 @@ input, button, select { font-family: inherit; }
 .shelf-panel:active { transform: translateY(-1px) scale(.992); }
 .shelf-panel:focus-visible { outline: 2px solid var(--accent, #4f46e5); outline-offset: 2px; }
 .shelf-rm:hover { background: #fee2e2 !important; border-color: #fecaca !important; color: #dc2626 !important; }
+.shelf-edit:hover { background: #eef2ff !important; border-color: #c7d2fe !important; color: #4f46e5 !important; }
 .shelf-open:hover { background: #000 !important; }
 /* [SH-4] 자동 재크롤 토글 스위치 — 기본 OFF 회색, ON indigo. 접근성: role=switch + aria-checked. */
 .shelf-switch {

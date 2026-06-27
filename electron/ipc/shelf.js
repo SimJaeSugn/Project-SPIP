@@ -78,7 +78,9 @@ function toView(bm, ctx) {
     id: bm.id,
     type: bm.type,
     ref: bm.ref,
-    name: bm.name,
+    // 사용자 지정 책 제목이 있으면 우선. 없으면 크롤/스캔 name. customName은 편집 입력 prefill용으로 동봉.
+    name: bm.customName || bm.name,
+    customName: bm.customName || '',
     title: bm.title,
     sub: bm.sub,
     desc: bm.desc,
@@ -240,6 +242,36 @@ async function add(args, ctx) {
   return { ok: true, bookmark: toView(stored, ctx) };
 }
 
+/** rename 인자 sanitize — { name } 문자열만(없으면 null). */
+function sanitizeName(args) {
+  const a = (args && typeof args === 'object' && !Array.isArray(args)) ? args : {};
+  return typeof a.name === 'string' ? a.name : null;
+}
+
+/**
+ * spip:shelf:rename — 책 제목(스파인 표시명) 사용자 지정. customName만 갱신하므로 원본 name·메타는
+ *   불변이고 refresh가 덮어쓰지 않는다. 빈 문자열이면 사용자 지정 해제(크롤/스캔 name으로 복귀).
+ *   [D-1] withWriteLock으로 최신 상태 재-read 후 머지·write(동시 변이와 stale write 차단).
+ */
+function rename(args, ctx) {
+  const id = sanitizeId(args);
+  if (!id) return { ok: false, code: 'BAD_INPUT' };
+  const raw = sanitizeName(args);
+  if (raw == null) return { ok: false, code: 'BAD_INPUT' };
+  const name = raw.trim(); // 길이 상한·제어문자 정리는 uiStateStore가 영속 시 재적용
+  return withWriteLock(ctx, () => {
+    const state = readState(ctx);
+    const idx = state.shelfBookmarks.findIndex((b) => b.id === id);
+    if (idx < 0) return { ok: false, code: 'NOT_FOUND' };
+    const nextArr = state.shelfBookmarks.slice();
+    nextArr[idx] = Object.assign({}, state.shelfBookmarks[idx], { customName: name });
+    const written = writeState(Object.assign({}, state, { shelfBookmarks: nextArr }), ctx);
+    const stored = written.shelfBookmarks.find((b) => b.id === id);
+    if (!stored) return { ok: false, code: 'INTERNAL' };
+    return { ok: true, bookmark: toView(stored, ctx) };
+  });
+}
+
 /**
  * spip:shelf:remove — id로 항목 제거 후 영속. 없으면 NOT_FOUND.
  */
@@ -382,4 +414,4 @@ async function refresh(args, ctx) {
   });
 }
 
-module.exports = { list, add, remove, reorder, open, refresh, getSettings, setSettings, getAutoRefresh, sanitizeAddArgs, sanitizeId, toView, genId };
+module.exports = { list, add, remove, rename, reorder, open, refresh, getSettings, setSettings, getAutoRefresh, sanitizeAddArgs, sanitizeId, sanitizeName, toView, genId };

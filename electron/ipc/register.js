@@ -254,6 +254,12 @@ function registerIpcHandlers(deps) {
   guard('spip:shelf:list', () => shelfIpc.list(undefined, shelfCtx()));
   guard('spip:shelf:add', (args) => shelfIpc.add(args, shelfCtx()));
   guard('spip:shelf:remove', (args) => shelfIpc.remove(args, shelfCtx()));
+  // 책 제목(스파인 표시명) 사용자 지정 — 성공 시 다른 창 동기화를 위해 changed push.
+  guard('spip:shelf:rename', async (args) => {
+    const res = await shelfIpc.rename(args, shelfCtx());
+    if (res && res.ok) broadcastShelf();
+    return res;
+  });
   guard('spip:shelf:reorder', (args) => shelfIpc.reorder(args, shelfCtx()));
   guard('spip:shelf:open', (args) => shelfIpc.open(args, shelfCtx()));
   // 수동 refresh 성공(메타 변경 가능) 시 다른 창 동기화를 위해 changed push.

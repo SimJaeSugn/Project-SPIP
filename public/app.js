@@ -1515,6 +1515,8 @@ function initBrowser() {
       autoRefresh: true,          // [SH-4] 자동 재크롤(6시간) 토글 — list 응답 autoRefresh 로 초기 적재(기본 ON)
       busyAuto: false,            // setSettings in-flight
       _focusPending: false,       // 활성 변경 후 마운트 시 자동 스크롤 1회 트리거
+      editing: null,              // 인라인 책 제목 편집 중인 항목 id(없으면 null)
+      _editValue: null,           // 편집 입력값 버퍼(재렌더 보존)
       _addTimer: null,            // 디바운스 add 타이머
       _addSeq: 0,                 // add 경합 가드(취소분 무시)
       unsub: null,                // onChanged 구독 해제
@@ -3373,6 +3375,45 @@ function initBrowser() {
     if (res && res.ok) toast('여는 중…');
     else toast(shelfAddErrorMessage(res && res.code), true);
   }
+  // ── 책 제목 인라인 편집(스파인 표시명) ──
+  function shelfStartEdit(id) {
+    var bm = store.shelf.bookmarks.find(function (b) { return b && b.id === id; });
+    store.shelf.active = id; // 펼침 보장(편집 입력은 펼침 면에만 존재)
+    store.shelf.editing = id;
+    store.shelf._editValue = bm ? (bm.name || '') : '';
+    patchShelfSection();
+    // patchRegion 재마운트 후 입력에 포커스·전체선택(capture 스냅샷엔 아직 입력이 없으므로 수동 포커스).
+    setTimeout(function () {
+      if (typeof document === 'undefined') return;
+      var inp = document.querySelector('.shelf-region .shelf-edit-input');
+      if (inp) { try { inp.focus(); inp.select(); } catch (_) { /* noop */ } }
+    }, 0);
+  }
+  function shelfCancelEdit() {
+    store.shelf.editing = null; store.shelf._editValue = null;
+    patchShelfSection();
+  }
+  async function shelfCommitRename(id, value) {
+    if (store.shelf.editing !== id) return; // 중복 호출(blur+Enter) 가드
+    var name = String(value == null ? '' : value).trim();
+    store.shelf.editing = null; store.shelf._editValue = null;
+    if (!bridgeHasShelf('rename')) { patchShelfSection(); return; }
+    // 낙관적 반영(빈 값이면 응답의 크롤/스캔 name으로 정합).
+    store.shelf.bookmarks = store.shelf.bookmarks.map(function (b) {
+      return (b && b.id === id) ? Object.assign({}, b, name ? { name: name } : {}) : b;
+    });
+    patchShelfSection();
+    var res = await shelfIpc('rename', id, name);
+    if (res && res.ok && res.bookmark && typeof res.bookmark.id === 'string') {
+      var bk = res.bookmark;
+      store.shelf.bookmarks = store.shelf.bookmarks.map(function (b) { return (b && b.id === bk.id) ? bk : b; });
+      patchShelfSection();
+      toast('책 제목을 바꿨어요');
+    } else if (res && res.ok === false) {
+      refreshShelf(); // 실패 → 재조회로 정합 복구
+      toast('이름을 바꾸지 못했어요', true);
+    }
+  }
 
   /** 셸프 영역만 부분 갱신(.shelf-region). 컴포저 캐럿 보존(.shelf-input ∈ FOCUS_SEL). 위젯 'shelf' 재배선. */
   function patchShelfSection() {
@@ -3560,7 +3601,7 @@ function initBrowser() {
     var face = el('div', { style: 'position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;padding:13px 0;' });
     face.appendChild(el('div', { text: p.mono, style: 'width:30px;height:30px;border-radius:9px;background:rgba(255,255,255,.22);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;' + HOME_MONO + 'font-size:15px;font-weight:600;color:#fff;flex:none;' }));
     var nameWrap = el('div', { style: 'flex:1;display:flex;align-items:center;justify-content:center;min-height:0;' });
-    nameWrap.appendChild(el('div', { text: p.name, style: 'writing-mode:vertical-rl;transform:rotate(180deg);font-size:12.5px;font-weight:600;letter-spacing:.01em;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-height:150px;' }));
+    nameWrap.appendChild(el('div', { text: p.name, style: 'writing-mode:vertical-rl;font-size:12.5px;font-weight:600;letter-spacing:.01em;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-height:150px;' }));
     face.appendChild(nameWrap);
     face.appendChild(el('div', { style: 'width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.55);flex:none;' }));
     return face;
@@ -3590,9 +3631,41 @@ function initBrowser() {
     var body = el('div', { style: 'flex:1;background:#fff;padding:26px 16px 14px;display:flex;flex-direction:column;min-width:0;overflow:hidden;' });
     var topRow = el('div', { style: 'display:flex;align-items:flex-start;gap:8px;' });
     var titleCol = el('div', { style: 'flex:1;min-width:0;' });
-    titleCol.appendChild(el('div', { text: p.title, style: 'font-size:14px;font-weight:600;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#1c1917;' }));
-    titleCol.appendChild(el('div', { text: p.sub, style: HOME_MONO + 'font-size:10.5px;color:#a8a29e;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;' }));
+    var editing = store.shelf.editing === p.id;
+    if (editing) {
+      // 인라인 책 제목 편집(스파인 표시명 = p.name 편집). Enter 저장 · Esc 취소 · 포커스 이탈 시 저장.
+      var nameInput = el('input', {
+        cls: 'shelf-edit-input',
+        style: 'width:100%;box-sizing:border-box;border:1.5px solid #c7d2fe;border-radius:8px;padding:5px 9px;font-size:14px;font-weight:600;color:#1c1917;background:#fff;font-family:Geist,Pretendard,sans-serif;outline:none;',
+        attrs: { type: 'text', 'aria-label': '책 제목 편집', maxlength: '120', spellcheck: 'false', placeholder: '책 제목', autocomplete: 'off' },
+        on: {
+          click: function (e) { e.stopPropagation(); },
+          input: function (e) { store.shelf._editValue = e.target.value; },
+          keydown: function (e) {
+            e.stopPropagation();
+            if (e.key === 'Enter') { e.preventDefault(); shelfCommitRename(p.id, e.target.value); }
+            else if (e.key === 'Escape') { e.preventDefault(); shelfCancelEdit(); }
+          },
+          blur: function (e) { if (store.shelf.editing === p.id) shelfCommitRename(p.id, e.target.value); },
+        },
+      });
+      nameInput.value = (store.shelf._editValue != null) ? store.shelf._editValue : (p.name || '');
+      titleCol.appendChild(nameInput);
+      titleCol.appendChild(el('div', { text: 'Enter 저장 · Esc 취소', style: HOME_MONO + 'font-size:10px;color:#a8a29e;margin-top:4px;' }));
+    } else {
+      titleCol.appendChild(el('div', { text: p.title, style: 'font-size:14px;font-weight:600;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#1c1917;' }));
+      titleCol.appendChild(el('div', { text: p.sub, style: HOME_MONO + 'font-size:10.5px;color:#a8a29e;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;' }));
+    }
     topRow.appendChild(titleCol);
+    if (!editing) {
+      var editBtn = el('button', {
+        cls: 'shelf-edit', attrs: { type: 'button', title: '책 제목 편집', 'aria-label': p.name + ' 제목 편집' },
+        style: 'appearance:none;border:1px solid #e7e5e4;background:#fff;width:26px;height:26px;border-radius:7px;cursor:pointer;color:#a8a29e;display:flex;align-items:center;justify-content:center;flex:none;',
+        on: { click: function (e) { e.stopPropagation(); shelfStartEdit(p.id); } },
+      });
+      editBtn.appendChild(svg([{ t: 'path', d: 'M12 20h9' }, { t: 'path', d: 'M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z' }], { size: 13, stroke: 'currentColor', sw: 2 }));
+      topRow.appendChild(editBtn);
+    }
     topRow.appendChild(el('span', { text: p.cat, style: 'font-size:10px;font-weight:600;padding:2px 8px;border-radius:6px;background:#f7f7f6;color:#78716c;border:1px solid #ececea;flex:none;white-space:nowrap;' }));
     body.appendChild(topRow);
     body.appendChild(el('p', { text: p.desc, style: 'margin:9px 0 0;font-size:12px;color:#57534e;line-height:1.55;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;' }));
@@ -7402,7 +7475,7 @@ function initBrowser() {
     // ── RG-2: preserve(노드 보존 — 포커스/캐럿/스크롤 캡처·복원) ──
     //   기존 render() 인라인 복원 로직을 동작 동일하게 흡수(로직 변경 없이 위치만). 회귀 0.
     const SCROLL_SEL = ['.settings-pane', '.modal__body', '.drawer', '.orbit__panel', '.dash__main'];
-    const FOCUS_SEL = ['.topbar__search-input', '.orbit__search', '.shelf-input', '.shelf-switch'];
+    const FOCUS_SEL = ['.topbar__search-input', '.orbit__search', '.shelf-input', '.shelf-edit-input', '.shelf-switch'];
     const preserve = {
       /** 재렌더 전 스냅샷(활성 입력의 포커스/캐럿 + 스크롤 위치). */
       capture(rootEl) {

@@ -188,6 +188,7 @@ contextBridge.exposeInMainWorld('spip', {
     list: () => ipcRenderer.invoke('spip:shelf:list'),
     add: (type, ref) => ipcRenderer.invoke('spip:shelf:add', { type: String(type), ref: String(ref) }),
     remove: (id) => ipcRenderer.invoke('spip:shelf:remove', { id: String(id) }),
+    rename: (id, name) => ipcRenderer.invoke('spip:shelf:rename', { id: String(id), name: String(name) }),
     reorder: (ids) => ipcRenderer.invoke('spip:shelf:reorder', { ids: Array.isArray(ids) ? ids.map(String) : [] }),
     open: (id) => ipcRenderer.invoke('spip:shelf:open', { id: String(id) }),
     refresh: (id) => ipcRenderer.invoke('spip:shelf:refresh', { id: String(id) }),

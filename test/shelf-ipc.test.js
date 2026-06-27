@@ -211,6 +211,39 @@ test('SH-3 refresh(url) — 재크롤로 메타 갱신(주입 모킹)', async ()
   assert.strictEqual(typeof r.bookmark.lastChecked, 'number');
 });
 
+// ── 책 제목(스파인 표시명) 사용자 지정 ──
+test('rename — customName 우선 표시·영속 / 빈 값=해제', async () => {
+  const ctx = makeCtx();
+  const added = await shelf.add({ type: 'folder', ref: fixtureDir() }, ctx);
+  const id = added.bookmark.id;
+  const r = await shelf.rename({ id, name: '내 책 제목' }, ctx);
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(r.bookmark.name, '내 책 제목');     // 표시 name은 customName 우선
+  assert.strictEqual(r.bookmark.customName, '내 책 제목'); // prefill용 동봉
+  assert.strictEqual(shelf.list(undefined, ctx).bookmarks[0].name, '내 책 제목'); // 영속
+  // 빈 값 → 사용자 지정 해제(원래 스캔 name 복귀)
+  const r2 = await shelf.rename({ id, name: '   ' }, ctx);
+  assert.strictEqual(r2.bookmark.customName, '');
+  assert.strictEqual(r2.bookmark.name, added.bookmark.name);
+});
+
+test('rename — refresh가 customName을 덮지 않음', async () => {
+  const ctx = makeCtx();
+  const added = await shelf.add({ type: 'folder', ref: fixtureDir() }, ctx);
+  const id = added.bookmark.id;
+  await shelf.rename({ id, name: '고정 제목' }, ctx);
+  const r = await shelf.refresh({ id }, ctx);
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(r.bookmark.name, '고정 제목'); // 재수집 후에도 사용자 지정 유지
+});
+
+test('rename — NOT_FOUND / BAD_INPUT', async () => {
+  const ctx = makeCtx();
+  assert.strictEqual((await shelf.rename({ id: 'bdeadbeef', name: 'x' }, ctx)).code, 'NOT_FOUND');
+  assert.strictEqual((await shelf.rename({ id: 'not-an-id', name: 'x' }, ctx)).code, 'BAD_INPUT');
+  assert.strictEqual((await shelf.rename({ id: 'bdeadbeef' }, ctx)).code, 'BAD_INPUT'); // name 누락
+});
+
 // ── SH-4: 자동 재크롤 토글 ──
 test('SH-4 getSettings/setSettings — autoRefresh 토글·라이브 반영·영속', () => {
   const cfgDir = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'spip-cfg-')));
