@@ -16,7 +16,9 @@
     "start:web": "node server.js",
     "serve:http": "node server.js",
     "dev": "node scan.js && node server.js",
-    "test": "node --test \"test/**/*.test.js\""
+    "pretest": "node test/cleanup-temp.js",
+    "test": "node --test \"test/**/*.test.js\"",
+    "posttest": "node test/cleanup-temp.js"
   },
   "engines": {
     "node": ">=18"
