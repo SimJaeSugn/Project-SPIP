@@ -506,6 +506,10 @@ input, button, select { font-family: inherit; }
 .briefing-item--urgent { border-left-color: #dc2626; }
 .briefing-item--must { border-left-color: #4f46e5; }
 .briefing-item--good { border-left-color: #d6d3d1; }
+/* 스트리밍 중 부분 항목 미리보기 — 점진 등장(작성 중 느낌). 액션 없는 읽기 전용. */
+.briefing-items--stream { opacity: 0.92; }
+.briefing-item--stream { border-left-color: #c7d2fe; animation: briefingStreamIn 0.18s ease-out; }
+@keyframes briefingStreamIn { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: none; } }
 .briefing-item__top { display: flex; align-items: baseline; gap: 9px; }
 .briefing-item__title { font-size: 13px; font-weight: 600; color: #1c1917; flex: 1 1 0%; min-width: 0; }
 .briefing-item__actions { display: flex; gap: 5px; flex: 0 0 auto; }

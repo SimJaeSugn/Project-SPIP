@@ -1529,7 +1529,9 @@ function initBrowser() {
       enabled: false,            // getSettings.enabled(opt-in)
       status: 'idle',            // idle|generating|streaming|done|error|disabled (onState)
       gen: 0,                    // 최신 세대(취소분 delta/done 무시용)
-      streamText: '',            // onDelta 누적 버퍼(textContent 로만 표시)
+      streamText: '',            // onDelta 누적 버퍼(평문 모드에서만 표시 — textContent)
+      streamMode: 'text',        // 'json'|'text' — json이면 streamItems 카드 표시(원문 JSON 숨김)
+      streamItems: [],           // 스트리밍 중 완성된 부분 항목 [{key,title,reason,guide}](점진 표시)
       items: [],                 // 최종/carry-over open 항목 [{key,category,title,reason,guide,ref}]
       counters: null,            // getUiState.briefing.counters
       lastError: null,           // 마지막 에러 code(고정 enum)
@@ -2136,13 +2138,23 @@ function initBrowser() {
       card.appendChild(hintRow);
     }
 
-    // 스트리밍 중 — 누적 텍스트(textContent). 마크다운→HTML 변환 절대 없음.
-    if (b.status === 'streaming' && b.streamText) {
-      card.appendChild(el('p', { cls: 'briefing-card__stream', text: b.streamText }));
+    // 스트리밍 중 — JSON 모드면 완성된 부분 항목을 카드로 점진 표시(원문 JSON 숨김), 평문 모드면
+    //   누적 원문 그대로(textContent). 어느 쪽도 마크다운→HTML 변환은 절대 없음.
+    var showingStream = false;
+    if (b.status === 'streaming') {
+      if (b.streamMode === 'json' && b.streamItems && b.streamItems.length) {
+        var sWrap = el('div', { cls: 'briefing-items briefing-items--stream' });
+        b.streamItems.forEach(function (it) { sWrap.appendChild(renderBriefingStreamItem(it)); });
+        card.appendChild(sWrap);
+        showingStream = true;
+      } else if (b.streamMode !== 'json' && b.streamText) {
+        card.appendChild(el('p', { cls: 'briefing-card__stream', text: b.streamText }));
+      }
+      // JSON 모드인데 아직 완성 항목 0개면 본문 비움 — 상단 "브리핑 작성 중…" 인디케이터가 대신한다.
     }
 
-    // 항목(done/streaming 종료/carry-over) — 분류별 그룹 + done/dismiss + 가이드 토글.
-    var groups = briefingGroupItems(b.items);
+    // 항목(done/carry-over) — 스트리밍 미리보기를 보이는 중이면 생략(중복 방지).
+    var groups = showingStream ? [] : briefingGroupItems(b.items);
     if (groups.length > 0) {
       var listWrap = el('div', { cls: 'briefing-items' });
       groups.forEach(function (gp) {
@@ -2187,6 +2199,15 @@ function initBrowser() {
       row.appendChild(toggle);
       if (open) row.appendChild(el('div', { cls: 'briefing-item__guide', text: String(it.guide) }));
     }
+    return row;
+  }
+
+  /** 스트리밍 중 부분 항목 1개 — 제목·사유만(읽기 전용 미리보기). 완료 전이라 액션 버튼 없음.
+   *   모델 출력은 표시 전용(textContent). 마지막 항목에 '작성 중' 느낌(stream 클래스). */
+  function renderBriefingStreamItem(it) {
+    var row = el('div', { cls: 'briefing-item briefing-item--stream' });
+    if (it.title) row.appendChild(el('div', { cls: 'briefing-item__title', text: String(it.title) }));
+    if (it.reason) row.appendChild(el('div', { cls: 'briefing-item__reason', text: String(it.reason) }));
     return row;
   }
 
@@ -6897,15 +6918,18 @@ function initBrowser() {
       if (!p || typeof p !== 'object') return;
       store.briefing.status = (typeof p.status === 'string') ? p.status : store.briefing.status;
       if (p.status === 'disabled') store.briefing.enabled = false;
-      else if (p.status === 'generating') { store.briefing.streamText = ''; store.briefing.lastError = null; }
+      else if (p.status === 'generating') { store.briefing.streamText = ''; store.briefing.streamItems = []; store.briefing.streamMode = 'text'; store.briefing.lastError = null; }
       if (typeof p.code === 'string') store.briefing.lastError = p.code;
       patchBriefing();
     }));
     if (typeof spip.briefing.onDelta === 'function') subs.push(spip.briefing.onDelta(function (p) {
       if (!p || !briefingAcceptsGen(store.briefing.gen, p.gen)) return; // [R-35] 이전 세대 잔여 무시
-      if (Number(p.gen) > store.briefing.gen) { store.briefing.gen = Number(p.gen); store.briefing.streamText = ''; } // 새 세대 시작 → 버퍼 초기화
+      if (Number(p.gen) > store.briefing.gen) { store.briefing.gen = Number(p.gen); store.briefing.streamText = ''; store.briefing.streamItems = []; store.briefing.streamMode = 'text'; } // 새 세대 시작 → 버퍼 초기화
       store.briefing.status = 'streaming';
-      store.briefing.streamText += (typeof p.chunk === 'string') ? p.chunk : ''; // 누적(textContent)
+      store.briefing.streamText += (typeof p.chunk === 'string') ? p.chunk : ''; // 평문 모드 표시용 누적
+      if (p.mode === 'json' || p.mode === 'text') store.briefing.streamMode = p.mode;
+      // JSON 모드: 완성된 부분 항목만 카드로 점진 표시(원문 JSON 숨김). 항목 수 변동 시에만 동봉됨.
+      if (Array.isArray(p.items)) store.briefing.streamItems = p.items;
       patchBriefing();
     }));
     if (typeof spip.briefing.onDone === 'function') subs.push(spip.briefing.onDone(function (p) {
