@@ -120,6 +120,14 @@ test('deleteMailArchiveItem — 메일함 비우기 / 계정 초기화', async (
   assert.deepStrictEqual(res.accounts[0].mailboxes, [], '계정 보관함 초기화');
 });
 
+test('toView — 메일함명 modified UTF-7 디코드(displayName), name은 원본 보존', async () => {
+  const ctx = makeCtx([{ mailbox: '&vBvHQNO4ycDVaA-', uidvalidity: 1, serverUids: [1], entries: [entry(1)] }]);
+  const res = await ipc.syncMailArchive(ctx);
+  const mb = res.accounts[0].mailboxes[0];
+  assert.strictEqual(mb.name, '&vBvHQNO4ycDVaA-', 'name은 IMAP 원본(조회용)');
+  assert.strictEqual(mb.displayName, '받은편지함', 'displayName은 디코드된 한글(표시용)');
+});
+
 test('deleteMailArchiveItem — 잘못된 인자', async () => {
   const ctx = makeCtx([]);
   assert.strictEqual((await ipc.deleteMailArchiveItem({}, ctx)).code, 'INVALID');

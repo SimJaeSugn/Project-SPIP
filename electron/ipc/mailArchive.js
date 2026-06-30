@@ -21,6 +21,7 @@
 const archiveStore = require('../../lib/mail/mailArchiveStore');
 const mailArchive = require('../../lib/mail/mailArchive');
 const { ImapClient } = require('../../lib/mail/imapClient');
+const { decodeModifiedUtf7 } = require('../../lib/mail/imapProtocol');
 
 const SYNC_MAX_FOLDERS = mailArchive.MAX_FOLDERS;
 const SYNC_PER_FOLDER = mailArchive.MAX_ITEMS;
@@ -84,7 +85,8 @@ function toView(archive, accounts) {
         .slice()
         .sort((x, y) => (dateMs(y.date) - dateMs(x.date)) || (y.uid - x.uid));
       const unread = items.filter((it) => it.onServer && !it.seen).length;
-      return { name, total: items.length, unread, items };
+      // name은 IMAP 원본(EXAMINE/조회용 — 인코딩 그대로), displayName은 한글 등 표시용(modified UTF-7 디코드).
+      return { name, displayName: decodeModifiedUtf7(name), total: items.length, unread, items };
     });
     out.push({
       accountId: id,

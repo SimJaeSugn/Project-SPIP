@@ -150,3 +150,15 @@ test('parseFetchFlags — FLAGS에서 uid/seen/deleted 추출', () => {
   // FLAGS 부재 → null
   assert.strictEqual(parseFetchFlags('* 1 FETCH (UID 7 ENVELOPE ("d" "s" NIL NIL NIL NIL NIL NIL NIL NIL))'), null);
 });
+
+test('decodeModifiedUtf7 — 한글 메일함명(modified UTF-7) 디코드', () => {
+  const { decodeModifiedUtf7 } = require('../lib/mail/imapProtocol');
+  assert.strictEqual(decodeModifiedUtf7('&vBvHQNO4ycDVaA-'), '받은편지함');
+  assert.strictEqual(decodeModifiedUtf7('&vPSwuNO4ycDVaA-'), '보낸편지함');
+  assert.strictEqual(decodeModifiedUtf7('[Gmail]/&yATMtLz0rQDVaA-'), '[Gmail]/전체보관함'); // ASCII 경로 + 한글 혼합
+  assert.strictEqual(decodeModifiedUtf7('INBOX'), 'INBOX'); // ASCII는 그대로
+  assert.strictEqual(decodeModifiedUtf7('Tom &- Jerry'), 'Tom & Jerry'); // '&-' → '&'
+  // 손상/비문자열 graceful
+  assert.strictEqual(decodeModifiedUtf7('&abc'), '&abc'); // 닫힘 없음 → 원문 보존
+  assert.strictEqual(decodeModifiedUtf7(null), '');
+});

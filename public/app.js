@@ -1759,10 +1759,10 @@ function initBrowser() {
     if (store.showHelp) app.appendChild(renderHelp());
     // 최초 스캔 팝업 — 홈 위에만 표시(스냅샷 없을 때). 닫기 가능(× / Esc / 오버레이).
     if (store.showFirstRun && store.state.view === 'home') app.appendChild(renderFirstRunModal());
-    // 메일 본문 팝업(항목 클릭).
-    if (store.mailView && store.mailView.open) app.appendChild(renderMailMessageModal());
-    // 메일함 팝업(헤더 버튼).
+    // 메일함 팝업(헤더 버튼) — 먼저 마운트(아래 깔림).
     if (store.mailbox && store.mailbox.open) app.appendChild(renderMailboxModal());
+    // 메일 본문 팝업(항목 클릭) — 나중에 마운트해 메일함 위에 표시(메일함에서 메일을 읽을 때 위로).
+    if (store.mailView && store.mailView.open) app.appendChild(renderMailMessageModal());
     // [R-25 RG-2] 저장한 스크롤 위치 + 검색 입력 포커스/캐럿 복원(타이핑 중 재렌더로 포커스가 풀리는 문제 해결).
     RG.preserve.restore(app, snap);
     // [R-25 RG-3] 새 DOM 에 매칭되는 위젯만 1회 부착(카드뷰면 .cards 에 Sortable, 표/무결과/홈이면 no-op).
@@ -2941,7 +2941,7 @@ function initBrowser() {
     var wrap = el('div', { style: 'display:flex;gap:16px;align-items:flex-start;min-height:320px;' });
 
     // 좌측 트리.
-    var tree = el('div', { style: 'flex:0 0 230px;max-height:60vh;overflow:auto;border-right:1px solid #f4f3f1;padding-right:10px;' });
+    var tree = el('div', { cls: 'mailbox-tree', style: 'flex:0 0 230px;max-height:60vh;overflow:auto;border-right:1px solid #f4f3f1;padding-right:10px;' });
     accts.forEach(function (a) {
       tree.appendChild(el('div', { text: a.label || a.host || a.accountId, title: a.user || '', style: 'font-size:12px;font-weight:700;color:#1c1917;margin:10px 0 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;' }));
       if (!a.mailboxes || !a.mailboxes.length) {
@@ -2950,12 +2950,13 @@ function initBrowser() {
       }
       a.mailboxes.forEach(function (m) {
         var active = a.accountId === mx.selAccount && m.name === mx.selMailbox;
+        var mbLabel = m.displayName || m.name; // 표시는 디코드된 한글, 동작(select)은 원본 name
         var row = el('div', {
-          attrs: { role: 'button', tabindex: '0', title: m.name },
+          attrs: { role: 'button', tabindex: '0', title: mbLabel },
           style: 'display:flex;align-items:center;gap:6px;padding:5px 8px;border-radius:7px;cursor:pointer;font-size:12px;' + (active ? 'background:#eef2ff;color:#4338ca;font-weight:600;' : 'color:#57534e;'),
           on: { click: (function (id, nm) { return function () { selectMailbox(id, nm); }; })(a.accountId, m.name) },
         });
-        row.appendChild(el('span', { text: m.name, style: 'flex:1 1 0%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;' }));
+        row.appendChild(el('span', { text: mbLabel, style: 'flex:1 1 0%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;' }));
         if (m.unread > 0) row.appendChild(el('span', { text: String(m.unread), style: 'flex:0 0 auto;font-size:10px;font-weight:700;background:#4f46e5;color:#fff;border-radius:9px;padding:1px 6px;' }));
         row.appendChild(el('span', { text: String(m.total), style: 'flex:0 0 auto;font-size:10px;color:#a8a29e;' }));
         tree.appendChild(row);
@@ -2964,14 +2965,14 @@ function initBrowser() {
     wrap.appendChild(tree);
 
     // 우측 메일 목록.
-    var listWrap = el('div', { style: 'flex:1 1 0%;min-width:0;max-height:60vh;overflow:auto;' });
+    var listWrap = el('div', { cls: 'mailbox-list', style: 'flex:1 1 0%;min-width:0;max-height:60vh;overflow:auto;' });
     var selAcct = accts.find(function (a) { return a.accountId === mx.selAccount; });
     var selMb = selAcct && (selAcct.mailboxes || []).find(function (m) { return m.name === mx.selMailbox; });
     if (!selMb) {
       listWrap.appendChild(el('div', { text: '메일함을 선택하세요.', style: 'color:#a8a29e;font-size:13px;padding:16px 0;' }));
     } else {
       var mbHead = el('div', { style: 'display:flex;align-items:center;gap:8px;margin-bottom:8px;' });
-      mbHead.appendChild(el('div', { text: selMb.name, style: 'font-size:13px;font-weight:700;color:#1c1917;flex:1 1 0%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;' }));
+      mbHead.appendChild(el('div', { text: selMb.displayName || selMb.name, style: 'font-size:13px;font-weight:700;color:#1c1917;flex:1 1 0%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;' }));
       mbHead.appendChild(el('span', { text: '전체 ' + selMb.total + ' · 안읽음 ' + selMb.unread, style: 'font-size:11px;color:#a8a29e;flex:0 0 auto;' }));
       if (selMb.total > 0) mbHead.appendChild(el('button', {
         text: '비우기',
@@ -7709,7 +7710,7 @@ function initBrowser() {
 
     // ── RG-2: preserve(노드 보존 — 포커스/캐럿/스크롤 캡처·복원) ──
     //   기존 render() 인라인 복원 로직을 동작 동일하게 흡수(로직 변경 없이 위치만). 회귀 0.
-    const SCROLL_SEL = ['.settings-pane', '.modal__body', '.drawer', '.orbit__panel', '.dash__main'];
+    const SCROLL_SEL = ['.settings-pane', '.modal__body', '.drawer', '.orbit__panel', '.dash__main', '.mailbox-tree', '.mailbox-list'];
     const FOCUS_SEL = ['.topbar__search-input', '.orbit__search', '.shelf-input', '.shelf-edit-input', '.shelf-switch'];
     const preserve = {
       /** 재렌더 전 스냅샷(활성 입력의 포커스/캐럿 + 스크롤 위치). */
