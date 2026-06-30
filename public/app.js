@@ -1478,6 +1478,8 @@ function initBrowser() {
     mailView: { open: false, loading: false, accountId: null, uid: null, meta: null, code: null }, // 메일 본문 팝업
     // 메일함 팝업 — 계정별·메일함별 수집 메일 보관함(영속). 헤더 버튼으로 열고 동기화·삭제.
     mailbox: { open: false, loading: false, syncing: false, accounts: [], code: null, selAccount: null, selMailbox: null, errors: [] },
+    // 공용 확인 모달(파괴적 동작 승인) — askConfirm()로 연다.
+    confirm: { open: false, title: '', message: '', confirmText: '확인', danger: false, onConfirm: null },
     // 생산성(홈 브리핑) — 최근 14일 커밋 빈도(getCommitActivity). 수동 새로고침(git 호출 비용).
     commitActivity: null,        // {days:[{date,count}],total,repos,scanned}
     busyCommitActivity: false,   // getCommitActivity in-flight
@@ -1763,6 +1765,8 @@ function initBrowser() {
     if (store.mailbox && store.mailbox.open) app.appendChild(renderMailboxModal());
     // 메일 본문 팝업(항목 클릭) — 나중에 마운트해 메일함 위에 표시(메일함에서 메일을 읽을 때 위로).
     if (store.mailView && store.mailView.open) app.appendChild(renderMailMessageModal());
+    // 공용 확인 모달 — 최상단(파괴적 동작 승인).
+    if (store.confirm && store.confirm.open) app.appendChild(renderConfirmModal());
     // [R-25 RG-2] 저장한 스크롤 위치 + 검색 입력 포커스/캐럿 복원(타이핑 중 재렌더로 포커스가 풀리는 문제 해결).
     RG.preserve.restore(app, snap);
     // [R-25 RG-3] 새 DOM 에 매칭되는 위젯만 1회 부착(카드뷰면 .cards 에 Sortable, 표/무결과/홈이면 no-op).
@@ -2798,8 +2802,11 @@ function initBrowser() {
         text: res.text,
         hasHtml: !!res.hasHtml, // [메일 뷰어] 격리 iframe(app://mailbody) 렌더 가능 여부
       };
-      // 열람 시 서버에서 읽음 처리됨 → 메일함 팝업 표시도 즉시 읽음 반영(낙관적, 다음 동기화에 영속).
-      if (store.mailbox && store.mailbox.open && known.mailbox) markArchiveItemSeenLocal(accountId, known.mailbox, uid);
+      // 열람 시 서버에서 읽음 처리됨 → 메일함 표시와 위젯(안읽음)에 즉시 반영(낙관적, 다음 동기화에 영속).
+      if (known.mailbox) {
+        if (store.mailbox && store.mailbox.open) markArchiveItemSeenLocal(accountId, known.mailbox, uid);
+        removeFromMailSummary(accountId, known.mailbox, uid); // 읽음 → 위젯 안읽음 목록에서 제거
+      }
     } else store.mailView.code = (res && res.code) || 'NETWORK';
     render();
   }
@@ -2817,6 +2824,45 @@ function initBrowser() {
     store.mailView = { open: false, loading: false, accountId: null, uid: null, meta: null, code: null };
     store._mailViewShown = false;
     render();
+  }
+
+  /* ===== 공용 확인 모달(파괴적 동작 승인) ===== */
+  function askConfirm(opts) {
+    opts = opts || {};
+    store.confirm = {
+      open: true,
+      title: opts.title || '확인',
+      message: opts.message || '',
+      confirmText: opts.confirmText || '확인',
+      danger: !!opts.danger,
+      onConfirm: (typeof opts.onConfirm === 'function') ? opts.onConfirm : function () {},
+    };
+    store._confirmShown = false;
+    render();
+  }
+  function closeConfirm() {
+    store.confirm = { open: false, title: '', message: '', confirmText: '확인', danger: false, onConfirm: null };
+    store._confirmShown = false;
+    render();
+  }
+  function renderConfirmModal() {
+    var c = store.confirm;
+    var enter = !store._confirmShown; store._confirmShown = true;
+    var body = [];
+    body.push(el('p', { text: c.message, style: 'margin:0;font-size:13.5px;color:#44403c;line-height:1.65;white-space:pre-wrap;' }));
+    var actions = el('div', { style: 'display:flex;justify-content:flex-end;gap:8px;margin-top:18px;' });
+    actions.appendChild(el('button', {
+      text: '취소', attrs: { type: 'button' },
+      style: 'appearance:none;border:1px solid #e7e5e4;border-radius:8px;background:#fff;cursor:pointer;font-size:13px;font-weight:600;color:#57534e;padding:7px 14px;',
+      on: { click: closeConfirm },
+    }));
+    actions.appendChild(el('button', {
+      text: c.confirmText, attrs: { type: 'button' },
+      style: 'appearance:none;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;color:#fff;padding:7px 14px;background:' + (c.danger ? '#dc2626' : '#4f46e5') + ';',
+      on: { click: function () { var fn = c.onConfirm; closeConfirm(); if (fn) try { fn(); } catch (_) { /* noop */ } } },
+    }));
+    body.push(actions);
+    return buildModal({ title: c.title, onClose: closeConfirm, enter: enter, bodyChildren: body });
   }
 
   /* ===== 메일함(보관함) 팝업 — 계정별·메일함별 수집 메일(영속). 헤더 '메일함' 버튼으로 연다. ===== */
@@ -2884,29 +2930,58 @@ function initBrowser() {
     if (c === 'NETWORK') return '서버 연결 실패로 삭제하지 못했습니다.';
     return '삭제에 실패했습니다.';
   }
-  /** 단건 메일 삭제 — 서버 휴지통으로 이동 + 로컬 보관함에서 제거. */
-  async function deleteMailboxMail(accountId, mailbox, uid) {
+  /** 홈 메일 위젯(다이제스트)에서도 즉시 제거(낙관적) — 메일함 삭제가 위젯에 바로 반영되게. */
+  function removeFromMailSummary(accountId, mailbox, uid) {
+    var a = (store.mailSummary || []).find(function (x) { return x && x.id === accountId; });
+    if (!a || !Array.isArray(a.items)) return;
+    var before = a.items.length;
+    a.items = a.items.filter(function (it) {
+      if (it.mailbox !== mailbox) return true;
+      return (uid != null) ? (it.uid !== uid) : false; // uid 지정=단건, 미지정=폴더 전체
+    });
+    var removed = before - a.items.length;
+    if (removed > 0 && Number.isFinite(a.unseen)) a.unseen = Math.max(0, a.unseen - removed);
+  }
+  /** 단건 메일 삭제 — 확인 후 서버 휴지통 이동 + 로컬 보관함/위젯 반영. */
+  function deleteMailboxMail(accountId, mailbox, uid) {
     if (!bridgeHas('deleteMailArchiveItem') || store.mailbox.busy) return;
+    askConfirm({
+      title: '메일 삭제', confirmText: '삭제', danger: true,
+      message: '이 메일을 삭제할까요?\n서버 휴지통으로 이동합니다(복구 가능).',
+      onConfirm: function () { doDeleteMailboxMail(accountId, mailbox, uid); },
+    });
+  }
+  async function doDeleteMailboxMail(accountId, mailbox, uid) {
     store.mailbox.busy = true; render();
     var res = await ipc('deleteMailArchiveItem', accountId, mailbox, uid);
     store.mailbox.busy = false;
-    if (!store.mailbox.open) return;
-    if (res && res.ok) { store.mailbox.accounts = res.accounts || []; ensureMailboxSelection(); toast('메일을 휴지통으로 옮겼습니다.'); }
-    else toast(describeMailboxDeleteError(res), true);
+    if (res && res.ok) {
+      if (store.mailbox.open) { store.mailbox.accounts = res.accounts || []; ensureMailboxSelection(); }
+      removeFromMailSummary(accountId, mailbox, uid); // 위젯 즉시 반영
+      refreshMailSummary();                            // 권위 재조회(서버 반영)
+      toast('메일을 휴지통으로 옮겼습니다.');
+    } else toast(describeMailboxDeleteError(res), true);
     render();
   }
-  /** 메일함(폴더) 비우기 — 그 폴더의 서버 메일을 일괄 휴지통으로 이동 + 로컬 제거. 대량이라 확인 후 진행. */
-  async function clearMailboxFolder(accountId, mailbox, label) {
+  /** 메일함(폴더) 비우기 — 확인 후 그 폴더의 서버 메일을 일괄 휴지통 이동 + 로컬/위젯 반영. */
+  function clearMailboxFolder(accountId, mailbox, label) {
     if (!bridgeHas('deleteMailArchiveItem') || store.mailbox.busy) return;
-    if (typeof window !== 'undefined' && typeof window.confirm === 'function') {
-      if (!window.confirm('“' + (label || mailbox) + '” 메일함의 메일을 서버 휴지통으로 모두 옮깁니다. 계속할까요?')) return;
-    }
+    askConfirm({
+      title: '메일함 비우기', confirmText: '비우기', danger: true,
+      message: '“' + (label || mailbox) + '” 메일함의 메일을 모두 삭제할까요?\n서버 휴지통으로 이동합니다(복구 가능).',
+      onConfirm: function () { doClearMailboxFolder(accountId, mailbox); },
+    });
+  }
+  async function doClearMailboxFolder(accountId, mailbox) {
     store.mailbox.busy = true; render();
     var res = await ipc('deleteMailArchiveItem', accountId, mailbox);
     store.mailbox.busy = false;
-    if (!store.mailbox.open) return;
-    if (res && res.ok) { store.mailbox.accounts = res.accounts || []; ensureMailboxSelection(); toast('메일함을 비웠습니다(휴지통 이동).'); }
-    else toast(describeMailboxDeleteError(res), true);
+    if (res && res.ok) {
+      if (store.mailbox.open) { store.mailbox.accounts = res.accounts || []; ensureMailboxSelection(); }
+      removeFromMailSummary(accountId, mailbox, null); // 위젯에서 그 폴더 메일 제거
+      refreshMailSummary();
+      toast('메일함을 비웠습니다(휴지통 이동).');
+    } else toast(describeMailboxDeleteError(res), true);
     render();
   }
   /** 메일을 열었을 때(서버 읽음 처리됨) 보관함 표시도 즉시 읽음으로 반영(낙관적 — 다음 동기화에 영속). */
