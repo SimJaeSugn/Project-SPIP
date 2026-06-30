@@ -124,12 +124,14 @@ async function getMailSummary(ctx) {
     const view = reg.toPublicView(a);
     try {
       const client = d.clientFactory({ host: a.host, port: a.port, user: a.user, pass: a.pass });
-      const digest = await client.fetchUnseenDigest('INBOX', MAIL_DIGEST_LIMIT);
+      // 모든 메일함(휴지통/스팸 제외)을 순회 — 폴더로 분류된 메일도 수집한다(INBOX 단독 한정 해제).
+      const digest = await client.fetchUnseenDigestAll(MAIL_DIGEST_LIMIT);
       const items = (Array.isArray(digest.items) ? digest.items : []).map((m) => ({
         uid: Number.isInteger(m.uid) ? m.uid : null, // 본문 조회용
         subject: m.subject ? clampString(String(m.subject), 200) : null,
         from: m.from ? clampString(String(m.from), 120) : null,
         date: m.date ? clampString(String(m.date), 64) : null,
+        mailbox: m.mailbox ? clampString(String(m.mailbox), 200) : null, // 본문 조회 시 소속 메일함(없으면 INBOX)
       }));
       return Object.assign({}, view, { ok: true, unseen: Number.isFinite(digest.unseen) ? digest.unseen : items.length, items });
     } catch (err) {
@@ -150,11 +152,13 @@ async function getMailMessage(args, ctx) {
   const id = (typeof args.accountId === 'string' && args.accountId) ? args.accountId : '';
   const uid = Number(args.uid);
   if (!id || !Number.isInteger(uid) || uid <= 0) return { ok: false, code: 'INVALID' };
+  // 메일이 속한 메일함(다이제스트 아이템이 전달). 제어문자(CRLF 인젝션) 제거 후 사용, 없으면 INBOX.
+  const mailbox = (typeof args.mailbox === 'string' ? args.mailbox.replace(/[\x00-\x1F\x7F]/g, '') : '') || 'INBOX';
   const acct = currentAccounts(ctx).find((a) => a && a.id === id);
   if (!acct) return { ok: false, code: 'NOT_FOUND' };
   try {
     const client = d.clientFactory({ host: acct.host, port: acct.port, user: acct.user, pass: acct.pass });
-    const raw = await client.fetchMessage(uid, 'INBOX');
+    const raw = await client.fetchMessage(uid, mailbox);
     const msg = mailBody.parseMessage(raw);
     // [메일 뷰어] 정제 HTML을 메인에 보관 → 격리 문서(app://mailbody)가 서빙. 렌더러엔 hasHtml만(대용량 회송 회피).
     const html = (typeof msg.html === 'string') ? msg.html : '';

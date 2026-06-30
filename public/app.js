@@ -2732,7 +2732,7 @@ function initBrowser() {
         cls: clickable ? 'home-mail-row' : '',
         attrs: clickable ? { role: 'button', tabindex: '0', 'aria-label': '메일 보기: ' + (m.subject || '') } : {},
         style: 'display:flex;align-items:center;gap:11px;padding:9px 2px;' + (i > 0 ? 'border-top:1px solid #f4f3f1;' : '') + (clickable ? 'cursor:pointer;' : ''),
-        on: clickable ? { click: function () { openMailMessage(m.accountId, m.uid, { subject: m.subject, from: m.from, date: m.date }); } } : {},
+        on: clickable ? { click: function () { openMailMessage(m.accountId, m.uid, { subject: m.subject, from: m.from, date: m.date, mailbox: m.mailbox }); } } : {},
       });
       var av = homeAvatarColors(i);
       var name = m.from || '(발신자)';
@@ -2761,7 +2761,8 @@ function initBrowser() {
     store.mailView = { open: true, loading: true, accountId: accountId, uid: uid, meta: null, code: null, known: known, showImages: false };
     store._mailViewShown = false;
     render();
-    var res = await ipc('getMailMessage', accountId, uid);
+    // 본문은 메일이 속한 메일함(known.mailbox)에서 조회한다. 없으면 main이 INBOX로 폴백.
+    var res = await ipc('getMailMessage', accountId, uid, known.mailbox);
     if (!store.mailView.open || store.mailView.uid !== uid) return; // 닫혔거나 다른 메일 — 무시
     store.mailView.loading = false;
     if (res && res.ok) {

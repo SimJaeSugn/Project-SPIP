@@ -164,3 +164,88 @@ test('fetchUnseenDigest — EXAMINE+SEARCH+ENVELOPE(리터럴 제목 포함) 파
   assert.strictEqual(d.items[1].subject, 'Hello');
   assert.ok(sock.written.some((c) => /EXAMINE/.test(c)), 'EXAMINE(read-only) 사용');
 });
+
+// ── 전체 메일함 순회: listMailboxes + fetchUnseenDigestAll ──
+function allFoldersSocket() {
+  const s = new EventEmitter();
+  s.written = [];
+  s.setTimeout = () => {}; s.end = () => {}; s.destroy = () => {};
+  s.feedRaw = (str) => s.emit('data', Buffer.from(str, 'utf8'));
+  s.feed = (line) => s.feedRaw(line + '\r\n');
+  let current = 'INBOX';
+  const unseenByBox = { INBOX: 1, Work: 2 };           // 메일함별 안 읽은 수
+  const searchByBox = { INBOX: '48', Work: '10' };     // 메일함별 UNSEEN UID
+  const envByUid = {
+    48: '("Mon, 01 Jan 2026 00:00:00 +0000" "Inbox msg" (("A" NIL "a" "ex.com")) NIL NIL NIL NIL NIL NIL NIL)',
+    10: '("Wed, 03 Jan 2026 00:00:00 +0000" "Work msg" (("B" NIL "b" "ex.com")) NIL NIL NIL NIL NIL NIL NIL)',
+  };
+  const qname = (data) => { const m = String(data).match(/"([^"]*)"/); return (m && m[1]) ? m[1] : 'INBOX'; };
+  s.write = (data) => {
+    s.written.push(data);
+    const tag = String(data).split(' ')[0];
+    process.nextTick(() => {
+      if (/\bLOGIN\b/i.test(data)) s.feed(tag + ' OK LOGIN');
+      else if (/\bLIST\b/i.test(data)) {
+        s.feed('* LIST (\\HasNoChildren) "/" "INBOX"');
+        s.feed('* LIST (\\HasNoChildren) "/" "Work"');
+        s.feed('* LIST (\\HasNoChildren \\Trash) "/" "[Gmail]/Trash"'); // 제외 대상
+        s.feed(tag + ' OK LIST');
+      }
+      else if (/\bSTATUS\b/i.test(data)) { const nm = qname(data); s.feed('* STATUS "' + nm + '" (MESSAGES 5 UNSEEN ' + (unseenByBox[nm] || 0) + ' UIDNEXT 99)'); s.feed(tag + ' OK'); }
+      else if (/\bEXAMINE\b/i.test(data)) { current = qname(data); s.feed('* OK [READ-ONLY]'); s.feed(tag + ' OK [READ-ONLY]'); }
+      else if (/UID\s+SEARCH/i.test(data)) { s.feed('* SEARCH ' + (searchByBox[current] || '')); s.feed(tag + ' OK'); }
+      else if (/UID\s+FETCH/i.test(data)) {
+        const um = String(data).match(/UID FETCH ([\d,]+)/i);
+        if (um) um[1].split(',').forEach((u, i) => { if (envByUid[u]) s.feed('* ' + (i + 1) + ' FETCH (UID ' + u + ' ENVELOPE ' + envByUid[u] + ')'); });
+        s.feed(tag + ' OK');
+      }
+      else if (/\bLOGOUT\b/i.test(data)) { s.feed('* BYE'); s.feed(tag + ' OK'); }
+    });
+    return true;
+  };
+  return s;
+}
+
+test('listMailboxes — LIST 응답을 메일함 목록으로 파싱', async () => {
+  const sock = allFoldersSocket();
+  const client = new ImapClient({ host: 'h', port: 993, user: 'u', pass: 'p',
+    connect: () => { process.nextTick(() => sock.feed('* OK ready')); return sock; } });
+  await client.connect();
+  await client.login();
+  const boxes = await client.listMailboxes();
+  assert.strictEqual(boxes.length, 3);
+  assert.deepStrictEqual(boxes.map((b) => b.name), ['INBOX', 'Work', '[Gmail]/Trash']);
+});
+
+test('fetchUnseenDigestAll — 전체 메일함 순회·합계·최신순 병합, 휴지통 제외', async () => {
+  const sock = allFoldersSocket();
+  const client = new ImapClient({ host: 'h', port: 993, user: 'u', pass: 'p',
+    connect: () => { process.nextTick(() => sock.feed('* OK ready')); return sock; } });
+  const d = await client.fetchUnseenDigestAll(5);
+  assert.strictEqual(d.unseen, 3, 'INBOX(1)+Work(2) 합계');
+  assert.strictEqual(d.items.length, 2);
+  // 메일함을 가로질러 최신순: Work(01-03) > INBOX(01-01)
+  assert.strictEqual(d.items[0].uid, 10);
+  assert.strictEqual(d.items[0].mailbox, 'Work', '소속 메일함 포함');
+  assert.strictEqual(d.items[1].uid, 48);
+  assert.strictEqual(d.items[1].mailbox, 'INBOX');
+  // 휴지통은 선택(EXAMINE)조차 하지 않는다.
+  assert.ok(!sock.written.some((c) => /EXAMINE.*Trash/i.test(c)), '휴지통 EXAMINE 안 함(제외)');
+  assert.ok(sock.written.some((c) => /EXAMINE\s+"Work"/i.test(c)), 'Work 메일함 EXAMINE');
+});
+
+test('fetchUnseenDigestAll — LIST 실패 시 INBOX 단독 폴백', async () => {
+  const sock = allFoldersSocket();
+  // LIST에 NO로 응답하도록 가로채기.
+  const origWrite = sock.write;
+  sock.write = (data) => {
+    if (/\bLIST\b/i.test(data)) { sock.written.push(data); const tag = String(data).split(' ')[0]; process.nextTick(() => sock.feed(tag + ' NO not supported')); return true; }
+    return origWrite(data);
+  };
+  const client = new ImapClient({ host: 'h', port: 993, user: 'u', pass: 'p',
+    connect: () => { process.nextTick(() => sock.feed('* OK ready')); return sock; } });
+  const d = await client.fetchUnseenDigestAll(5);
+  assert.strictEqual(d.unseen, 1, 'INBOX만 조회');
+  assert.strictEqual(d.items.length, 1);
+  assert.strictEqual(d.items[0].mailbox, 'INBOX');
+});

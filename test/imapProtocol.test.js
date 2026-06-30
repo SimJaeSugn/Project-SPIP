@@ -100,3 +100,44 @@ test('parseFetchEnvelope — uid/subject(디코드)/from(이름 우선)', () => 
   // ENVELOPE 부재 → null
   assert.strictEqual(parseFetchEnvelope('* 1 FETCH (UID 7 FLAGS (\Seen))'), null);
 });
+
+test('parseListMailbox — flags/delimiter/name 파싱(따옴표·경로·특수플래그)', () => {
+  const { parseListMailbox } = require('../lib/mail/imapProtocol');
+  assert.deepStrictEqual(
+    parseListMailbox('* LIST (\\HasNoChildren) "/" "INBOX"'),
+    { flags: ['\\HasNoChildren'], delimiter: '/', name: 'INBOX' });
+  assert.deepStrictEqual(
+    parseListMailbox('* LIST (\\HasNoChildren \\Trash) "/" "[Gmail]/Trash"'),
+    { flags: ['\\HasNoChildren', '\\Trash'], delimiter: '/', name: '[Gmail]/Trash' });
+  // delimiter NIL(평면 계층)
+  assert.deepStrictEqual(
+    parseListMailbox('* LIST () NIL "Work"'),
+    { flags: [], delimiter: null, name: 'Work' });
+  // LSUB도 동일 파싱
+  assert.strictEqual(parseListMailbox('* LSUB () "/" "Sent"').name, 'Sent');
+  // 비-LIST 라인 → null
+  assert.strictEqual(parseListMailbox('* STATUS "INBOX" (MESSAGES 1)'), null);
+  assert.strictEqual(parseListMailbox('A1 OK done'), null);
+});
+
+test('isCollectibleMailbox — 휴지통/스팸/전체보관함/선택불가 제외, 일반/하위폴더 수집', () => {
+  const { isCollectibleMailbox } = require('../lib/mail/imapProtocol');
+  // 수집 대상
+  assert.ok(isCollectibleMailbox({ flags: [], delimiter: '/', name: 'INBOX' }));
+  assert.ok(isCollectibleMailbox({ flags: ['\\HasNoChildren'], delimiter: '/', name: '업무/2026' }), '사용자 폴더(하위) 수집');
+  assert.ok(isCollectibleMailbox({ flags: ['\\Sent'], delimiter: '/', name: 'Sent' }), '보낸편지함은 수집 대상');
+  // 플래그 기반 제외
+  assert.ok(!isCollectibleMailbox({ flags: ['\\Trash'], delimiter: '/', name: 'X' }), '\\Trash 제외');
+  assert.ok(!isCollectibleMailbox({ flags: ['\\Junk'], delimiter: '/', name: 'X' }), '\\Junk 제외');
+  assert.ok(!isCollectibleMailbox({ flags: ['\\All'], delimiter: '/', name: '[Gmail]/All Mail' }), '\\All(전체보관함) 제외');
+  assert.ok(!isCollectibleMailbox({ flags: ['\\Drafts'], delimiter: '/', name: 'X' }), '\\Drafts 제외');
+  assert.ok(!isCollectibleMailbox({ flags: ['\\Noselect'], delimiter: '/', name: '[Gmail]' }), '\\Noselect 제외');
+  // 이름 기반 제외(플래그 미제공 서버)
+  assert.ok(!isCollectibleMailbox({ flags: [], delimiter: '/', name: '[Gmail]/Trash' }), '이름 Trash 제외');
+  assert.ok(!isCollectibleMailbox({ flags: [], delimiter: '/', name: 'Spam' }), '이름 Spam 제외');
+  assert.ok(!isCollectibleMailbox({ flags: [], delimiter: '/', name: '받은편지함/휴지통' }), '한글 휴지통 제외');
+  assert.ok(!isCollectibleMailbox({ flags: [], delimiter: '/', name: '스팸편지함' }), '한글 스팸 제외');
+  // 잘못된 입력
+  assert.ok(!isCollectibleMailbox(null));
+  assert.ok(!isCollectibleMailbox({ name: '' }));
+});

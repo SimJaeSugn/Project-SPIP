@@ -114,8 +114,8 @@ contextBridge.exposeInMainWorld('spip', {
     (a && a.id != null) ? { id: String(a.id) } : {}, _mailArgs(a))),
   // 홈 브리핑용 — 계정별 안 읽은 메일 수 + 제목·발신자 미리보기(인자 없음).
   getMailSummary: () => ipcRenderer.invoke('spip:getMailSummary'),
-  // 단건 메일 본문 조회(팝업) — 계정 id + uid. 읽음표시 영향 없음(main이 EXAMINE+PEEK).
-  getMailMessage: (accountId, uid) => ipcRenderer.invoke('spip:getMailMessage', { accountId: String(accountId), uid: Number(uid) }),
+  // 단건 메일 본문 조회(팝업) — 계정 id + uid + 소속 메일함. 읽음표시 영향 없음(main이 EXAMINE+PEEK).
+  getMailMessage: (accountId, uid, mailbox) => ipcRenderer.invoke('spip:getMailMessage', { accountId: String(accountId), uid: Number(uid), mailbox: (mailbox == null ? '' : String(mailbox)) }),
   // 홈 인사이트 — 최근 14일 커밋 빈도 시계열(인자 없음).
   getCommitActivity: () => ipcRenderer.invoke('spip:getCommitActivity'),
   // [항목2] 홈 인사이트 — Claude Code 로컬 로그 토큰 사용량 집계(인자 없음·읽기 전용).

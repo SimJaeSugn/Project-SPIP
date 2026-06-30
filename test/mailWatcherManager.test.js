@@ -18,15 +18,16 @@ function acc(id, host, user, uidnextSeq) {
   return { id, label: id + '-label', host, port: 993, user, pass: 'pw-' + id, _seq: uidnextSeq };
 }
 
-// 계정 host 기준으로 STATUS 시퀀스를 주는 가짜 클라이언트 팩토리.
+// 계정 host 기준으로 전 폴더 STATUS 시퀀스를 주는 가짜 클라이언트 팩토리(INBOX 단일 폴더로 래핑).
 function factory(seqByHost) {
   const idx = {};
   return (creds) => ({
-    fetchInboxStatus: async () => {
+    fetchAllStatus: async () => {
       const seq = seqByHost[creds.host] || [{ uidnext: 1 }];
       const i = idx[creds.host] || 0;
       idx[creds.host] = i + 1;
-      return seq[Math.min(i, seq.length - 1)];
+      const st = seq[Math.min(i, seq.length - 1)];
+      return [Object.assign({ name: 'INBOX' }, st)];
     },
   });
 }

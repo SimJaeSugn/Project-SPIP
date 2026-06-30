@@ -107,10 +107,11 @@ test('testMailAccount — 검증 실패 코드', async () => {
 });
 
 // ── M3: getMailSummary ──
-test('getMailSummary — 계정별 unseen+items, 비번 미노출', async () => {
+test('getMailSummary — 계정별 unseen+items(전체 메일함), mailbox 포함, 비번 미노출', async () => {
   const { ctx } = makeCtx();
   ipc.addMailAccount(VALID, ctx);
-  ctx.mailClientFactory = () => ({ fetchUnseenDigest: async () => ({ unseen: 3, items: [{ uid: 9, subject: '제목', from: '보낸이', date: 'd' }] }) });
+  // 전체 메일함 순회(fetchUnseenDigestAll) — 폴더로 분류된 메일 포함, 각 아이템에 mailbox.
+  ctx.mailClientFactory = () => ({ fetchUnseenDigestAll: async () => ({ unseen: 3, items: [{ uid: 9, subject: '제목', from: '보낸이', date: 'd', mailbox: '업무' }] }) });
   const res = await ipc.getMailSummary(ctx);
   assert.ok(res.ok);
   assert.strictEqual(res.accounts.length, 1);
@@ -118,17 +119,18 @@ test('getMailSummary — 계정별 unseen+items, 비번 미노출', async () => 
   assert.strictEqual(res.accounts[0].unseen, 3);
   assert.strictEqual(res.accounts[0].items[0].subject, '제목');
   assert.strictEqual(res.accounts[0].items[0].from, '보낸이');
+  assert.strictEqual(res.accounts[0].items[0].mailbox, '업무', '소속 메일함 전달(본문 조회용)');
   assert.ok(!('pass' in res.accounts[0]));
 });
 
 test('getMailSummary — 계정 실패 격리(AUTH/NETWORK)', async () => {
   const { ctx } = makeCtx();
   ipc.addMailAccount(VALID, ctx);
-  ctx.mailClientFactory = () => ({ fetchUnseenDigest: async () => { const e = new Error('no'); e.authFailed = true; throw e; } });
+  ctx.mailClientFactory = () => ({ fetchUnseenDigestAll: async () => { const e = new Error('no'); e.authFailed = true; throw e; } });
   let res = await ipc.getMailSummary(ctx);
   assert.strictEqual(res.accounts[0].ok, false);
   assert.strictEqual(res.accounts[0].code, 'AUTH');
-  ctx.mailClientFactory = () => ({ fetchUnseenDigest: async () => { throw new Error('ECONNREFUSED'); } });
+  ctx.mailClientFactory = () => ({ fetchUnseenDigestAll: async () => { throw new Error('ECONNREFUSED'); } });
   res = await ipc.getMailSummary(ctx);
   assert.strictEqual(res.accounts[0].code, 'NETWORK');
 });
@@ -152,6 +154,21 @@ test('getMailMessage — 성공 시 파싱된 본문 반환', async () => {
   assert.strictEqual(res.subject, '제목');
   assert.strictEqual(res.from, 's@x.com');
   assert.strictEqual(res.text, '본문입니다');
+});
+
+test('getMailMessage — 소속 메일함을 fetchMessage로 전달(폴더 메일 본문 조회)', async () => {
+  const { ctx } = makeCtx();
+  const added = ipc.addMailAccount(VALID, ctx);
+  let usedMailbox = null;
+  ctx.mailClientFactory = () => ({ fetchMessage: async (uid, mailbox) => { usedMailbox = mailbox; return 'Subject: x\r\n\r\nbody'; } });
+  await ipc.getMailMessage({ accountId: added.account.id, uid: 5, mailbox: '업무/2026' }, ctx);
+  assert.strictEqual(usedMailbox, '업무/2026', '아이템이 준 메일함으로 조회');
+  // mailbox 미지정 시 INBOX 폴백.
+  await ipc.getMailMessage({ accountId: added.account.id, uid: 5 }, ctx);
+  assert.strictEqual(usedMailbox, 'INBOX', 'mailbox 없으면 INBOX');
+  // CRLF 인젝션 제거 후 사용.
+  await ipc.getMailMessage({ accountId: added.account.id, uid: 5, mailbox: 'a\r\nX LOGOUT' }, ctx);
+  assert.ok(!/[\r\n]/.test(usedMailbox), '제어문자 제거(인젝션 차단)');
 });
 
 test('getMailMessage — 잘못된 인자 / 없는 계정', async () => {
