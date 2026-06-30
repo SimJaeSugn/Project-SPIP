@@ -308,3 +308,99 @@ test('fetchMailIndexAll — 전 메일함 UIDVALIDITY+전체uid+FLAGS/ENVELOPE �
   assert.strictEqual(work.uidvalidity, 222);
   assert.strictEqual(work.entries[0].subject, 'Work1');
 });
+
+// ── 서버 삭제(휴지통 이동) + 읽음 처리(markSeen) ──
+function deleteSocket(opts) {
+  opts = opts || {};
+  const s = new EventEmitter();
+  s.written = [];
+  s.setTimeout = () => {}; s.end = () => {}; s.destroy = () => {};
+  s.feed = (line) => s.emit('data', Buffer.from(line + '\r\n', 'utf8'));
+  s.write = (data) => {
+    s.written.push(data);
+    const tag = String(data).split(' ')[0];
+    process.nextTick(() => {
+      if (/\bLOGIN\b/i.test(data)) s.feed(tag + ' OK LOGIN');
+      else if (/\bLIST\b/i.test(data)) {
+        s.feed('* LIST (\\HasNoChildren) "/" "INBOX"');
+        s.feed('* LIST (\\HasNoChildren \\Trash) "/" "Trash"');
+        s.feed(tag + ' OK LIST');
+      }
+      else if (/\bSELECT\b/i.test(data)) { s.feed('* OK [READ-WRITE]'); s.feed(tag + ' OK [READ-WRITE]'); }
+      else if (/UID\s+MOVE/i.test(data)) { s.feed(opts.moveFails ? (tag + ' BAD unknown command') : (tag + ' OK MOVE')); }
+      else if (/UID\s+COPY/i.test(data)) { s.feed(tag + ' OK COPY'); }
+      else if (/UID\s+STORE/i.test(data)) { s.feed(tag + ' OK STORE'); }
+      else if (/UID\s+EXPUNGE/i.test(data)) { s.feed(tag + ' OK EXPUNGE'); }
+      else if (/\bEXPUNGE\b/i.test(data)) { s.feed(tag + ' OK EXPUNGE'); }
+      else if (/\bLOGOUT\b/i.test(data)) { s.feed('* BYE'); s.feed(tag + ' OK'); }
+    });
+    return true;
+  };
+  return s;
+}
+
+test('deleteMessages — 휴지통으로 UID MOVE(휴지통 탐지)', async () => {
+  const sock = deleteSocket();
+  const client = new ImapClient({ host: 'h', port: 993, user: 'u', pass: 'p',
+    connect: () => { process.nextTick(() => sock.feed('* OK ready')); return sock; } });
+  const r = await client.deleteMessages('INBOX', [3, 4], { permanent: false });
+  assert.strictEqual(r.method, 'move');
+  assert.ok(sock.written.some((c) => /SELECT "INBOX"/i.test(c)), 'read-write SELECT');
+  assert.ok(sock.written.some((c) => /UID MOVE 3,4 "Trash"/i.test(c)), '휴지통으로 이동');
+});
+
+test('deleteMessages — MOVE 미지원 시 COPY+\Deleted+EXPUNGE 폴백', async () => {
+  const sock = deleteSocket({ moveFails: true });
+  const client = new ImapClient({ host: 'h', port: 993, user: 'u', pass: 'p',
+    connect: () => { process.nextTick(() => sock.feed('* OK ready')); return sock; } });
+  const r = await client.deleteMessages('INBOX', [5], { permanent: false });
+  assert.ok(sock.written.some((c) => /UID COPY 5 "Trash"/i.test(c)), 'COPY 폴백');
+  assert.ok(sock.written.some((c) => /UID STORE 5 \+FLAGS \(\\Deleted\)/i.test(c)), '\\Deleted 표시');
+  assert.ok(sock.written.some((c) => /UID EXPUNGE 5/i.test(c)), 'UID EXPUNGE');
+  assert.strictEqual(r.method, 'copy');
+});
+
+function markSeenSocket() {
+  const s = new EventEmitter();
+  s.written = [];
+  s.setTimeout = () => {}; s.end = () => {}; s.destroy = () => {};
+  s.feedRaw = (str) => s.emit('data', Buffer.from(str, 'utf8'));
+  s.feed = (line) => s.feedRaw(line + '\r\n');
+  s.write = (data) => {
+    s.written.push(data);
+    const tag = String(data).split(' ')[0];
+    process.nextTick(() => {
+      if (/\bLOGIN\b/i.test(data)) s.feed(tag + ' OK LOGIN');
+      else if (/\bSELECT\b/i.test(data)) { s.feed('* OK [READ-WRITE]'); s.feed(tag + ' OK'); }
+      else if (/\bEXAMINE\b/i.test(data)) { s.feed('* OK [READ-ONLY]'); s.feed(tag + ' OK'); }
+      else if (/UID\s+FETCH/i.test(data)) {
+        const body = 'Subject: hi\r\n\r\nbody';
+        s.feedRaw('* 1 FETCH (UID 9 BODY[]<0> {' + Buffer.byteLength(body, 'utf8') + '}\r\n' + body + ')\r\n');
+        s.feed(tag + ' OK FETCH');
+      }
+      else if (/\bLOGOUT\b/i.test(data)) { s.feed('* BYE'); s.feed(tag + ' OK'); }
+    });
+    return true;
+  };
+  return s;
+}
+
+test('fetchMessage markSeen — SELECT(read-write) + 비-PEEK BODY[](서버 읽음 처리)', async () => {
+  const sock = markSeenSocket();
+  const client = new ImapClient({ host: 'h', port: 993, user: 'u', pass: 'p',
+    connect: () => { process.nextTick(() => sock.feed('* OK ready')); return sock; } });
+  const body = await client.fetchMessage(9, 'INBOX', undefined, { markSeen: true });
+  assert.ok(body.includes('body'), '본문 수신');
+  assert.ok(sock.written.some((c) => /SELECT "INBOX"/i.test(c)), 'read-write SELECT 사용');
+  assert.ok(sock.written.some((c) => /UID FETCH 9 BODY\[\]/i.test(c) && !/PEEK/i.test(c)), '비-PEEK BODY[](읽음 설정)');
+  assert.ok(!sock.written.some((c) => /EXAMINE/i.test(c)), 'EXAMINE 미사용');
+});
+
+test('fetchMessage 기본 — EXAMINE + BODY.PEEK(읽음 영향 없음)', async () => {
+  const sock = markSeenSocket();
+  const client = new ImapClient({ host: 'h', port: 993, user: 'u', pass: 'p',
+    connect: () => { process.nextTick(() => sock.feed('* OK ready')); return sock; } });
+  await client.fetchMessage(9, 'INBOX');
+  assert.ok(sock.written.some((c) => /EXAMINE "INBOX"/i.test(c)), 'EXAMINE 사용');
+  assert.ok(sock.written.some((c) => /BODY\.PEEK\[\]/i.test(c)), 'BODY.PEEK(읽음 영향 없음)');
+});

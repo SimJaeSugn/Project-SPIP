@@ -2798,6 +2798,8 @@ function initBrowser() {
         text: res.text,
         hasHtml: !!res.hasHtml, // [메일 뷰어] 격리 iframe(app://mailbody) 렌더 가능 여부
       };
+      // 열람 시 서버에서 읽음 처리됨 → 메일함 팝업 표시도 즉시 읽음 반영(낙관적, 다음 동기화에 영속).
+      if (store.mailbox && store.mailbox.open && known.mailbox) markArchiveItemSeenLocal(accountId, known.mailbox, uid);
     } else store.mailView.code = (res && res.code) || 'NETWORK';
     render();
   }
@@ -2876,23 +2878,45 @@ function initBrowser() {
     store.settingsTab = 'integration';
     openSettings();
   }
-  /** 단건 메일을 로컬 보관함에서 삭제(서버 미접촉). */
+  function describeMailboxDeleteError(res) {
+    var c = res && res.code;
+    if (c === 'AUTH') return '메일 로그인에 실패해 삭제하지 못했습니다.';
+    if (c === 'NETWORK') return '서버 연결 실패로 삭제하지 못했습니다.';
+    return '삭제에 실패했습니다.';
+  }
+  /** 단건 메일 삭제 — 서버 휴지통으로 이동 + 로컬 보관함에서 제거. */
   async function deleteMailboxMail(accountId, mailbox, uid) {
-    if (!bridgeHas('deleteMailArchiveItem')) return;
+    if (!bridgeHas('deleteMailArchiveItem') || store.mailbox.busy) return;
+    store.mailbox.busy = true; render();
     var res = await ipc('deleteMailArchiveItem', accountId, mailbox, uid);
+    store.mailbox.busy = false;
     if (!store.mailbox.open) return;
-    if (res && res.ok) { store.mailbox.accounts = res.accounts || []; ensureMailboxSelection(); toast('메일을 보관함에서 삭제했습니다.'); }
-    else toast('삭제에 실패했습니다.', true);
+    if (res && res.ok) { store.mailbox.accounts = res.accounts || []; ensureMailboxSelection(); toast('메일을 휴지통으로 옮겼습니다.'); }
+    else toast(describeMailboxDeleteError(res), true);
     render();
   }
-  /** 메일함(폴더)을 로컬에서 비운다(서버 미접촉). */
-  async function clearMailboxFolder(accountId, mailbox) {
-    if (!bridgeHas('deleteMailArchiveItem')) return;
+  /** 메일함(폴더) 비우기 — 그 폴더의 서버 메일을 일괄 휴지통으로 이동 + 로컬 제거. 대량이라 확인 후 진행. */
+  async function clearMailboxFolder(accountId, mailbox, label) {
+    if (!bridgeHas('deleteMailArchiveItem') || store.mailbox.busy) return;
+    if (typeof window !== 'undefined' && typeof window.confirm === 'function') {
+      if (!window.confirm('“' + (label || mailbox) + '” 메일함의 메일을 서버 휴지통으로 모두 옮깁니다. 계속할까요?')) return;
+    }
+    store.mailbox.busy = true; render();
     var res = await ipc('deleteMailArchiveItem', accountId, mailbox);
+    store.mailbox.busy = false;
     if (!store.mailbox.open) return;
-    if (res && res.ok) { store.mailbox.accounts = res.accounts || []; ensureMailboxSelection(); toast('메일함을 비웠습니다.'); }
-    else toast('비우기에 실패했습니다.', true);
+    if (res && res.ok) { store.mailbox.accounts = res.accounts || []; ensureMailboxSelection(); toast('메일함을 비웠습니다(휴지통 이동).'); }
+    else toast(describeMailboxDeleteError(res), true);
     render();
+  }
+  /** 메일을 열었을 때(서버 읽음 처리됨) 보관함 표시도 즉시 읽음으로 반영(낙관적 — 다음 동기화에 영속). */
+  function markArchiveItemSeenLocal(accountId, mailbox, uid) {
+    var accts = (store.mailbox && store.mailbox.accounts) || [];
+    var a = accts.find(function (x) { return x.accountId === accountId; });
+    var mb = a && (a.mailboxes || []).find(function (m) { return m.name === mailbox; });
+    if (!mb) return;
+    var it = (mb.items || []).find(function (x) { return x.uid === uid; });
+    if (it && !it.seen) { it.seen = true; mb.unread = (mb.items || []).filter(function (x) { return x.onServer && !x.seen; }).length; }
   }
   function renderMailboxModal() {
     var mx = store.mailbox;
@@ -2976,9 +3000,9 @@ function initBrowser() {
       mbHead.appendChild(el('span', { text: '전체 ' + selMb.total + ' · 안읽음 ' + selMb.unread, style: 'font-size:11px;color:#a8a29e;flex:0 0 auto;' }));
       if (selMb.total > 0) mbHead.appendChild(el('button', {
         text: '비우기',
-        attrs: { type: 'button', title: '이 메일함을 로컬 보관함에서 비웁니다(서버 미접촉)' },
+        attrs: { type: 'button', title: '이 메일함의 메일을 서버 휴지통으로 모두 옮깁니다' },
         style: 'appearance:none;border:1px solid #fecaca;border-radius:7px;background:#fff;cursor:pointer;font-size:11px;color:#b91c1c;padding:4px 9px;flex:0 0 auto;',
-        on: { click: (function (id, nm) { return function () { clearMailboxFolder(id, nm); }; })(selAcct.accountId, selMb.name) },
+        on: { click: (function (id, nm, label) { return function () { clearMailboxFolder(id, nm, label); }; })(selAcct.accountId, selMb.name, selMb.displayName || selMb.name) },
       }));
       listWrap.appendChild(mbHead);
 
@@ -3010,7 +3034,7 @@ function initBrowser() {
         row.appendChild(el('span', { text: relMail(m.date), style: HOME_MONO + 'font-size:10.5px;color:#a8a29e;flex:0 0 auto;' }));
         row.appendChild(el('button', {
           text: '×',
-          attrs: { type: 'button', 'aria-label': '보관함에서 삭제', title: '보관함에서 삭제(서버 미접촉)' },
+          attrs: { type: 'button', 'aria-label': '메일 삭제(휴지통으로 이동)', title: '삭제 — 서버 휴지통으로 이동' },
           style: 'appearance:none;border:none;background:none;cursor:pointer;font-size:15px;color:#d6d3d1;flex:0 0 auto;padding:0 4px;',
           on: { click: (function (id, nm, uid) { return function (e) { e.stopPropagation(); deleteMailboxMail(id, nm, uid); }; })(selAcct.accountId, selMb.name, m.uid) },
         }));
@@ -3020,7 +3044,7 @@ function initBrowser() {
     wrap.appendChild(listWrap);
     body.push(wrap);
 
-    return buildModal({ title: '메일함', subtitle: '계정·메일함별 수집 메일 (로컬 보관 · 서버와 읽음/삭제 동기화)', onClose: closeMailbox, wide: true, enter: enter, bodyChildren: body });
+    return buildModal({ title: '메일함', subtitle: '계정·메일함별 수집 메일 (열람=서버 읽음 · 삭제=서버 휴지통)', onClose: closeMailbox, wide: true, enter: enter, bodyChildren: body });
   }
 
   function renderMailMessageModal() {

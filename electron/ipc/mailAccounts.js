@@ -142,7 +142,7 @@ async function getMailSummary(ctx) {
 }
 
 /**
- * spip:getMailMessage — 단건 메일 본문 조회(읽음표시 영향 없음, EXAMINE+BODY.PEEK 부분 fetch).
+ * spip:getMailMessage — 단건 메일 본문 조회(열람 시 서버 읽음 처리, SELECT+BODY[] 부분 fetch).
  * @param {object} args { accountId, uid }
  * @returns {Promise<{ok:true, subject, from, date, text} | {ok:false, code}>}
  */
@@ -158,7 +158,8 @@ async function getMailMessage(args, ctx) {
   if (!acct) return { ok: false, code: 'NOT_FOUND' };
   try {
     const client = d.clientFactory({ host: acct.host, port: acct.port, user: acct.user, pass: acct.pass });
-    const raw = await client.fetchMessage(uid, mailbox);
+    // 메일을 열면 서버에서도 읽음(\Seen) 처리한다(SELECT+비-PEEK BODY[]). 서버 읽음 상태 동기화.
+    const raw = await client.fetchMessage(uid, mailbox, undefined, { markSeen: true });
     const msg = mailBody.parseMessage(raw);
     // [메일 뷰어] 정제 HTML을 메인에 보관 → 격리 문서(app://mailbody)가 서빙. 렌더러엔 hasHtml만(대용량 회송 회피).
     const html = (typeof msg.html === 'string') ? msg.html : '';

@@ -144,11 +144,13 @@ async function syncMailArchive(ctx) {
 }
 
 /**
- * spip:deleteMailArchiveItem — 로컬 보관함에서만 삭제(서버 미접촉).
+ * spip:deleteMailArchiveItem — 메일을 삭제한다. 단건/메일함비우기는 **서버에서도 삭제**(휴지통 이동),
+ *   계정 초기화는 로컬 보관함만 정리(서버 미접촉).
  *   args: { accountId, mailbox?, uid? }
- *     - uid 지정     → 단건 삭제(tombstone)
- *     - mailbox만    → 메일함 비우기
- *     - accountId만  → 계정 보관함 초기화
+ *     - uid 지정     → 단건: 서버 휴지통 이동 + 로컬 제거(tombstone)
+ *     - mailbox만    → 메일함 비우기: 그 폴더의 서버 메일 일괄 휴지통 이동 + 로컬 제거
+ *     - accountId만  → 계정 보관함 초기화(로컬만)
+ *   느린 IMAP 삭제는 락 밖에서 먼저 수행하고, 성공 시에만 로컬을 갱신한다(서버 실패 시 로컬 보존).
  * @returns {Promise<{ok:true, accounts:Array} | {ok:false, code}>}
  */
 async function deleteMailArchiveItem(args, ctx) {
@@ -160,7 +162,32 @@ async function deleteMailArchiveItem(args, ctx) {
   const uid = hasUid ? Number(args.uid) : null;
   if (hasUid && (!Number.isInteger(uid) || uid <= 0)) return { ok: false, code: 'INVALID' };
 
+  const d = deps(ctx);
   const accounts = currentAccounts(ctx);
+  const acct = accounts.find((a) => a && a.id === accountId);
+
+  // 서버에서 삭제할 uid 목록 결정(계정 초기화는 서버 미접촉).
+  let serverUids = [];
+  if (mailbox && hasUid) {
+    serverUids = [uid];
+  } else if (mailbox && !hasUid) {
+    // 메일함 비우기 — 현재 보관함에서 서버 보유(onServer) 메일 uid 수집.
+    const cur0 = archiveStore.read(storeCtx(ctx));
+    const acc0 = cur0.accounts[accountId];
+    const mb0 = acc0 && acc0.mailboxes && acc0.mailboxes[mailbox];
+    serverUids = (mb0 && Array.isArray(mb0.items)) ? mb0.items.filter((it) => it.onServer).map((it) => it.uid) : [];
+  }
+
+  // 서버 삭제(휴지통 이동) — 락 밖에서. 계정 자격이 있어야 가능. 실패 시 로컬도 건드리지 않음.
+  if (serverUids.length && acct) {
+    try {
+      const client = d.clientFactory({ host: acct.host, port: acct.port, user: acct.user, pass: acct.pass });
+      await client.deleteMessages(mailbox, serverUids, { permanent: false });
+    } catch (err) {
+      return { ok: false, code: (err && err.authFailed) ? 'AUTH' : 'NETWORK' };
+    }
+  }
+
   const saved = await withWriteLock(ctx, () => {
     const cur = archiveStore.read(storeCtx(ctx));
     if (hasUid) {

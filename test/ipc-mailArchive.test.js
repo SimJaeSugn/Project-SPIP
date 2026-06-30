@@ -21,11 +21,16 @@ function tmpPath() {
 const ACCT = { id: 'ab123456', label: '회사', host: 'imap.x.com', port: 993, user: 'me@x.com', pass: 'secret' };
 
 function makeCtx(folders) {
+  const deletes = [];
   return {
     config: { mailAccounts: [ACCT] },
     logger: { error() {}, warn() {}, info() {} },
     mailArchivePath: tmpPath(),
-    mailClientFactory: () => ({ fetchMailIndexAll: async () => folders }),
+    _deletes: deletes,
+    mailClientFactory: () => ({
+      fetchMailIndexAll: async () => folders,
+      deleteMessages: async (mailbox, uids, opts) => { deletes.push({ mailbox, uids: uids.slice(), opts }); return { deleted: uids.length, method: 'move' }; },
+    }),
   };
 }
 
@@ -95,6 +100,7 @@ test('deleteMailArchiveItem — 단건 삭제 후 재동기화해도 부활 안 
   await ipc.syncMailArchive(ctx);
   const del = await ipc.deleteMailArchiveItem({ accountId: 'ab123456', mailbox: 'INBOX', uid: 1 }, ctx);
   assert.ok(del.ok);
+  assert.deepStrictEqual(ctx._deletes, [{ mailbox: 'INBOX', uids: [1], opts: { permanent: false } }], '서버 휴지통 이동 호출');
   let items = del.accounts[0].mailboxes.find((m) => m.name === 'INBOX').items;
   assert.ok(!items.some((it) => it.uid === 1), '삭제됨');
   // 서버엔 uid1이 여전히 있어도 재수집 시 부활하지 않아야.
@@ -126,6 +132,33 @@ test('toView — 메일함명 modified UTF-7 디코드(displayName), name은 원
   const mb = res.accounts[0].mailboxes[0];
   assert.strictEqual(mb.name, '&vBvHQNO4ycDVaA-', 'name은 IMAP 원본(조회용)');
   assert.strictEqual(mb.displayName, '받은편지함', 'displayName은 디코드된 한글(표시용)');
+});
+
+test('deleteMailArchiveItem — 메일함 비우기는 서버 메일 일괄 삭제, 계정 초기화는 서버 미접촉', async () => {
+  const ctx = makeCtx([
+    { mailbox: 'INBOX', uidvalidity: 1, serverUids: [1, 2], entries: [entry(1), entry(2)] },
+  ]);
+  await ipc.syncMailArchive(ctx);
+  ctx._deletes.length = 0;
+  await ipc.deleteMailArchiveItem({ accountId: 'ab123456', mailbox: 'INBOX' }, ctx); // 비우기
+  assert.strictEqual(ctx._deletes.length, 1, '서버 삭제 1회');
+  assert.deepStrictEqual(ctx._deletes[0].uids.slice().sort((a, b) => a - b), [1, 2], '폴더 내 서버 메일 일괄');
+  // 계정 초기화(mailbox 없음) — 서버 미접촉.
+  ctx._deletes.length = 0;
+  await ipc.deleteMailArchiveItem({ accountId: 'ab123456' }, ctx);
+  assert.strictEqual(ctx._deletes.length, 0, '계정 초기화는 로컬만(서버 미접촉)');
+});
+
+test('deleteMailArchiveItem — 서버 삭제 실패 시 로컬 보존(ok:false)', async () => {
+  const ctx = makeCtx([{ mailbox: 'INBOX', uidvalidity: 1, serverUids: [1], entries: [entry(1)] }]);
+  await ipc.syncMailArchive(ctx);
+  ctx.mailClientFactory = () => ({ deleteMessages: async () => { throw new Error('ECONNREFUSED'); } });
+  const res = await ipc.deleteMailArchiveItem({ accountId: 'ab123456', mailbox: 'INBOX', uid: 1 }, ctx);
+  assert.strictEqual(res.ok, false);
+  assert.strictEqual(res.code, 'NETWORK');
+  // 로컬에는 남아 있어야(서버 삭제 실패).
+  const items = ipc.getMailArchive(ctx).accounts[0].mailboxes.find((m) => m.name === 'INBOX').items;
+  assert.ok(items.some((it) => it.uid === 1), '서버 실패 시 로컬 보존');
 });
 
 test('deleteMailArchiveItem — 잘못된 인자', async () => {
