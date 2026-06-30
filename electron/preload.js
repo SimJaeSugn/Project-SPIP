@@ -116,6 +116,14 @@ contextBridge.exposeInMainWorld('spip', {
   getMailSummary: () => ipcRenderer.invoke('spip:getMailSummary'),
   // 단건 메일 본문 조회(팝업) — 계정 id + uid + 소속 메일함. 읽음표시 영향 없음(main이 EXAMINE+PEEK).
   getMailMessage: (accountId, uid, mailbox) => ipcRenderer.invoke('spip:getMailMessage', { accountId: String(accountId), uid: Number(uid), mailbox: (mailbox == null ? '' : String(mailbox)) }),
+  // 메일 보관함 — 계정별·메일함별 수집 메일(메타) 영속 보관. 로컬 삭제(서버 미접촉).
+  getMailArchive: () => ipcRenderer.invoke('spip:getMailArchive'),
+  syncMailArchive: () => ipcRenderer.invoke('spip:syncMailArchive'),
+  deleteMailArchiveItem: (accountId, mailbox, uid) => ipcRenderer.invoke('spip:deleteMailArchiveItem', {
+    accountId: String(accountId),
+    mailbox: (mailbox == null ? '' : String(mailbox)),
+    uid: (uid == null || uid === '' ? '' : Number(uid)),
+  }),
   // 홈 인사이트 — 최근 14일 커밋 빈도 시계열(인자 없음).
   getCommitActivity: () => ipcRenderer.invoke('spip:getCommitActivity'),
   // [항목2] 홈 인사이트 — Claude Code 로컬 로그 토큰 사용량 집계(인자 없음·읽기 전용).

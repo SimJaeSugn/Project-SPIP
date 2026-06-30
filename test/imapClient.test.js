@@ -249,3 +249,62 @@ test('fetchUnseenDigestAll — LIST 실패 시 INBOX 단독 폴백', async () =>
   assert.strictEqual(d.items.length, 1);
   assert.strictEqual(d.items[0].mailbox, 'INBOX');
 });
+
+// ── 보관함 수집: fetchMailIndexAll(UIDVALIDITY + SEARCH ALL + FLAGS ENVELOPE) ──
+function indexSocket() {
+  const s = new EventEmitter();
+  s.written = [];
+  s.setTimeout = () => {}; s.end = () => {}; s.destroy = () => {};
+  s.feedRaw = (str) => s.emit('data', Buffer.from(str, 'utf8'));
+  s.feed = (line) => s.feedRaw(line + '\r\n');
+  let current = 'INBOX';
+  const uidvalByBox = { INBOX: 111, Work: 222 };
+  const allUidsByBox = { INBOX: [1, 2], Work: [10] };
+  // uid → "(FLAGS (..) ENVELOPE (..))" 본문
+  const fetchByUid = {
+    1: 'FLAGS (\\Seen) ENVELOPE ("Mon, 01 Jan 2026" "Inbox1" (("A" NIL "a" "ex.com")) NIL NIL NIL NIL NIL NIL NIL)',
+    2: 'FLAGS () ENVELOPE ("Tue, 02 Jan 2026" "Inbox2" (("B" NIL "b" "ex.com")) NIL NIL NIL NIL NIL NIL NIL)',
+    10: 'FLAGS (\\Seen) ENVELOPE ("Wed, 03 Jan 2026" "Work1" (("C" NIL "c" "ex.com")) NIL NIL NIL NIL NIL NIL NIL)',
+  };
+  const qname = (data) => { const m = String(data).match(/"([^"]*)"/); return (m && m[1]) ? m[1] : 'INBOX'; };
+  s.write = (data) => {
+    s.written.push(data);
+    const tag = String(data).split(' ')[0];
+    process.nextTick(() => {
+      if (/\bLOGIN\b/i.test(data)) s.feed(tag + ' OK LOGIN');
+      else if (/\bLIST\b/i.test(data)) {
+        s.feed('* LIST (\\HasNoChildren) "/" "INBOX"');
+        s.feed('* LIST (\\HasNoChildren) "/" "Work"');
+        s.feed(tag + ' OK LIST');
+      }
+      else if (/\bEXAMINE\b/i.test(data)) { current = qname(data); s.feed('* OK [UIDVALIDITY ' + (uidvalByBox[current] || 0) + ']'); s.feed(tag + ' OK [READ-ONLY]'); }
+      else if (/UID\s+SEARCH\s+ALL/i.test(data)) { s.feed('* SEARCH ' + (allUidsByBox[current] || []).join(' ')); s.feed(tag + ' OK'); }
+      else if (/UID\s+FETCH/i.test(data)) {
+        const um = String(data).match(/UID FETCH ([\d,]+)/i);
+        if (um) um[1].split(',').forEach((u, i) => { if (fetchByUid[u]) s.feed('* ' + (i + 1) + ' FETCH (UID ' + u + ' ' + fetchByUid[u] + ')'); });
+        s.feed(tag + ' OK');
+      }
+      else if (/\bLOGOUT\b/i.test(data)) { s.feed('* BYE'); s.feed(tag + ' OK'); }
+    });
+    return true;
+  };
+  return s;
+}
+
+test('fetchMailIndexAll — 전 메일함 UIDVALIDITY+전체uid+FLAGS/ENVELOPE 수집', async () => {
+  const sock = indexSocket();
+  const client = new ImapClient({ host: 'h', port: 993, user: 'u', pass: 'p',
+    connect: () => { process.nextTick(() => sock.feed('* OK ready')); return sock; } });
+  const idx = await client.fetchMailIndexAll({ perFolder: 10 });
+  assert.strictEqual(idx.length, 2, 'INBOX + Work');
+  const inbox = idx.find((f) => f.mailbox === 'INBOX');
+  assert.strictEqual(inbox.uidvalidity, 111);
+  assert.deepStrictEqual(inbox.serverUids, [1, 2]);
+  const byUid = new Map(inbox.entries.map((e) => [e.uid, e]));
+  assert.strictEqual(byUid.get(1).seen, true, 'uid1 \\Seen');
+  assert.strictEqual(byUid.get(1).subject, 'Inbox1');
+  assert.strictEqual(byUid.get(2).seen, false, 'uid2 안읽음');
+  const work = idx.find((f) => f.mailbox === 'Work');
+  assert.strictEqual(work.uidvalidity, 222);
+  assert.strictEqual(work.entries[0].subject, 'Work1');
+});

@@ -22,6 +22,7 @@ const foldersIpc = require('./folders');
 const clipboardIpc = require('./clipboard');
 const toolsIpc = require('./tools');
 const mailAccountsIpc = require('./mailAccounts');
+const mailArchiveIpc = require('./mailArchive');
 const insightsIpc = require('./insights');
 const uiStateIpc = require('./uiState');
 const briefingIpc = require('./briefing');
@@ -178,6 +179,11 @@ function registerIpcHandlers(deps) {
   guard('spip:testMailAccount', (args) => mailAccountsIpc.testMailAccount(args, ctx));
   guard('spip:getMailSummary', () => mailAccountsIpc.getMailSummary(ctx));
   guard('spip:getMailMessage', (args) => mailAccountsIpc.getMailMessage(args, ctx));
+
+  // 메일 보관함(계정별·메일함별 수집 메일 영속) — mailArchive.js. 로컬 보관(서버 미접촉), 0600 영속.
+  guard('spip:getMailArchive', () => mailArchiveIpc.getMailArchive(ctx));
+  guard('spip:syncMailArchive', () => mailArchiveIpc.syncMailArchive(ctx));
+  guard('spip:deleteMailArchiveItem', (args) => mailArchiveIpc.deleteMailArchiveItem(args, ctx));
 
   // 홈 인사이트 — 최근 14일 커밋 빈도(등록 프로젝트 합산, git -C safeExec).
   guard('spip:getCommitActivity', () => insightsIpc.getCommitActivity(ctx));

@@ -1476,6 +1476,8 @@ function initBrowser() {
     busyMailSummary: false,      // getMailSummary in-flight
     mailSummaryLoaded: false,    // 최초 1회 자동 로드 가드
     mailView: { open: false, loading: false, accountId: null, uid: null, meta: null, code: null }, // 메일 본문 팝업
+    // 메일함 팝업 — 계정별·메일함별 수집 메일 보관함(영속). 헤더 버튼으로 열고 동기화·삭제.
+    mailbox: { open: false, loading: false, syncing: false, accounts: [], code: null, selAccount: null, selMailbox: null, errors: [] },
     // 생산성(홈 브리핑) — 최근 14일 커밋 빈도(getCommitActivity). 수동 새로고침(git 호출 비용).
     commitActivity: null,        // {days:[{date,count}],total,repos,scanned}
     busyCommitActivity: false,   // getCommitActivity in-flight
@@ -1757,6 +1759,8 @@ function initBrowser() {
     if (store.showFirstRun && store.state.view === 'home') app.appendChild(renderFirstRunModal());
     // 메일 본문 팝업(항목 클릭).
     if (store.mailView && store.mailView.open) app.appendChild(renderMailMessageModal());
+    // 메일함 팝업(헤더 버튼).
+    if (store.mailbox && store.mailbox.open) app.appendChild(renderMailboxModal());
     // [R-25 RG-2] 저장한 스크롤 위치 + 검색 입력 포커스/캐럿 복원(타이핑 중 재렌더로 포커스가 풀리는 문제 해결).
     RG.preserve.restore(app, snap);
     // [R-25 RG-3] 새 DOM 에 매칭되는 위젯만 1회 부착(카드뷰면 .cards 에 Sortable, 표/무결과/홈이면 no-op).
@@ -2711,12 +2715,12 @@ function initBrowser() {
     var head = el('div', { style: 'display:flex;align-items:center;gap:10px;margin-bottom:14px;' });
     head.appendChild(el('div', { text: '메일', style: 'font-size:15px;font-weight:600;flex:1 1 0%;' }));
     if (replies > 0) head.appendChild(homeBadge(replies + ' 회신 필요', 'blue'));
-    // 헤더 → 메일 계정 설정 열기(항목 클릭은 본문 팝업).
+    // 헤더 → 메일함(보관함) 팝업 열기(항목 클릭은 본문 팝업). 계정 설정은 팝업 안/전역 설정에서.
     head.appendChild(el('button', {
-      cls: 'home-mail-more', text: '→',
-      attrs: { type: 'button', 'aria-label': '메일 계정 설정 열기', title: '메일 계정 설정' },
+      cls: 'home-mail-more', text: '메일함',
+      attrs: { type: 'button', 'aria-label': '메일함 열기', title: '메일함 — 계정·메일함별 수집 메일' },
       style: 'appearance:none;border:none;background:none;cursor:pointer;font-size:12px;font-weight:600;color:#4f46e5;padding:0 2px;',
-      on: { click: function () { openSettings(); } },
+      on: { click: function () { openMailbox(); } },
     }));
     card.appendChild(head);
 
@@ -2791,6 +2795,212 @@ function initBrowser() {
     store._mailViewShown = false;
     render();
   }
+
+  /* ===== 메일함(보관함) 팝업 — 계정별·메일함별 수집 메일(영속). 헤더 '메일함' 버튼으로 연다. ===== */
+  function openMailbox() {
+    if (!bridgeHas('getMailArchive')) { openSettings(); return; } // 구버전 preload 폴백
+    store.mailbox = { open: true, loading: true, syncing: false, accounts: [], code: null, selAccount: null, selMailbox: null, errors: [] };
+    store._mailboxShown = false;
+    render();
+    refreshMailArchive();
+  }
+  function closeMailbox() {
+    store.mailbox = { open: false, loading: false, syncing: false, accounts: [], code: null, selAccount: null, selMailbox: null, errors: [] };
+    store._mailboxShown = false;
+    render();
+  }
+  /** 보관함을 디스크에서 읽어 표시한 뒤(즉시), 곧바로 서버 동기화를 한 번 돌린다. */
+  async function refreshMailArchive() {
+    var res = await ipc('getMailArchive');
+    if (!store.mailbox.open) return;
+    store.mailbox.loading = false;
+    if (res && res.ok) { store.mailbox.accounts = res.accounts || []; ensureMailboxSelection(); }
+    else store.mailbox.code = (res && res.code) || 'NETWORK';
+    render();
+    syncMailbox(); // 최신 상태로 동기화(읽음/삭제 반영)
+  }
+  /** 서버에서 전 메일함 인덱스를 수집해 보관함과 병합·영속(읽음/삭제 상태 동기화). */
+  async function syncMailbox() {
+    if (!bridgeHas('syncMailArchive') || store.mailbox.syncing) return;
+    store.mailbox.syncing = true; render();
+    var res = await ipc('syncMailArchive');
+    if (!store.mailbox.open) return;
+    store.mailbox.syncing = false;
+    if (res && res.ok) {
+      store.mailbox.accounts = res.accounts || [];
+      store.mailbox.errors = Array.isArray(res.errors) ? res.errors : [];
+      ensureMailboxSelection();
+    }
+    render();
+  }
+  /** 선택된 계정/메일함이 유효하지 않으면 첫 항목으로 보정. */
+  function ensureMailboxSelection() {
+    var accts = store.mailbox.accounts || [];
+    var acct = accts.find(function (a) { return a.accountId === store.mailbox.selAccount; });
+    if (!acct) acct = accts.find(function (a) { return a.mailboxes && a.mailboxes.length; }) || accts[0] || null;
+    store.mailbox.selAccount = acct ? acct.accountId : null;
+    if (!acct) { store.mailbox.selMailbox = null; return; }
+    var mb = (acct.mailboxes || []).find(function (m) { return m.name === store.mailbox.selMailbox; });
+    if (!mb) mb = (acct.mailboxes || [])[0] || null;
+    store.mailbox.selMailbox = mb ? mb.name : null;
+  }
+  function selectMailbox(accountId, mailbox) {
+    store.mailbox.selAccount = accountId;
+    store.mailbox.selMailbox = mailbox;
+    render();
+  }
+  /** 메일함 팝업에서 계정 설정으로 이동(전역 설정 '연동' 탭). */
+  function mailboxOpenSettings() {
+    closeMailbox();
+    store.settingsTab = 'integration';
+    openSettings();
+  }
+  /** 단건 메일을 로컬 보관함에서 삭제(서버 미접촉). */
+  async function deleteMailboxMail(accountId, mailbox, uid) {
+    if (!bridgeHas('deleteMailArchiveItem')) return;
+    var res = await ipc('deleteMailArchiveItem', accountId, mailbox, uid);
+    if (!store.mailbox.open) return;
+    if (res && res.ok) { store.mailbox.accounts = res.accounts || []; ensureMailboxSelection(); toast('메일을 보관함에서 삭제했습니다.'); }
+    else toast('삭제에 실패했습니다.', true);
+    render();
+  }
+  /** 메일함(폴더)을 로컬에서 비운다(서버 미접촉). */
+  async function clearMailboxFolder(accountId, mailbox) {
+    if (!bridgeHas('deleteMailArchiveItem')) return;
+    var res = await ipc('deleteMailArchiveItem', accountId, mailbox);
+    if (!store.mailbox.open) return;
+    if (res && res.ok) { store.mailbox.accounts = res.accounts || []; ensureMailboxSelection(); toast('메일함을 비웠습니다.'); }
+    else toast('비우기에 실패했습니다.', true);
+    render();
+  }
+  function renderMailboxModal() {
+    var mx = store.mailbox;
+    var enter = !store._mailboxShown; store._mailboxShown = true;
+    var body = [];
+
+    // 상단 도구 막대: 동기화 / 계정 설정 / 오류.
+    var bar = el('div', { style: 'display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap;' });
+    var syncAttrs = { type: 'button', title: '서버에서 전 메일함을 다시 수집' };
+    if (mx.syncing) syncAttrs.disabled = 'disabled';
+    bar.appendChild(el('button', {
+      text: mx.syncing ? '동기화 중…' : '동기화',
+      attrs: syncAttrs,
+      style: 'appearance:none;border:1px solid #e7e5e4;border-radius:8px;background:#fff;cursor:pointer;font-size:12px;font-weight:600;color:#4f46e5;padding:6px 12px;' + (mx.syncing ? 'opacity:.6;cursor:default;' : ''),
+      on: { click: function () { syncMailbox(); } },
+    }));
+    bar.appendChild(el('button', {
+      text: '계정 설정',
+      attrs: { type: 'button', title: '메일 계정 추가·수정(연동 설정)' },
+      style: 'appearance:none;border:1px solid #e7e5e4;border-radius:8px;background:#fff;cursor:pointer;font-size:12px;font-weight:600;color:#57534e;padding:6px 12px;',
+      on: { click: function () { mailboxOpenSettings(); } },
+    }));
+    if (mx.errors && mx.errors.length) {
+      bar.appendChild(el('span', { text: '일부 계정 동기화 실패(' + mx.errors.length + ')', style: 'font-size:11.5px;color:#b91c1c;' }));
+    }
+    body.push(bar);
+
+    if (mx.loading) {
+      body.push(el('div', { style: 'color:#a8a29e;font-size:13px;padding:16px 0;', text: '메일함을 불러오는 중…' }));
+      return buildModal({ title: '메일함', subtitle: '계정·메일함별 수집 메일 (로컬 보관)', onClose: closeMailbox, wide: true, enter: enter, bodyChildren: body });
+    }
+    if (mx.code) {
+      body.push(el('div', { style: 'color:#b91c1c;font-size:13px;padding:16px 0;', text: '보관함을 불러오지 못했습니다.' }));
+      return buildModal({ title: '메일함', subtitle: '계정·메일함별 수집 메일 (로컬 보관)', onClose: closeMailbox, wide: true, enter: enter, bodyChildren: body });
+    }
+    var accts = mx.accounts || [];
+    if (!accts.length) {
+      body.push(el('div', { style: 'color:#78716c;font-size:13px;padding:16px 0;line-height:1.7;', children: [
+        el('div', { text: '등록된 메일 계정이 없습니다.' }),
+        el('div', { text: '“계정 설정”에서 IMAP 계정을 추가하면 메일함이 채워집니다.' }),
+      ]}));
+      return buildModal({ title: '메일함', subtitle: '계정·메일함별 수집 메일 (로컬 보관)', onClose: closeMailbox, wide: true, enter: enter, bodyChildren: body });
+    }
+
+    // 본문: 좌(계정→메일함 트리) / 우(선택 메일함의 메일 목록).
+    var wrap = el('div', { style: 'display:flex;gap:16px;align-items:flex-start;min-height:320px;' });
+
+    // 좌측 트리.
+    var tree = el('div', { style: 'flex:0 0 230px;max-height:60vh;overflow:auto;border-right:1px solid #f4f3f1;padding-right:10px;' });
+    accts.forEach(function (a) {
+      tree.appendChild(el('div', { text: a.label || a.host || a.accountId, title: a.user || '', style: 'font-size:12px;font-weight:700;color:#1c1917;margin:10px 0 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;' }));
+      if (!a.mailboxes || !a.mailboxes.length) {
+        tree.appendChild(el('div', { text: '(수집된 메일 없음)', style: 'font-size:11px;color:#a8a29e;padding:2px 0 2px 8px;' }));
+        return;
+      }
+      a.mailboxes.forEach(function (m) {
+        var active = a.accountId === mx.selAccount && m.name === mx.selMailbox;
+        var row = el('div', {
+          attrs: { role: 'button', tabindex: '0', title: m.name },
+          style: 'display:flex;align-items:center;gap:6px;padding:5px 8px;border-radius:7px;cursor:pointer;font-size:12px;' + (active ? 'background:#eef2ff;color:#4338ca;font-weight:600;' : 'color:#57534e;'),
+          on: { click: (function (id, nm) { return function () { selectMailbox(id, nm); }; })(a.accountId, m.name) },
+        });
+        row.appendChild(el('span', { text: m.name, style: 'flex:1 1 0%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;' }));
+        if (m.unread > 0) row.appendChild(el('span', { text: String(m.unread), style: 'flex:0 0 auto;font-size:10px;font-weight:700;background:#4f46e5;color:#fff;border-radius:9px;padding:1px 6px;' }));
+        row.appendChild(el('span', { text: String(m.total), style: 'flex:0 0 auto;font-size:10px;color:#a8a29e;' }));
+        tree.appendChild(row);
+      });
+    });
+    wrap.appendChild(tree);
+
+    // 우측 메일 목록.
+    var listWrap = el('div', { style: 'flex:1 1 0%;min-width:0;max-height:60vh;overflow:auto;' });
+    var selAcct = accts.find(function (a) { return a.accountId === mx.selAccount; });
+    var selMb = selAcct && (selAcct.mailboxes || []).find(function (m) { return m.name === mx.selMailbox; });
+    if (!selMb) {
+      listWrap.appendChild(el('div', { text: '메일함을 선택하세요.', style: 'color:#a8a29e;font-size:13px;padding:16px 0;' }));
+    } else {
+      var mbHead = el('div', { style: 'display:flex;align-items:center;gap:8px;margin-bottom:8px;' });
+      mbHead.appendChild(el('div', { text: selMb.name, style: 'font-size:13px;font-weight:700;color:#1c1917;flex:1 1 0%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;' }));
+      mbHead.appendChild(el('span', { text: '전체 ' + selMb.total + ' · 안읽음 ' + selMb.unread, style: 'font-size:11px;color:#a8a29e;flex:0 0 auto;' }));
+      if (selMb.total > 0) mbHead.appendChild(el('button', {
+        text: '비우기',
+        attrs: { type: 'button', title: '이 메일함을 로컬 보관함에서 비웁니다(서버 미접촉)' },
+        style: 'appearance:none;border:1px solid #fecaca;border-radius:7px;background:#fff;cursor:pointer;font-size:11px;color:#b91c1c;padding:4px 9px;flex:0 0 auto;',
+        on: { click: (function (id, nm) { return function () { clearMailboxFolder(id, nm); }; })(selAcct.accountId, selMb.name) },
+      }));
+      listWrap.appendChild(mbHead);
+
+      var items = selMb.items || [];
+      if (!items.length) {
+        listWrap.appendChild(el('div', { text: '메일이 없습니다.', style: 'color:#a8a29e;font-size:13px;padding:12px 0;' }));
+      }
+      items.forEach(function (m, i) {
+        var clickable = Number.isInteger(m.uid) && bridgeHas('getMailMessage');
+        var row = el('div', {
+          style: 'display:flex;align-items:center;gap:10px;padding:8px 4px;' + (i > 0 ? 'border-top:1px solid #f4f3f1;' : ''),
+        });
+        // 읽음/안읽음 점.
+        row.appendChild(el('span', {
+          attrs: { title: m.seen ? '읽음' : '안읽음' },
+          style: 'flex:0 0 auto;width:8px;height:8px;border-radius:50%;background:' + (m.onServer && !m.seen ? '#4f46e5' : '#d6d3d1') + ';',
+        }));
+        var mid = el('div', {
+          style: 'flex:1 1 0%;min-width:0;cursor:' + (clickable ? 'pointer' : 'default') + ';',
+          attrs: clickable ? { role: 'button', tabindex: '0', 'aria-label': '메일 보기: ' + (m.subject || '') } : {},
+          on: clickable ? { click: (function (id, uid, known) { return function () { openMailMessage(id, uid, known); }; })(selAcct.accountId, m.uid, { subject: m.subject, from: m.from, date: m.date, mailbox: selMb.name }) } : {},
+        });
+        var top = el('div', { style: 'display:flex;align-items:center;gap:7px;' });
+        top.appendChild(el('span', { text: m.from || '(발신자)', style: 'font-size:12.5px;font-weight:' + (m.seen ? '500' : '700') + ';color:#1c1917;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:240px;' }));
+        if (!m.onServer) top.appendChild(el('span', { text: '서버 삭제됨', style: 'flex:0 0 auto;font-size:9.5px;font-weight:600;padding:1px 6px;border-radius:5px;background:#f5f5f4;color:#a8a29e;' }));
+        mid.appendChild(top);
+        mid.appendChild(el('div', { text: m.subject || '(제목 없음)', style: 'font-size:12px;color:#57534e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px;' }));
+        row.appendChild(mid);
+        row.appendChild(el('span', { text: relMail(m.date), style: HOME_MONO + 'font-size:10.5px;color:#a8a29e;flex:0 0 auto;' }));
+        row.appendChild(el('button', {
+          text: '×',
+          attrs: { type: 'button', 'aria-label': '보관함에서 삭제', title: '보관함에서 삭제(서버 미접촉)' },
+          style: 'appearance:none;border:none;background:none;cursor:pointer;font-size:15px;color:#d6d3d1;flex:0 0 auto;padding:0 4px;',
+          on: { click: (function (id, nm, uid) { return function (e) { e.stopPropagation(); deleteMailboxMail(id, nm, uid); }; })(selAcct.accountId, selMb.name, m.uid) },
+        }));
+        listWrap.appendChild(row);
+      });
+    }
+    wrap.appendChild(listWrap);
+    body.push(wrap);
+
+    return buildModal({ title: '메일함', subtitle: '계정·메일함별 수집 메일 (로컬 보관 · 서버와 읽음/삭제 동기화)', onClose: closeMailbox, wide: true, enter: enter, bodyChildren: body });
+  }
+
   function renderMailMessageModal() {
     var mv = store.mailView;
     var enter = !store._mailViewShown; store._mailViewShown = true;

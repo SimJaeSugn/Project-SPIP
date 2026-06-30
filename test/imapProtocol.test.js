@@ -141,3 +141,12 @@ test('isCollectibleMailbox — 휴지통/스팸/전체보관함/선택불가 제
   assert.ok(!isCollectibleMailbox(null));
   assert.ok(!isCollectibleMailbox({ name: '' }));
 });
+
+test('parseFetchFlags — FLAGS에서 uid/seen/deleted 추출', () => {
+  const { parseFetchFlags } = require('../lib/mail/imapProtocol');
+  assert.deepStrictEqual(parseFetchFlags('* 3 FETCH (UID 12 FLAGS (\\Seen \\Answered))'), { uid: 12, seen: true, deleted: false });
+  assert.deepStrictEqual(parseFetchFlags('* 4 FETCH (UID 13 FLAGS ())'), { uid: 13, seen: false, deleted: false });
+  assert.strictEqual(parseFetchFlags('* 5 FETCH (UID 9 FLAGS (\\Deleted))').deleted, true);
+  // FLAGS 부재 → null
+  assert.strictEqual(parseFetchFlags('* 1 FETCH (UID 7 ENVELOPE ("d" "s" NIL NIL NIL NIL NIL NIL NIL NIL))'), null);
+});
