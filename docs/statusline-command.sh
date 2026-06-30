@@ -170,17 +170,26 @@ if sd.get('used_percentage') is not None:
 rate_str = '  '.join(rate_parts) if rate_parts else None
 
 # ── 출력 조합 ──────────────────────────────────────────────────
-# ◆ 모델명 │ 폴더명 ⎇ main*3 │ ctx ████░░░░ 6% (↓12k ↑3k) │ ↓45k ↑8k │ 5h ███░░░ 32%
-parts = [BOLD + '◆ ' + model + RESET]   # ◆ 모델명
+# 1줄: ◆ 모델명 │ 폴더명 ⎇ main ±3
+# 2줄: ctx ████░░░░ 6% (↓12k ↑3k) │ ↓45k ↑8k │ 5h ███░░░ 32%  7d █░░░░░ 15%
 
-# 폴더명과 git 브랜치를 한 항목으로 묶기 (예: 04.rag_with_harness1 ⎇ main*3)
+# 첫째 줄: 모델명 + 폴더/git
+line1_parts = [BOLD + '◆ ' + model + RESET]
 loc_parts = []
 if folder_str: loc_parts.append(folder_str)
 if git_str:    loc_parts.append(git_str)
-if loc_parts:  parts.append(' '.join(loc_parts))
+if loc_parts:  line1_parts.append(' '.join(loc_parts))
 
-if ctx_part:    parts.append(ctx_part)
-if session_str: parts.append(session_str)
-if rate_str:    parts.append(rate_str)
-sys.stdout.write(SEP.join(parts) + '\n')
+# 둘째 줄: ctx 사용률 + 누적 토큰 + 구독 한도
+line2_parts = []
+if ctx_part:    line2_parts.append(ctx_part)
+if session_str: line2_parts.append(session_str)
+if rate_str:    line2_parts.append(rate_str)
+
+line1 = SEP.join(line1_parts)
+if line2_parts:
+    line2 = SEP.join(line2_parts)
+    sys.stdout.write(line1 + '\n' + line2 + '\n')
+else:
+    sys.stdout.write(line1 + '\n')
 "
