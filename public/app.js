@@ -2802,10 +2802,10 @@ function initBrowser() {
         text: res.text,
         hasHtml: !!res.hasHtml, // [메일 뷰어] 격리 iframe(app://mailbody) 렌더 가능 여부
       };
-      // 열람 시 서버에서 읽음 처리됨 → 메일함 표시와 위젯(안읽음)에 즉시 반영(낙관적, 다음 동기화에 영속).
+      // 열람 시 서버에서 읽음 처리됨 → 보관함(단일 소스)에 읽음 반영 → 위젯에도 자동 반영.
       if (known.mailbox) {
-        if (store.mailbox && store.mailbox.open) markArchiveItemSeenLocal(accountId, known.mailbox, uid);
-        removeFromMailSummary(accountId, known.mailbox, uid); // 읽음 → 위젯 안읽음 목록에서 제거
+        markArchiveItemSeenLocal(accountId, known.mailbox, uid);
+        reflectArchiveToWidget();
       }
     } else store.mailView.code = (res && res.code) || 'NETWORK';
     render();
@@ -2868,39 +2868,44 @@ function initBrowser() {
   /* ===== 메일함(보관함) 팝업 — 계정별·메일함별 수집 메일(영속). 헤더 '메일함' 버튼으로 연다. ===== */
   function openMailbox() {
     if (!bridgeHas('getMailArchive')) { openSettings(); return; } // 구버전 preload 폴백
-    store.mailbox = { open: true, loading: true, syncing: false, accounts: [], code: null, selAccount: null, selMailbox: null, errors: [] };
+    store.mailbox.open = true;
+    // 보관함은 위젯과 공유(이미 홈에서 로드됐을 수 있음) — 비었을 때만 로딩 표시.
+    store.mailbox.loading = !(store.mailbox.accounts && store.mailbox.accounts.length);
     store._mailboxShown = false;
     render();
-    refreshMailArchive();
+    if (!store.mailSummaryLoaded) loadMailArchive(); // 아직 로드 안 됨 → 디스크 즉시 + 서버 동기화
+    else refreshMailSummary();                        // 이미 로드됨 → 최신화만
   }
   function closeMailbox() {
-    store.mailbox = { open: false, loading: false, syncing: false, accounts: [], code: null, selAccount: null, selMailbox: null, errors: [] };
+    store.mailbox.open = false; // accounts는 보존(위젯과 공유하는 단일 소스)
     store._mailboxShown = false;
     render();
   }
-  /** 보관함을 디스크에서 읽어 표시한 뒤(즉시), 곧바로 서버 동기화를 한 번 돌린다. */
-  async function refreshMailArchive() {
+  /** 보관함을 디스크에서 읽어 즉시 표시(위젯/팝업 공용 소스)한 뒤, 서버 동기화를 한 번 돌린다. */
+  async function loadMailArchive() {
+    if (!bridgeHas('getMailArchive')) return;
     var res = await ipc('getMailArchive');
-    if (!store.mailbox.open) return;
-    store.mailbox.loading = false;
-    if (res && res.ok) { store.mailbox.accounts = res.accounts || []; ensureMailboxSelection(); }
+    if (res && res.ok) { store.mailbox.accounts = res.accounts || []; store.mailbox.code = null; ensureMailboxSelection(); }
     else store.mailbox.code = (res && res.code) || 'NETWORK';
+    store.mailbox.loading = false;
+    store.mailSummaryLoaded = true;
+    projectMailSummaryFromArchive(); // 위젯(다이제스트)도 보관함에서 파생
+    if (store.state.view === 'home') onMailSummaryFetched();
     render();
-    syncMailbox(); // 최신 상태로 동기화(읽음/삭제 반영)
+    refreshMailSummary({ silent: true }); // 이어서 서버 동기화(읽음/삭제/신규 반영)
   }
-  /** 서버에서 전 메일함 인덱스를 수집해 보관함과 병합·영속(읽음/삭제 상태 동기화). */
-  async function syncMailbox() {
-    if (!bridgeHas('syncMailArchive') || store.mailbox.syncing) return;
-    store.mailbox.syncing = true; render();
-    var res = await ipc('syncMailArchive');
-    if (!store.mailbox.open) return;
-    store.mailbox.syncing = false;
-    if (res && res.ok) {
-      store.mailbox.accounts = res.accounts || [];
-      store.mailbox.errors = Array.isArray(res.errors) ? res.errors : [];
-      ensureMailboxSelection();
-    }
-    render();
+  /** 보관함(계정→메일함→메일) → 위젯용 다이제스트 투영(서버 보유 안읽음만, 계정별). 단일 소스 일관성. */
+  function projectMailSummaryFromArchive() {
+    var accts = (store.mailbox && store.mailbox.accounts) || [];
+    store.mailSummary = accts.map(function (a) {
+      var items = []; var unread = 0;
+      (a.mailboxes || []).forEach(function (m) {
+        (m.items || []).forEach(function (it) {
+          if (it.onServer && !it.seen) { unread++; items.push({ uid: it.uid, subject: it.subject, from: it.from, date: it.date, mailbox: m.name }); }
+        });
+      });
+      return { id: a.accountId, label: a.label, host: a.host, user: a.user, unseen: unread, items: items };
+    });
   }
   /** 선택된 계정/메일함이 유효하지 않으면 첫 항목으로 보정. */
   function ensureMailboxSelection() {
@@ -2930,19 +2935,12 @@ function initBrowser() {
     if (c === 'NETWORK') return '서버 연결 실패로 삭제하지 못했습니다.';
     return '삭제에 실패했습니다.';
   }
-  /** 홈 메일 위젯(다이제스트)에서도 즉시 제거(낙관적) — 메일함 삭제가 위젯에 바로 반영되게. */
-  function removeFromMailSummary(accountId, mailbox, uid) {
-    var a = (store.mailSummary || []).find(function (x) { return x && x.id === accountId; });
-    if (!a || !Array.isArray(a.items)) return;
-    var before = a.items.length;
-    a.items = a.items.filter(function (it) {
-      if (it.mailbox !== mailbox) return true;
-      return (uid != null) ? (it.uid !== uid) : false; // uid 지정=단건, 미지정=폴더 전체
-    });
-    var removed = before - a.items.length;
-    if (removed > 0 && Number.isFinite(a.unseen)) a.unseen = Math.max(0, a.unseen - removed);
+  /** 보관함 변경(삭제/읽음)을 위젯에 반영 — 단일 소스(store.mailbox.accounts)에서 재투영 + 홈 갱신. */
+  function reflectArchiveToWidget() {
+    projectMailSummaryFromArchive();
+    if (store.state.view === 'home') onMailSummaryFetched();
   }
-  /** 단건 메일 삭제 — 확인 후 서버 휴지통 이동 + 로컬 보관함/위젯 반영. */
+  /** 단건 메일 삭제 — 확인 후 서버 휴지통 이동 + 보관함/위젯(단일 소스) 반영. */
   function deleteMailboxMail(accountId, mailbox, uid) {
     if (!bridgeHas('deleteMailArchiveItem') || store.mailbox.busy) return;
     askConfirm({
@@ -2956,9 +2954,8 @@ function initBrowser() {
     var res = await ipc('deleteMailArchiveItem', accountId, mailbox, uid);
     store.mailbox.busy = false;
     if (res && res.ok) {
-      if (store.mailbox.open) { store.mailbox.accounts = res.accounts || []; ensureMailboxSelection(); }
-      removeFromMailSummary(accountId, mailbox, uid); // 위젯 즉시 반영
-      refreshMailSummary();                            // 권위 재조회(서버 반영)
+      store.mailbox.accounts = res.accounts || []; ensureMailboxSelection();
+      reflectArchiveToWidget(); // 보관함·위젯 동시 반영(서버 결과 그대로)
       toast('메일을 휴지통으로 옮겼습니다.');
     } else toast(describeMailboxDeleteError(res), true);
     render();
@@ -2977,9 +2974,8 @@ function initBrowser() {
     var res = await ipc('deleteMailArchiveItem', accountId, mailbox);
     store.mailbox.busy = false;
     if (res && res.ok) {
-      if (store.mailbox.open) { store.mailbox.accounts = res.accounts || []; ensureMailboxSelection(); }
-      removeFromMailSummary(accountId, mailbox, null); // 위젯에서 그 폴더 메일 제거
-      refreshMailSummary();
+      store.mailbox.accounts = res.accounts || []; ensureMailboxSelection();
+      reflectArchiveToWidget();
       toast('메일함을 비웠습니다(휴지통 이동).');
     } else toast(describeMailboxDeleteError(res), true);
     render();
@@ -3006,7 +3002,7 @@ function initBrowser() {
       text: mx.syncing ? '동기화 중…' : '동기화',
       attrs: syncAttrs,
       style: 'appearance:none;border:1px solid #e7e5e4;border-radius:8px;background:#fff;cursor:pointer;font-size:12px;font-weight:600;color:#4f46e5;padding:6px 12px;' + (mx.syncing ? 'opacity:.6;cursor:default;' : ''),
-      on: { click: function () { syncMailbox(); } },
+      on: { click: function () { refreshMailSummary(); } },
     }));
     bar.appendChild(el('button', {
       text: '계정 설정',
@@ -3172,9 +3168,9 @@ function initBrowser() {
     });
   }
 
-  /** 홈 진입 시 1회 자동 로드(이후는 카드 클릭/설정에서 갱신). */
+  /** 홈 진입 시 1회 자동 로드 — 보관함(archive)을 디스크에서 즉시 표시 후 서버 동기화(위젯=보관함 단일 소스). */
   function maybeLoadMailSummary() {
-    if (bridgeHas('getMailSummary') && !store.mailSummaryLoaded && !store.busyMailSummary) refreshMailSummary();
+    if (bridgeHas('getMailArchive') && !store.mailSummaryLoaded && !store.busyMailSummary) loadMailArchive();
   }
   // [백로그2-2] 경량 위젯 이벤트 버스 — 위젯 간 상호작용의 단일 통지 지점(렌더러 내, 외부 egress 아님).
   //   on(event, fn)→unsubscribe, emit(event, data). 구독자 예외는 격리(다른 구독자 영향 0).
@@ -3187,20 +3183,28 @@ function initBrowser() {
   })();
 
   var _lastMailSummaryKey = '';
+  // 보관함 서버 동기화(전 메일함 인덱스 수집·병합·영속) 후 위젯/팝업을 보관함에서 재투영한다.
+  //   위젯·메일함이 같은 단일 소스(store.mailbox.accounts)를 보므로 항상 일치한다. (M11 시그니처 유지)
   async function refreshMailSummary(opts) {
     opts = opts || {};
-    if (!bridgeHas('getMailSummary') || store.busyMailSummary) return;
+    if (!bridgeHas('syncMailArchive') || store.busyMailSummary) return;
     store.busyMailSummary = true;
-    // [M11] silent(폴링/push)면 진입 로딩 render 생략 — fetch 동안 이전 메일 목록 유지(깜빡임 0).
-    //   최초/수동(silent 아님)은 기존대로 로딩 표시용 render.
+    if (store.mailbox.open) store.mailbox.syncing = true;
+    // [M11] silent(폴링/push)면 진입 render 생략(깜빡임 0).
     if (!opts.silent && store.state.view === 'home') render();
-    var res = await ipc('getMailSummary');
+    var res = await ipc('syncMailArchive');
     store.busyMailSummary = false;
+    store.mailbox.syncing = false;
     store.mailSummaryLoaded = true;
-    store.mailSummary = (res && res.ok && Array.isArray(res.accounts)) ? res.accounts : [];
-    // [M11] 완료부 — 데이터 무변경이면 skip, 변경 시 메일 섹션 영역만 patchRegion 교체.
+    if (res && res.ok) {
+      store.mailbox.accounts = res.accounts || [];
+      store.mailbox.errors = Array.isArray(res.errors) ? res.errors : [];
+      ensureMailboxSelection();
+    }
+    projectMailSummaryFromArchive();
     if (store.state.view === 'home') onMailSummaryFetched();
-    maybeFlushCommitRefresh(); // [M10-P1] busyMail 해제 → 보류된 커밋 폴링 따라감
+    maybeFlushCommitRefresh();
+    if (store.mailbox.open) render();
   }
   /** [M11] 메일 요약 fetch 완료부 — diff 키 동일 시 갱신 skip, 변경 시 영역만 patch. */
   function onMailSummaryFetched() {
@@ -6898,7 +6902,7 @@ function initBrowser() {
   /* 메일 실시간 갱신 — 새 메일 감지 push(즉시) + 홈 체류 중 주기 갱신(읽음/도착 반영).
    *   편집(할 일 입력)·모달 중에는 보류해 포커스/스크롤 방해를 막는다. */
   function maybeAutoRefreshMail() {
-    if (store.state.view !== 'home' || !bridgeHas('getMailSummary')) return;
+    if (store.state.view !== 'home' || !bridgeHas('syncMailArchive')) return;
     if (store.busyMailSummary || store.showSettings || store.showHelp || store.todoAdding) return;
     refreshMailSummary({ silent: true }); // [M11] 폴링/push 는 silent(진입 로딩 render 생략 → 깜빡임 0)
   }
@@ -6915,7 +6919,7 @@ function initBrowser() {
     store.mailUpdatedUnsubscribe = null;
   }
   function startMailAutoRefresh() {
-    if (store.mailRefreshTimer || !bridgeHas('getMailSummary')) return;
+    if (store.mailRefreshTimer || !bridgeHas('syncMailArchive')) return;
     store.mailRefreshTimer = setInterval(maybeAutoRefreshMail, 60000);
   }
   function stopMailAutoRefresh() {
