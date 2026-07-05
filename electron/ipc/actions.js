@@ -22,6 +22,7 @@
  */
 
 const pathGuard = require('../../lib/common/pathGuard');
+const config = require('../../lib/common/config');
 const { resolveBin, safeExec } = require('../../lib/common/safeExec');
 const driveEnum = require('../../lib/scan/driveEnum');
 const toolRegistry = require('../../lib/common/toolRegistry');
@@ -162,6 +163,29 @@ async function openPath(args, ctx) {
 }
 
 /**
+ * spip:openExternal — 외부 URL을 기본 브라우저로 연다(shell.openExternal).
+ *   [§4.2 재검증] renderer 신뢰 금지. config.validateHttpUrl로 http/https만 허용하고
+ *   임의 스킴(javascript:·file: 등)·자격증명 포함 URL은 거부한다. 경로/파일 표면은 만들지 않는다.
+ *   원격지(GitHub 등) 링크 열기 전용으로 도입 — url 이외 인자는 받지 않는다.
+ * @param {object} args { url }
+ * @param {object} ctx { shell }
+ * @returns {Promise<{ok:true,code:'OPENING'} | {ok:false,code:string}>}
+ */
+async function openExternal(args, ctx) {
+  const shell = ctx && ctx.shell;
+  const url = (args && typeof args === 'object' && !Array.isArray(args)) ? args.url : null;
+  const v = config.validateHttpUrl(typeof url === 'string' ? url : '');
+  if (!v.ok) return { ok: false, code: 'BAD_INPUT' };
+  if (!shell || typeof shell.openExternal !== 'function') return { ok: false, code: 'INTERNAL' };
+  try {
+    await shell.openExternal(v.value);
+    return { ok: true, code: 'OPENING' };
+  } catch (_) {
+    return { ok: false, code: 'OPEN_FAILED' };
+  }
+}
+
+/**
  * spip:rescan — 재스캔 트리거. 게이트·락·start (actionHandlers.rescan 이식).
  * 경로는 config에서만 가져온다(인자로 경로 안 받음 — H-1 정합).
  * [M12 b3] 진입부(acquire/start 이전)에서 중앙 elevated 플래그면 { ok:false, code:'ELEVATED' }
@@ -246,4 +270,4 @@ function rescan(args, ctx) {
   return { ok: true, code: 'SCAN_STARTED', scanId: acquired.scanId, startedAt: acquired.startedAt };
 }
 
-module.exports = { openInVsCode, openPath, rescan, sanitizeOpenId, sanitizeToolId, sanitizeRescanOpts, MAX_INFLIGHT_PER_ID, MAX_ID_LEN };
+module.exports = { openInVsCode, openPath, openExternal, rescan, sanitizeOpenId, sanitizeToolId, sanitizeRescanOpts, MAX_INFLIGHT_PER_ID, MAX_ID_LEN };

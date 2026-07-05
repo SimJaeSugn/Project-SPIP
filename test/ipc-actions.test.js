@@ -95,6 +95,30 @@ test('open — safeExec reject → OPEN_FAILED', async () => {
   assert.deepStrictEqual(r, { ok: false, code: 'OPEN_FAILED' });
 });
 
+// ── openExternal (원격지 링크 열기) ──
+test('openExternal — http/https만 허용, 그 외 스킴/불량은 BAD_INPUT', async () => {
+  const shell = { openExternal: () => Promise.resolve() };
+  assert.deepStrictEqual(await actions.openExternal({ url: 'javascript:alert(1)' }, { shell }), { ok: false, code: 'BAD_INPUT' });
+  assert.deepStrictEqual(await actions.openExternal({ url: 'file:///etc/passwd' }, { shell }), { ok: false, code: 'BAD_INPUT' });
+  assert.deepStrictEqual(await actions.openExternal({ url: '' }, { shell }), { ok: false, code: 'BAD_INPUT' });
+  assert.deepStrictEqual(await actions.openExternal({ url: 123 }, { shell }), { ok: false, code: 'BAD_INPUT' });
+  assert.deepStrictEqual(await actions.openExternal(null, { shell }), { ok: false, code: 'BAD_INPUT' });
+});
+
+test('openExternal — 유효 URL → shell.openExternal 호출 + OPENING', async () => {
+  let opened = null;
+  const shell = { openExternal: (u) => { opened = u; return Promise.resolve(); } };
+  const r = await actions.openExternal({ url: 'https://github.com/owner/repo' }, { shell });
+  assert.deepStrictEqual(r, { ok: true, code: 'OPENING' });
+  assert.strictEqual(opened, 'https://github.com/owner/repo');
+});
+
+test('openExternal — shell 미주입 → INTERNAL, reject → OPEN_FAILED', async () => {
+  assert.deepStrictEqual(await actions.openExternal({ url: 'https://x.com/' }, {}), { ok: false, code: 'INTERNAL' });
+  const shell = { openExternal: () => Promise.reject(new Error('boom')) };
+  assert.deepStrictEqual(await actions.openExternal({ url: 'https://x.com/' }, { shell }), { ok: false, code: 'OPEN_FAILED' });
+});
+
 // ── rescan ──
 function fakeController() {
   return {

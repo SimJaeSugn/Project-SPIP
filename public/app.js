@@ -44,6 +44,11 @@ function toViewModel(p) {
     ahead,
     behind,
     changes: gitStatus === 'na' ? null : (typeof git.changes === 'number' ? git.changes : null),
+    // 원격지(origin) 정보 — host/slug/web(문자열 or null). 렌더는 textContent, 열기는 main 재검증(H-2).
+    remoteHost: gitStatus === 'na' ? null : (typeof git.remoteHost === 'string' ? git.remoteHost : null),
+    remoteSlug: gitStatus === 'na' ? null : (typeof git.remoteSlug === 'string' ? git.remoteSlug : null),
+    remoteWeb: gitStatus === 'na' ? null : (typeof git.remoteWeb === 'string' ? git.remoteWeb : null),
+    remoteUrl: gitStatus === 'na' ? null : (typeof git.remoteUrl === 'string' ? git.remoteUrl : null),
     // size: MVP에서 status==='skipped' & 전부 null → "미측정"
     sizeStatus: typeof size.status === 'string' ? size.status : 'skipped',
     totalBytes: typeof size.totalBytes === 'number' ? size.totalBytes : null,
@@ -6591,7 +6596,37 @@ function initBrowser() {
       kvRow('미커밋 변경', dirtyVal),
       el('div', { cls: 'kv__divider' }),
       kvRow('원격 대비', aheadBehind),
+      el('div', { cls: 'kv__divider' }),
+      kvRow('원격지', gitRemoteVal(vm)),
     ]);
+  }
+
+  /** 원격지(origin) 값 노드 — 없으면 'N/A', 있으면 host·owner/repo(+열기 버튼). L-1: 텍스트는 textContent. */
+  function gitRemoteVal(vm) {
+    if (!vm.remoteHost && !vm.remoteSlug) {
+      return el('span', { cls: 'kv__v kv__v--na', text: '원격 없음(로컬 전용)' });
+    }
+    const label = vm.remoteSlug || vm.remoteHost || '원격';
+    const canOpen = !!vm.remoteWeb && bridgeHas('openExternal');
+    if (!canOpen) return el('span', { cls: 'mono kv__v', text: label });
+    // 클릭 시 기본 브라우저로 열기(main이 validateHttpUrl로 재검증 후 shell.openExternal).
+    const btn = el('button', {
+      cls: 'git-remote-link mono kv__v',
+      title: vm.remoteWeb, // 속성값(setAttribute) — innerHTML 아님(안전)
+      attrs: { type: 'button', 'aria-label': label + ' — 브라우저에서 열기' },
+      on: { click: () => onOpenExternal(vm.remoteWeb) },
+    });
+    btn.appendChild(el('span', { text: label })); // L-1
+    btn.appendChild(svg([{ t: 'path', d: 'M15 3h6v6' }, { t: 'path', d: 'M10 14 21 3' },
+      { t: 'path', d: 'M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6' }], { size: 12, sw: 1.8 }));
+    return btn;
+  }
+
+  /** 외부 URL 열기 — main 재검증(http/https만) 후 shell.openExternal. graceful. */
+  async function onOpenExternal(url) {
+    if (!bridgeHas('openExternal')) { toast('이 환경에서는 링크 열기를 사용할 수 없습니다.', true); return; }
+    const res = await ipc('openExternal', url);
+    if (!res || !res.ok) toast('링크를 열지 못했습니다.', true);
   }
 
   function insightSize(vm) {

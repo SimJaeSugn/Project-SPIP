@@ -99,6 +99,9 @@ contextBridge.exposeInMainWorld('spip', {
   // 경로 열기 — id로 프로젝트 폴더를 OS 탐색기에서 연다(main이 화이트리스트 검증 후 shell.openPath).
   openPath: (id) => ipcRenderer.invoke('spip:openPath', { id: String(id) }),
 
+  // 외부 링크 열기 — 원격지(GitHub 등) URL을 기본 브라우저로(main이 http/https 재검증 후 shell.openExternal).
+  openExternal: (url) => ipcRenderer.invoke('spip:openExternal', { url: String(url) }),
+
   // [M6 R-18] 외부 툴 경로 설정. setToolPath는 args 없음(M6-H-2). path=null은 지정 해제.
   getTools: () => ipcRenderer.invoke('spip:getTools'),
   setToolPath: (id, p) => ipcRenderer.invoke('spip:setToolPath', { id: String(id), path: p == null ? null : String(p) }),

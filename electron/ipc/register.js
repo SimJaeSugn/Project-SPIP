@@ -125,6 +125,7 @@ function registerIpcHandlers(deps) {
   // actions — rescan에 sendProgress 주입.
   guard('spip:openInVsCode', (args) => actionsIpc.openInVsCode(args, ctx));
   guard('spip:openPath', (args) => actionsIpc.openPath(args, Object.assign({}, ctx, { shell })));
+  guard('spip:openExternal', (args) => actionsIpc.openExternal(args, Object.assign({}, ctx, { shell })));
   guard('spip:rescan', (args) => actionsIpc.rescan(args, Object.assign({}, ctx, { sendProgress })));
 
   // folders — dialog/win 주입.
