@@ -21,7 +21,7 @@ const quiet = { error() {}, warn() {}, info() {} };
 function proj(id, path, gitOver, freshOver) {
   return {
     id, path, name: id, language: { primary: 'Go' }, size: { status: 'ok', totalBytes: 1 },
-    git: Object.assign({ status: 'ok', isRepo: true, branch: 'main', dirty: false, ahead: 0, behind: 0, changes: 0 }, gitOver),
+    git: Object.assign({ status: 'ok', isRepo: true, branch: 'main', dirty: false, ahead: 0, behind: 0, changes: 0, remoteHost: null, remoteSlug: null, remoteWeb: null, remoteUrl: null }, gitOver),
     freshness: Object.assign({ lastModified: '2026-01-01T00:00:00.000Z', lastCommit: null, isStale: false }, freshOver),
   };
 }
@@ -59,11 +59,11 @@ const idCanon = (p) => (p === 'GONE' ? null : p);
 /* ───────────── 순수 계약 ───────────── */
 test('normalizeGit — ok shape / na 폴백', () => {
   assert.deepStrictEqual(
-    normalizeGit({ status: 'ok', isRepo: true, branch: 'm', dirty: true, ahead: 2, behind: 1, changes: 3 }),
-    { status: 'ok', isRepo: true, branch: 'm', dirty: true, ahead: 2, behind: 1, changes: 3 });
+    normalizeGit({ status: 'ok', isRepo: true, branch: 'm', dirty: true, ahead: 2, behind: 1, changes: 3, remoteHost: 'github.com', remoteSlug: 'o/r', remoteWeb: 'https://github.com/o/r', remoteUrl: 'git@github.com:o/r.git' }),
+    { status: 'ok', isRepo: true, branch: 'm', dirty: true, ahead: 2, behind: 1, changes: 3, remoteHost: 'github.com', remoteSlug: 'o/r', remoteWeb: 'https://github.com/o/r', remoteUrl: 'git@github.com:o/r.git' });
   assert.deepStrictEqual(
     normalizeGit({ status: 'na' }),
-    { status: 'na', isRepo: false, branch: null, dirty: null, ahead: null, behind: null, changes: null });
+    { status: 'na', isRepo: false, branch: null, dirty: null, ahead: null, behind: null, changes: null, remoteHost: null, remoteSlug: null, remoteWeb: null, remoteUrl: null });
 });
 
 test('normalizeFreshness — shape + isStale 불리언화', () => {
