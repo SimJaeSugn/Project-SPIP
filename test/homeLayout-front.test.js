@@ -151,9 +151,13 @@ test('로드맵 Phase 5·M — 그룹: 렌더·CRUD·접기·멤버 배정·격�
   assert.ok(/store\.groups\s*=\s*applyGroups\(/.test(APP_SRC) && /function applyGroups\(/.test(APP_SRC), '그룹 하이드레이션·방어 적재');
   // 멤버 한 그룹에만(배정 시 타 그룹서 제거).
   assert.ok(/function onAddToGroup\([\s\S]{0,320}filter\(function \(m\) \{ return m !== widgetId/.test(APP_SRC), '배정 시 타 그룹서 제거(유일)');
-  // CSS.
-  assert.ok(/\.home-group__grid\s*\{[^}]*repeat\(auto-fit/.test(CSS), '멤버 auto-fit 격자');
+  // CSS — 그룹 내부도 masonry 격자(--home-cols)로 멤버 리사이즈/스팬 지원.
+  assert.ok(/\.home-group__grid\s*\{[^}]*repeat\(var\(--home-cols/.test(CSS), '멤버 masonry 격자(--home-cols)');
   assert.ok(/\.home-group\.is-collapsed/.test(CSS), '접기 상태 CSS');
+  // 멤버 리사이즈·순서변경(masonry 그룹 내부).
+  assert.ok(/homeResizeHandle\(id\)\); \/\/ 우하단 리사이즈/.test(APP_SRC), '그룹 멤버 리사이즈 핸들');
+  assert.ok(/function initGroupSortables\(/.test(APP_SRC) && /function commitGroupMembers\(/.test(APP_SRC) && /function commitGroupOrder\(/.test(APP_SRC), '멤버·그룹 순서변경 Sortable/커밋');
+  assert.ok(/closest\('\.home-masonry, \.home-group__grid'\)/.test(APP_SRC), '리사이즈가 속한 격자(메인/그룹) 기준');
 });
 
 // ── [로드맵 Phase 5·B] 프리폼(자유 배치) — 순수 좌표 유틸 + 렌더/드래그 배선 ──
@@ -419,13 +423,16 @@ test('홈 위젯 크기 — 렌더가 콘텐츠 래퍼·리사이즈 핸들·레
   assert.ok(!/home-section--wide/.test(APP_SRC), '구 column-span(.home-section--wide) 배선 제거');
 });
 
-test('홈 위젯 크기 — layoutHomeMasonry 가 열 수·폭/높이 스팬을 적용', () => {
-  const start = APP_SRC.indexOf('function layoutHomeMasonry(');
-  assert.ok(start >= 0, 'layoutHomeMasonry 함수 존재');
-  const body = APP_SRC.slice(start, start + 2400);
+test('홈 위젯 크기 — layoutMasonryGrid 가 열 수·폭/높이 스팬을 적용(메인·그룹 공용)', () => {
+  // [Phase 5·M] 실제 배치 로직은 layoutMasonryGrid 로 추출(메인 격자 + 그룹 내부 격자 공용).
+  const start = APP_SRC.indexOf('function layoutMasonryGrid(');
+  assert.ok(start >= 0, 'layoutMasonryGrid 함수 존재');
+  const body = APP_SRC.slice(start, start + 2000);
   assert.ok(/setProperty\('--home-cols'/.test(body), '반응형 열 수(--home-cols) 주입');
   assert.ok(/gridColumnEnd\s*=\s*'span '/.test(body), '폭 = grid-column span 적용');
   assert.ok(/gridRowEnd\s*=\s*'span '/.test(body), '높이 = grid-row span 적용');
+  // 메인 격자 + 그룹 격자 모두 배치.
+  assert.ok(/querySelectorAll\('\.home-group__grid'\)/.test(APP_SRC), 'layoutHomeMasonry 가 그룹 격자도 배치');
 });
 
 test('홈 위젯 크기 — 리사이즈 종료 시 setHomeWidgetSizes 로 영속', () => {

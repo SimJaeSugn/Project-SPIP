@@ -22,7 +22,7 @@
 | Phase 4 — 팔레트(D) | ✅ **배포(v1.23.0)** | **액션 레지스트리**(`buildActions` + 순수 `filterActions`/`actionMatchScore`) + **Cmd+K 팔레트**(뷰전환·설정·위젯·프리셋·내보내기·테마·포커스·프로젝트점프, 방향키·부분교체) |
 | Phase 4 — 포커스(I)·딥링크(H) | ✅ **배포(v1.23.0)** | I: 위젯 포커스 버튼 + 풀스크린 오버레이(종료 시 masonry 재측정·컨테이너 컨텍스트 재사용). H: 팔레트 **프로젝트 점프**(→상세 드로어). 데이터 드래그(위젯간 DnD)는 후속(SortableJS·리사이즈 충돌 회피 설계 필요) |
 | Phase 5 — 프리폼(B) | ✅ **배포(v1.24.0)** | `layoutMode=freeform` + 위젯 좌표(`positions{x,y}`) — 자유 배치 토글·드래그 이동(스냅, 클릭/드래그 임계값)·자동 정렬. featureAdd 포함 배치. 육안 확인 완료 |
-| Phase 5 — 그룹(M) | 🔶 육안 대기 | 그룹/섹션 노드(`{id,name,collapsed,members}`) — 전체폭 **접기 밴드** + 그룹 추가/이름변경/삭제 + 멤버 배정(피커)/제거. 그룹 위젯은 메인 격자서 제외해 그룹 내부 auto-fit 격자로. masonry 전용. `normalizeGroups` 단일 신뢰 경계(멤버 그룹 간 유일)·IPC `setGroups` |
+| Phase 5 — 그룹(M) | 🔶 육안 대기 | 그룹/섹션(`{id,name,collapsed,members}`) — 전체폭 **접기 밴드** + 추가/이름변경/삭제/멤버 배정·제거. **그룹 내부도 masonry**(멤버 폭·높이 리사이즈·드래그 순서변경) + **그룹 순서 드래그**. `layoutMasonryGrid` 메인/그룹 공용, 리사이즈는 속한 격자 기준. masonry 전용·`normalizeGroups` 단일 신뢰 경계 |
 | Phase 5 — 스택(F) | ⬜ 미착수 | 위젯 스택(겹침·로테이션). 최고 난이도 — **다음 작업** |
 
 **배포**: v1.24.0 (Phase 5-B 프리폼/자유 배치 — 드래그 이동·스냅·자동 정렬). 테스트 **1232 그린**. 커밋 `bb490ca`→`2c1bbb4`(master).

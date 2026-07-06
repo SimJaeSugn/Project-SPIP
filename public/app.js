@@ -8224,7 +8224,8 @@ function initBrowser() {
       if (_homeLayoutRaf) return;                  // 이미 예약됨
       _homeLayoutRaf = window.requestAnimationFrame(function () { _homeLayoutRaf = 0; layoutHomeMasonry(); });
     });
-    var nodes = grid.querySelectorAll('.home-section__content');
+    // [로드맵 Phase 5·M] 메인 격자 + 그룹 내부 격자의 콘텐츠 모두 관찰(그룹 멤버 async 로드도 재배치).
+    var nodes = document.querySelectorAll('.home-masonry .home-section__content, .home-group__grid .home-section__content');
     for (var i = 0; i < nodes.length; i++) _homeMasonryRO.observe(nodes[i]);
   }
 
@@ -8236,21 +8237,29 @@ function initBrowser() {
     return Math.max(0, grid.clientWidth - padL - padR);
   }
 
-  /** 홈 그리드 폭·높이 스팬 배치 — 반응형 열 수 + 위젯별 크기 반영. */
+  /** 홈 그리드 폭·높이 스팬 배치 — 반응형 열 수 + 위젯별 크기 반영. 메인 격자 + [Phase 5·M] 그룹 내부 격자. */
   function layoutHomeMasonry() {
     if (typeof document === 'undefined') return;
     var grid = document.querySelector('.home-masonry');
     if (!grid) return;
     // [로드맵 Phase 5·B] 프리폼이면 절대 배치 레이아웃으로 분기(격자 masonry 미적용).
     if (store.layoutMode === 'freeform') { layoutHomeFreeform(grid); return; }
+    layoutMasonryGrid(grid);
+    // [로드맵 Phase 5·M] 그룹 내부 격자도 동일 masonry 배치(멤버 폭·높이 스팬·밀도).
+    var groupGrids = document.querySelectorAll('.home-group__grid');
+    for (var gi = 0; gi < groupGrids.length; gi++) layoutMasonryGrid(groupGrids[gi]);
+  }
+  /** 단일 격자 요소를 masonry 배치(순수 DOM 조작) — 메인·그룹 내부 공용. */
+  function layoutMasonryGrid(grid) {
     var contentW = homeGridContentWidth(grid);
     var cols = computeHomeCols(contentW);
     grid.style.setProperty('--home-cols', String(cols));
     var colW = (contentW - HOME_GAP * (cols - 1)) / cols; // 한 열의 실제 폭(px) — 밀도 tier 파생용
     var sizes = store.homeWidgetSizes || {};
-    var cells = grid.querySelectorAll('.home-section');
+    var cells = grid.children; // 직계 셀만(중첩 그룹 격자의 셀은 각자 배치)
     for (var i = 0; i < cells.length; i++) {
       var cell = cells[i];
+      if (!cell.classList || !cell.classList.contains('home-section')) continue;
       var id = (cell.dataset && cell.dataset.homeSection) || '';
       var sz = sizes[id] || {};
       // 폭(열 스팬): 저장 w(없으면 기본 스팬), 현재 열 수로 캡.
@@ -8404,9 +8413,10 @@ function initBrowser() {
 
   function onHomeResizeStart(e, id) {
     if (e.button != null && e.button !== 0) return; // 좌클릭만
-    var grid = document.querySelector('.home-masonry');
     var handle = e.currentTarget;
     var cell = handle && handle.closest ? handle.closest('.home-section') : null;
+    // [로드맵 Phase 5·M] 셀이 속한 격자(메인 또는 그룹 내부)를 기준으로 열 폭 산출.
+    var grid = cell && cell.closest ? cell.closest('.home-masonry, .home-group__grid') : document.querySelector('.home-masonry');
     if (!grid || !cell) return;
     e.preventDefault();
     e.stopPropagation();
@@ -8475,12 +8485,12 @@ function initBrowser() {
    *   data-home-section enum 순서를 읽어 setHomeLayout 영속 → 응답 정규화 순서를 store 반영.
    *   RG.widget('homeSections')로 render() 1회당 destroy/recreate(중복 인스턴스·핸들러 누적 0).
    * ===================================================================== */
-  let homeSortable = null;
+  let homeSortables = [];
   function destroyHomeSortable() {
-    if (homeSortable && typeof homeSortable.destroy === 'function') {
-      try { homeSortable.destroy(); } catch (_) { /* ignore */ }
+    for (var i = 0; i < homeSortables.length; i++) {
+      try { if (homeSortables[i] && typeof homeSortables[i].destroy === 'function') homeSortables[i].destroy(); } catch (_) { /* ignore */ }
     }
-    homeSortable = null;
+    homeSortables = [];
   }
   function initHomeSortable() {
     destroyHomeSortable();
@@ -8491,7 +8501,9 @@ function initBrowser() {
     if (!Sortable || typeof Sortable.create !== 'function') return; // 라이브러리 부재 — 재정렬 비활성(표시는 정상)
     const grid = document.querySelector('.home-masonry');
     if (!grid) return; // 홈 뷰 아님
-    homeSortable = Sortable.create(grid, {
+    // [로드맵 Phase 5·M] 그룹 내부 멤버 순서변경 + 그룹 순서변경 Sortable 도 함께 마운트.
+    initGroupSortables(Sortable);
+    homeSortables.push(Sortable.create(grid, {
       draggable: '.home-section',
       // 섹션 내부 인터랙티브 컨트롤(버튼/링크/입력)·리사이즈 핸들에서 시작하는 포인터다운은 드래그로 잡지 않음.
       filter: 'button, a, input, select, textarea, .btn, .home-resize',
@@ -8520,7 +8532,71 @@ function initBrowser() {
           maybeFlushCommitRefresh(); // [M10-P1] dragging 해제 → 보류된 커밋 폴링 따라감
         });
       },
-    });
+    }));
+  }
+  /** [로드맵 Phase 5·M] 그룹 내부 멤버 순서 + 그룹 자체 순서 Sortable. */
+  function initGroupSortables(Sortable) {
+    // 멤버 순서(그룹별 격자) — 그룹 간 이동은 막고 내부 재정렬만(그룹 이동은 피커/제거로).
+    var groupGrids = document.querySelectorAll('.home-group__grid');
+    for (var gi = 0; gi < groupGrids.length; gi++) {
+      (function (gGrid) {
+        var groupId = gGrid.getAttribute('data-group-id') || '';
+        homeSortables.push(Sortable.create(gGrid, {
+          draggable: '.home-section',
+          filter: 'button, a, input, select, textarea, .btn, .home-resize',
+          preventOnFilter: false,
+          animation: prefersReducedMotion() ? 0 : 160,
+          easing: 'cubic-bezier(.2,.8,.2,1)',
+          ghostClass: 'home-section--ghost', chosenClass: 'home-section--chosen', dragClass: 'home-section--drag',
+          fallbackTolerance: 4,
+          group: 'home-group-' + groupId, // 그룹별 고유 → 그룹 간 드래그 이동 차단(내부 재정렬만)
+          onStart: function () { store._dragging = true; },
+          onEnd: function (evt) {
+            store._dragging = false;
+            var reorder = !!(evt && evt.oldIndex !== evt.newIndex);
+            var ids = reorder ? Array.prototype.slice.call(gGrid.querySelectorAll('[data-home-section]'))
+              .map(function (n) { return (n.dataset && n.dataset.homeSection) || ''; }).filter(function (x) { return x; }) : [];
+            Promise.resolve().then(function () { if (reorder && ids.length) commitGroupMembers(groupId, ids); else RG.coalesce.flushIfPending(); });
+          },
+        }));
+      })(groupGrids[gi]);
+    }
+    // 그룹 순서 — 편집 모드에서만, 헤더를 핸들로. (평소엔 접기/펼치기만)
+    var groupsWrap = document.querySelector('.home-groups');
+    if (groupsWrap && document.querySelector('.home-masonry--editing')) {
+      homeSortables.push(Sortable.create(groupsWrap, {
+        draggable: '.home-group',
+        handle: '.home-group__head',
+        filter: 'button, input, .preset-mini, .home-group__chev',
+        preventOnFilter: false,
+        animation: prefersReducedMotion() ? 0 : 160,
+        ghostClass: 'home-group--ghost',
+        onEnd: function (evt) {
+          var reorder = !!(evt && evt.oldIndex !== evt.newIndex);
+          var ids = reorder ? Array.prototype.slice.call(groupsWrap.querySelectorAll('.home-group'))
+            .map(function (n) { return n.getAttribute('data-group-id') || ''; }).filter(function (x) { return x; }) : [];
+          Promise.resolve().then(function () { if (reorder && ids.length) commitGroupOrder(ids); });
+        },
+      }));
+    }
+  }
+  /** 그룹 멤버 순서 영속 — DOM 순서(ids)로 해당 그룹 members 재정렬(숨김 등 DOM 부재 멤버는 뒤에 보존). */
+  function commitGroupMembers(groupId, orderedIds) {
+    commitGroups((store.groups || []).map(function (g) {
+      if (g.id !== groupId) return g;
+      var set = {}; (g.members || []).forEach(function (m) { set[m] = 1; });
+      var next = orderedIds.filter(function (id) { return set[id]; });
+      (g.members || []).forEach(function (m) { if (next.indexOf(m) < 0) next.push(m); });
+      return Object.assign({}, g, { members: next });
+    }));
+  }
+  /** 그룹 순서 영속 — DOM 순서(group ids)로 store.groups 재정렬(누락 보존). */
+  function commitGroupOrder(orderedIds) {
+    var byId = {}; (store.groups || []).forEach(function (g) { byId[g.id] = g; });
+    var next = [];
+    orderedIds.forEach(function (id) { if (byId[id]) { next.push(byId[id]); delete byId[id]; } });
+    (store.groups || []).forEach(function (g) { if (byId[g.id]) next.push(g); });
+    commitGroups(next);
   }
   /** [R-32] 새 섹션 순서 영속 — 낙관적 store 반영 + setHomeLayout IPC → 응답 정규화 순서로 확정.
    *   메인 normalizeHomeLayout 이 단일 신뢰 경계(렌더러 ids 는 enum 필터만, UX 편의). */
@@ -8686,7 +8762,7 @@ function initBrowser() {
   function renderHomeGroups(groups, hidden, reclaim, editing) {
     var wrap = el('div', { cls: 'home-groups', style: 'padding:0 30px 30px;' });
     groups.forEach(function (g) {
-      var block = el('div', { cls: 'home-group' + (g.collapsed ? ' is-collapsed' : '') });
+      var block = el('div', { cls: 'home-group' + (g.collapsed ? ' is-collapsed' : ''), attrs: { 'data-group-id': g.id } });
       var head = el('div', { cls: 'home-group__head' });
       head.appendChild(el('button', {
         cls: 'home-group__chev', text: g.collapsed ? '▶' : '▼',
@@ -8722,27 +8798,33 @@ function initBrowser() {
       }
       block.appendChild(head);
       if (!g.collapsed) {
-        var inner = el('div', { cls: 'home-group__grid' });
+        // [로드맵 Phase 5·M] 그룹 내부도 masonry 격자 — 멤버는 폭·높이 리사이즈 + 드래그 순서변경 가능(메인과 동일 계약).
+        var inner = el('div', { cls: 'home-group__grid' + (editing ? ' home-masonry--editing' : ''), attrs: { 'data-group-id': g.id } });
         (g.members || []).forEach(function (id) {
           if (hidden.indexOf(id) >= 0) return; // 숨긴 멤버 skip
           var node = renderHomeSection(id, reclaim);
           if (!node) return;
           var cell = el('div', { cls: 'home-section home-group__member', attrs: { 'data-home-section': id } });
-          if (editing) cell.appendChild(el('button', {
+          // 그룹에서 빼기(−) + 포커스(⛶) — 메인 위젯과 동일 위치 규약.
+          cell.appendChild(el('button', {
             cls: 'widget-remove', attrs: { type: 'button', 'aria-label': '그룹에서 빼기', title: '그룹에서 빼기' },
             on: { click: function (e) { e.stopPropagation(); onRemoveFromGroup(id); } },
             children: [svg([{ t: 'path', d: 'M5 12h14' }], { size: 13, stroke: '#78716c', sw: 2 })],
           }));
+          cell.appendChild(widgetFocusBtn(id));
           var content = el('div', { cls: 'home-section__content' });
           content.appendChild(node);
           cell.appendChild(content);
+          cell.appendChild(homeResizeHandle(id)); // 우하단 리사이즈(그룹 격자 기준)
           inner.appendChild(cell);
         });
-        if (editing && store._groupAddFor === g.id) inner.appendChild(renderGroupAddPicker(g.id));
-        if ((g.members || []).length === 0 && !(editing && store._groupAddFor === g.id)) {
-          inner.appendChild(el('div', { cls: 'home-group__empty', text: editing ? '＋ 로 위젯을 추가하세요.' : '빈 그룹' }));
+        block.appendChild(inner); // 멤버 격자(빈 그룹도 sortable 타깃 유지)
+        // 피커·빈 안내는 masonry 미세 행 격자 밖(별도 블록 자식)에 둔다(8px 행에 갇히지 않게).
+        if (editing && store._groupAddFor === g.id) block.appendChild(renderGroupAddPicker(g.id));
+        var visibleMembers = (g.members || []).filter(function (m) { return hidden.indexOf(m) < 0; });
+        if (visibleMembers.length === 0 && !(editing && store._groupAddFor === g.id)) {
+          block.appendChild(el('div', { cls: 'home-group__empty', text: editing ? '＋ 로 위젯을 추가하세요.' : '빈 그룹' }));
         }
-        block.appendChild(inner);
       }
       wrap.appendChild(block);
     });
@@ -9565,7 +9647,7 @@ function initBrowser() {
   // [R-32] 홈 섹션 드래그 재정렬 위젯. .home-masonry 부재(홈 뷰 아님) 시 init 은 no-op.
   RG.widget.define({
     id: 'homeSections',
-    init: () => { initHomeSortable(); return homeSortable; },
+    init: () => { initHomeSortable(); return homeSortables; },
     destroy: () => { destroyHomeSortable(); },
   });
   // [R-33] 커밋 차트 위젯(SVG 자작). .commit-chart-host 부재(홈 뷰 아님/생산성 섹션 미표시) 시 no-op.

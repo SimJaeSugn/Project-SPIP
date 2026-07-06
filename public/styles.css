@@ -526,10 +526,10 @@ body.home-freedragging { user-select: none; cursor: grabbing; }
 .home-group__name { font-size: 14px; font-weight: 700; color: var(--t1, #1c1917); }
 .home-group__count { font-size: 11px; font-weight: 600; color: #a8a29e; background: #f5f5f4; padding: 2px 8px; border-radius: 6px; }
 .home-group__rename { font: inherit; font-size: 14px; font-weight: 700; border: 1px solid #c7c9f5; border-radius: 6px; padding: 2px 8px; outline: none; }
-.home-group__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; padding: 16px; align-items: start; }
+.home-group__grid { display: grid; grid-template-columns: repeat(var(--home-cols, 1), minmax(0, 1fr)); grid-auto-rows: 8px; gap: 20px; padding: 16px; align-items: start; position: relative; }
 .home-group__member { position: relative; }
-.home-group__empty { grid-column: 1 / -1; font-size: 12.5px; color: #a8a29e; padding: 8px 2px; }
-.home-group__picker { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px; border: 1px dashed var(--border, #e7e5e4); border-radius: 10px; }
+.home-group__empty { font-size: 12.5px; color: #a8a29e; padding: 0 16px 16px; }
+.home-group__picker { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 16px 16px; padding: 10px; border: 1px dashed var(--border, #e7e5e4); border-radius: 10px; }
 .home-group__picker-title { font-size: 12px; font-weight: 600; color: #78716c; width: 100%; }
 .home-group__pick { appearance: none; cursor: pointer; font-size: 12.5px; font-weight: 600; padding: 6px 11px; border-radius: 8px; border: 1px solid var(--border, #e7e5e4); background: var(--surface-2, #f5f5f4); color: var(--t2, #57534e); }
 .home-group__pick:hover { background: #eef2ff; }
