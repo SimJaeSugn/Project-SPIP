@@ -705,6 +705,9 @@ const HOME_SECTION_IDS = ['attention', 'productivity', 'activity', 'todos', 'mai
 // [위젯 추가/제거] 토글 가능한 콘텐츠 위젯 메타(갤러리·제거 UI용). 'featureAdd'는 추가 트리거라 제외(항상 표시).
 //   메인 uiStateStore.TOGGLEABLE_WIDGET_IDS 와 동형(드리프트 0 — homeLayout-front 테스트가 교차검증).
 const TOGGLEABLE_WIDGET_IDS = HOME_SECTION_IDS.filter((id) => id !== 'featureAdd');
+// [로드맵 Phase 5·M] 그룹 id 판정(메인 GROUP_ID_RE 동형) — 프리폼에서 그룹 블록도 좌표·폭을 갖는 배치 대상.
+const GROUP_ID_RE_FRONT = /^g[0-9a-z]{4,32}$/;
+function isGroupId(id) { return typeof id === 'string' && GROUP_ID_RE_FRONT.test(id); }
 const WIDGET_META = {
   attention: { name: '주의가 필요한 프로젝트', desc: '미커밋·미푸시·방치 프로젝트를 한눈에' },
   productivity: { name: '주간 생산성', desc: '커밋 빈도 차트와 언어·스택 추세' },
@@ -767,7 +770,7 @@ function applyWidgetPositions(input) {
   const out = {};
   if (!input || typeof input !== 'object' || Array.isArray(input)) return out;
   for (const id of Object.keys(input)) {
-    if (HOME_SECTION_IDS.indexOf(id) < 0) continue; // featureAdd 포함(프리폼 배치 대상)
+    if (HOME_SECTION_IDS.indexOf(id) < 0 && !isGroupId(id)) continue; // 홈 섹션(featureAdd) + 그룹 블록(프리폼)
     const v = input[id];
     if (!v || typeof v !== 'object') continue;
     const x = Number(v.x), y = Number(v.y);
@@ -803,10 +806,11 @@ const HOME_ROW_UNIT = 8;      // masonry 미세 행 단위(px) — 행 스팬 �
 const HOME_H_MIN = 120;       // 사용자 지정 높이 하한(px)
 const HOME_H_MAX = 1600;      // 상한(px)
 
-/** shelfWide 는 기본 전체폭, 커밋 히트맵은 기본 2열(가로로 긴 캘린더), 그 외는 기본 1열(사용자 미조절 시 기본 스팬). */
+/** shelfWide 는 기본 전체폭, 커밋 히트맵·그룹 블록은 기본 2열, 그 외는 기본 1열(사용자 미조절 시 기본 스팬). */
 function homeDefaultSpan(id) {
   if (id === 'shelfWide') return HOME_MAX_COLS;
   if (id === 'commitHeatmap') return 2;
+  if (isGroupId(id)) return 2; // [Phase 5·M] 프리폼 그룹 블록 기본 2열
   return 1;
 }
 
@@ -929,7 +933,7 @@ function applyHomeWidgetSizes(input) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) return out;
   const allowed = new Set(TOGGLEABLE_WIDGET_IDS);
   for (const id of Object.keys(input)) {
-    if (!allowed.has(id)) continue;
+    if (!allowed.has(id) && !isGroupId(id)) continue; // [Phase 5·M] 그룹 블록 폭도 허용
     const v = input[id];
     if (!v || typeof v !== 'object') continue;
     let w = Number(v.w);
@@ -2699,8 +2703,8 @@ function initBrowser() {
     wrap.appendChild(editBar);
     var grid = el('div', { cls: 'home-masonry' + (editing ? ' home-masonry--editing' : '') + (freeform ? ' home-masonry--freeform' : ''), style: 'padding:20px 30px 36px;' });
     var hidden = store.hiddenWidgets || [];
-    // [로드맵 Phase 5·M] 그룹은 masonry 모드에서만 적용. 그룹 소속 위젯은 메인 격자에서 빼고 아래 그룹 섹션에 렌더.
-    var groups = (!freeform && Array.isArray(store.groups)) ? store.groups : [];
+    // [로드맵 Phase 5·M] 그룹 — 소속 위젯은 메인 격자에서 빼고 그룹으로 렌더(masonry=밴드, freeform=자유 배치 셀).
+    var groups = Array.isArray(store.groups) ? store.groups : [];
     var groupedOf = {};
     groups.forEach(function (g) { (g.members || []).forEach(function (m) { groupedOf[m] = g.id; }); });
     applyHomeLayout(store.homeLayout).forEach(function (id) {
@@ -2727,8 +2731,16 @@ function initBrowser() {
       }
       grid.appendChild(cell);
     });
+    // [로드맵 Phase 5·M] 프리폼: 그룹 블록도 자유 배치 셀로 메인 격자에 추가(좌표·드래그 대상).
+    if (freeform) {
+      groups.forEach(function (g) {
+        var gcell = renderGroupFreeCell(g, hidden, reclaim, editing);
+        if (editing) { gcell.classList.add('home-section--free'); gcell.addEventListener('pointerdown', function (e) { onFreeformDragStart(e, g.id); }); }
+        grid.appendChild(gcell);
+      });
+    }
     wrap.appendChild(grid);
-    // [로드맵 Phase 5·M] 그룹 섹션(격자 아래 전체폭 접기 밴드) — masonry 모드에서만.
+    // [로드맵 Phase 5·M] masonry: 그룹 섹션(격자 아래 전체폭 접기 밴드).
     if (!freeform && (groups.length > 0)) wrap.appendChild(renderHomeGroups(groups, hidden, reclaim, editing));
 
     main.appendChild(wrap);
@@ -8290,8 +8302,10 @@ function initBrowser() {
     grid.style.setProperty('--home-cols', String(cols));
     var colW = (contentW - HOME_GAP * (cols - 1)) / cols;
     var sizes = store.homeWidgetSizes || {};
-    var cells = grid.querySelectorAll('.home-section');
-    // 표시 순서 기준 시딩(미배치 위젯 기본 좌표) — 렌더된 셀만 대상.
+    // 직계 셀만(그룹 내부 멤버 .home-section 은 제외 — 그룹 셀 안에서 흐름 배치).
+    var cells = [];
+    for (var c = 0; c < grid.children.length; c++) { if (grid.children[c].classList && grid.children[c].classList.contains('home-section')) cells.push(grid.children[c]); }
+    // 표시 순서 기준 시딩(미배치 셀 기본 좌표).
     var orderedIds = [];
     for (var k = 0; k < cells.length; k++) { var cid = (cells[k].dataset && cells[k].dataset.homeSection) || ''; if (cid) orderedIds.push(cid); }
     var pos = freeformSeedPositions(orderedIds, store.widgetPositions || {}, cols);
@@ -8758,68 +8772,76 @@ function initBrowser() {
   function onRemoveFromGroup(widgetId) {
     commitGroups((store.groups || []).map(function (g) { return Object.assign({}, g, { members: (g.members || []).filter(function (m) { return m !== widgetId; }) }); }));
   }
-  /** 그룹 섹션 렌더 — 각 그룹을 전체폭 접기 밴드로. 멤버 위젯은 내부 auto-fit 격자. */
+  /** 그룹 헤더(접기 토글·이름/인라인 이름변경·개수·편집 컨트롤) — 밴드·프리폼 공용. */
+  function buildGroupHeader(g, editing) {
+    var head = el('div', { cls: 'home-group__head' });
+    head.appendChild(el('button', {
+      cls: 'home-group__chev', text: g.collapsed ? '▶' : '▼',
+      attrs: { type: 'button', 'aria-label': g.collapsed ? '펼치기' : '접기', 'aria-expanded': String(!g.collapsed) },
+      on: { click: function (e) { e.stopPropagation(); onToggleGroupCollapse(g.id); } },
+    }));
+    if (editing && store._groupRenameId === g.id) {
+      var inp = el('input', {
+        cls: 'home-group__rename', attrs: { type: 'text', 'aria-label': '그룹 이름', maxlength: '60', autocomplete: 'off', spellcheck: 'false' },
+        on: {
+          click: function (e) { e.stopPropagation(); }, pointerdown: function (e) { e.stopPropagation(); },
+          input: function (e) { store._groupRenameVal = e.target.value; },
+          keydown: function (e) { e.stopPropagation(); if (e.key === 'Enter') { e.preventDefault(); commitGroupRename(g.id); } else if (e.key === 'Escape') { e.preventDefault(); store._groupRenameId = null; render(); } },
+          blur: function () { if (store._groupRenameId === g.id) commitGroupRename(g.id); },
+        },
+      });
+      inp.value = (store._groupRenameVal != null) ? store._groupRenameVal : g.name;
+      head.appendChild(inp);
+      setTimeout(function () { try { inp.focus(); inp.select(); } catch (_) { /* ignore */ } }, 0);
+    } else {
+      head.appendChild(el('span', { cls: 'home-group__name', text: g.name }));
+    }
+    head.appendChild(el('span', { cls: 'home-group__count', text: (g.members || []).length + '개' }));
+    head.appendChild(el('span', { style: 'flex:1 1 auto;' }));
+    if (editing) {
+      var mkMini = function (txt, label, fn) {
+        return el('span', { cls: 'preset-mini', text: txt, attrs: { role: 'button', tabindex: '0', 'aria-label': label, title: label },
+          on: { pointerdown: function (e) { e.stopPropagation(); }, click: function (e) { e.stopPropagation(); fn(); }, keydown: function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); fn(); } } } });
+      };
+      head.appendChild(mkMini('✎', '이름 변경', function () { store._groupRenameId = g.id; store._groupRenameVal = g.name; render(); }));
+      head.appendChild(mkMini('＋', '위젯 추가', function () { store._groupAddFor = (store._groupAddFor === g.id) ? null : g.id; render(); }));
+      head.appendChild(mkMini('✕', '그룹 삭제', function () { onDeleteGroup(g.id); }));
+    }
+    return head;
+  }
+  /** 그룹 멤버 셀(그룹서 빼기·포커스·리사이즈 핸들). masonry=true 면 그룹 격자 리사이즈 대상. */
+  function buildGroupMemberCell(id, reclaim, editing, withResize) {
+    var node = renderHomeSection(id, reclaim);
+    if (!node) return null;
+    var cell = el('div', { cls: 'home-section home-group__member', attrs: { 'data-home-section': id } });
+    if (editing) {
+      cell.appendChild(el('button', {
+        cls: 'widget-remove', attrs: { type: 'button', 'aria-label': '그룹에서 빼기', title: '그룹에서 빼기' },
+        on: { click: function (e) { e.stopPropagation(); onRemoveFromGroup(id); }, pointerdown: function (e) { e.stopPropagation(); } },
+        children: [svg([{ t: 'path', d: 'M5 12h14' }], { size: 13, stroke: '#78716c', sw: 2 })],
+      }));
+    }
+    cell.appendChild(widgetFocusBtn(id));
+    var content = el('div', { cls: 'home-section__content' });
+    content.appendChild(node);
+    cell.appendChild(content);
+    if (withResize) cell.appendChild(homeResizeHandle(id));
+    return cell;
+  }
+  /** [masonry] 그룹 섹션 밴드 — 각 그룹을 전체폭 접기 밴드로. 멤버는 내부 masonry 격자(리사이즈·순서변경). */
   function renderHomeGroups(groups, hidden, reclaim, editing) {
     var wrap = el('div', { cls: 'home-groups', style: 'padding:0 30px 30px;' });
     groups.forEach(function (g) {
       var block = el('div', { cls: 'home-group' + (g.collapsed ? ' is-collapsed' : ''), attrs: { 'data-group-id': g.id } });
-      var head = el('div', { cls: 'home-group__head' });
-      head.appendChild(el('button', {
-        cls: 'home-group__chev', text: g.collapsed ? '▶' : '▼',
-        attrs: { type: 'button', 'aria-label': g.collapsed ? '펼치기' : '접기', 'aria-expanded': String(!g.collapsed) },
-        on: { click: function () { onToggleGroupCollapse(g.id); } },
-      }));
-      if (editing && store._groupRenameId === g.id) {
-        var inp = el('input', {
-          cls: 'home-group__rename', attrs: { type: 'text', 'aria-label': '그룹 이름', maxlength: '60', autocomplete: 'off', spellcheck: 'false' },
-          on: {
-            click: function (e) { e.stopPropagation(); },
-            input: function (e) { store._groupRenameVal = e.target.value; },
-            keydown: function (e) { e.stopPropagation(); if (e.key === 'Enter') { e.preventDefault(); commitGroupRename(g.id); } else if (e.key === 'Escape') { e.preventDefault(); store._groupRenameId = null; render(); } },
-            blur: function () { if (store._groupRenameId === g.id) commitGroupRename(g.id); },
-          },
-        });
-        inp.value = (store._groupRenameVal != null) ? store._groupRenameVal : g.name;
-        head.appendChild(inp);
-        setTimeout(function () { try { inp.focus(); inp.select(); } catch (_) { /* ignore */ } }, 0);
-      } else {
-        head.appendChild(el('span', { cls: 'home-group__name', text: g.name }));
-      }
-      head.appendChild(el('span', { cls: 'home-group__count', text: (g.members || []).length + '개' }));
-      head.appendChild(el('span', { style: 'flex:1 1 auto;' }));
-      if (editing) {
-        var mkMini = function (txt, label, fn) {
-          return el('span', { cls: 'preset-mini', text: txt, attrs: { role: 'button', tabindex: '0', 'aria-label': label, title: label },
-            on: { click: function (e) { e.stopPropagation(); fn(); }, keydown: function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); fn(); } } } });
-        };
-        head.appendChild(mkMini('✎', '이름 변경', function () { store._groupRenameId = g.id; store._groupRenameVal = g.name; render(); }));
-        head.appendChild(mkMini('＋', '위젯 추가', function () { store._groupAddFor = (store._groupAddFor === g.id) ? null : g.id; render(); }));
-        head.appendChild(mkMini('✕', '그룹 삭제', function () { onDeleteGroup(g.id); }));
-      }
-      block.appendChild(head);
+      block.appendChild(buildGroupHeader(g, editing));
       if (!g.collapsed) {
-        // [로드맵 Phase 5·M] 그룹 내부도 masonry 격자 — 멤버는 폭·높이 리사이즈 + 드래그 순서변경 가능(메인과 동일 계약).
         var inner = el('div', { cls: 'home-group__grid' + (editing ? ' home-masonry--editing' : ''), attrs: { 'data-group-id': g.id } });
         (g.members || []).forEach(function (id) {
-          if (hidden.indexOf(id) >= 0) return; // 숨긴 멤버 skip
-          var node = renderHomeSection(id, reclaim);
-          if (!node) return;
-          var cell = el('div', { cls: 'home-section home-group__member', attrs: { 'data-home-section': id } });
-          // 그룹에서 빼기(−) + 포커스(⛶) — 메인 위젯과 동일 위치 규약.
-          cell.appendChild(el('button', {
-            cls: 'widget-remove', attrs: { type: 'button', 'aria-label': '그룹에서 빼기', title: '그룹에서 빼기' },
-            on: { click: function (e) { e.stopPropagation(); onRemoveFromGroup(id); } },
-            children: [svg([{ t: 'path', d: 'M5 12h14' }], { size: 13, stroke: '#78716c', sw: 2 })],
-          }));
-          cell.appendChild(widgetFocusBtn(id));
-          var content = el('div', { cls: 'home-section__content' });
-          content.appendChild(node);
-          cell.appendChild(content);
-          cell.appendChild(homeResizeHandle(id)); // 우하단 리사이즈(그룹 격자 기준)
-          inner.appendChild(cell);
+          if (hidden.indexOf(id) >= 0) return;
+          var mcell = buildGroupMemberCell(id, reclaim, editing, true);
+          if (mcell) inner.appendChild(mcell);
         });
-        block.appendChild(inner); // 멤버 격자(빈 그룹도 sortable 타깃 유지)
-        // 피커·빈 안내는 masonry 미세 행 격자 밖(별도 블록 자식)에 둔다(8px 행에 갇히지 않게).
+        block.appendChild(inner);
         if (editing && store._groupAddFor === g.id) block.appendChild(renderGroupAddPicker(g.id));
         var visibleMembers = (g.members || []).filter(function (m) { return hidden.indexOf(m) < 0; });
         if (visibleMembers.length === 0 && !(editing && store._groupAddFor === g.id)) {
@@ -8829,6 +8851,31 @@ function initBrowser() {
       wrap.appendChild(block);
     });
     return wrap;
+  }
+  /** [freeform] 그룹을 자유 배치 셀로 — 좌표(positions[gId])·폭(sizes[gId]) 대상, 드래그로 이동. 멤버는 내부 auto-fit. */
+  function renderGroupFreeCell(g, hidden, reclaim, editing) {
+    var cell = el('div', { cls: 'home-section home-group--freecell', attrs: { 'data-home-section': g.id } });
+    var content = el('div', { cls: 'home-section__content' });
+    var block = el('div', { cls: 'home-group' + (g.collapsed ? ' is-collapsed' : '') });
+    block.appendChild(buildGroupHeader(g, editing));
+    if (!g.collapsed) {
+      var inner = el('div', { cls: 'home-group__gridfree' });
+      (g.members || []).forEach(function (id) {
+        if (hidden.indexOf(id) >= 0) return;
+        var mcell = buildGroupMemberCell(id, reclaim, editing, false); // 프리폼 그룹 내부 멤버는 리사이즈 없이 흐름 배치
+        if (mcell) inner.appendChild(mcell);
+      });
+      block.appendChild(inner);
+      if (editing && store._groupAddFor === g.id) block.appendChild(renderGroupAddPicker(g.id));
+      var visM = (g.members || []).filter(function (m) { return hidden.indexOf(m) < 0; });
+      if (visM.length === 0 && !(editing && store._groupAddFor === g.id)) {
+        block.appendChild(el('div', { cls: 'home-group__empty', text: editing ? '＋ 로 위젯을 추가하세요.' : '빈 그룹' }));
+      }
+    }
+    content.appendChild(block);
+    cell.appendChild(content);
+    if (editing) cell.appendChild(homeResizeHandle(g.id));
+    return cell;
   }
   /** 그룹에 추가할 위젯 선택 목록 — 어느 그룹에도 없고 숨기지 않은 토글 위젯. */
   function renderGroupAddPicker(groupId) {

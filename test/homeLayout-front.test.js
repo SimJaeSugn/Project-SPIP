@@ -155,9 +155,26 @@ test('로드맵 Phase 5·M — 그룹: 렌더·CRUD·접기·멤버 배정·격�
   assert.ok(/\.home-group__grid\s*\{[^}]*repeat\(var\(--home-cols/.test(CSS), '멤버 masonry 격자(--home-cols)');
   assert.ok(/\.home-group\.is-collapsed/.test(CSS), '접기 상태 CSS');
   // 멤버 리사이즈·순서변경(masonry 그룹 내부).
-  assert.ok(/homeResizeHandle\(id\)\); \/\/ 우하단 리사이즈/.test(APP_SRC), '그룹 멤버 리사이즈 핸들');
+  assert.ok(/function buildGroupMemberCell\(/.test(APP_SRC) && /buildGroupMemberCell\(id, reclaim, editing, true\)/.test(APP_SRC), '밴드 멤버 리사이즈(withResize=true)');
   assert.ok(/function initGroupSortables\(/.test(APP_SRC) && /function commitGroupMembers\(/.test(APP_SRC) && /function commitGroupOrder\(/.test(APP_SRC), '멤버·그룹 순서변경 Sortable/커밋');
   assert.ok(/closest\('\.home-masonry, \.home-group__grid'\)/.test(APP_SRC), '리사이즈가 속한 격자(메인/그룹) 기준');
+});
+
+// ── [로드맵 Phase 5·M] 프리폼 그룹 자유 배치 ──
+test('로드맵 Phase 5·M — 프리폼에서 그룹 블록 자유 배치(좌표·드래그·화이트리스트)', () => {
+  const CSS = fs.readFileSync(path.join(__dirname, '..', 'public', 'styles.css'), 'utf8');
+  // 그룹은 두 모드 모두 적용(masonry=밴드, freeform=자유 셀).
+  assert.ok(/var groups = Array\.isArray\(store\.groups\) \? store\.groups : \[\]/.test(APP_SRC), '그룹은 모드 무관 적재');
+  assert.ok(/function renderGroupFreeCell\(/.test(APP_SRC), '프리폼 그룹 자유 배치 셀 렌더');
+  assert.ok(/if \(freeform\) \{[\s\S]{0,260}renderGroupFreeCell\(g, hidden, reclaim, editing\)/.test(APP_SRC), '프리폼에서 그룹 셀을 격자에 추가');
+  assert.ok(/onFreeformDragStart\(e, g\.id\)/.test(APP_SRC), '그룹 셀 드래그(그룹 id)');
+  // 그룹 id 판정 + 좌표/폭 화이트리스트 확장(프리폼 그룹 배치·폭).
+  assert.ok(/function isGroupId\(/.test(APP_SRC), '그룹 id 판정');
+  assert.ok(/HOME_SECTION_IDS\.indexOf\(id\) < 0 && !isGroupId\(id\)\) continue/.test(APP_SRC), 'positions 에 그룹 id 허용');
+  assert.ok(/if \(isGroupId\(id\)\) return 2;/.test(APP_SRC), '그룹 블록 기본 2열');
+  // layoutHomeFreeform 은 직계 셀만(중첩 멤버 제외).
+  assert.ok(/grid\.children\[c\]\.classList\.contains\('home-section'\)/.test(APP_SRC), '프리폼 배치는 직계 셀만(멤버 제외)');
+  assert.ok(/\.home-group__gridfree\s*\{[^}]*repeat\(auto-fit/.test(CSS), '프리폼 그룹 멤버 auto-fit');
 });
 
 // ── [로드맵 Phase 5·B] 프리폼(자유 배치) — 순수 좌표 유틸 + 렌더/드래그 배선 ──
