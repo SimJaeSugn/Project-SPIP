@@ -71,6 +71,21 @@ npm run release      # electron-builder --win --publish always (게시)
   경계)로 영속된다. 배치는 `layoutHomeMasonry`(CSS Grid + 폭/높이 스팬)가 계산한다.
 - 위젯 추가 시 반응형 동작에 대한 배선 테스트(정적 소스/순수 로직)를 함께 둔다.
 
+**표현 방식 — 행·열 병합(레이아웃 모델).** 홈은 CSS Grid masonry(`.home-masonry`)다. 위젯을
+추가·수정할 때 이 병합 모델을 깨지 않는다.
+
+- **열 병합(폭)**: 위젯 셀의 `grid-column: span w`. 반응형 열 수는 `computeHomeCols`(열 최소폭
+  `HOME_COL_MIN_W`=300px, 최대 `HOME_MAX_COLS`=4)가 콘텐츠 폭에서 산출해 `--home-cols`로
+  주입하고, `w`는 현재 열 수로 클램프된다. 미조절 기본 스팬은 `homeDefaultSpan`(그 외 1,
+  `shelfWide`는 전체폭).
+- **행 병합(높이)**: `grid-row: span`. 미세 행 `HOME_ROW_UNIT`=8px·`HOME_GAP`=20px 기준으로
+  **측정 높이(또는 사용자 지정 높이)**에서 스팬을 계산해 높이가 제각각인 카드를 masonry로
+  촘촘히 채운다. 따라서 위젯은 **고정폭·고정높이를 가정하지 말 것** — 콘텐츠 높이가 바뀌면
+  `layoutHomeMasonry`가 rAF·`ResizeObserver`·창 리사이즈로 재측정·재배치한다(async 로드
+  위젯은 이 재배치를 전제로 작성).
+- 각 위젯 셀은 우하단 **모서리 리사이즈 핸들**(`.home-resize`)을 가진다 — 위젯 내부에 우하단
+  코너를 점유하는 상시 컨트롤을 두지 않는다(핸들과 충돌). 재정렬(SortableJS)과도 공존한다.
+
 ## 보안 모델 (변경 시 반드시 유지)
 
 로컬 전용 도구지만 신뢰할 수 없는 클론 리포가 섞여도 안전하도록 다음 불변식을 지킨다.
