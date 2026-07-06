@@ -8272,11 +8272,23 @@ function initBrowser() {
   /** 단일 격자 요소를 masonry 배치(순수 DOM 조작) — 메인·그룹 내부 공용. */
   function layoutMasonryGrid(grid) {
     var contentW = homeGridContentWidth(grid);
-    var cols = computeHomeCols(contentW);
-    grid.style.setProperty('--home-cols', String(cols));
-    var colW = (contentW - HOME_GAP * (cols - 1)) / cols; // 한 열의 실제 폭(px) — 밀도 tier 파생용
     var sizes = store.homeWidgetSizes || {};
     var cells = grid.children; // 직계 셀만(중첩 그룹 격자의 셀은 각자 배치)
+    // [좌측 치우침 보정] 아이템이 적으면 반응형 최대 열 수만큼 빈 우측 열이 생겨 왼쪽으로 몰려 보인다.
+    //   → 열 수를 (아이템 수, 가장 넓은 위젯 스팬) 로 캡해 적은 아이템도 폭을 고르게 채우도록.
+    var count = 0, maxSpan = 1;
+    for (var s = 0; s < cells.length; s++) {
+      var scell = cells[s];
+      if (!scell.classList || !scell.classList.contains('home-section')) continue;
+      count += 1;
+      var sid = (scell.dataset && scell.dataset.homeSection) || '';
+      var ssz = sizes[sid] || {};
+      var sw = (typeof ssz.w === 'number' && ssz.w >= 1) ? Math.round(ssz.w) : homeDefaultSpan(sid);
+      if (sw > maxSpan) maxSpan = sw;
+    }
+    var cols = Math.min(computeHomeCols(contentW), Math.max(1, Math.max(count, Math.min(maxSpan, HOME_MAX_COLS))));
+    grid.style.setProperty('--home-cols', String(cols));
+    var colW = (contentW - HOME_GAP * (cols - 1)) / cols; // 한 열의 실제 폭(px) — 밀도 tier 파생용
     for (var i = 0; i < cells.length; i++) {
       var cell = cells[i];
       if (!cell.classList || !cell.classList.contains('home-section')) continue;

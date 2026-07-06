@@ -77,9 +77,9 @@ test('로드맵 Phase 3·C — densityTier: 실측 폭에서 S|M|L 경계 파생
 
 // ── [로드맵 Phase 3·C] layoutHomeMasonry 가 셀에 [data-density] 훅 부여(배선) ──
 test('로드맵 Phase 3·C — 렌더러: layoutHomeMasonry 가 실측 셀폭→densityTier→data-density 부여', () => {
-  const start = APP_SRC.indexOf('function layoutHomeMasonry(');
-  assert.ok(start >= 0, 'layoutHomeMasonry 함수가 있어야 한다');
-  const body = APP_SRC.slice(start, start + 1900);
+  const start = APP_SRC.indexOf('function layoutMasonryGrid(');
+  assert.ok(start >= 0, 'layoutMasonryGrid 함수가 있어야 한다');
+  const body = APP_SRC.slice(start, start + 2800);
   assert.ok(/colW\s*=\s*\(contentW\s*-\s*HOME_GAP\s*\*\s*\(cols\s*-\s*1\)\)\s*\/\s*cols/.test(body), '한 열 실제 폭(colW) 산출');
   assert.ok(/cellW\s*=\s*colW\s*\*\s*w\s*\+\s*HOME_GAP\s*\*\s*\(w\s*-\s*1\)/.test(body), '셀 실측 폭(cellW) = colW*스팬 + gap');
   assert.ok(/cell\.dataset\.density\s*=\s*densityTier\(cellW\)/.test(body), 'densityTier(cellW) → data-density 부여');
@@ -454,12 +454,14 @@ test('홈 위젯 크기 — layoutMasonryGrid 가 열 수·폭/높이 스팬을 
   // [Phase 5·M] 실제 배치 로직은 layoutMasonryGrid 로 추출(메인 격자 + 그룹 내부 격자 공용).
   const start = APP_SRC.indexOf('function layoutMasonryGrid(');
   assert.ok(start >= 0, 'layoutMasonryGrid 함수 존재');
-  const body = APP_SRC.slice(start, start + 2000);
+  const body = APP_SRC.slice(start, start + 2800);
   assert.ok(/setProperty\('--home-cols'/.test(body), '반응형 열 수(--home-cols) 주입');
   assert.ok(/gridColumnEnd\s*=\s*'span '/.test(body), '폭 = grid-column span 적용');
   assert.ok(/gridRowEnd\s*=\s*'span '/.test(body), '높이 = grid-row span 적용');
   // 메인 격자 + 그룹 격자 모두 배치.
   assert.ok(/querySelectorAll\('\.home-group__grid'\)/.test(APP_SRC), 'layoutHomeMasonry 가 그룹 격자도 배치');
+  // [좌측 치우침 보정] 열 수를 아이템 수·최대 스팬으로 캡(적은 아이템도 폭 채움).
+  assert.ok(/Math\.min\(computeHomeCols\(contentW\), Math\.max\(1, Math\.max\(count/.test(body), '열 수를 아이템 수로 캡(좌측 치우침 보정)');
 });
 
 test('홈 위젯 크기 — 리사이즈 종료 시 setHomeWidgetSizes 로 영속', () => {
@@ -532,8 +534,8 @@ test('홈 위젯 반응형/높이 — 메일 위젯: 카드가 위젯 높이를 
   const body = fnBody('renderHomeMailCard', 2400);
   assert.ok(/flex-direction:column/.test(body), '메일 카드 flex 컬럼');
   assert.ok(/cls:\s*'hw-cols mail-list'/.test(body), '메일 목록에 mail-list 클래스');
-  // layoutHomeMasonry 가 사용자 높이 지정 시 --sized 표식 토글
-  const lm = fnBody('layoutHomeMasonry', 2300);
+  // layoutMasonryGrid 가 사용자 높이 지정 시 --sized 표식 토글
+  const lm = fnBody('layoutMasonryGrid', 2800);
   assert.ok(/classList\.add\('home-section__content--sized'\)/.test(lm), '사이즈 지정 시 --sized 부여');
   assert.ok(/classList\.remove\('home-section__content--sized'\)/.test(lm), '미지정 시 --sized 제거');
 });
