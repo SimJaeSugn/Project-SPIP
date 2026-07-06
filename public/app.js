@@ -659,7 +659,7 @@ function shouldPollCommit(view, visible) {
  */
 // [SH-2] 즐겨찾기 셸프 위젯 2변형('shelf'=일반 컬럼, 'shelfWide'=전체폭 스팬)을 featureAdd 앞에 추가.
 //   둘은 동일 셸프 데이터·로직 공유(폭만 다름)·둘 다 기본 숨김(메인 uiStateStore가 첫 실행 시 hiddenWidgets 시드).
-const HOME_SECTION_IDS = ['attention', 'productivity', 'activity', 'todos', 'mail', 'disk', 'aiusage', 'shelf', 'shelfWide', 'featureAdd'];
+const HOME_SECTION_IDS = ['attention', 'productivity', 'activity', 'todos', 'mail', 'disk', 'aiusage', 'shelf', 'shelfWide', 'scratchpad', 'featureAdd'];
 
 // [위젯 추가/제거] 토글 가능한 콘텐츠 위젯 메타(갤러리·제거 UI용). 'featureAdd'는 추가 트리거라 제외(항상 표시).
 //   메인 uiStateStore.TOGGLEABLE_WIDGET_IDS 와 동형(드리프트 0 — homeLayout-front 테스트가 교차검증).
@@ -674,6 +674,7 @@ const WIDGET_META = {
   aiusage: { name: '토큰 사용량', desc: 'Claude Code·연결 모델 토큰 추이' },
   shelf: { name: '즐겨찾기 셸프', desc: '사이트·폴더·파일을 한 셸프에서 즐겨찾기' },
   shelfWide: { name: '즐겨찾기 셸프 (와이드)', desc: '셸프를 전체폭으로 — 더 많은 즐겨찾기를 한눈에' },
+  scratchpad: { name: '스크래치패드 메모', desc: '자유롭게 적어두는 로컬 메모 — 자동 저장' },
 };
 
 /**
@@ -706,6 +707,14 @@ function applyDashboard(d) {
   if (presets.length === 0) return fallback;
   const active = (typeof d.activePreset === 'string' && presets.some((p) => p.id === d.activePreset)) ? d.activePreset : presets[0].id;
   return { activePreset: active, presets };
+}
+
+/** [로드맵 Phase 3·G] getUiState.scratchpad 방어 적재(렌더러) — { text, updatedAt }. 검증 단일 신뢰 경계는 메인. */
+function applyScratchpad(s) {
+  if (!s || typeof s !== 'object') return { text: '', updatedAt: null };
+  const text = (typeof s.text === 'string') ? s.text : '';
+  const updatedAt = (typeof s.updatedAt === 'number' && isFinite(s.updatedAt) && s.updatedAt > 0) ? s.updatedAt : null;
+  return { text, updatedAt };
 }
 
 /* [홈 위젯 크기] 폭(열 스팬)·높이(px) — homeLayout(순서)·hiddenWidgets(표시)와 직교. 메인 uiStateStore 와 상수 동형. */
@@ -1597,6 +1606,10 @@ function initBrowser() {
     busyWidgets: false,           // setHiddenWidgets in-flight
     // [로드맵 Phase 1·K] 대시보드 내보내기/가져오기 모달 상태. mode='export'면 json에 직렬화 결과, 'import'면 입력값.
     dashIO: { open: false, mode: 'export', json: '', busy: false, error: '' },
+    // [로드맵 Phase 3·G] 스크래치패드 메모(전역 콘텐츠) — getUiState.scratchpad 적재, 디바운스 저장.
+    scratchpad: { text: '', updatedAt: null },
+    _scratchSaveTimer: null,   // 입력 디바운스 타이머 핸들
+    _scratchSaved: null,       // 마지막 저장 시각(ms) — '저장됨' 표시용
     // [SH-2] 즐겨찾기 셸프 위젯 — 렌더러 상태. 데이터는 spip.shelf.list()로 적재, 변경 push(onChanged) 시 재조회.
     shelf: {
       bookmarks: [],              // ShelfBookmarkView[] (main 이 표시 메타 완비)
@@ -2508,6 +2521,7 @@ function initBrowser() {
       case 'aiusage':      return renderHomeAiUsage();
       case 'shelf':        return renderHomeShelf();
       case 'shelfWide':    return renderHomeShelf();
+      case 'scratchpad':   return renderHomeScratchpad();
       case 'featureAdd':   return renderHomeFeatureAdd();
       default:             return null;
     }
@@ -3632,6 +3646,66 @@ function initBrowser() {
     split.appendChild(right);
     card.appendChild(split);
     return card;
+  }
+
+  /* [로드맵 Phase 3·G] 스크래치패드 메모 위젯 — 자유 로컬 메모(전역 콘텐츠). 자동 저장(디바운스+blur).
+   *   반응형 계약: 카드가 위젯 높이를 채우고 textarea 가 남는 높이를 차지(상단 정렬·내부 스크롤).
+   *   §3 코너 규약: textarea 우하단 네이티브 리사이즈(resize:none)로 위젯 리사이즈 핸들과 충돌 회피.
+   *   L-1: 표시·저장 모두 textContent/value(마크업 해석 없음). 검증 단일 신뢰 경계는 메인 normalizeScratchpad. */
+  function renderHomeScratchpad() {
+    var card = el('div', { style: HOME_CARD + 'padding:18px 18px 14px;display:flex;flex-direction:column;min-height:0;' });
+    var head = el('div', { style: 'display:flex;align-items:center;gap:10px;margin-bottom:10px;' });
+    head.appendChild(el('div', { text: '메모', style: 'font-size:15px;font-weight:600;flex:1 1 0%;' }));
+    // 저장 상태 표시 — 디바운스 저장 완료 시 직접 DOM 갱신(재렌더 없이 포커스 보존).
+    head.appendChild(el('span', { cls: 'scratch-status', text: store._scratchSaved ? '저장됨' : '자동 저장', style: 'font-size:11px;color:#a8a29e;flex:0 0 auto;' }));
+
+    var ta = el('textarea', {
+      cls: 'scratch-input spip-scroll',
+      attrs: { 'aria-label': '스크래치패드 메모', placeholder: '자유롭게 적어두세요… (자동 저장)', spellcheck: 'false', autocomplete: 'off' },
+    });
+    ta.value = (store.scratchpad && typeof store.scratchpad.text === 'string') ? store.scratchpad.text : '';
+    ta.addEventListener('input', function (e) { onScratchpadInput(e.target.value); });
+    ta.addEventListener('focus', function () { store._scratchEditing = true; });
+    ta.addEventListener('blur', function () { store._scratchEditing = false; flushScratchpad(); });
+    // 편집 중 재정렬 드래그(SortableJS)와 분리 — 텍스트 선택/캐럿 이동이 드래그로 오인되지 않도록.
+    ta.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
+    card.appendChild(head);
+    card.appendChild(ta);
+    return card;
+  }
+  /** 입력(디바운스) — 낙관적으로 store 갱신(재렌더 안 함: 포커스/캐럿 보존), 600ms 후 저장. */
+  function onScratchpadInput(text) {
+    if (!store.scratchpad) store.scratchpad = { text: '', updatedAt: null };
+    store.scratchpad.text = text;
+    setScratchStatus('편집 중…');
+    if (store._scratchSaveTimer) clearTimeout(store._scratchSaveTimer);
+    store._scratchSaveTimer = setTimeout(commitScratchpad, 600);
+  }
+  /** blur 시 즉시 저장(디바운스 대기 중이면 앞당김). */
+  function flushScratchpad() {
+    if (store._scratchSaveTimer) { clearTimeout(store._scratchSaveTimer); store._scratchSaveTimer = null; commitScratchpad(); }
+  }
+  /** 실제 저장 — 메인 normalizeScratchpad 확정본으로 갱신. 재렌더 없이 상태 표시만 직접 DOM 갱신(포커스 보존). */
+  function commitScratchpad() {
+    store._scratchSaveTimer = null;
+    if (!bridgeHas('setScratchpad')) { setScratchStatus('자동 저장'); return; }
+    var text = (store.scratchpad && store.scratchpad.text) || '';
+    ipc('setScratchpad', text).then(function (res) {
+      if (res && res.ok && res.scratchpad && typeof res.scratchpad === 'object') {
+        // 메인이 길이 상한 등으로 자른 확정본을 보관. 단, 사용자가 계속 타이핑 중이면 value 덮어쓰기 금지(캐럿 보존).
+        store.scratchpad = applyScratchpad(res.scratchpad);
+        store._scratchSaved = Date.now();
+        setScratchStatus('저장됨');
+      } else {
+        setScratchStatus('저장 실패');
+      }
+    });
+  }
+  /** 저장 상태 라벨 직접 갱신(재렌더 없이) — 스크래치패드가 화면에 있을 때만. */
+  function setScratchStatus(text) {
+    if (typeof document === 'undefined') return;
+    var n = document.querySelector('.scratch-status');
+    if (n) n.textContent = text;
   }
 
   function renderHomeFeatureAdd() {
@@ -7173,7 +7247,7 @@ function initBrowser() {
    *   편집(할 일 입력)·모달 중에는 보류해 포커스/스크롤 방해를 막는다. */
   function maybeAutoRefreshMail() {
     if (store.state.view !== 'home' || !bridgeHas('syncMailArchive')) return;
-    if (store.busyMailSummary || store.showSettings || store.showHelp || store.todoAdding) return;
+    if (store.busyMailSummary || store.showSettings || store.showHelp || store.todoAdding || store._scratchEditing) return;
     refreshMailSummary({ silent: true }); // [M11] 폴링/push 는 silent(진입 로딩 render 생략 → 깜빡임 0)
   }
   function subscribeMailUpdated() {
@@ -7906,6 +7980,8 @@ function initBrowser() {
       ? res.hiddenWidgets.filter(function (id) { return TOGGLEABLE_WIDGET_IDS.indexOf(id) >= 0; }) : [];
     // [로드맵 Phase 2] 대시보드(프리셋) 적재 — 탭/전환용. 활성 프리셋은 위 homeLayout/hidden/sizes 와 동기.
     store.dashboard = applyDashboard(res && res.ok !== false ? res.dashboard : null);
+    // [로드맵 Phase 3·G] 스크래치패드 메모 적재(전역 콘텐츠). 부재/손상 시 빈 메모.
+    store.scratchpad = applyScratchpad(res && res.ok !== false ? res.scratchpad : null);
     // [항목3] 연결된 LLM 모델 토큰 사용량 누적 적재(브리핑 생성 시 메인이 누적·영속).
     store.aiUsage = (res && res.ok !== false && res.aiUsage && typeof res.aiUsage === 'object') ? res.aiUsage : null;
     // [M13] 브리핑 carry-over 항목(open) 적재 — 영속 단일 출처. 실시간 생성상태는 push 로 갱신.
@@ -8878,6 +8954,7 @@ if (typeof module !== 'undefined' && module.exports) {
     HOME_SECTION_IDS,
     applyHomeLayout,
     applyDashboard,
+    applyScratchpad,
     // [홈 위젯 크기] 폭·높이 정규화 + 반응형 열 수/기본 스팬(렌더러 동형, 헤드리스 테스트)
     applyHomeWidgetSizes,
     computeHomeCols,

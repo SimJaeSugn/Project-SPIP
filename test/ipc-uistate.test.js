@@ -80,7 +80,7 @@ test('setHomeLayout — 정규화·영속·응답(중복/미지/비배열 흡수
   // 유효 재정렬 + 중복 + 미지 id + 비문자열 → 정규화가 흡수, 누락 섹션 기본 순서 보충.
   const r = uiState.setHomeLayout({ ids: ['mail', 'attention', 'mail', 'bogus', 7] }, ctx);
   assert.strictEqual(r.ok, true);
-  assert.deepStrictEqual(r.homeLayout, ['mail', 'attention', 'productivity', 'activity', 'todos', 'disk', 'aiusage', 'shelf', 'shelfWide', 'featureAdd']);
+  assert.deepStrictEqual(r.homeLayout, ['mail', 'attention', 'productivity', 'activity', 'todos', 'disk', 'aiusage', 'shelf', 'shelfWide', 'scratchpad', 'featureAdd']);
   // 영속 반영 확인(write를 거친 store 상태와 일치).
   assert.deepStrictEqual(s._get().homeLayout, r.homeLayout);
 });
@@ -99,6 +99,24 @@ test('getUiState — homeLayout 포함(toResponse 노출)', () => {
   assert.strictEqual(r.homeLayout[0], 'disk');
   assert.strictEqual(r.homeLayout[1], 'mail');
   assert.strictEqual(r.homeLayout.length, realStore.HOME_SECTION_IDS.length); // 누락 보충
+});
+
+// ── [로드맵 Phase 3·G] setScratchpad ──
+test('setScratchpad — 텍스트 정규화·영속·updatedAt 메인 스탬프 + getUiState 노출', () => {
+  const s = memStore();
+  const ctx = Object.assign(ctxWith(s), { nowMs: () => 1717000000000 });
+  // 개행 보존 + 제어문자 제거.
+  const raw = 'line1' + String.fromCharCode(10) + 'line2' + String.fromCharCode(7);
+  const r = uiState.setScratchpad({ text: raw }, ctx);
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(r.scratchpad.text, 'line1' + String.fromCharCode(10) + 'line2');
+  assert.strictEqual(r.scratchpad.updatedAt, 1717000000000, 'updatedAt 은 메인 스탬프');
+  // 영속 + getUiState 노출.
+  assert.deepStrictEqual(s._get().scratchpad, r.scratchpad);
+  assert.deepStrictEqual(uiState.getUiState(ctx).scratchpad, r.scratchpad);
+  // 비문자열/누락 args graceful(빈 텍스트).
+  assert.strictEqual(uiState.setScratchpad({}, ctx).scratchpad.text, '');
+  assert.strictEqual(uiState.setScratchpad(undefined, ctx).scratchpad.text, '');
 });
 
 // ── [위젯 추가/제거] setHiddenWidgets ──

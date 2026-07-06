@@ -41,6 +41,8 @@ function toResponse(state) {
     aiUsage: state.aiUsage || uiStateStore.defaultAiUsage(),
     // [로드맵 Phase 2] 대시보드(프리셋) — 렌더러가 프리셋 탭·전환에 사용. 활성 프리셋은 레거시 키와 동기.
     dashboard: state.dashboard || uiStateStore.defaultDashboardState(),
+    // [로드맵 Phase 3·G] 스크래치패드 메모(전역 콘텐츠) — 렌더러 위젯이 표시·편집.
+    scratchpad: state.scratchpad || uiStateStore.defaultScratchpad(),
   };
 }
 
@@ -195,6 +197,21 @@ function setProjectName(args, ctx) {
   if (trimmed) names[id] = trimmed; else delete names[id];
   const next = store.write(Object.assign({}, state, { names }), storeCtx);
   return { ok: true, names: next.names };
+}
+
+/**
+ * [로드맵 Phase 3·G] spip:setScratchpad { text } — 스크래치패드 메모 저장.
+ *   렌더러 입력 불신 — normalizeScratchpad 가 유일 검증 경계(개행 보존·제어문자 제거·길이 상한). updatedAt 은 메인 스탬프.
+ * @param {object} args { text }
+ * @returns {{ok:true, scratchpad:{text,updatedAt}}}
+ */
+function setScratchpad(args, ctx) {
+  const text = (args && typeof args === 'object' && typeof args.text === 'string') ? args.text : '';
+  const { store, storeCtx } = resolveStore(ctx);
+  const state = store.read(storeCtx);
+  const scratchpad = uiStateStore.normalizeScratchpad({ text, updatedAt: nowMs(ctx) });
+  const next = store.write(Object.assign({}, state, { scratchpad }), storeCtx);
+  return { ok: true, scratchpad: next.scratchpad };
 }
 
 /**
@@ -391,4 +408,4 @@ function updateLangTrend(args, ctx) {
   return { ok: true, prev: written.langTrend.prev, cur: written.langTrend.cur };
 }
 
-module.exports = { getUiState, setFavorite, setOrder, setSortMode, setHomeLayout, setHiddenWidgets, setHomeWidgetSizes, setProjectName, setTheme, addTodo, toggleTodo, removeTodo, setTodoDue, updateLangTrend, setActivePreset, addPreset, duplicatePreset, renamePreset, removePreset, exportDashboard, importDashboard };
+module.exports = { getUiState, setFavorite, setOrder, setSortMode, setHomeLayout, setHiddenWidgets, setHomeWidgetSizes, setProjectName, setTheme, setScratchpad, addTodo, toggleTodo, removeTodo, setTodoDue, updateLangTrend, setActivePreset, addPreset, duplicatePreset, renamePreset, removePreset, exportDashboard, importDashboard };

@@ -163,6 +163,8 @@ contextBridge.exposeInMainWorld('spip', {
   // 프로젝트 표시 별칭(빈 문자열이면 해제) + 테마(light|dark|system).
   setProjectName: (id, name) => ipcRenderer.invoke('spip:setProjectName', { id: String(id), name: name == null ? '' : String(name) }),
   setTheme: (theme) => ipcRenderer.invoke('spip:setTheme', { theme: String(theme) }),
+  // [로드맵 Phase 3·G] 스크래치패드 메모 — 텍스트만. 읽기는 getUiState 응답의 scratchpad. 검증은 메인 normalizeScratchpad.
+  setScratchpad: (text) => ipcRenderer.invoke('spip:setScratchpad', { text: text == null ? '' : String(text) }),
 
   // 할 일(홈 브리핑) — 추가/완료토글/삭제/마감설정. 읽기는 getUiState 응답의 todos.
   //   [백로그2-4] dueAt(ms epoch, 선택)·setTodoDue 추가. 빈/무효 dueAt 은 생략(메인이 null 처리).

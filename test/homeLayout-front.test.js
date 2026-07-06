@@ -15,11 +15,11 @@ const APP_SRC = fs.readFileSync(path.join(__dirname, '..', 'public', 'app.js'), 
 const STORE_SRC = fs.readFileSync(path.join(__dirname, '..', 'lib', 'common', 'uiStateStore.js'), 'utf8');
 
 // ── HOME_SECTION_IDS 계약 동형 ────────────────────────────────────────────
-// [SH-2] 셸프 위젯 2변형('shelf','shelfWide')을 featureAdd 앞에 추가 → 10섹션 enum.
-const N_SECTIONS = 10;
-test('R-32 — HOME_SECTION_IDS: 10섹션 enum(배열 순서 = 기본 순서)', () => {
+// [SH-2] 셸프 위젯 2변형('shelf','shelfWide') + [Phase 3·G] 스크래치패드('scratchpad')를 featureAdd 앞에 → 11섹션 enum.
+const N_SECTIONS = 11;
+test('R-32 — HOME_SECTION_IDS: 11섹션 enum(배열 순서 = 기본 순서)', () => {
   assert.deepStrictEqual(HOME_SECTION_IDS,
-    ['attention', 'productivity', 'activity', 'todos', 'mail', 'disk', 'aiusage', 'shelf', 'shelfWide', 'featureAdd']);
+    ['attention', 'productivity', 'activity', 'todos', 'mail', 'disk', 'aiusage', 'shelf', 'shelfWide', 'scratchpad', 'featureAdd']);
 });
 
 test('R-32 — 렌더러 HOME_SECTION_IDS 가 메인 uiStateStore 와 동일 집합·순서', () => {
@@ -85,6 +85,31 @@ test('로드맵 Phase 3·C — 렌더러: layoutHomeMasonry 가 실측 셀폭→
   assert.ok(/cell\.dataset\.density\s*=\s*densityTier\(cellW\)/.test(body), 'densityTier(cellW) → data-density 부여');
 });
 
+// ── [로드맵 Phase 3·G] 스크래치패드 메모 위젯 배선(렌더·IPC·반응형 계약·L-1) ──
+test('로드맵 Phase 3·G — 스크래치패드 위젯: 렌더 함수·WIDGET_META·case·하이드레이션·디바운스 저장', () => {
+  const CSS = fs.readFileSync(path.join(__dirname, '..', 'public', 'styles.css'), 'utf8');
+  // enum 동형(메인/렌더러) — 드리프트 방지.
+  assert.ok(HOME_SECTION_IDS.includes('scratchpad'), '렌더러 enum 에 scratchpad');
+  // 렌더 함수 + 섹션 디스패치 case + 갤러리 메타.
+  assert.ok(/function renderHomeScratchpad\(/.test(APP_SRC), '스크래치패드 렌더 함수');
+  assert.ok(/case 'scratchpad':\s*return renderHomeScratchpad\(\)/.test(APP_SRC), 'renderHomeSection case 배선');
+  assert.ok(/scratchpad:\s*\{\s*name:/.test(APP_SRC), 'WIDGET_META.scratchpad 메타');
+  // 하이드레이션 + 방어 적재.
+  assert.ok(/store\.scratchpad\s*=\s*applyScratchpad\(/.test(APP_SRC), 'loadUiState 가 scratchpad 하이드레이션');
+  assert.ok(/function applyScratchpad\(/.test(APP_SRC), '방어 적재기(applyScratchpad)');
+  // 저장 경로: 디바운스 + blur flush + setScratchpad IPC.
+  const sp = fnBody('renderHomeScratchpad', 1600);
+  assert.ok(/addEventListener\('input'/.test(sp) && /onScratchpadInput/.test(sp), 'input → 디바운스 저장');
+  assert.ok(/addEventListener\('blur'.*flushScratchpad|flushScratchpad/.test(APP_SRC), 'blur flush');
+  assert.ok(/ipc\('setScratchpad',\s*text\)/.test(APP_SRC), 'setScratchpad IPC 영속');
+  assert.ok(/setTimeout\(commitScratchpad,\s*600\)/.test(APP_SRC), '600ms 디바운스');
+  // 반응형/코너 규약: textarea resize:none(위젯 리사이즈 핸들과 충돌 회피) + 높이 채움.
+  assert.ok(/\.scratch-input\s*\{[^}]*resize:\s*none/.test(CSS), 'textarea resize:none(§3 코너 규약)');
+  assert.ok(/\.scratch-input\s*\{[^}]*flex:\s*1 1 auto/.test(CSS), 'textarea 가 위젯 높이 채움');
+  // L-1: 렌더는 el/textContent/value 만(innerHTML 미사용).
+  assert.ok(!/renderHomeScratchpad[\s\S]{0,1400}innerHTML/.test(APP_SRC), '스크래치패드 렌더 innerHTML 미사용(L-1)');
+});
+
 // ── [로드맵 Phase 3·C] 메일 위젯 밀도 소비(showcase): S=숫자요약 / M=목록(시간숨김) / L=목록+시간 ──
 test('로드맵 Phase 3·C — 메일 위젯 밀도 소비: 요약 노드·시간 클래스 렌더 + [data-density] CSS 전환', () => {
   const CSS = fs.readFileSync(path.join(__dirname, '..', 'public', 'styles.css'), 'utf8');
@@ -102,7 +127,7 @@ test('로드맵 Phase 3·C — 메일 위젯 밀도 소비: 요약 노드·시�
 
 // ── applyHomeLayout (순서 정규화, 메인 normalizeHomeLayout 과 동일 규칙) ──
 test('R-32 — applyHomeLayout: 유효 순열은 그대로 유지', () => {
-  const input = ['mail', 'attention', 'disk', 'todos', 'shelf', 'activity', 'productivity', 'aiusage', 'shelfWide', 'featureAdd'];
+  const input = ['mail', 'attention', 'disk', 'todos', 'shelf', 'activity', 'productivity', 'aiusage', 'shelfWide', 'scratchpad', 'featureAdd'];
   assert.deepStrictEqual(applyHomeLayout(input), input);
 });
 
@@ -111,7 +136,7 @@ test('R-32 — applyHomeLayout: 부분 순서는 나머지를 기본 순서로 �
   assert.strictEqual(out.length, N_SECTIONS);
   assert.deepStrictEqual(out.slice(0, 2), ['mail', 'todos']);
   // 나머지는 기본 순서 유지(중복 없이).
-  assert.deepStrictEqual(out, ['mail', 'todos', 'attention', 'productivity', 'activity', 'disk', 'aiusage', 'shelf', 'shelfWide', 'featureAdd']);
+  assert.deepStrictEqual(out, ['mail', 'todos', 'attention', 'productivity', 'activity', 'disk', 'aiusage', 'shelf', 'shelfWide', 'scratchpad', 'featureAdd']);
 });
 
 test('R-32 — applyHomeLayout: 화이트리스트 외·중복·비문자열 제거', () => {

@@ -151,7 +151,7 @@ test('normalizeHomeLayout — 비배열/손상 → 기본 순서 전체 복원',
 test('normalizeHomeLayout — 화이트리스트 외/중복 제거 + 누락 보충(끝)', () => {
   const r = store.normalizeHomeLayout(['mail', 'attention', 'mail', 'bogus', 42, 'mail']);
   // 유효 순서 보존(mail, attention) → 중복·미지·비문자열 제거 → 누락 섹션 기본 순서로 끝에 보충
-  assert.deepStrictEqual(r, ['mail', 'attention', 'productivity', 'activity', 'todos', 'disk', 'aiusage', 'shelf', 'shelfWide', 'featureAdd']);
+  assert.deepStrictEqual(r, ['mail', 'attention', 'productivity', 'activity', 'todos', 'disk', 'aiusage', 'shelf', 'shelfWide', 'scratchpad', 'featureAdd']);
   // 항상 화이트리스트 전체의 순열
   assert.strictEqual(r.length, store.HOME_SECTION_IDS.length);
   assert.deepStrictEqual(r.slice().sort(), store.HOME_SECTION_IDS.slice().sort());
@@ -218,17 +218,18 @@ test('write/read — homeWidgetSizes 라운드트립 보존', () => {
   assert.deepStrictEqual(store.read({ uiStatePath: file }).homeWidgetSizes, sizes);
 });
 
-test('defaultState/normalizeState — hiddenWidgets 시드(셸프 기본 숨김) / v2 입력은 무시드', () => {
-  // [SH-1 PM#3] 신규 설치 기본 숨김 시드 — 셸프 2변형이 기본 숨김.
-  assert.deepStrictEqual(store.defaultState().hiddenWidgets, ['shelf', 'shelfWide']);
-  // [SH-1 P1] 명시적 v2 입력(hiddenWidgets 키 없음)은 이행 union·시드 미적용 — 사용자 상태 그대로(빈).
-  assert.deepStrictEqual(store.normalizeState({ schemaVersion: 2 }).hiddenWidgets, []);
+test('defaultState/normalizeState — hiddenWidgets 시드(신규 위젯 기본 숨김) / 현재버전 입력은 무시드', () => {
+  // [SH-1 PM#3 / Phase 3·G] 신규 설치 기본 숨김 시드 = DEFAULT_HIDDEN_WIDGETS(셸프 2변형 + 스크래치패드).
+  assert.deepStrictEqual(store.defaultState().hiddenWidgets, store.DEFAULT_HIDDEN_WIDGETS);
+  assert.deepStrictEqual(store.DEFAULT_HIDDEN_WIDGETS, ['shelf', 'shelfWide', 'scratchpad']);
+  // [SH-1 P1] 현재 스키마 버전 입력(hiddenWidgets 키 없음)은 이행 union·시드 미적용 — 사용자 상태 그대로(빈).
+  assert.deepStrictEqual(store.normalizeState({ schemaVersion: store.SCHEMA_VERSION }).hiddenWidgets, []);
 });
 
 test('write/read — hiddenWidgets 라운드트립 보존 (C-M-1)', () => {
   const file = tmpFile();
-  // [SH-1 P1] schemaVersion:2 명시 — 이행 union 회피(순수 라운드트립 의도 보존).
-  const written = store.write({ schemaVersion: 2, hiddenWidgets: ['mail', 'disk'] }, { uiStatePath: file });
+  // [SH-1 P1] 현재 스키마 버전 명시 — 이행 union 회피(순수 라운드트립 의도 보존).
+  const written = store.write({ schemaVersion: store.SCHEMA_VERSION, hiddenWidgets: ['mail', 'disk'] }, { uiStatePath: file });
   assert.deepStrictEqual(written.hiddenWidgets, ['mail', 'disk']);
   const back = store.read({ uiStatePath: file });
   assert.deepStrictEqual(back.hiddenWidgets, ['mail', 'disk'], 'read 후에도 보존(키 안 버려짐)');
@@ -237,9 +238,37 @@ test('write/read — hiddenWidgets 라운드트립 보존 (C-M-1)', () => {
 // [C-M-1 게이트] write→read 라운드트립 보존 — homeLayout 키가 normalizeState에서 조용히 버려지지 않음.
 test('write/read — homeLayout 라운드트립 보존 (C-M-1)', () => {
   const file = tmpFile();
-  const custom = ['mail', 'attention', 'productivity', 'activity', 'todos', 'disk', 'aiusage', 'shelf', 'shelfWide', 'featureAdd'];
+  const custom = ['mail', 'attention', 'productivity', 'activity', 'todos', 'disk', 'aiusage', 'shelf', 'shelfWide', 'scratchpad', 'featureAdd'];
   const written = store.write({ homeLayout: custom }, { uiStatePath: file });
   assert.deepStrictEqual(written.homeLayout, custom, 'write 반환에 정규화된 homeLayout 보존');
   const back = store.read({ uiStatePath: file });
   assert.deepStrictEqual(back.homeLayout, custom, 'read 후에도 동일 순서(키가 버려지지 않음)');
+});
+
+// ── [로드맵 Phase 3·G] 스크래치패드 메모 정규화 ──
+test('normalizeScratchpad — 개행/탭 보존·제어문자 제거·길이 상한·updatedAt 정규화', () => {
+  // 개행(\n)·탭(\t)은 보존, BEL(\x07)·DEL(\x7f)·NUL(\x00)은 제거.
+  const raw = 'a' + String.fromCharCode(10) + 'b' + String.fromCharCode(9) + 'c'
+    + String.fromCharCode(7) + String.fromCharCode(127) + String.fromCharCode(0) + 'd';
+  const r = store.normalizeScratchpad({ text: raw, updatedAt: 1717000000000.9 });
+  assert.strictEqual(r.text, 'a' + String.fromCharCode(10) + 'b' + String.fromCharCode(9) + 'cd');
+  assert.strictEqual(r.updatedAt, 1717000000000, 'updatedAt floor');
+  // 길이 상한.
+  const long = store.normalizeScratchpad({ text: 'x'.repeat(store.MAX_SCRATCHPAD + 500) });
+  assert.strictEqual(long.text.length, store.MAX_SCRATCHPAD);
+  assert.strictEqual(long.updatedAt, null, 'updatedAt 부재 → null');
+  // 손상/부재 graceful.
+  assert.deepStrictEqual(store.normalizeScratchpad(null), { text: '', updatedAt: null });
+  assert.deepStrictEqual(store.normalizeScratchpad({ text: 42, updatedAt: -1 }), { text: '', updatedAt: null });
+  assert.deepStrictEqual(store.defaultScratchpad(), { text: '', updatedAt: null });
+});
+
+test('normalizeState/write/read — scratchpad 라운드트립 보존', () => {
+  const file = tmpFile();
+  // 기본 상태에 scratchpad 키 존재.
+  assert.deepStrictEqual(store.normalizeState({}).scratchpad, { text: '', updatedAt: null });
+  const written = store.write({ schemaVersion: store.SCHEMA_VERSION, scratchpad: { text: 'hello memo', updatedAt: 123 } }, { uiStatePath: file });
+  assert.deepStrictEqual(written.scratchpad, { text: 'hello memo', updatedAt: 123 });
+  const back = store.read({ uiStatePath: file });
+  assert.deepStrictEqual(back.scratchpad, { text: 'hello memo', updatedAt: 123 }, 'read 후에도 보존(키 안 버려짐)');
 });

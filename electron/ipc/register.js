@@ -231,6 +231,8 @@ function registerIpcHandlers(deps) {
   // 프로젝트 표시 별칭 + 테마(라이트/다크/시스템).
   guard('spip:setProjectName', (args) => uiStateIpc.setProjectName(args, ctx));
   guard('spip:setTheme', (args) => uiStateIpc.setTheme(args, ctx));
+  // [로드맵 Phase 3·G] 스크래치패드 메모 — 텍스트만. 검증(개행 보존·길이 상한)은 메인 normalizeScratchpad 단일 경계.
+  guard('spip:setScratchpad', (args) => uiStateIpc.setScratchpad(args, ctx));
   // 할 일(홈 브리핑) — 추가/완료토글/삭제. 읽기는 getUiState 응답의 todos로.
   guard('spip:addTodo', (args) => uiStateIpc.addTodo(args, ctx));
   guard('spip:toggleTodo', (args) => uiStateIpc.toggleTodo(args, ctx));

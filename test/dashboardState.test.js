@@ -19,9 +19,9 @@ test('Phase0 — normalizeDashboardState: 부재/손상은 기본(프리셋 1개
     assert.strictEqual(d.presets[0].layoutMode, 'masonry');
     assert.deepStrictEqual(d.presets[0].positions, {});
     assert.deepStrictEqual(d.presets[0].groups, []);
-    // 기본 프리셋은 현행 기본 배치(전 섹션 순서) + 셸프 기본 숨김.
+    // 기본 프리셋은 현행 기본 배치(전 섹션 순서) + 신규 위젯 기본 숨김(셸프 2변형 + 스크래치패드).
     assert.deepStrictEqual(d.presets[0].layout, S.HOME_SECTION_IDS);
-    assert.deepStrictEqual(d.presets[0].hidden, S.SHELF_WIDGET_IDS);
+    assert.deepStrictEqual(d.presets[0].hidden, S.DEFAULT_HIDDEN_WIDGETS);
   }
 });
 
@@ -37,7 +37,7 @@ test('Phase0 — migrateLegacyToDashboard: 기존 배치·숨김·크기를 기�
   const p = d.presets[0];
   assert.strictEqual(p.id, 'default');
   assert.strictEqual(d.activePreset, 'default');
-  // layout: normalizeHomeLayout 재사용 → 앞 3개 유지 + 나머지 보충(10섹션).
+  // layout: normalizeHomeLayout 재사용 → 앞 3개 유지 + 나머지 보충(11섹션).
   assert.deepStrictEqual(p.layout.slice(0, 3), ['mail', 'attention', 'todos']);
   assert.strictEqual(p.layout.length, S.HOME_SECTION_IDS.length);
   assert.deepStrictEqual(p.hidden, ['disk']);

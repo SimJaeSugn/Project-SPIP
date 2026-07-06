@@ -425,6 +425,19 @@ input, button, select { font-family: inherit; }
 .home-section[data-density="S"] .mail-list { display: none; }
 .home-section[data-density="M"] .mail-time { display: none; }      /* 보통이면 목록(시간 숨겨 간결) */
 /* L(넓음)은 기본값 — 목록 + 시간 모두 노출 */
+
+/* [로드맵 Phase 3·G] 스크래치패드 메모 위젯 — 카드가 위젯 높이를 채우고 textarea 가 남는 높이 차지(반응형 계약).
+ *   §3 코너 규약: textarea 네이티브 리사이즈(resize:none) → 위젯 우하단 리사이즈 핸들과 충돌 회피. */
+.scratch-input {
+  flex: 1 1 auto; min-height: 140px; width: 100%; box-sizing: border-box;
+  resize: none; border: 1px solid #e7e5e4; border-radius: 10px; background: #fcfcfb;
+  padding: 11px 13px; font: inherit; font-size: 13px; line-height: 1.6; color: #1c1917;
+  outline: none; transition: border-color .12s ease, background .12s ease;
+}
+.scratch-input::placeholder { color: #c7c2bd; }
+.scratch-input:focus { border-color: #c7c9f5; background: #fff; }
+/* 높이 조절 위젯(.--sized)에서는 textarea 가 카드를 채우고 넘치면 내부 스크롤. */
+.home-section__content--sized .scratch-input { min-height: 0; }
 /* [홈 위젯 크기] 우하단 리사이즈 핸들 — 평소 옅게, 호버/드래그 시 강조. */
 .home-resize {
   position: absolute; right: 3px; bottom: 3px; z-index: 4;
