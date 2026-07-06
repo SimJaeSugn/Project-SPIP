@@ -539,6 +539,8 @@ body.home-freedragging { user-select: none; cursor: grabbing; }
 .home-masonry--freeform.home-masonry--editing .home-group--freecell { cursor: grab; }
 .home-group__gridfree { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; padding: 14px; align-items: start; }
 .home-group__gridfree .home-group__member { position: relative; }
+/* [로드맵 Phase 5·M] '+ 위젯 추가' 카드(masonry 최하단 별도 렌더) — 폭 과대 방지. */
+.home-featureadd > * { max-width: 420px; }
 /* [홈 위젯 크기] 우하단 리사이즈 핸들 — 평소 옅게, 호버/드래그 시 강조. */
 .home-resize {
   position: absolute; right: 3px; bottom: 3px; z-index: 4;

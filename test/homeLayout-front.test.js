@@ -177,6 +177,16 @@ test('로드맵 Phase 5·M — 프리폼에서 그룹 블록 자유 배치(좌�
   assert.ok(/\.home-group__gridfree\s*\{[^}]*repeat\(auto-fit/.test(CSS), '프리폼 그룹 멤버 auto-fit');
 });
 
+test('로드맵 Phase 5·M — featureAdd(+위젯) 는 항상 최하단(그룹 위에 최상단 배치 가능)', () => {
+  // 메인 격자 루프에서 featureAdd 제외 → 별도 렌더.
+  assert.ok(/if \(id === 'featureAdd'\) return; \/\/ \[Phase 5·M\]/.test(APP_SRC), '메인 루프에서 featureAdd 제외');
+  // masonry: 그룹 밴드 다음에 featureAdd 카드(최하단).
+  assert.ok(/renderHomeGroups\(groups, hidden, reclaim, editing\)\);[\s\S]{0,220}renderHomeSection\('featureAdd'/.test(APP_SRC), 'masonry 는 그룹 밴드 뒤에 featureAdd 카드');
+  // freeform: featureAdd 도 자유 배치 셀(그룹 다음에 추가 → 기본 최하단 시드).
+  assert.ok(/buildHomeCell\('featureAdd', reclaim, editing, freeform\)/.test(APP_SRC), 'freeform featureAdd 자유 배치 셀');
+  assert.ok(/function buildHomeCell\(/.test(APP_SRC), '홈 셀 빌더 추출');
+});
+
 // ── [로드맵 Phase 5·B] 프리폼(자유 배치) — 순수 좌표 유틸 + 렌더/드래그 배선 ──
 test('로드맵 Phase 5·B — freeformSeedPositions: 미배치만 순차 패킹, 기존 좌표 유지·클램프', () => {
   const r = freeformSeedPositions(['a', 'b', 'c', 'd', 'e'], { b: { x: 9, y: 1 } }, 2);

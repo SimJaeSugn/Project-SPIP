@@ -2708,40 +2708,30 @@ function initBrowser() {
     var groupedOf = {};
     groups.forEach(function (g) { (g.members || []).forEach(function (m) { groupedOf[m] = g.id; }); });
     applyHomeLayout(store.homeLayout).forEach(function (id) {
-      // [위젯 추가/제거] 미적용(숨김) 콘텐츠 위젯은 건너뜀. featureAdd(추가 트리거)는 항상 표시.
-      if (id !== 'featureAdd' && hidden.indexOf(id) >= 0) return;
+      if (id === 'featureAdd') return; // [Phase 5·M] '+ 위젯 추가' 카드는 항상 마지막(그룹 아래)에 별도 렌더
+      if (hidden.indexOf(id) >= 0) return; // 미적용(숨김) 위젯 건너뜀
       if (groupedOf[id]) return; // [Phase 5·M] 그룹 소속 위젯은 그룹 섹션에서 렌더
-      var node = renderHomeSection(id, reclaim);
-      if (!node) return;
-      // data-home-section 은 고정 enum 값만(L-2/L-3: 스캔 유래 신뢰 못 할 데이터 아님). 드래그 이동 단위.
-      var cell = el('div', { cls: 'home-section', attrs: { 'data-home-section': id } });
-      // [위젯 추가/제거] featureAdd 외 위젯엔 제거(×) + [Phase 4·I] 포커스 버튼 오버레이(호버/편집 시 노출).
-      if (id !== 'featureAdd') { cell.appendChild(widgetRemoveBtn(id)); cell.appendChild(widgetFocusBtn(id)); }
-      // [홈 위젯 크기] 콘텐츠 래퍼 — 높이 조절은 이 래퍼에 적용(제거 버튼·핸들은 absolute 라 높이 무관).
-      var content = el('div', { cls: 'home-section__content' });
-      content.appendChild(node);
-      cell.appendChild(content);
-      // [홈 위젯 크기] featureAdd 외 위젯엔 우하단 리사이즈 핸들(폭=열 스냅, 높이=px 유동).
-      if (id !== 'featureAdd') cell.appendChild(homeResizeHandle(id));
-      // [로드맵 Phase 5·B] 프리폼 + 편집 모드: 셀 드래그로 자유 이동(스냅). featureAdd(추가 카드)도 이동 가능.
-      //   이동 임계값 이하의 포인터업은 클릭으로 처리(예: featureAdd 클릭 시 갤러리 열림 유지).
-      if (freeform && editing) {
-        cell.classList.add('home-section--free');
-        cell.addEventListener('pointerdown', function (e) { onFreeformDragStart(e, id); });
-      }
-      grid.appendChild(cell);
+      var cell = buildHomeCell(id, reclaim, editing, freeform);
+      if (cell) grid.appendChild(cell);
     });
-    // [로드맵 Phase 5·M] 프리폼: 그룹 블록도 자유 배치 셀로 메인 격자에 추가(좌표·드래그 대상).
+    // [로드맵 Phase 5·M] 프리폼: 그룹 블록·featureAdd 도 자유 배치 셀로 메인 격자에 추가(좌표·드래그 대상).
     if (freeform) {
       groups.forEach(function (g) {
         var gcell = renderGroupFreeCell(g, hidden, reclaim, editing);
         if (editing) { gcell.classList.add('home-section--free'); gcell.addEventListener('pointerdown', function (e) { onFreeformDragStart(e, g.id); }); }
         grid.appendChild(gcell);
       });
+      var faFree = buildHomeCell('featureAdd', reclaim, editing, freeform);
+      if (faFree) grid.appendChild(faFree);
     }
     wrap.appendChild(grid);
-    // [로드맵 Phase 5·M] masonry: 그룹 섹션(격자 아래 전체폭 접기 밴드).
-    if (!freeform && (groups.length > 0)) wrap.appendChild(renderHomeGroups(groups, hidden, reclaim, editing));
+    // [로드맵 Phase 5·M] masonry: 그룹 섹션(격자 아래 전체폭 접기 밴드) → 그 다음 '+ 위젯 추가' 카드(항상 최하단).
+    //   featureAdd 를 맨 끝에 둬 그룹이 위젯갤러리 카드 위(최상단)에 올 수 있게 한다.
+    if (!freeform) {
+      if (groups.length > 0) wrap.appendChild(renderHomeGroups(groups, hidden, reclaim, editing));
+      var faCard = renderHomeSection('featureAdd', reclaim);
+      if (faCard) wrap.appendChild(el('div', { cls: 'home-featureadd', style: 'padding:0 30px 36px;' , children: [faCard] }));
+    }
 
     main.appendChild(wrap);
     root.appendChild(main);
@@ -2750,6 +2740,24 @@ function initBrowser() {
     // [홈 위젯 크기] DOM 삽입 후 1회 레이아웃(폭·높이 스팬) + 콘텐츠 크기 변화 관찰(async 위젯 로드 대응).
     scheduleHomeMasonryLayout();
     return root;
+  }
+
+  /** 홈 위젯 셀 빌더 — .home-section 래퍼 + 제거/포커스/리사이즈(featureAdd 제외) + 프리폼 드래그. null=미지/미표시. */
+  function buildHomeCell(id, reclaim, editing, freeform) {
+    var node = renderHomeSection(id, reclaim);
+    if (!node) return null;
+    var cell = el('div', { cls: 'home-section', attrs: { 'data-home-section': id } });
+    if (id !== 'featureAdd') { cell.appendChild(widgetRemoveBtn(id)); cell.appendChild(widgetFocusBtn(id)); }
+    var content = el('div', { cls: 'home-section__content' });
+    content.appendChild(node);
+    cell.appendChild(content);
+    if (id !== 'featureAdd') cell.appendChild(homeResizeHandle(id));
+    // [로드맵 Phase 5·B] 프리폼 + 편집: 셀 드래그 자유 이동(featureAdd 포함, 이동 임계값으로 클릭 유지).
+    if (freeform && editing) {
+      cell.classList.add('home-section--free');
+      cell.addEventListener('pointerdown', function (e) { onFreeformDragStart(e, id); });
+    }
+    return cell;
   }
 
   /** [R-32] 홈 섹션 id(enum) → 섹션 DOM 빌더. 기존 render*Home* 함수를 그대로 호출(내용·동작 불변).
