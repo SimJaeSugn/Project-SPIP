@@ -1582,6 +1582,8 @@ function initBrowser() {
     hiddenWidgets: [],
     showWidgetGallery: false,
     busyWidgets: false,           // setHiddenWidgets in-flight
+    // [로드맵 Phase 1·K] 대시보드 내보내기/가져오기 모달 상태. mode='export'면 json에 직렬화 결과, 'import'면 입력값.
+    dashIO: { open: false, mode: 'export', json: '', busy: false, error: '' },
     // [SH-2] 즐겨찾기 셸프 위젯 — 렌더러 상태. 데이터는 spip.shelf.list()로 적재, 변경 push(onChanged) 시 재조회.
     shelf: {
       bookmarks: [],              // ShelfBookmarkView[] (main 이 표시 메타 완비)
@@ -1841,6 +1843,8 @@ function initBrowser() {
     if (store.mailbox && store.mailbox.open) app.appendChild(renderMailboxModal());
     // 메일 본문 팝업(항목 클릭) — 나중에 마운트해 메일함 위에 표시(메일함에서 메일을 읽을 때 위로).
     if (store.mailView && store.mailView.open) app.appendChild(renderMailMessageModal());
+    // [로드맵 Phase 1·K] 대시보드 내보내기/가져오기 모달.
+    if (store.dashIO && store.dashIO.open) app.appendChild(renderDashboardIOModal());
     // 공용 확인 모달 — 최상단(파괴적 동작 승인).
     if (store.confirm && store.confirm.open) app.appendChild(renderConfirmModal());
     // [R-25 RG-2] 저장한 스크롤 위치 + 검색 입력 포커스/캐럿 복원(타이핑 중 재렌더로 포커스가 풀리는 문제 해결).
@@ -2428,6 +2432,19 @@ function initBrowser() {
       wrap.appendChild(presetBar);
     }
     var editBar = el('div', { style: 'display:flex;align-items:center;justify-content:flex-end;gap:10px;padding:8px 30px 0;' });
+    // [로드맵 Phase 1·K] 편집 모드에서만 대시보드 내보내기/가져오기 노출(평소엔 깔끔). 백엔드 IPC 부재 시 숨김(구버전 preload graceful).
+    if (editing && bridgeHas('exportDashboard')) {
+      editBar.appendChild(el('button', {
+        cls: 'home-editmode', text: '내보내기', attrs: { type: 'button', 'aria-label': '대시보드 내보내기(JSON)' },
+        on: { click: function () { openDashboardIO('export'); } },
+      }));
+    }
+    if (editing && bridgeHas('importDashboard')) {
+      editBar.appendChild(el('button', {
+        cls: 'home-editmode', text: '가져오기', attrs: { type: 'button', 'aria-label': '대시보드 가져오기(JSON)' },
+        on: { click: function () { openDashboardIO('import'); } },
+      }));
+    }
     editBar.appendChild(el('button', {
       cls: 'home-editmode' + (editing ? ' is-on' : ''),
       text: editing ? '편집 완료' : '위젯 편집',
@@ -7920,6 +7937,141 @@ function initBrowser() {
     var v = (store._presetRenameVal || '').trim();
     store._presetRenameId = null;
     if (v) onRenamePreset(id, v); else render();
+  }
+
+  // ── [로드맵 Phase 1·K] 대시보드 내보내기/가져오기 — 백업·공유·기기 이전. 정규화 단일 신뢰 경계는 메인(importDashboard). ──
+  /** 모달 열기. export 모드면 현재 대시보드를 직렬화해 json 에 적재(비동기). */
+  function openDashboardIO(mode) {
+    store.dashIO = { open: true, mode: (mode === 'import' ? 'import' : 'export'), json: '', busy: false, error: '' };
+    store._dashIOShown = false; // 진입 애니메이션 1회
+    render();
+    if (store.dashIO.mode === 'export' && bridgeHas('exportDashboard')) {
+      ipc('exportDashboard').then(function (res) {
+        if (!store.dashIO.open) return; // 그 사이 닫힘
+        if (res && res.ok && typeof res.json === 'string') { store.dashIO.json = res.json; }
+        else { store.dashIO.error = '내보내기에 실패했습니다.'; }
+        render();
+      });
+    }
+  }
+  function closeDashboardIO() {
+    store.dashIO = { open: false, mode: 'export', json: '', busy: false, error: '' };
+    store._dashIOShown = false;
+    render();
+  }
+  /** 내보내기 JSON 을 클립보드로 복사(메인 clipboard.writeText). */
+  async function onDashExportCopy() {
+    var json = store.dashIO.json || '';
+    if (!json || !bridgeHas('copyText')) return;
+    var res = await ipc('copyText', json);
+    toast(res && res.ok ? '대시보드 JSON을 클립보드에 복사했습니다.' : '복사에 실패했습니다.', !(res && res.ok));
+  }
+  /** 내보내기 JSON 을 파일로 저장(브라우저 Blob 다운로드 — 외부 의존성 0). */
+  function onDashExportSave() {
+    var json = store.dashIO.json || '';
+    if (!json) return;
+    try {
+      var blob = new Blob([json], { type: 'application/json' });
+      var url = URL.createObjectURL(blob);
+      var a = el('a', { attrs: { href: url, download: 'spip-dashboard-' + fileStamp() + '.json' } });
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(function () { try { URL.revokeObjectURL(url); } catch (_) { /* ignore */ } }, 0);
+    } catch (_) {
+      toast('파일 저장에 실패했습니다. 복사를 이용하세요.', true);
+    }
+  }
+  /** 파일 스탬프(YYYYMMDD-HHmm) — 로컬 시각. 렌더러 표시 전용(보안·경로 무관). */
+  function fileStamp() {
+    var d = new Date();
+    var p = function (n) { return (n < 10 ? '0' : '') + n; };
+    return '' + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '-' + p(d.getHours()) + p(d.getMinutes());
+  }
+  /** 가져오기 실행 — 입력 JSON 을 메인 importDashboard 로 정규화·교체. 성공 시 전 프리셋 스왑 + 재렌더. */
+  async function onDashImportApply() {
+    var json = (store.dashIO.json || '').trim();
+    if (!json) { store.dashIO.error = 'JSON을 붙여넣거나 파일을 선택하세요.'; render(); return; }
+    if (!bridgeHas('importDashboard')) { store.dashIO.error = '이 버전에서는 가져오기를 지원하지 않습니다.'; render(); return; }
+    store.dashIO.busy = true; store.dashIO.error = ''; render();
+    var res = await ipc('importDashboard', json);
+    store.dashIO.busy = false;
+    if (res && res.ok) {
+      closeDashboardIO();
+      applyPresetResponse(res); // 활성 프리셋 레거시 키 갱신 + render
+      toast('대시보드를 가져왔습니다.');
+    } else {
+      store.dashIO.error = (res && res.code === 'INVALID') ? '유효하지 않은 대시보드 JSON입니다.' : '가져오기에 실패했습니다.';
+      render();
+    }
+  }
+  /** 파일 선택 → 텍스트를 읽어 입력값에 적재(FileReader — 로컬 파일만, 메인이 정규화). */
+  function onDashImportFile(file) {
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function () {
+      store.dashIO.json = (typeof reader.result === 'string') ? reader.result : '';
+      store.dashIO.error = '';
+      render();
+    };
+    reader.onerror = function () { store.dashIO.error = '파일을 읽지 못했습니다.'; render(); };
+    reader.readAsText(file);
+  }
+
+  function renderDashboardIOModal() {
+    var io = store.dashIO;
+    var isExport = io.mode === 'export';
+    var body = [];
+    body.push(el('p', {
+      text: isExport
+        ? '현재 모든 대시보드(프리셋·배치·크기)를 JSON으로 내보냅니다. 복사하거나 파일로 저장해 백업·이전하세요.'
+        : '내보낸 JSON을 붙여넣거나 파일을 선택하면 현재 대시보드를 통째로 교체합니다.',
+      style: 'margin:0 0 12px;font-size:13px;color:#57534e;line-height:1.6;',
+    }));
+
+    var ta = el('textarea', {
+      cls: 'spip-scroll',
+      attrs: {
+        'aria-label': isExport ? '대시보드 JSON' : '가져올 대시보드 JSON',
+        spellcheck: 'false', autocomplete: 'off', wrap: 'off',
+        placeholder: isExport ? '' : '{ "schemaVersion": 1, ... }',
+      },
+      style: 'width:100%;box-sizing:border-box;height:200px;resize:vertical;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;line-height:1.5;padding:10px 12px;border:1px solid #e7e5e4;border-radius:8px;background:#fafaf9;color:#1c1917;white-space:pre;',
+    });
+    ta.value = io.json || '';
+    if (isExport) { ta.readOnly = true; }
+    else { ta.addEventListener('input', function (e) { store.dashIO.json = e.target.value; store.dashIO.error = ''; }); }
+    body.push(ta);
+
+    if (io.error) body.push(el('p', { text: io.error, style: 'margin:10px 0 0;font-size:12.5px;color:#dc2626;font-weight:600;' }));
+
+    var actions = el('div', { style: 'display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:16px;flex-wrap:wrap;' });
+    var btnGhost = 'appearance:none;border:1px solid #e7e5e4;border-radius:8px;background:#fff;cursor:pointer;font-size:13px;font-weight:600;color:#57534e;padding:7px 14px;';
+    var btnPrimary = 'appearance:none;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;color:#fff;padding:7px 14px;background:#4f46e5;';
+
+    if (isExport) {
+      if (bridgeHas('copyText')) actions.appendChild(el('button', { text: '복사', attrs: { type: 'button' }, style: btnGhost, on: { click: onDashExportCopy } }));
+      actions.appendChild(el('button', { text: '파일로 저장', attrs: { type: 'button' }, style: btnPrimary, on: { click: onDashExportSave } }));
+    } else {
+      // 파일 선택(라벨로 감싼 숨김 input — 네이티브 파일 대화상자).
+      var fileInput = el('input', { attrs: { type: 'file', accept: '.json,application/json' }, style: 'position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;' });
+      fileInput.addEventListener('change', function (e) { var f = e.target.files && e.target.files[0]; onDashImportFile(f); });
+      var pick = el('button', { text: '파일 선택…', attrs: { type: 'button' }, style: btnGhost, on: { click: function () { fileInput.click(); } } });
+      pick.appendChild(fileInput);
+      actions.appendChild(pick);
+      actions.appendChild(el('button', {
+        text: io.busy ? '가져오는 중…' : '가져오기', attrs: Object.assign({ type: 'button' }, io.busy ? { disabled: 'disabled' } : {}),
+        style: btnPrimary + (io.busy ? 'opacity:.6;cursor:default;' : ''), on: { click: io.busy ? function () {} : onDashImportApply },
+      }));
+    }
+    body.push(actions);
+
+    var enter = !store._dashIOShown; store._dashIOShown = true;
+    return buildModal({
+      title: isExport ? '대시보드 내보내기' : '대시보드 가져오기',
+      subtitle: isExport ? '프리셋·배치·크기 전체 (JSON)' : '현재 대시보드를 교체합니다',
+      onClose: closeDashboardIO, enter: enter, bodyChildren: body,
+    });
   }
 
   /** viewModels 빌드 직후 감지명을 캡처(별칭 해제 시 복원 기준). */

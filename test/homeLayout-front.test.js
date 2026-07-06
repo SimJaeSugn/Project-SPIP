@@ -259,6 +259,28 @@ test('로드맵 Phase 1 — 편집 모드: 토글 버튼 + masonry --editing 클
   assert.ok(/\.home-editmode\.is-on\s*\{/.test(CSS), '토글 on 상태 스타일');
 });
 
+// ── [로드맵 Phase 1·K] 대시보드 내보내기/가져오기 렌더러 배선 ──────────────
+test('로드맵 Phase 1·K — 렌더러: 편집 모드 내보내기/가져오기 버튼 + IPC + 정규화 응답 적용', () => {
+  // 편집 모드에서만 노출 + 백엔드 IPC 존재 가드.
+  assert.ok(/editing\s*&&\s*bridgeHas\('exportDashboard'\)/.test(APP_SRC), '편집 모드 & export IPC 가드로 내보내기 버튼');
+  assert.ok(/editing\s*&&\s*bridgeHas\('importDashboard'\)/.test(APP_SRC), '편집 모드 & import IPC 가드로 가져오기 버튼');
+  // 모달 열기/닫기 + 렌더 배선.
+  assert.ok(/function openDashboardIO\(/.test(APP_SRC) && /function closeDashboardIO\(/.test(APP_SRC), '모달 열기/닫기 핸들러');
+  assert.ok(/function renderDashboardIOModal\(/.test(APP_SRC), '모달 렌더 함수');
+  assert.ok(/store\.dashIO\s*&&\s*store\.dashIO\.open\)\s*app\.appendChild\(renderDashboardIOModal/.test(APP_SRC), 'render 에서 모달 마운트');
+  // 내보내기: exportDashboard IPC + 복사/파일저장 경로.
+  assert.ok(/ipc\('exportDashboard'\)/.test(APP_SRC), 'exportDashboard IPC 호출');
+  assert.ok(/ipc\('copyText',\s*json\)/.test(APP_SRC), '내보내기 JSON 클립보드 복사');
+  assert.ok(/new Blob\(\[json\]/.test(APP_SRC), '내보내기 JSON 파일 저장(Blob)');
+  // 가져오기: importDashboard IPC + 정규화 응답을 applyPresetResponse 로 반영(활성 프리셋 스왑).
+  assert.ok(/ipc\('importDashboard',\s*json\)/.test(APP_SRC), 'importDashboard IPC 호출(메인 정규화 단일 신뢰 경계)');
+  assert.ok(/applyPresetResponse\(res\)/.test(fnBody('onDashImportApply', 900)), '가져오기 성공 시 applyPresetResponse 로 반영');
+  // 파일 선택 → FileReader 로 텍스트 적재(로컬 파일만).
+  assert.ok(/function onDashImportFile\(/.test(APP_SRC) && /readAsText\(file\)/.test(APP_SRC), '파일 선택 시 FileReader 텍스트 적재');
+  // L-1: 모달은 textContent/el 헬퍼만(innerHTML 미사용).
+  assert.ok(!/renderDashboardIOModal[\s\S]{0,1600}innerHTML/.test(APP_SRC), '모달은 innerHTML 미사용(L-1)');
+});
+
 test('R-32 — homeSortable: RG.widget 등록 + onEnd 마이크로태스크 패턴(R4) + setHomeLayout 영속', () => {
   // RG.widget 등록.
   assert.ok(/id:\s*'homeSections'/.test(APP_SRC), "RG.widget.define({id:'homeSections'})");

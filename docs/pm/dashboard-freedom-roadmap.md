@@ -13,7 +13,7 @@
 |---|---|---|
 | Phase 0 — 통합 모델·마이그레이션 | ✅ 완료 | `normalizeDashboardState`/`migrateLegacyToDashboard`/프리셋 CRIT, reconcile 영속 통합 |
 | Phase 1 — 편집 모드(N) | ✅ 완료 | `위젯 편집` 토글 + 핸들·×·셀 윤곽 상시 노출 |
-| Phase 1 — 내보내기/가져오기(K) | 🔶 백엔드 완료 | serialize/deserialize + IPC 완비, **렌더러 버튼만 후속** |
+| Phase 1 — 내보내기/가져오기(K) | ✅ 완료 | 백엔드(serialize/IPC) + **렌더러 버튼 완료** — 편집 모드 내보내기(복사·파일저장)/가져오기(붙여넣기·파일선택) 모달. 육안 검증 대기 |
 | Phase 1 — 테마 액센트/밀도(J) | ⛔ 보류 | 하드코딩 색상 다수 → 색상 토큰 리팩터 선행 필요 |
 | Phase 1 — 템플릿 갤러리(L) | ⬜ 미착수 | |
 | Phase 2 — 프리셋 전환(A) | ✅ **배포(v1.21.0)** | 영속·IPC·렌더러 프리셋 탭(전환/추가/복제/이름변경/삭제). 데이터 E2E + 육안 확인 완료 |
@@ -217,10 +217,11 @@ Phase 5 (프리폼·그룹·스택)  ← Phase 0~4 전부 선행
   `test/homeLayout-front.test.js`(편집모드·프리셋 탭 배선). 총 1201 그린.
 
 ### 10.2 다음 작업 (우선순위 순)
-1. **Phase 1-K 렌더러 버튼**(사소·반나절): 편집 모드 또는 설정에 "대시보드 내보내기/가져오기".
-   IPC(`exportDashboard`/`importDashboard`)는 **완비** → 버튼만. 내보내기=`json` 클립보드 복사/파일 저장,
-   가져오기=textarea/파일→`importDashboard`→`applyPresetResponse`. 육안 검증만 필요.
-2. **Phase 3 — 밀도(C) + 신규 위젯(G)**:
+1. ~~**Phase 1-K 렌더러 버튼**~~ ✅ **완료**: 편집 모드 우측 편집바에 `내보내기`/`가져오기` 버튼 →
+   `renderDashboardIOModal`(buildModal 재사용). 내보내기=`exportDashboard`→readonly textarea + `복사`(copyText)·`파일로 저장`(Blob 다운로드).
+   가져오기=textarea 붙여넣기/`파일 선택`(FileReader)→`importDashboard`→`applyPresetResponse`(활성 프리셋 레거시 스왑).
+   배선 테스트 `test/homeLayout-front.test.js`('로드맵 Phase 1·K') 추가. **남은 것: `npm start` 육안 검증**(헤드리스 불가).
+2. **Phase 3 — 밀도(C) + 신규 위젯(G)** ← **다음 작업**:
    - 밀도: `densityTier(측정폭)→'S'|'M'|'L'` 순수 함수부터(헤드리스). 위젯이 크기별 콘텐츠 분기(예 메일 S=숫자/M=3건/L=목록). 기존 `@container` 확장.
    - 신규 위젯: 런처(핀)·스크래치패드·통합 커밋 히트맵·npm 스크립트 러너·시스템 상태·최근 파일 등.
    - **★ 위젯 추가 절차**: `HOME_SECTION_IDS`를 `lib/common/uiStateStore.js`와 `public/app.js` **양쪽에 동형 추가**
@@ -238,6 +239,6 @@ Phase 5 (프리폼·그룹·스택)  ← Phase 0~4 전부 선행
 
 ### 10.4 주의(정직)
 - 액션 레지스트리 **미구현**(Phase 4 전제).
-- Phase 1-K는 **백엔드만**(버튼 없음).
+- Phase 1-K 렌더러 버튼 **구현 완료** — 단 렌더러라 **육안 검증 미완**(`npm start`로 내보내기 복사·파일저장 / 가져오기 붙여넣기·파일선택 왕복 확인 필요).
 - Phase 2 렌더러 프리셋 UI는 헤드리스 검증 불가분 — 변경 시 반드시 육안.
 - 릴리즈 절차: `docs/temp/RELEASE_DEPLOY_PROMPT.md` §7, 버전 단조 증가, 미서명 SmartScreen 정상.
