@@ -136,12 +136,12 @@ test('로드맵 Phase 4·D — 팔레트 렌더 배선: Cmd+K 토글·액션 레
 // ── [로드맵 Phase 5·M] 그룹/섹션 — 렌더·CRUD·접기·멤버 관리 배선 ──
 test('로드맵 Phase 5·M — 그룹: 렌더·CRUD·접기·멤버 배정·격자 제외·masonry 전용', () => {
   const CSS = fs.readFileSync(path.join(__dirname, '..', 'public', 'styles.css'), 'utf8');
-  // 편집 모드 그룹 추가 버튼(masonry 전용).
-  assert.ok(/text:\s*'\+ 그룹'/.test(APP_SRC), '그룹 추가 버튼');
-  assert.ok(/editing && !freeform && bridgeHas\('setGroups'\)/.test(APP_SRC), '그룹은 masonry 편집 모드에서만');
+  // 편집 모드 그룹/스택 추가 버튼.
+  assert.ok(/text:\s*'\+ 그룹'/.test(APP_SRC) && /text:\s*'\+ 스택'/.test(APP_SRC), '그룹·스택 추가 버튼');
+  assert.ok(/editing && bridgeHas\('setGroups'\)/.test(APP_SRC), '그룹/스택은 편집 모드에서');
   // 그룹 소속 위젯은 메인 격자에서 제외.
   assert.ok(/if \(groupedOf\[id\]\) return;/.test(APP_SRC), '그룹 위젯은 메인 격자에서 제외');
-  assert.ok(/renderHomeGroups\(groups, hidden, reclaim, editing\)/.test(APP_SRC), '그룹 섹션 렌더 호출');
+  assert.ok(/renderHomeGroups\(sectionGroups, hidden, reclaim, editing\)/.test(APP_SRC), '섹션 그룹 밴드 렌더 호출');
   // 렌더 함수 + CRUD 핸들러.
   assert.ok(/function renderHomeGroups\(/.test(APP_SRC) && /function renderGroupAddPicker\(/.test(APP_SRC), '그룹 렌더·피커');
   assert.ok(/function onAddGroup\(/.test(APP_SRC) && /function onDeleteGroup\(/.test(APP_SRC) && /function onToggleGroupCollapse\(/.test(APP_SRC), 'CRUD·접기 핸들러');
@@ -158,6 +158,27 @@ test('로드맵 Phase 5·M — 그룹: 렌더·CRUD·접기·멤버 배정·격�
   assert.ok(/function buildGroupMemberCell\(/.test(APP_SRC) && /buildGroupMemberCell\(id, reclaim, editing, true\)/.test(APP_SRC), '밴드 멤버 리사이즈(withResize=true)');
   assert.ok(/function initGroupSortables\(/.test(APP_SRC) && /function commitGroupMembers\(/.test(APP_SRC) && /function commitGroupOrder\(/.test(APP_SRC), '멤버·그룹 순서변경 Sortable/커밋');
   assert.ok(/closest\('\.home-masonry, \.home-group__grid'\)/.test(APP_SRC), '리사이즈가 속한 격자(메인/그룹) 기준');
+});
+
+// ── [로드맵 Phase 5·F] 스택(겹침·로테이션) ──
+test('로드맵 Phase 5·F — 스택: 렌더·모드전환·활성 로테이션·인디케이터·부분교체', () => {
+  const CSS = fs.readFileSync(path.join(__dirname, '..', 'public', 'styles.css'), 'utf8');
+  // 추가·모드 전환·활성 설정 핸들러.
+  assert.ok(/function onAddStack\(/.test(APP_SRC) && /mode: 'stack'/.test(APP_SRC), '스택 추가(mode=stack)');
+  assert.ok(/function onToggleGroupMode\(/.test(APP_SRC), '섹션↔스택 모드 전환');
+  assert.ok(/function onStackSetActive\(/.test(APP_SRC), '활성 멤버 설정');
+  // 렌더: 스택 셀 + 하단 인디케이터(§3 하단중앙).
+  assert.ok(/function renderStackCell\(/.test(APP_SRC) && /function buildStackIndicator\(/.test(APP_SRC), '스택 셀·인디케이터 렌더');
+  assert.ok(/stackGroups\.forEach\(function \(g\) \{ grid\.appendChild\(renderStackCell/.test(APP_SRC), '스택은 위젯처럼 격자 셀로 배치');
+  assert.ok(/groups\.filter\(function \(g\) \{ return g\.mode === 'stack'/.test(APP_SRC) && /groups\.filter\(function \(g\) \{ return g\.mode !== 'stack'/.test(APP_SRC), '스택/섹션 분리');
+  // 활성 로테이션 순환(‹/›) + 부분 교체(포커스·다른 위젯 보존).
+  assert.ok(/\(\(Math\.round\(index\) % n\) \+ n\) % n/.test(APP_SRC), '활성 인덱스 래핑(순환)');
+  assert.ok(/function patchStackCell\(/.test(APP_SRC), '스택 셀 부분 교체');
+  // 하이드레이션 mode/active.
+  assert.ok(/mode: mode, active: active/.test(APP_SRC), 'applyGroups 가 mode/active 적재');
+  // CSS.
+  assert.ok(/\.home-stack__dot\.is-on\s*\{/.test(CSS), '활성 점 스타일');
+  assert.ok(/\.home-stack__ind\s*\{/.test(CSS), '인디케이터 CSS');
 });
 
 // ── [로드맵 Phase 5·M] 프리폼 그룹 자유 배치 ──
@@ -181,7 +202,7 @@ test('로드맵 Phase 5·M — featureAdd(+위젯) 는 항상 최하단(그룹 �
   // 메인 격자 루프에서 featureAdd 제외 → 별도 렌더.
   assert.ok(/if \(id === 'featureAdd'\) return; \/\/ \[Phase 5·M\]/.test(APP_SRC), '메인 루프에서 featureAdd 제외');
   // masonry: 그룹 밴드 다음에 featureAdd 카드(최하단).
-  assert.ok(/renderHomeGroups\(groups, hidden, reclaim, editing\)\);[\s\S]{0,220}renderHomeSection\('featureAdd'/.test(APP_SRC), 'masonry 는 그룹 밴드 뒤에 featureAdd 카드');
+  assert.ok(/renderHomeGroups\(sectionGroups, hidden, reclaim, editing\)\);[\s\S]{0,220}renderHomeSection\('featureAdd'/.test(APP_SRC), 'masonry 는 그룹 밴드 뒤에 featureAdd 카드');
   // freeform: featureAdd 도 자유 배치 셀(그룹 다음에 추가 → 기본 최하단 시드).
   assert.ok(/buildHomeCell\('featureAdd', reclaim, editing, freeform\)/.test(APP_SRC), 'freeform featureAdd 자유 배치 셀');
   assert.ok(/function buildHomeCell\(/.test(APP_SRC), '홈 셀 빌더 추출');

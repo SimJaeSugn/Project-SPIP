@@ -793,7 +793,10 @@ function applyGroups(input) {
     if (Array.isArray(g.members)) for (const m of g.members) {
       if (TOGGLEABLE_WIDGET_IDS.indexOf(m) >= 0 && !claimed.has(m) && members.indexOf(m) < 0) { members.push(m); claimed.add(m); }
     }
-    out.push({ id: g.id, name: (typeof g.name === 'string' && g.name) ? g.name : '그룹', collapsed: !!g.collapsed, members: members });
+    var mode = (g.mode === 'stack') ? 'stack' : 'section';
+    var active = Number(g.active);
+    active = (isFinite(active) && active >= 0) ? Math.min(Math.floor(active), Math.max(0, members.length - 1)) : 0;
+    out.push({ id: g.id, name: (typeof g.name === 'string' && g.name) ? g.name : '그룹', collapsed: !!g.collapsed, members: members, mode: mode, active: active });
   }
   return out;
 }
@@ -2687,11 +2690,15 @@ function initBrowser() {
         on: { click: function () { onAutoArrange(); } },
       }));
     }
-    // [로드맵 Phase 5·M] 그룹은 격자(masonry) 모드에서만 — 편집 모드에서 그룹 추가.
-    if (editing && !freeform && bridgeHas('setGroups')) {
-      editBar.appendChild(el('button', {
-        cls: 'home-editmode', text: '+ 그룹', attrs: { type: 'button', 'aria-label': '그룹 추가' },
+    // [로드맵 Phase 5·M/F] 편집 모드에서 그룹(섹션)·스택 추가. 그룹 섹션 밴드는 masonry 전용, 스택은 두 모드 모두.
+    if (editing && bridgeHas('setGroups')) {
+      if (!freeform) editBar.appendChild(el('button', {
+        cls: 'home-editmode', text: '+ 그룹', attrs: { type: 'button', 'aria-label': '그룹(섹션) 추가' },
         on: { click: function () { onAddGroup(); } },
+      }));
+      editBar.appendChild(el('button', {
+        cls: 'home-editmode', text: '+ 스택', attrs: { type: 'button', 'aria-label': '스택 추가' },
+        on: { click: function () { onAddStack(); } },
       }));
     }
     editBar.appendChild(el('button', {
@@ -2703,20 +2710,25 @@ function initBrowser() {
     wrap.appendChild(editBar);
     var grid = el('div', { cls: 'home-masonry' + (editing ? ' home-masonry--editing' : '') + (freeform ? ' home-masonry--freeform' : ''), style: 'padding:20px 30px 36px;' });
     var hidden = store.hiddenWidgets || [];
-    // [로드맵 Phase 5·M] 그룹 — 소속 위젯은 메인 격자에서 빼고 그룹으로 렌더(masonry=밴드, freeform=자유 배치 셀).
+    // [로드맵 Phase 5·M/F] 그룹 — 소속 위젯은 메인 격자에서 빼고 그룹으로 렌더. 스택(mode=stack)은 셀(한 자리 겹침),
+    //   섹션(mode=section)은 masonry=밴드/freeform=자유 셀.
     var groups = Array.isArray(store.groups) ? store.groups : [];
+    var stackGroups = groups.filter(function (g) { return g.mode === 'stack'; });
+    var sectionGroups = groups.filter(function (g) { return g.mode !== 'stack'; });
     var groupedOf = {};
     groups.forEach(function (g) { (g.members || []).forEach(function (m) { groupedOf[m] = g.id; }); });
     applyHomeLayout(store.homeLayout).forEach(function (id) {
       if (id === 'featureAdd') return; // [Phase 5·M] '+ 위젯 추가' 카드는 항상 마지막(그룹 아래)에 별도 렌더
       if (hidden.indexOf(id) >= 0) return; // 미적용(숨김) 위젯 건너뜀
-      if (groupedOf[id]) return; // [Phase 5·M] 그룹 소속 위젯은 그룹 섹션에서 렌더
+      if (groupedOf[id]) return; // 그룹 소속 위젯은 그룹/스택에서 렌더
       var cell = buildHomeCell(id, reclaim, editing, freeform);
       if (cell) grid.appendChild(cell);
     });
-    // [로드맵 Phase 5·M] 프리폼: 그룹 블록·featureAdd 도 자유 배치 셀로 메인 격자에 추가(좌표·드래그 대상).
+    // [로드맵 Phase 5·F] 스택은 위젯처럼 셀로 격자에 배치(masonry 흐름 / freeform 자유 배치 — renderStackCell 내부 처리).
+    stackGroups.forEach(function (g) { grid.appendChild(renderStackCell(g, reclaim, editing, freeform)); });
+    // [로드맵 Phase 5·M] 프리폼: 섹션 그룹·featureAdd 도 자유 배치 셀로 격자에 추가(좌표·드래그 대상).
     if (freeform) {
-      groups.forEach(function (g) {
+      sectionGroups.forEach(function (g) {
         var gcell = renderGroupFreeCell(g, hidden, reclaim, editing);
         if (editing) { gcell.classList.add('home-section--free'); gcell.addEventListener('pointerdown', function (e) { onFreeformDragStart(e, g.id); }); }
         grid.appendChild(gcell);
@@ -2725,10 +2737,9 @@ function initBrowser() {
       if (faFree) grid.appendChild(faFree);
     }
     wrap.appendChild(grid);
-    // [로드맵 Phase 5·M] masonry: 그룹 섹션(격자 아래 전체폭 접기 밴드) → 그 다음 '+ 위젯 추가' 카드(항상 최하단).
-    //   featureAdd 를 맨 끝에 둬 그룹이 위젯갤러리 카드 위(최상단)에 올 수 있게 한다.
+    // [로드맵 Phase 5·M] masonry: 섹션 그룹(격자 아래 전체폭 접기 밴드) → 그 다음 '+ 위젯 추가' 카드(항상 최하단).
     if (!freeform) {
-      if (groups.length > 0) wrap.appendChild(renderHomeGroups(groups, hidden, reclaim, editing));
+      if (sectionGroups.length > 0) wrap.appendChild(renderHomeGroups(sectionGroups, hidden, reclaim, editing));
       var faCard = renderHomeSection('featureAdd', reclaim);
       if (faCard) wrap.appendChild(el('div', { cls: 'home-featureadd', style: 'padding:0 30px 36px;' , children: [faCard] }));
     }
@@ -8800,6 +8811,89 @@ function initBrowser() {
   function onRemoveFromGroup(widgetId) {
     commitGroups((store.groups || []).map(function (g) { return Object.assign({}, g, { members: (g.members || []).filter(function (m) { return m !== widgetId; }) }); }));
   }
+  // ── [로드맵 Phase 5·F] 스택 — 그룹의 mode='stack'(한 자리 겹침·로테이션). 그룹 인프라 재사용. ──
+  function onAddStack() {
+    if (!bridgeHas('setGroups')) return;
+    if ((store.groups || []).length >= 12) { toast('그룹이 너무 많습니다.', true); return; }
+    commitGroups((store.groups || []).concat([{ id: genGroupId(), name: '스택', collapsed: false, members: [], mode: 'stack', active: 0 }]));
+  }
+  function onToggleGroupMode(id) {
+    commitGroups((store.groups || []).map(function (g) { return g.id === id ? Object.assign({}, g, { mode: g.mode === 'stack' ? 'section' : 'stack', active: 0 }) : g; }));
+  }
+  /** 스택 활성(표시) 멤버 인덱스 설정(순환). 재렌더 없이 해당 스택 셀만 부분 교체(포커스·다른 위젯 보존). */
+  function onStackSetActive(id, index) {
+    var next = (store.groups || []).map(function (g) {
+      if (g.id !== id) return g;
+      var n = (g.members || []).length;
+      if (n <= 0) return g;
+      var a = ((Math.round(index) % n) + n) % n; // 래핑(‹/›)
+      return Object.assign({}, g, { active: a });
+    });
+    store.groups = applyGroups(next);
+    if (!patchStackCell(id)) render(); // 스택 셀 본문만 교체(실패 시 전체)
+    if (bridgeHas('setGroups')) ipc('setGroups', next).catch(function () { /* graceful */ });
+  }
+  /** 스택 셀 본문(활성 위젯 + 인디케이터)만 in-place 교체 후 masonry 재측정. 셀 부재 시 false. */
+  function patchStackCell(id) {
+    if (typeof document === 'undefined') return false;
+    var cell = document.querySelector('.home-stack[data-home-section="' + id + '"]');
+    if (!cell) return false;
+    var g = (store.groups || []).find(function (x) { return x.id === id; });
+    if (!g) return false;
+    var fresh = renderStackCell(g, null, !!store.editMode, store.layoutMode === 'freeform');
+    // 위치·크기 인라인 스타일 보존(레이아웃이 다시 잡아주지만 깜빡임 최소화).
+    cell.parentNode.replaceChild(fresh, cell);
+    scheduleHomeMasonryLayout();
+    return true;
+  }
+  /** 스택 인디케이터(점 + 이전/다음) — 하단중앙(§3 코너 규약: 우하단 리사이즈와 분리). */
+  function buildStackIndicator(g, members, active) {
+    var ind = el('div', { cls: 'home-stack__ind' });
+    ind.appendChild(el('button', { cls: 'home-stack__nav', text: '‹', attrs: { type: 'button', 'aria-label': '이전' },
+      on: { click: function (e) { e.stopPropagation(); onStackSetActive(g.id, active - 1); }, pointerdown: function (e) { e.stopPropagation(); } } }));
+    members.forEach(function (m, i) {
+      var meta = WIDGET_META[m] || { name: m };
+      ind.appendChild(el('button', {
+        cls: 'home-stack__dot' + (i === active ? ' is-on' : ''),
+        attrs: { type: 'button', 'aria-label': meta.name, title: meta.name, 'aria-current': String(i === active) },
+        on: { click: function (e) { e.stopPropagation(); onStackSetActive(g.id, i); }, pointerdown: function (e) { e.stopPropagation(); } },
+      }));
+    });
+    ind.appendChild(el('button', { cls: 'home-stack__nav', text: '›', attrs: { type: 'button', 'aria-label': '다음' },
+      on: { click: function (e) { e.stopPropagation(); onStackSetActive(g.id, active + 1); }, pointerdown: function (e) { e.stopPropagation(); } } }));
+    return ind;
+  }
+  /** [로드맵 Phase 5·F] 스택 셀 — 한 자리에 겹친 멤버 중 active 하나만 표시 + 하단 인디케이터로 전환.
+   *   위젯처럼 리사이즈/드래그(그룹 id 좌표·크기). 편집: 헤더로 멤버 추가·모드전환·삭제, 활성 멤버 빼기. */
+  function renderStackCell(g, reclaim, editing, freeform) {
+    var hidden = store.hiddenWidgets || [];
+    var members = (g.members || []).filter(function (m) { return hidden.indexOf(m) < 0; });
+    var active = Math.min(Math.max(0, g.active || 0), Math.max(0, members.length - 1));
+    var cell = el('div', { cls: 'home-section home-stack', attrs: { 'data-home-section': g.id } });
+    var content = el('div', { cls: 'home-section__content' });
+    var head = buildGroupHeader(g, editing);
+    head.classList.add('home-stack__head');
+    content.appendChild(head);
+    if (members.length === 0) {
+      content.appendChild(el('div', { cls: 'home-group__empty', text: editing ? '＋ 로 위젯을 스택에 추가하세요.' : '빈 스택' }));
+    } else {
+      var body = el('div', { cls: 'home-stack__body' });
+      if (editing) body.appendChild(el('button', {
+        cls: 'widget-remove home-stack__remove', attrs: { type: 'button', 'aria-label': '현재 위젯 스택에서 빼기', title: '현재 위젯 빼기' },
+        on: { click: function (e) { e.stopPropagation(); onRemoveFromGroup(members[active]); }, pointerdown: function (e) { e.stopPropagation(); } },
+        children: [svg([{ t: 'path', d: 'M5 12h14' }], { size: 13, stroke: '#78716c', sw: 2 })],
+      }));
+      var node = renderHomeSection(members[active], reclaim);
+      if (node) body.appendChild(node);
+      content.appendChild(body);
+      if (members.length > 1) content.appendChild(buildStackIndicator(g, members, active));
+    }
+    cell.appendChild(content);
+    if (editing && store._groupAddFor === g.id) cell.appendChild(renderGroupAddPicker(g.id));
+    cell.appendChild(homeResizeHandle(g.id));
+    if (freeform && editing) { cell.classList.add('home-section--free'); cell.addEventListener('pointerdown', function (e) { onFreeformDragStart(e, g.id); }); }
+    return cell;
+  }
   /** 그룹 헤더(접기 토글·이름/인라인 이름변경·개수·편집 컨트롤) — 밴드·프리폼 공용. */
   function buildGroupHeader(g, editing) {
     var head = el('div', { cls: 'home-group__head' });
@@ -8833,7 +8927,9 @@ function initBrowser() {
       };
       head.appendChild(mkMini('✎', '이름 변경', function () { store._groupRenameId = g.id; store._groupRenameVal = g.name; render(); }));
       head.appendChild(mkMini('＋', '위젯 추가', function () { store._groupAddFor = (store._groupAddFor === g.id) ? null : g.id; render(); }));
-      head.appendChild(mkMini('✕', '그룹 삭제', function () { onDeleteGroup(g.id); }));
+      // [로드맵 Phase 5·F] 섹션 ↔ 스택 전환. 스택=한 자리 겹침·로테이션, 섹션=전체폭 밴드.
+      head.appendChild(mkMini('⧉', g.mode === 'stack' ? '섹션으로 전환' : '스택으로 전환', function () { onToggleGroupMode(g.id); }));
+      head.appendChild(mkMini('✕', '삭제', function () { onDeleteGroup(g.id); }));
     }
     return head;
   }

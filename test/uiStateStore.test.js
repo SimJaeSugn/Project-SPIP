@@ -254,8 +254,8 @@ test('normalizeGroups — id 형식·중복·members(토글·그룹간 유일)·
     { id: 'gabc1', name: 'dup' },                            // 중복 id → 제거
   ]);
   assert.strictEqual(g.length, 2);
-  assert.deepStrictEqual(g[0], { id: 'gabc1', name: '작업', collapsed: true, members: ['mail', 'disk'] });
-  assert.deepStrictEqual(g[1], { id: 'gabc2', name: '그룹', collapsed: false, members: ['todos'] });
+  assert.deepStrictEqual(g[0], { id: 'gabc1', name: '작업', collapsed: true, members: ['mail', 'disk'], mode: 'section', active: 0 });
+  assert.deepStrictEqual(g[1], { id: 'gabc2', name: '그룹', collapsed: false, members: ['todos'], mode: 'section', active: 0 });
   // 비배열/손상 graceful.
   assert.deepStrictEqual(store.normalizeGroups(null), []);
   assert.deepStrictEqual(store.normalizeGroups('x'), []);
@@ -270,7 +270,18 @@ test('normalizePreset — groups 스키마 정규화(예약 [] → 실제)', () 
     activePreset: 'a',
     presets: [{ id: 'a', name: 'x', groups: [{ id: 'gaa11', name: '섹션', members: ['mail'] }] }],
   });
-  assert.deepStrictEqual(d.presets[0].groups, [{ id: 'gaa11', name: '섹션', collapsed: false, members: ['mail'] }]);
+  assert.deepStrictEqual(d.presets[0].groups, [{ id: 'gaa11', name: '섹션', collapsed: false, members: ['mail'], mode: 'section', active: 0 }]);
+});
+
+test('normalizeGroups — mode(section|stack)·active 클램프', () => {
+  const g = store.normalizeGroups([
+    { id: 'gs001', name: '탭', members: ['mail', 'disk', 'todos'], mode: 'stack', active: 9 }, // active 클램프 → 2
+    { id: 'gs002', members: ['attention'], mode: 'chaos', active: -1 },                        // 잘못된 모드 → section, active → 0
+  ]);
+  assert.strictEqual(g[0].mode, 'stack');
+  assert.strictEqual(g[0].active, 2, 'active 는 멤버 범위로 클램프');
+  assert.strictEqual(g[1].mode, 'section');
+  assert.strictEqual(g[1].active, 0);
 });
 
 // ── [로드맵 Phase 3·G] 스크래치패드 메모 정규화 ──

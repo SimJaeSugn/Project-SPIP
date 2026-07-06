@@ -133,8 +133,8 @@ test('setGroups — 활성 프리셋 그룹 정규화·영속·getUiState 노출
   ] }, ctx);
   assert.strictEqual(r.ok, true);
   assert.deepStrictEqual(r.homeWidgetGroups, [
-    { id: 'g0001', name: '작업', collapsed: false, members: ['mail', 'disk'] },
-    { id: 'g0002', name: '기타', collapsed: false, members: ['todos'] },
+    { id: 'g0001', name: '작업', collapsed: false, members: ['mail', 'disk'], mode: 'section', active: 0 },
+    { id: 'g0002', name: '기타', collapsed: false, members: ['todos'], mode: 'section', active: 0 },
   ]);
   assert.deepStrictEqual(uiState.getUiState(ctx).homeWidgetGroups, r.homeWidgetGroups, '영속·노출');
 });

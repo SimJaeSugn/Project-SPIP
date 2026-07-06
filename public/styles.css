@@ -541,6 +541,18 @@ body.home-freedragging { user-select: none; cursor: grabbing; }
 .home-group__gridfree .home-group__member { position: relative; }
 /* [로드맵 Phase 5·M] '+ 위젯 추가' 카드(masonry 최하단 별도 렌더) — 폭 과대 방지. */
 .home-featureadd > * { max-width: 420px; }
+
+/* [로드맵 Phase 5·F] 스택 — 한 자리에 겹친 위젯 중 하나만 표시 + 하단 인디케이터로 전환. */
+.home-stack > .home-section__content { border: 1px solid var(--border, #e7e5e4); border-radius: 16px; background: var(--panel, #fff); padding: 8px 8px 6px; display: flex; flex-direction: column; gap: 4px; }
+.home-stack__head { padding: 4px 6px 2px; }
+.home-stack__body { position: relative; min-width: 0; }
+.home-stack__remove { top: 2px; right: 2px; }
+.home-stack__ind { display: flex; align-items: center; justify-content: center; gap: 5px; padding: 4px 0 2px; }
+.home-stack__nav { appearance: none; border: none; background: none; cursor: pointer; font-size: 15px; line-height: 1; color: var(--t2, #57534e); padding: 0 4px; }
+.home-stack__nav:hover { color: #4f46e5; }
+.home-stack__dot { appearance: none; border: none; cursor: pointer; width: 8px; height: 8px; padding: 0; border-radius: 50%; background: #d6d3d1; transition: background .12s ease, transform .12s ease; }
+.home-stack__dot:hover { background: #a5b4fc; }
+.home-stack__dot.is-on { background: #4f46e5; transform: scale(1.25); }
 /* [홈 위젯 크기] 우하단 리사이즈 핸들 — 평소 옅게, 호버/드래그 시 강조. */
 .home-resize {
   position: absolute; right: 3px; bottom: 3px; z-index: 4;
