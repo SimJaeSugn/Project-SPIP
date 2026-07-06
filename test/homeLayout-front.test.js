@@ -174,6 +174,11 @@ test('편집 모드 전용 — 삭제·리사이즈·추가·재정렬은 편집
   assert.ok(/if \(editing\) \{ var faFree = buildHomeCell\('featureAdd'/.test(APP_SRC), 'freeform featureAdd 편집 모드 전용');
   // 재정렬(SortableJS)은 편집 모드에서만.
   assert.ok(/if \(!store\.editMode\) return;/.test(fnBody('initHomeSortable', 500)), '순서 변경 편집 모드 전용');
+  // [편집 모드 안내] 진입 시 안내 배너(모드별) — 편집 모드에서만.
+  const CSS = fs.readFileSync(path.join(__dirname, '..', 'public', 'styles.css'), 'utf8');
+  assert.ok(/if \(editing\) \{[\s\S]{0,120}cls:\s*'home-edit-guide'/.test(APP_SRC), '편집 모드 안내 배너(편집 시에만)');
+  assert.ok(/자유 배치 모드 —/.test(APP_SRC) && /위젯을 드래그해 순서 변경/.test(APP_SRC), '모드별 안내 문구');
+  assert.ok(/\.home-edit-guide\s*\{/.test(CSS), '안내 배너 CSS');
 });
 
 // ── [로드맵 Phase 1·J] 테마 개인화(액센트·배율) ──

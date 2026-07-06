@@ -2742,6 +2742,20 @@ function initBrowser() {
       on: { click: function () { store.editMode = !store.editMode; render(); } },
     }));
     wrap.appendChild(editBar);
+    // [편집 모드 안내] 진입 시 사용 방법 배너(모드별). 일반 모드는 표시 안 함(깔끔).
+    if (editing) {
+      var guide = el('div', { cls: 'home-edit-guide', attrs: { role: 'note' } });
+      guide.appendChild(el('span', { cls: 'home-edit-guide__ico', text: '✎', attrs: { 'aria-hidden': 'true' } }));
+      var gt = freeform
+        ? '자유 배치 모드 — 위젯·그룹을 드래그해 원하는 곳에 두고, 우하단 핸들로 크기를 조절하세요. ‘자동 정렬’로 격자로 돌아갑니다.'
+        : '위젯을 드래그해 순서 변경 · 우하단 핸들로 크기 조절 · × 로 삭제 · 위 버튼으로 위젯·그룹·스택 추가 · ‘자유 배치’로 좌표 배치.';
+      guide.appendChild(el('span', { cls: 'home-edit-guide__txt', text: gt }));
+      guide.appendChild(el('button', {
+        cls: 'home-edit-guide__done', text: '편집 완료', attrs: { type: 'button' },
+        on: { click: function () { store.editMode = false; render(); } },
+      }));
+      wrap.appendChild(guide);
+    }
     var grid = el('div', { cls: 'home-masonry' + (editing ? ' home-masonry--editing' : '') + (freeform ? ' home-masonry--freeform' : ''), style: 'padding:20px 30px 36px;' });
     var hidden = store.hiddenWidgets || [];
     // [로드맵 Phase 5·M/F] 그룹 — 소속 위젯은 메인 격자에서 빼고 그룹으로 렌더. 스택(mode=stack)은 셀(한 자리 겹침),
