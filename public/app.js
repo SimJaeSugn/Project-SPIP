@@ -2916,6 +2916,13 @@ function initBrowser() {
     }));
     card.appendChild(head);
 
+    // [로드맵 Phase 3·C] 밀도 소비 — 좁을 때(S)만 노출하는 숫자 요약(안 읽음 수 + 회신 필요). 넓으면(M/L) 목록. CSS([data-density])가 전환.
+    var unread = mailUnreadTotal();
+    var summary = el('div', { cls: 'mail-summary' });
+    summary.appendChild(el('div', { cls: 'mail-summary__num', text: String(unread) }));
+    summary.appendChild(el('div', { cls: 'mail-summary__label', text: unread === 0 ? '안 읽은 메일 없음' : ('안 읽음' + (replies > 0 ? ' · ' + replies + ' 회신' : '')) }));
+    card.appendChild(summary);
+
     var list = el('div', { cls: 'hw-cols mail-list', style: 'column-gap:22px;' }); // [반응형] 넓으면 다열 · [높이] 남는 높이 채우고 넘치면 스크롤
     if (!store.mailSummaryLoaded && store.busyMailSummary) {
       list.appendChild(el('div', { text: '메일을 확인하는 중…', style: 'font-size:12px;color:#a8a29e;padding:6px 0;' }));
@@ -2940,7 +2947,8 @@ function initBrowser() {
       mid.appendChild(nameRow);
       mid.appendChild(el('div', { text: m.subject || '(제목 없음)', style: 'font-size:12px;color:#57534e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px;' }));
       row.appendChild(mid);
-      row.appendChild(el('span', { text: relMail(m.date), style: HOME_MONO + 'font-size:10.5px;color:#a8a29e;flex:0 0 auto;' }));
+      // [로드맵 Phase 3·C] 시간은 mail-time 클래스 — 좁을 때(M) 공간 절약 위해 CSS 로 숨김, 넓으면(L) 노출.
+      row.appendChild(el('span', { cls: 'mail-time', text: relMail(m.date), style: HOME_MONO + 'font-size:10.5px;color:#a8a29e;flex:0 0 auto;' }));
       list.appendChild(row);
     });
     card.appendChild(list);

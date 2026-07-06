@@ -416,6 +416,15 @@ input, button, select { font-family: inherit; }
 .mail-region > * { flex: 1 1 auto; min-height: 0; }
 .mail-list { max-height: 264px; overflow-y: auto; }
 .home-section__content--sized .mail-list { max-height: none; flex: 1 1 auto; min-height: 0; }
+/* [로드맵 Phase 3·C] 메일 위젯 밀도 소비 — 셀 [data-density](layoutHomeMasonry 가 실측 폭에서 파생) 에 따라
+ *   S=숫자 요약 / M=목록(시간 숨김·간결) / L=목록+시간. 크기의 단일 진실은 연속값(homeWidgetSizes), tier 는 표현 파생. */
+.mail-summary { display: none; align-items: baseline; gap: 10px; padding: 4px 2px; }
+.mail-summary__num { font-size: 34px; font-weight: 800; line-height: 1; color: #1c1917; letter-spacing: -.02em; }
+.mail-summary__label { font-size: 12.5px; font-weight: 600; color: #78716c; }
+.home-section[data-density="S"] .mail-summary { display: flex; }   /* 좁으면 숫자 요약만 */
+.home-section[data-density="S"] .mail-list { display: none; }
+.home-section[data-density="M"] .mail-time { display: none; }      /* 보통이면 목록(시간 숨겨 간결) */
+/* L(넓음)은 기본값 — 목록 + 시간 모두 노출 */
 /* [홈 위젯 크기] 우하단 리사이즈 핸들 — 평소 옅게, 호버/드래그 시 강조. */
 .home-resize {
   position: absolute; right: 3px; bottom: 3px; z-index: 4;

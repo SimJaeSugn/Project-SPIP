@@ -85,6 +85,21 @@ test('로드맵 Phase 3·C — 렌더러: layoutHomeMasonry 가 실측 셀폭→
   assert.ok(/cell\.dataset\.density\s*=\s*densityTier\(cellW\)/.test(body), 'densityTier(cellW) → data-density 부여');
 });
 
+// ── [로드맵 Phase 3·C] 메일 위젯 밀도 소비(showcase): S=숫자요약 / M=목록(시간숨김) / L=목록+시간 ──
+test('로드맵 Phase 3·C — 메일 위젯 밀도 소비: 요약 노드·시간 클래스 렌더 + [data-density] CSS 전환', () => {
+  const CSS = fs.readFileSync(path.join(__dirname, '..', 'public', 'styles.css'), 'utf8');
+  // 렌더: 밀도 요약 노드(숫자+라벨) + 시간 span 에 mail-time 클래스.
+  const mailBody = fnBody('renderHomeMailCard', 5200);
+  assert.ok(/cls:\s*'mail-summary'/.test(mailBody), '밀도 숫자 요약 노드(mail-summary)');
+  assert.ok(/cls:\s*'mail-summary__num'/.test(mailBody), '요약 숫자(mail-summary__num)');
+  assert.ok(/cls:\s*'mail-time'/.test(mailBody), '시간 span 에 mail-time 클래스(밀도별 표시)');
+  // CSS: 셀 data-density 로 S=요약만 / M=시간숨김 / L=기본(전부).
+  assert.ok(/\.home-section\[data-density="S"\]\s+\.mail-summary\s*\{[^}]*display:\s*flex/.test(CSS), 'S: 숫자 요약 노출');
+  assert.ok(/\.home-section\[data-density="S"\]\s+\.mail-list\s*\{[^}]*display:\s*none/.test(CSS), 'S: 목록 숨김(숫자만)');
+  assert.ok(/\.home-section\[data-density="M"\]\s+\.mail-time\s*\{[^}]*display:\s*none/.test(CSS), 'M: 시간 숨겨 간결');
+  assert.ok(/\.mail-summary\s*\{[^}]*display:\s*none/.test(CSS), '요약은 기본 숨김(S 에서만 노출)');
+});
+
 // ── applyHomeLayout (순서 정규화, 메인 normalizeHomeLayout 과 동일 규칙) ──
 test('R-32 — applyHomeLayout: 유효 순열은 그대로 유지', () => {
   const input = ['mail', 'attention', 'disk', 'todos', 'shelf', 'activity', 'productivity', 'aiusage', 'shelfWide', 'featureAdd'];
