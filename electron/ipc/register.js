@@ -219,6 +219,12 @@ function registerIpcHandlers(deps) {
   // [위젯 추가/제거] 숨긴(미적용) 위젯 집합 — 토글 가능 위젯 화이트리스트만. 검증은 메인 normalizeHiddenWidgets.
   guard('spip:setHiddenWidgets', (args) => uiStateIpc.setHiddenWidgets(args, ctx));
   guard('spip:setHomeWidgetSizes', (args) => uiStateIpc.setHomeWidgetSizes(args, ctx));
+  // [로드맵 Phase 2] 대시보드 프리셋(모드) — 전환/추가/복제/이름변경/삭제. 검증은 메인 프리셋 CRUD 단일 경계.
+  guard('spip:setActivePreset', (args) => uiStateIpc.setActivePreset(args, ctx));
+  guard('spip:addPreset', (args) => uiStateIpc.addPreset(args, ctx));
+  guard('spip:duplicatePreset', (args) => uiStateIpc.duplicatePreset(args, ctx));
+  guard('spip:renamePreset', (args) => uiStateIpc.renamePreset(args, ctx));
+  guard('spip:removePreset', (args) => uiStateIpc.removePreset(args, ctx));
   // 프로젝트 표시 별칭 + 테마(라이트/다크/시스템).
   guard('spip:setProjectName', (args) => uiStateIpc.setProjectName(args, ctx));
   guard('spip:setTheme', (args) => uiStateIpc.setTheme(args, ctx));

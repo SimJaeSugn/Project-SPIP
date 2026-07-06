@@ -39,6 +39,8 @@ function toResponse(state) {
     briefing: { items: openItems, counters: briefing.counters },
     // [항목3] 연결된 LLM 모델 토큰 사용량 누적(표시·집계 전용 수치만). 정규화된 값 그대로 노출.
     aiUsage: state.aiUsage || uiStateStore.defaultAiUsage(),
+    // [로드맵 Phase 2] 대시보드(프리셋) — 렌더러가 프리셋 탭·전환에 사용. 활성 프리셋은 레거시 키와 동기.
+    dashboard: state.dashboard || uiStateStore.defaultDashboardState(),
   };
 }
 
@@ -209,6 +211,68 @@ function setTheme(args, ctx) {
   return { ok: true, theme: written.theme };
 }
 
+// ── [로드맵 Phase 2] 프리셋(대시보드 모드) IPC — 검증·불변식은 uiStateStore 프리셋 CRUD 단일 경계 ──
+//   활성 전환/추가/복제/삭제는 '레거시 키(homeLayout/hidden/sizes)를 (새) 활성 프리셋 내용으로 스왑'해
+//   normalizeState reconcile 과 일관을 유지한다. 이름 변경은 내용/활성 불변이라 스왑 불요.
+
+/** (활성) 프리셋 내용을 레거시 키에 실어 write — 스왑 후 응답은 toResponse(전체 최신). */
+function writeWithActive(store, storeCtx, state, dashboard) {
+  const active = (dashboard.presets || []).find((p) => p.id === dashboard.activePreset) || dashboard.presets[0];
+  const written = store.write(Object.assign({}, state, {
+    dashboard,
+    homeLayout: active.layout, hiddenWidgets: active.hidden, homeWidgetSizes: active.sizes,
+  }), storeCtx);
+  return Object.assign({ ok: true }, toResponse(written));
+}
+
+/** spip:setActivePreset { id } — 활성 프리셋 전환(레거시 키 스왑). 없으면 NO_PRESET. */
+function setActivePreset(args, ctx) {
+  const id = (args && typeof args === 'object') ? args.id : undefined;
+  const { store, storeCtx } = resolveStore(ctx);
+  const state = store.read(storeCtx);
+  if (!(state.dashboard.presets || []).some((p) => p.id === id)) return { ok: false, code: 'NO_PRESET' };
+  return writeWithActive(store, storeCtx, state, uiStateStore.presetSetActive(state.dashboard, id));
+}
+
+/** spip:addPreset { name } — 새 기본 배치 프리셋 추가 + 활성 전환. 상한 초과 시 LIMIT. */
+function addPreset(args, ctx) {
+  const name = (args && typeof args === 'object' && typeof args.name === 'string') ? args.name : '';
+  const { store, storeCtx } = resolveStore(ctx);
+  const state = store.read(storeCtx);
+  const r = uiStateStore.presetAdd(state.dashboard, name);
+  if (!r.id) return { ok: false, code: 'LIMIT' };
+  return writeWithActive(store, storeCtx, state, r.state);
+}
+
+/** spip:duplicatePreset { id } — 프리셋 복제 + 활성 전환. 없거나 상한이면 LIMIT. */
+function duplicatePreset(args, ctx) {
+  const id = (args && typeof args === 'object') ? args.id : undefined;
+  const { store, storeCtx } = resolveStore(ctx);
+  const state = store.read(storeCtx);
+  const r = uiStateStore.presetDuplicate(state.dashboard, id);
+  if (!r.id) return { ok: false, code: 'LIMIT' };
+  return writeWithActive(store, storeCtx, state, r.state);
+}
+
+/** spip:renamePreset { id, name } — 이름 변경(내용·활성 불변). */
+function renamePreset(args, ctx) {
+  const id = (args && typeof args === 'object') ? args.id : undefined;
+  const name = (args && typeof args === 'object' && typeof args.name === 'string') ? args.name : '';
+  const { store, storeCtx } = resolveStore(ctx);
+  const state = store.read(storeCtx);
+  const dashboard = uiStateStore.presetRename(state.dashboard, id, name);
+  const written = store.write(Object.assign({}, state, { dashboard }), storeCtx);
+  return Object.assign({ ok: true }, toResponse(written));
+}
+
+/** spip:removePreset { id } — 프리셋 삭제(마지막은 불가). 활성 삭제 시 인접으로 이동 + 레거시 스왑. */
+function removePreset(args, ctx) {
+  const id = (args && typeof args === 'object') ? args.id : undefined;
+  const { store, storeCtx } = resolveStore(ctx);
+  const state = store.read(storeCtx);
+  return writeWithActive(store, storeCtx, state, uiStateStore.presetRemove(state.dashboard, id));
+}
+
 /**
  * spip:addTodo — 할 일 추가(메인이 id·createdAt 스탬프). 빈 텍스트 거부, 개수 상한.
  * @param {object} args { text }
@@ -310,4 +374,4 @@ function updateLangTrend(args, ctx) {
   return { ok: true, prev: written.langTrend.prev, cur: written.langTrend.cur };
 }
 
-module.exports = { getUiState, setFavorite, setOrder, setSortMode, setHomeLayout, setHiddenWidgets, setHomeWidgetSizes, setProjectName, setTheme, addTodo, toggleTodo, removeTodo, setTodoDue, updateLangTrend };
+module.exports = { getUiState, setFavorite, setOrder, setSortMode, setHomeLayout, setHiddenWidgets, setHomeWidgetSizes, setProjectName, setTheme, addTodo, toggleTodo, removeTodo, setTodoDue, updateLangTrend, setActivePreset, addPreset, duplicatePreset, renamePreset, removePreset };

@@ -150,6 +150,12 @@ contextBridge.exposeInMainWorld('spip', {
   setHiddenWidgets: (ids) => ipcRenderer.invoke('spip:setHiddenWidgets', { ids: Array.isArray(ids) ? ids.map(String) : [] }),
   // [홈 위젯 크기] 위젯별 폭(열 스팬)·높이(px) 맵 { id:{w,h} }. 읽기는 getUiState 응답의 homeWidgetSizes. 검증은 main normalizeHomeWidgetSizes.
   setHomeWidgetSizes: (sizes) => ipcRenderer.invoke('spip:setHomeWidgetSizes', { sizes: (sizes && typeof sizes === 'object') ? sizes : {} }),
+  // [로드맵 Phase 2] 대시보드 프리셋(모드) — 전환/추가/복제/이름변경/삭제. 읽기는 getUiState 응답의 dashboard. 검증은 main 프리셋 CRUD.
+  setActivePreset: (id) => ipcRenderer.invoke('spip:setActivePreset', { id: String(id) }),
+  addPreset: (name) => ipcRenderer.invoke('spip:addPreset', { name: name == null ? '' : String(name) }),
+  duplicatePreset: (id) => ipcRenderer.invoke('spip:duplicatePreset', { id: String(id) }),
+  renamePreset: (id, name) => ipcRenderer.invoke('spip:renamePreset', { id: String(id), name: name == null ? '' : String(name) }),
+  removePreset: (id) => ipcRenderer.invoke('spip:removePreset', { id: String(id) }),
 
   // 프로젝트 표시 별칭(빈 문자열이면 해제) + 테마(light|dark|system).
   setProjectName: (id, name) => ipcRenderer.invoke('spip:setProjectName', { id: String(id), name: name == null ? '' : String(name) }),

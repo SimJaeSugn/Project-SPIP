@@ -207,3 +207,62 @@ test('updateLangTrend — 새 스캔이면 cur→prev 이동, 같은 스캔이�
   assert.deepStrictEqual(r.prev, { TS: 3 }, '직전 cur가 prev로');
   assert.deepStrictEqual(r.cur, { TS: 4 });
 });
+
+// ── [로드맵 Phase 2] 대시보드 프리셋 IPC ────────────────────────────────────
+test('Phase2 IPC — getUiState 가 dashboard(기본 프리셋 1개) 노출', () => {
+  const r = uiState.getUiState(ctxWith(memStore()));
+  assert.ok(r.dashboard && Array.isArray(r.dashboard.presets));
+  assert.strictEqual(r.dashboard.presets.length, 1);
+  assert.strictEqual(r.dashboard.activePreset, r.dashboard.presets[0].id);
+});
+
+test('Phase2 IPC — addPreset: 새 프리셋 추가 + 활성 전환 + 레거시 키 스왑(기본 배치)', () => {
+  const s = memStore({ homeLayout: ['mail', 'todos'] }); // 기존 활성 배치
+  const ctx = ctxWith(s);
+  const r = uiState.addPreset({ name: '집중' }, ctx);
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(r.dashboard.presets.length, 2);
+  assert.strictEqual(r.dashboard.activePreset, r.dashboard.presets[1].id);
+  // 새 활성 프리셋은 기본 배치(전 섹션 순서) → 레거시 homeLayout 스왑됨
+  assert.deepStrictEqual(r.homeLayout, realStore.HOME_SECTION_IDS);
+});
+
+test('Phase2 IPC — setActivePreset: 전환 시 레거시 키가 대상 프리셋 내용으로', () => {
+  const ctx = ctxWith(memStore({ homeLayout: ['mail', 'todos'] }));
+  // p1(기본 배치) 추가 → 활성 p1
+  const a = uiState.addPreset({ name: 'A' }, ctx);
+  const firstId = a.dashboard.presets[0].id; // 'default'(배치 mail,todos)
+  // 다시 default 로 전환 → 레거시가 default 내용(mail,todos)으로 복귀
+  const r = uiState.setActivePreset({ id: firstId }, ctx);
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(r.dashboard.activePreset, firstId);
+  assert.deepStrictEqual(r.homeLayout.slice(0, 2), ['mail', 'todos']);
+});
+
+test('Phase2 IPC — setActivePreset: 없는 id → NO_PRESET', () => {
+  assert.deepStrictEqual(uiState.setActivePreset({ id: 'ghost' }, ctxWith(memStore())), { ok: false, code: 'NO_PRESET' });
+});
+
+test('Phase2 IPC — duplicatePreset / renamePreset / removePreset', () => {
+  const ctx = ctxWith(memStore());
+  const base = uiState.getUiState(ctx).dashboard.presets[0].id;
+  // 복제
+  let r = uiState.duplicatePreset({ id: base }, ctx);
+  assert.strictEqual(r.dashboard.presets.length, 2);
+  const dupId = r.dashboard.activePreset;
+  assert.notStrictEqual(dupId, base);
+  // 이름 변경
+  r = uiState.renamePreset({ id: dupId, name: '리뷰 모드' }, ctx);
+  assert.strictEqual(r.dashboard.presets.find((p) => p.id === dupId).name, '리뷰 모드');
+  // 삭제(활성 복제본) → default 로 이동
+  r = uiState.removePreset({ id: dupId }, ctx);
+  assert.strictEqual(r.dashboard.presets.length, 1);
+  assert.strictEqual(r.dashboard.activePreset, base);
+});
+
+test('Phase2 IPC — removePreset: 마지막 프리셋은 삭제 불가(무변경)', () => {
+  const ctx = ctxWith(memStore());
+  const base = uiState.getUiState(ctx).dashboard.presets[0].id;
+  const r = uiState.removePreset({ id: base }, ctx);
+  assert.strictEqual(r.dashboard.presets.length, 1);
+});
