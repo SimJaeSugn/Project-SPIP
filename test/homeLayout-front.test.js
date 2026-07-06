@@ -133,6 +133,35 @@ test('로드맵 Phase 4·D — 팔레트 렌더 배선: Cmd+K 토글·액션 레
   assert.ok(!/function renderPalette\([\s\S]{0,1400}innerHTML/.test(APP_SRC), '팔레트 렌더 innerHTML 미사용(L-1)');
 });
 
+// ── [로드맵 Phase 4·I/H] 포커스 위젯 + 딥링크(프로젝트 점프) 배선 ──
+test('로드맵 Phase 4·I — 포커스 위젯: 버튼·오버레이·masonry 재측정·ESC 우선순위', () => {
+  const CSS = fs.readFileSync(path.join(__dirname, '..', 'public', 'styles.css'), 'utf8');
+  // 셀에 포커스 버튼 부착(제거 버튼과 함께).
+  assert.ok(/function widgetFocusBtn\(/.test(APP_SRC), '포커스 버튼 빌더');
+  assert.ok(/cell\.appendChild\(widgetFocusBtn\(id\)\)/.test(APP_SRC), '셀에 포커스 버튼 부착');
+  // 열기/닫기 + 오버레이 렌더 + 마운트.
+  assert.ok(/function openFocusWidget\(/.test(APP_SRC) && /function closeFocusWidget\(/.test(APP_SRC), '포커스 열기/닫기');
+  assert.ok(/function renderFocusOverlay\(/.test(APP_SRC), '포커스 오버레이 렌더');
+  assert.ok(/store\.focusWidget && store\.focusWidget\.open\)\s*app\.appendChild\(renderFocusOverlay/.test(APP_SRC), 'render 에서 포커스 마운트');
+  // 닫을 때 masonry 재측정(로드맵 §4 요구).
+  assert.ok(/function closeFocusWidget\(\)[\s\S]{0,220}scheduleHomeMasonryLayout\(\)/.test(APP_SRC), '포커스 종료 시 masonry 재측정');
+  // 오버레이는 컨테이너 컨텍스트 재사용(밀도 L 반응).
+  assert.ok(/focusw__body home-section__content/.test(APP_SRC), '포커스 본문이 컨테이너 컨텍스트 재사용');
+  // ESC 우선순위: 팔레트 > 포커스 > 도움말.
+  assert.ok(/store\.focusWidget && store\.focusWidget\.open\)\s*\{\s*closeFocusWidget\(\)/.test(APP_SRC), 'ESC 포커스 닫기');
+  // CSS.
+  assert.ok(/\.focusw-overlay\s*\{/.test(CSS) && /\.widget-focus\s*\{/.test(CSS), '포커스 오버레이·버튼 CSS');
+});
+
+test('로드맵 Phase 4·H/I — 팔레트 액션에 위젯 포커스·프로젝트 점프(딥링크) 포함', () => {
+  // 포커스 액션(표시 위젯) + 프로젝트 점프(viewModels → openDrawer).
+  const b = APP_SRC.slice(APP_SRC.indexOf('function buildActions('), APP_SRC.indexOf('function buildActions(') + 4800);
+  assert.ok(/id:\s*'focus\.'\s*\+\s*id/.test(b), '표시 위젯 포커스 액션');
+  assert.ok(/openFocusWidget\(id\)/.test(b), '포커스 액션이 openFocusWidget 실행');
+  assert.ok(/id:\s*'project\.'\s*\+\s*vm\.id/.test(b), '프로젝트 점프 액션');
+  assert.ok(/openDrawer\(vm\.id\)/.test(b), '프로젝트 점프가 상세 드로어 열기(딥링크)');
+});
+
 // ── [로드맵 Phase 3·G] 시스템 상태 위젯 — 렌더 배선·지연로드·주기갱신·L-1 ──
 test('로드맵 Phase 3·G — 시스템 상태 위젯: 렌더·표시시 지연로드·주기갱신 타이머·부분교체·L-1', () => {
   const CSS = fs.readFileSync(path.join(__dirname, '..', 'public', 'styles.css'), 'utf8');

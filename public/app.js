@@ -1719,6 +1719,8 @@ function initBrowser() {
     dashIO: { open: false, mode: 'export', json: '', busy: false, error: '' },
     // [로드맵 Phase 4·D] 커맨드 팔레트(Cmd+K) 상태 — 열림·질의·선택 인덱스.
     palette: { open: false, query: '', index: 0 },
+    // [로드맵 Phase 4·I] 포커스(풀스크린) 위젯 — 열림·대상 위젯 id.
+    focusWidget: { open: false, id: null },
     // [로드맵 Phase 3·G] 스크래치패드 메모(전역 콘텐츠) — getUiState.scratchpad 적재, 디바운스 저장.
     scratchpad: { text: '', updatedAt: null },
     _scratchSaveTimer: null,   // 입력 디바운스 타이머 핸들
@@ -1984,7 +1986,9 @@ function initBrowser() {
     if (store.mailView && store.mailView.open) app.appendChild(renderMailMessageModal());
     // [로드맵 Phase 1·K] 대시보드 내보내기/가져오기 모달.
     if (store.dashIO && store.dashIO.open) app.appendChild(renderDashboardIOModal());
-    // [로드맵 Phase 4·D] 커맨드 팔레트(Cmd+K) — 최상단 오버레이.
+    // [로드맵 Phase 4·I] 포커스(풀스크린) 위젯 오버레이.
+    if (store.focusWidget && store.focusWidget.open) app.appendChild(renderFocusOverlay());
+    // [로드맵 Phase 4·D] 커맨드 팔레트(Cmd+K) — 최상단 오버레이(포커스보다 위).
     if (store.palette && store.palette.open) app.appendChild(renderPalette());
     // 공용 확인 모달 — 최상단(파괴적 동작 승인).
     if (store.confirm && store.confirm.open) app.appendChild(renderConfirmModal());
@@ -2604,8 +2608,8 @@ function initBrowser() {
       if (!node) return;
       // data-home-section 은 고정 enum 값만(L-2/L-3: 스캔 유래 신뢰 못 할 데이터 아님). 드래그 이동 단위.
       var cell = el('div', { cls: 'home-section', attrs: { 'data-home-section': id } });
-      // [위젯 추가/제거] featureAdd 외 위젯엔 제거(×) 버튼 오버레이(호버 시 노출).
-      if (id !== 'featureAdd') cell.appendChild(widgetRemoveBtn(id));
+      // [위젯 추가/제거] featureAdd 외 위젯엔 제거(×) + [Phase 4·I] 포커스 버튼 오버레이(호버/편집 시 노출).
+      if (id !== 'featureAdd') { cell.appendChild(widgetRemoveBtn(id)); cell.appendChild(widgetFocusBtn(id)); }
       // [홈 위젯 크기] 콘텐츠 래퍼 — 높이 조절은 이 래퍼에 적용(제거 버튼·핸들은 absolute 라 높이 무관).
       var content = el('div', { cls: 'home-section__content' });
       content.appendChild(node);
@@ -4063,6 +4067,21 @@ function initBrowser() {
       attrs: { type: 'button', 'aria-label': meta.name + ' 위젯 홈에서 제거', title: '홈에서 제거' },
       on: { click: function (e) { e.stopPropagation(); onRemoveWidget(id); } },
       children: [svg([{ t: 'path', d: 'M18 6L6 18M6 6l12 12' }], { size: 13, stroke: '#78716c', sw: 2 })],
+    });
+  }
+  /** [로드맵 Phase 4·I] 위젯 포커스(풀스크린) 버튼 — 제거(×) 좌측. 호버/편집 시 노출(§3 코너 규약). */
+  function widgetFocusBtn(id) {
+    var meta = WIDGET_META[id] || { name: id };
+    return el('button', {
+      cls: 'widget-focus',
+      attrs: { type: 'button', 'aria-label': meta.name + ' 위젯 포커스(크게 보기)', title: '크게 보기' },
+      on: { click: function (e) { e.stopPropagation(); openFocusWidget(id); } },
+      children: [svg([
+        { t: 'path', d: 'M8 3H5a2 2 0 0 0-2 2v3' },
+        { t: 'path', d: 'M16 3h3a2 2 0 0 1 2 2v3' },
+        { t: 'path', d: 'M8 21H5a2 2 0 0 1-2-2v-3' },
+        { t: 'path', d: 'M16 21h3a2 2 0 0 0 2-2v-3' },
+      ], { size: 13, stroke: '#78716c', sw: 2 })],
     });
   }
 
@@ -8546,6 +8565,19 @@ function initBrowser() {
       var label = t === 'light' ? '라이트' : (t === 'dark' ? '다크' : '시스템');
       acts.push({ id: 'theme.' + t, title: '테마: ' + label, group: '앱', keywords: 'theme 테마 ' + t + ' ' + label, enabled: function () { return store.theme !== t; }, run: function () { setTheme(t); } });
     });
+    // [로드맵 Phase 4·I] 표시 중인 위젯 포커스(풀스크린) 액션.
+    var hidden = store.hiddenWidgets || [];
+    applyHomeLayout(store.homeLayout).forEach(function (id) {
+      if (id === 'featureAdd' || hidden.indexOf(id) >= 0) return;
+      var meta = WIDGET_META[id] || { name: id };
+      acts.push({ id: 'focus.' + id, title: '위젯 포커스: ' + meta.name, group: '포커스', keywords: 'focus fullscreen 포커스 크게 ' + id, run: function () { openFocusWidget(id); } });
+    });
+    // [로드맵 Phase 4·H] 딥링크 — 프로젝트로 점프(상세 드로어 열기). viewModels 유래.
+    (store.viewModels || []).forEach(function (vm) {
+      if (!vm || typeof vm.id !== 'string') return;
+      var nm = vm.name || vm.id;
+      acts.push({ id: 'project.' + vm.id, title: '프로젝트: ' + nm, group: '프로젝트', keywords: 'project jump 프로젝트 ' + nm, run: function () { openDrawer(vm.id); } });
+    });
     void onHome;
     return acts;
   }
@@ -8626,6 +8658,44 @@ function initBrowser() {
     else if (e.key === 'ArrowUp') { e.preventDefault(); store.palette.index = Math.max(0, store.palette.index - 1); patchPaletteActive(); }
     else if (e.key === 'Enter') { e.preventDefault(); runPaletteAction(results[store.palette.index]); }
     else if (e.key === 'Escape') { e.preventDefault(); closePalette(); }
+  }
+
+  /* ===== [로드맵 Phase 4·I] 포커스(풀스크린) 위젯 — 한 위젯을 오버레이로 크게 ===== */
+  function openFocusWidget(id) {
+    if (HOME_SECTION_IDS.indexOf(id) < 0 || id === 'featureAdd') return;
+    store.state.view = 'home';
+    store.focusWidget = { open: true, id: id };
+    store._focusShown = false;
+    // 포커스 대상이 숨김/미로드 위젯이면 표시되도록(지연 로드 위젯은 오버레이 진입 시 로드).
+    render();
+  }
+  function closeFocusWidget() {
+    store.focusWidget = { open: false, id: null };
+    store._focusShown = false;
+    render();
+    // 포커스 중 콘텐츠 높이가 바뀌었을 수 있어 홈 masonry 재측정(로드맵 §4 Phase4 요구).
+    scheduleHomeMasonryLayout();
+  }
+  function renderFocusOverlay() {
+    var id = store.focusWidget.id;
+    var meta = WIDGET_META[id] || { name: id };
+    var enter = !store._focusShown; store._focusShown = true;
+    var overlay = el('div', { cls: 'focusw-overlay', on: { click: function (e) { if (e.target === overlay) closeFocusWidget(); } } });
+    var panel = el('div', { cls: 'focusw' + (enter ? ' is-enter' : ''), attrs: { role: 'dialog', 'aria-modal': 'true', 'aria-label': meta.name + ' 포커스' } });
+    var head = el('div', { cls: 'focusw__head' });
+    head.appendChild(el('div', { cls: 'focusw__title', text: meta.name }));
+    head.appendChild(el('button', {
+      cls: 'focusw__close', text: '✕', attrs: { type: 'button', 'aria-label': '포커스 닫기' }, on: { click: closeFocusWidget },
+    }));
+    panel.appendChild(head);
+    // 컨테이너 쿼리 컨텍스트 재사용(.home-section__content) — 위젯이 넓은 폭에 반응(밀도 L 등).
+    var content = el('div', { cls: 'focusw__body home-section__content', attrs: { 'data-density': 'L' } });
+    var node = renderHomeSection(id);
+    if (node) content.appendChild(node);
+    panel.appendChild(content);
+    overlay.appendChild(panel);
+    setTimeout(function () { try { var c = panel.querySelector('.focusw__close'); if (c) c.focus(); } catch (_) { /* ignore */ } }, 0);
+    return overlay;
   }
 
   /** viewModels 빌드 직후 감지명을 캡처(별칭 해제 시 복원 기준). */
@@ -9269,6 +9339,7 @@ function initBrowser() {
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
     if (store.palette && store.palette.open) { closePalette(); return; }
+    if (store.focusWidget && store.focusWidget.open) { closeFocusWidget(); return; }
     if (store.showHelp) { closeHelp(); return; }
     if (store.state.selectedId) { closeDrawer(); return; }
     if (store.showSettings) { closeSettings(); return; }
