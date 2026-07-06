@@ -205,6 +205,8 @@ test('홈 위젯 반응형/높이 — 메일 위젯: 카드가 위젯 높이를 
   const CSS = fs.readFileSync(path.join(__dirname, '..', 'public', 'styles.css'), 'utf8');
   // .mail-region 이 카드를 세로로 늘림(카드 fill)
   assert.ok(/\.mail-region\s*\{[^}]*display:\s*flex/.test(CSS), 'mail-region flex 컬럼');
+  // [회귀 가드] mail-region 을 display:block 으로 되돌리는 후속 규칙이 없어야(카드 채움 무력화 방지).
+  assert.ok(!/\.mail-region\s*\{[^}]*display:\s*block/.test(CSS), 'mail-region 를 block 으로 재선언하는 규칙 없음');
   assert.ok(/\.mail-region\s*>\s*\*\s*\{[^}]*flex:\s*1 1 auto/.test(CSS), 'mail-region 자식(카드) 높이 채움');
   // 기본은 목록 캡, 높이 조절 시 채움
   assert.ok(/\.mail-list\s*\{[^}]*max-height:\s*264px[^}]*overflow-y:\s*auto/.test(CSS), '기본 목록 max-height 캡+스크롤');

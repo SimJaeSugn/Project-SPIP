@@ -537,8 +537,9 @@ body.home-resizing { cursor: nwse-resize; user-select: none; }
 /* [R-33] 커밋 SVG 차트(자작·외부 0). 막대 강조/툴팁은 chartBars 가 setAttribute/textContent 로 제어. */
 /* [M10-P4] patchRegion 교체 대상 영역(차트 호스트를 감쌈). 레이아웃 영향 없는 단순 래퍼. */
 .commit-chart-region { display: block; }
-/* [M11] 메일 섹션 patchRegion 교체 대상 영역(메일 카드를 감쌈). 단순 래퍼. */
-.mail-region { display: block; }
+/* [M11] 메일 섹션 patchRegion 교체 대상 영역(메일 카드를 감쌈).
+ *   .mail-region 스타일은 위 [홈 위젯 반응형/높이] 블록에서 정의(카드가 위젯 높이를 채우도록 flex 컬럼).
+ *   여기서 display:block 으로 되돌리면 카드 높이 채움이 무력화되므로 재선언 금지. */
 
 /* [M13] 브리핑 AI 카드(홈 히어로 영역). patchRegion 교체 대상은 .briefing-region. textContent 만. */
 .briefing-region { display: block; margin-top: 6px; }
