@@ -48,6 +48,30 @@ test('getCommitActivity — 빈 스냅샷 graceful', async () => {
   assert.deepStrictEqual({ ok: r.ok, repos: r.repos, total: r.total }, { ok: true, repos: 0, total: 0 });
 });
 
+// ── [로드맵 Phase 3·G] days 인자(커밋 히트맵 365일) ──
+test('getCommitActivity — args.days 로 범위 조절(하위호환 14 / 클램프 [1,366]) + 수집기에 전달', async () => {
+  // 기본(인자 없음) = 14일.
+  assert.strictEqual(insights.normalizeDays(undefined), insights.DEFAULT_DAYS);
+  // 클램프.
+  assert.strictEqual(insights.normalizeDays(0), insights.DEFAULT_DAYS);
+  assert.strictEqual(insights.normalizeDays(-3), insights.DEFAULT_DAYS);
+  assert.strictEqual(insights.normalizeDays(365), 365);
+  assert.strictEqual(insights.normalizeDays(9999), insights.MAX_DAYS);
+  assert.strictEqual(insights.normalizeDays(30.9), 30);
+  // days 가 수집기·일별 시리즈 길이에 반영.
+  let seenDays = null;
+  const ctx = {
+    store: storeOf([{ id: 'a', path: 'A' }]),
+    canonicalize: (p) => p,
+    collectCommitActivity: async (p, days) => { seenDays = days; return { ok: true, dates: ['2026-01-10'] }; },
+    nowMs: () => new Date(2026, 0, 10).getTime(),
+  };
+  const r = await insights.getCommitActivity(ctx, { days: 365 });
+  assert.strictEqual(seenDays, 365, '수집기에 days 전달');
+  assert.strictEqual(r.requestedDays, 365);
+  assert.strictEqual(r.days.length, 365, '일별 시리즈 365칸');
+});
+
 // ── [항목2] Claude Code 로컬 로그 토큰 사용량 ──
 
 test('getClaudeUsage — .claude 부재 homeDir → ok:true·available:false(graceful)', () => {

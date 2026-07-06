@@ -8,18 +8,18 @@ const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
 
-const { HOME_SECTION_IDS, applyHomeLayout, TOGGLEABLE_WIDGET_IDS, applyHomeWidgetSizes, computeHomeCols, homeDefaultSpan, HOME_MAX_COLS, applyDashboard, densityTier, DENSITY_M_MIN, DENSITY_L_MIN } = require('../public/app.js');
+const { HOME_SECTION_IDS, applyHomeLayout, TOGGLEABLE_WIDGET_IDS, applyHomeWidgetSizes, computeHomeCols, homeDefaultSpan, HOME_MAX_COLS, applyDashboard, densityTier, DENSITY_M_MIN, DENSITY_L_MIN, buildHeatmapModel, heatmapLevel } = require('../public/app.js');
 const realStore = require('../lib/common/uiStateStore');
 const APP_SRC = fs.readFileSync(path.join(__dirname, '..', 'public', 'app.js'), 'utf8');
 // 메인 계약(단일 신뢰 경계)과 동형인지 교차 확인.
 const STORE_SRC = fs.readFileSync(path.join(__dirname, '..', 'lib', 'common', 'uiStateStore.js'), 'utf8');
 
 // ── HOME_SECTION_IDS 계약 동형 ────────────────────────────────────────────
-// [SH-2] 셸프 위젯 2변형('shelf','shelfWide') + [Phase 3·G] 스크래치패드('scratchpad')를 featureAdd 앞에 → 11섹션 enum.
-const N_SECTIONS = 11;
-test('R-32 — HOME_SECTION_IDS: 11섹션 enum(배열 순서 = 기본 순서)', () => {
+// [SH-2] 셸프 2변형 + [Phase 3·G] 스크래치패드('scratchpad')·커밋 히트맵('commitHeatmap')을 featureAdd 앞에 → 12섹션 enum.
+const N_SECTIONS = 12;
+test('R-32 — HOME_SECTION_IDS: 12섹션 enum(배열 순서 = 기본 순서)', () => {
   assert.deepStrictEqual(HOME_SECTION_IDS,
-    ['attention', 'productivity', 'activity', 'todos', 'mail', 'disk', 'aiusage', 'shelf', 'shelfWide', 'scratchpad', 'featureAdd']);
+    ['attention', 'productivity', 'activity', 'todos', 'mail', 'disk', 'aiusage', 'shelf', 'shelfWide', 'scratchpad', 'commitHeatmap', 'featureAdd']);
 });
 
 test('R-32 — 렌더러 HOME_SECTION_IDS 가 메인 uiStateStore 와 동일 집합·순서', () => {
@@ -85,6 +85,66 @@ test('로드맵 Phase 3·C — 렌더러: layoutHomeMasonry 가 실측 셀폭→
   assert.ok(/cell\.dataset\.density\s*=\s*densityTier\(cellW\)/.test(body), 'densityTier(cellW) → data-density 부여');
 });
 
+// ── [로드맵 Phase 3·G] 통합 커밋 히트맵 — 순수 모델 + 렌더 배선 ──
+test('로드맵 Phase 3·G — heatmapLevel: 커밋 수 → 색 강도 레벨 0..4(고정 임계·단조)', () => {
+  assert.strictEqual(heatmapLevel(0), 0);
+  assert.strictEqual(heatmapLevel(1), 1);
+  assert.strictEqual(heatmapLevel(2), 1);
+  assert.strictEqual(heatmapLevel(3), 2);
+  assert.strictEqual(heatmapLevel(5), 2);
+  assert.strictEqual(heatmapLevel(6), 3);
+  assert.strictEqual(heatmapLevel(9), 3);
+  assert.strictEqual(heatmapLevel(10), 4);
+  assert.strictEqual(heatmapLevel(999), 4);
+  // 비유효 graceful → 0.
+  assert.strictEqual(heatmapLevel(-5), 0);
+  assert.strictEqual(heatmapLevel(NaN), 0);
+  assert.strictEqual(heatmapLevel('x'), 0);
+});
+
+test('로드맵 Phase 3·G — buildHeatmapModel: 주간 격자·요일 패딩·월 라벨·집계(순수)', () => {
+  // 2026-01-04(일)~2026-01-10(토) 7일 + 앞뒤. 첫날 2026-01-01(목=dow4) → 선행 null 4개.
+  const days = [
+    { date: '2026-01-01', count: 0 }, { date: '2026-01-02', count: 3 }, { date: '2026-01-03', count: 0 },
+    { date: '2026-01-04', count: 1 }, { date: '2026-01-05', count: 12 }, { date: '2026-01-06', count: 0 },
+    { date: '2026-01-07', count: 2 }, { date: '2026-01-08', count: 0 }, { date: '2026-01-09', count: 6 },
+  ];
+  const m = buildHeatmapModel(days);
+  // 선행 패딩 4 + 9일 = 13칸 → 2열(7,6). 첫 열 첫 4칸 null.
+  assert.strictEqual(m.weeks.length, 2);
+  for (let i = 0; i < 4; i++) assert.strictEqual(m.weeks[0][i], null, '첫날 요일 선행 패딩(목=4)');
+  assert.deepStrictEqual(m.weeks[0][4], { date: '2026-01-01', count: 0, level: 0 });
+  assert.deepStrictEqual(m.weeks[0][5], { date: '2026-01-02', count: 3, level: 2 });
+  // 집계.
+  assert.strictEqual(m.total, 0 + 3 + 0 + 1 + 12 + 0 + 2 + 0 + 6);
+  assert.strictEqual(m.activeDays, 5, 'count>0 인 날 수');
+  assert.strictEqual(m.days, 9);
+  // 월 라벨 — 첫 열에 1월.
+  assert.ok(m.months.some((x) => x.col === 0 && x.label === '1월'));
+  // 빈/손상 graceful.
+  assert.deepStrictEqual(buildHeatmapModel([]), { weeks: [], months: [], total: 0, activeDays: 0, days: 0 });
+  assert.deepStrictEqual(buildHeatmapModel(null).weeks, []);
+  assert.deepStrictEqual(buildHeatmapModel([{ date: 'bad', count: 5 }]).weeks, [], '형식 불량 날짜 폐기');
+});
+
+test('로드맵 Phase 3·G — 커밋 히트맵 위젯: 렌더·지연로드·365일 요청·반응형 스크롤·L-1', () => {
+  const CSS = fs.readFileSync(path.join(__dirname, '..', 'public', 'styles.css'), 'utf8');
+  assert.ok(HOME_SECTION_IDS.includes('commitHeatmap'), '렌더러 enum 에 commitHeatmap');
+  assert.strictEqual(homeDefaultSpan('commitHeatmap'), 2, '기본 2열(가로 캘린더)');
+  assert.ok(/function renderHomeCommitHeatmap\(/.test(APP_SRC), '히트맵 렌더 함수');
+  assert.ok(/case 'commitHeatmap':\s*return renderHomeCommitHeatmap\(\)/.test(APP_SRC), 'renderHomeSection case');
+  assert.ok(/commitHeatmap:\s*\{\s*name:/.test(APP_SRC), 'WIDGET_META.commitHeatmap');
+  // 지연 로드: 표시될 때만 + 365일 요청.
+  assert.ok(/function maybeLoadCommitHeatmap\(/.test(APP_SRC) && /homeWidgetVisible\('commitHeatmap'\)/.test(APP_SRC), '표시(visible)될 때만 로드');
+  assert.ok(/ipc\('getCommitActivity',\s*365\)/.test(APP_SRC), '365일 범위 요청');
+  assert.ok(/buildHeatmapModel\(/.test(fnBody('renderHomeCommitHeatmap', 3200)), '렌더가 순수 모델 사용');
+  // 반응형: 가로 스크롤 컨테이너(페이지 스크롤 안 남김) + 레벨 색 클래스.
+  assert.ok(/\.heatmap-scroll\s*\{[^}]*overflow-x:\s*auto/.test(CSS), '좁으면 내부 가로 스크롤');
+  assert.ok(/\.heatmap-cell\.lvl-4\s*\{/.test(CSS), '레벨 색 클래스');
+  // L-1: 색은 클래스, 데이터는 title/textContent(innerHTML 미사용).
+  assert.ok(!/renderHomeCommitHeatmap[\s\S]{0,3200}innerHTML/.test(APP_SRC), '히트맵 렌더 innerHTML 미사용(L-1)');
+});
+
 // ── [로드맵 Phase 3·G] 스크래치패드 메모 위젯 배선(렌더·IPC·반응형 계약·L-1) ──
 test('로드맵 Phase 3·G — 스크래치패드 위젯: 렌더 함수·WIDGET_META·case·하이드레이션·디바운스 저장', () => {
   const CSS = fs.readFileSync(path.join(__dirname, '..', 'public', 'styles.css'), 'utf8');
@@ -127,7 +187,7 @@ test('로드맵 Phase 3·C — 메일 위젯 밀도 소비: 요약 노드·시�
 
 // ── applyHomeLayout (순서 정규화, 메인 normalizeHomeLayout 과 동일 규칙) ──
 test('R-32 — applyHomeLayout: 유효 순열은 그대로 유지', () => {
-  const input = ['mail', 'attention', 'disk', 'todos', 'shelf', 'activity', 'productivity', 'aiusage', 'shelfWide', 'scratchpad', 'featureAdd'];
+  const input = ['mail', 'attention', 'disk', 'todos', 'shelf', 'activity', 'productivity', 'aiusage', 'shelfWide', 'scratchpad', 'commitHeatmap', 'featureAdd'];
   assert.deepStrictEqual(applyHomeLayout(input), input);
 });
 
@@ -136,7 +196,7 @@ test('R-32 — applyHomeLayout: 부분 순서는 나머지를 기본 순서로 �
   assert.strictEqual(out.length, N_SECTIONS);
   assert.deepStrictEqual(out.slice(0, 2), ['mail', 'todos']);
   // 나머지는 기본 순서 유지(중복 없이).
-  assert.deepStrictEqual(out, ['mail', 'todos', 'attention', 'productivity', 'activity', 'disk', 'aiusage', 'shelf', 'shelfWide', 'scratchpad', 'featureAdd']);
+  assert.deepStrictEqual(out, ['mail', 'todos', 'attention', 'productivity', 'activity', 'disk', 'aiusage', 'shelf', 'shelfWide', 'scratchpad', 'commitHeatmap', 'featureAdd']);
 });
 
 test('R-32 — applyHomeLayout: 화이트리스트 외·중복·비문자열 제거', () => {
@@ -158,7 +218,7 @@ test('R-32 — applyHomeLayout: 부재/비배열/빈 → 기본 순서(graceful)
 test('R-32 — renderHomeSection 이 모든 enum 섹션을 case 로 처리(누락 0)', () => {
   const start = APP_SRC.indexOf('function renderHomeSection(');
   assert.ok(start >= 0, 'renderHomeSection 함수가 있어야 한다');
-  const body = APP_SRC.slice(start, start + 700);
+  const body = APP_SRC.slice(start, start + 900);
   const caseIds = new Set((body.match(/case\s+'([a-zA-Z]+)'/g) || []).map((s) => s.replace(/case\s+'|'/g, '')));
   for (const id of HOME_SECTION_IDS) assert.ok(caseIds.has(id), 'renderHomeSection 누락 섹션: ' + id);
 });

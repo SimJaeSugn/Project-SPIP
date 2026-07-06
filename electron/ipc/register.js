@@ -186,8 +186,8 @@ function registerIpcHandlers(deps) {
   guard('spip:syncMailArchive', () => mailArchiveIpc.syncMailArchive(ctx));
   guard('spip:deleteMailArchiveItem', (args) => mailArchiveIpc.deleteMailArchiveItem(args, ctx));
 
-  // 홈 인사이트 — 최근 14일 커밋 빈도(등록 프로젝트 합산, git -C safeExec).
-  guard('spip:getCommitActivity', () => insightsIpc.getCommitActivity(ctx));
+  // 홈 인사이트 — 커밋 빈도(등록 프로젝트 합산, git -C safeExec). args.days 로 범위(기본 14=생산성 / 365=히트맵).
+  guard('spip:getCommitActivity', (args) => insightsIpc.getCommitActivity(ctx, args));
   // [항목2] 홈 인사이트 — Claude Code 로컬 로그 토큰 사용량 집계(읽기 전용·수치만).
   guard('spip:getClaudeUsage', () => insightsIpc.getClaudeUsage(ctx));
 

@@ -20,20 +20,31 @@ const claudeUsage = require('../../lib/ai/claudeUsage');
 
 const MAX_REPOS = 100;
 const DEFAULT_DAYS = 14;
+const MAX_DAYS = 366; // buildDailySeries 상한과 동일(1년 히트맵)
+
+/** 요청 일수 정규화(순수) — 유한 양수만, [1, MAX_DAYS] 클램프. 부재/손상은 기본(14일). */
+function normalizeDays(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n) || n <= 0) return DEFAULT_DAYS;
+  return Math.max(1, Math.min(MAX_DAYS, Math.floor(n)));
+}
 
 /**
  * spip:getCommitActivity — 스냅샷 프로젝트들의 최근 N일 커밋 빈도 합산.
+ *   [로드맵 Phase 3·G] args.days 로 범위 조절(기본 14=생산성 위젯, 365=커밋 히트맵). 인자 부재 시 하위호환(14일).
  * @param {object} ctx { store, config, logger, canonicalize?, collectCommitActivity?, nowMs? }
- * @returns {Promise<{ok:true, days:Array<{date,count}>, total:number, repos:number, scanned:number}>}
+ * @param {object} [args] { days?:number }
+ * @returns {Promise<{ok:true, days:Array<{date,count}>, total:number, repos:number, scanned:number, requestedDays:number}>}
  */
-async function getCommitActivity(ctx) {
+async function getCommitActivity(ctx, args) {
   ctx = ctx || {};
+  const days = normalizeDays(args && typeof args === 'object' ? args.days : undefined);
   const store = ctx.store;
   const projects = (store && typeof store.getProjects === 'function') ? store.getProjects() : [];
   const canonicalize = (typeof ctx.canonicalize === 'function') ? ctx.canonicalize : pathGuard.canonicalize;
   const collect = (typeof ctx.collectCommitActivity === 'function')
-    ? ctx.collectCommitActivity
-    : ((p) => commitActivity.collect(p, { config: ctx.config, logger: ctx.logger, days: DEFAULT_DAYS }));
+    ? ((p) => ctx.collectCommitActivity(p, days))
+    : ((p) => commitActivity.collect(p, { config: ctx.config, logger: ctx.logger, days }));
   const nowMs = (typeof ctx.nowMs === 'function') ? ctx.nowMs() : Date.now();
 
   const allDates = [];
@@ -53,10 +64,11 @@ async function getCommitActivity(ctx) {
   }
   return {
     ok: true,
-    days: commitActivity.buildDailySeries(allDates, DEFAULT_DAYS, nowMs),
+    days: commitActivity.buildDailySeries(allDates, days, nowMs),
     total: allDates.length,
     repos,
     scanned,
+    requestedDays: days,
   };
 }
 
@@ -82,4 +94,4 @@ function getClaudeUsage(ctx) {
   return Object.assign({ ok: true }, res);
 }
 
-module.exports = { getCommitActivity, getClaudeUsage, MAX_REPOS, DEFAULT_DAYS };
+module.exports = { getCommitActivity, getClaudeUsage, normalizeDays, MAX_REPOS, DEFAULT_DAYS, MAX_DAYS };

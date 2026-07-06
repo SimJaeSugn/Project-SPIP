@@ -438,6 +438,31 @@ input, button, select { font-family: inherit; }
 .scratch-input:focus { border-color: #c7c9f5; background: #fff; }
 /* 높이 조절 위젯(.--sized)에서는 textarea 가 카드를 채우고 넘치면 내부 스크롤. */
 .home-section__content--sized .scratch-input { min-height: 0; }
+
+/* [로드맵 Phase 3·G] 통합 커밋 히트맵 — GitHub 스타일 주간 캘린더. 좁으면 .heatmap-scroll 내부 가로 스크롤. */
+.heatmap-scroll { overflow-x: auto; overflow-y: hidden; padding-bottom: 4px; }
+.heatmap-inner { display: inline-flex; flex-direction: column; gap: 4px; }
+.heatmap-toprow { display: flex; }
+.heatmap-wdspacer { flex: 0 0 18px; }
+.heatmap-months { display: flex; gap: 3px; }
+.heatmap-mlabel { flex: 0 0 11px; font-size: 9.5px; color: #a8a29e; white-space: nowrap; overflow: visible; }
+.heatmap-bodyrow { display: flex; gap: 4px; }
+.heatmap-wdcol { display: flex; flex-direction: column; gap: 3px; flex: 0 0 14px; }
+.heatmap-wd { height: 11px; font-size: 9px; line-height: 11px; color: #a8a29e; }
+.heatmap-grid { display: flex; gap: 3px; }
+.heatmap-col { display: flex; flex-direction: column; gap: 3px; }
+.heatmap-cell { width: 11px; height: 11px; border-radius: 2px; background: #f0efed; flex: 0 0 auto; }
+.heatmap-cell--pad { background: transparent; }
+.heatmap-cell.lvl-0 { background: #f0efed; }
+.heatmap-cell.lvl-1 { background: #c7d2fe; }
+.heatmap-cell.lvl-2 { background: #a5b4fc; }
+.heatmap-cell.lvl-3 { background: #818cf8; }
+.heatmap-cell.lvl-4 { background: #4f46e5; }
+.heatmap-legend { display: flex; align-items: center; gap: 3px; justify-content: flex-end; margin-top: 8px; }
+.heatmap-legend .heatmap-cell { width: 10px; height: 10px; }
+/* 밀도 S(아주 좁음): 요일 라벨 접어 격자 폭 확보(격자는 어차피 가로 스크롤). */
+.home-section[data-density="S"] .heatmap-wdcol,
+.home-section[data-density="S"] .heatmap-wdspacer { display: none; }
 /* [홈 위젯 크기] 우하단 리사이즈 핸들 — 평소 옅게, 호버/드래그 시 강조. */
 .home-resize {
   position: absolute; right: 3px; bottom: 3px; z-index: 4;

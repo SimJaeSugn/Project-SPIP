@@ -127,8 +127,8 @@ contextBridge.exposeInMainWorld('spip', {
     mailbox: (mailbox == null ? '' : String(mailbox)),
     uid: (uid == null || uid === '' ? '' : Number(uid)),
   }),
-  // 홈 인사이트 — 최근 14일 커밋 빈도 시계열(인자 없음).
-  getCommitActivity: () => ipcRenderer.invoke('spip:getCommitActivity'),
+  // 홈 인사이트 — 커밋 빈도 시계열. days 미지정=14일(생산성 위젯), 지정 시 [1,366] 범위(예 365=커밋 히트맵).
+  getCommitActivity: (days) => ipcRenderer.invoke('spip:getCommitActivity', (days == null ? {} : { days: Number(days) })),
   // [항목2] 홈 인사이트 — Claude Code 로컬 로그 토큰 사용량 집계(인자 없음·읽기 전용).
   getClaudeUsage: () => ipcRenderer.invoke('spip:getClaudeUsage'),
 

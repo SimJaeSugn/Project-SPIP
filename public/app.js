@@ -659,7 +659,7 @@ function shouldPollCommit(view, visible) {
  */
 // [SH-2] 즐겨찾기 셸프 위젯 2변형('shelf'=일반 컬럼, 'shelfWide'=전체폭 스팬)을 featureAdd 앞에 추가.
 //   둘은 동일 셸프 데이터·로직 공유(폭만 다름)·둘 다 기본 숨김(메인 uiStateStore가 첫 실행 시 hiddenWidgets 시드).
-const HOME_SECTION_IDS = ['attention', 'productivity', 'activity', 'todos', 'mail', 'disk', 'aiusage', 'shelf', 'shelfWide', 'scratchpad', 'featureAdd'];
+const HOME_SECTION_IDS = ['attention', 'productivity', 'activity', 'todos', 'mail', 'disk', 'aiusage', 'shelf', 'shelfWide', 'scratchpad', 'commitHeatmap', 'featureAdd'];
 
 // [위젯 추가/제거] 토글 가능한 콘텐츠 위젯 메타(갤러리·제거 UI용). 'featureAdd'는 추가 트리거라 제외(항상 표시).
 //   메인 uiStateStore.TOGGLEABLE_WIDGET_IDS 와 동형(드리프트 0 — homeLayout-front 테스트가 교차검증).
@@ -675,6 +675,7 @@ const WIDGET_META = {
   shelf: { name: '즐겨찾기 셸프', desc: '사이트·폴더·파일을 한 셸프에서 즐겨찾기' },
   shelfWide: { name: '즐겨찾기 셸프 (와이드)', desc: '셸프를 전체폭으로 — 더 많은 즐겨찾기를 한눈에' },
   scratchpad: { name: '스크래치패드 메모', desc: '자유롭게 적어두는 로컬 메모 — 자동 저장' },
+  commitHeatmap: { name: '통합 커밋 히트맵', desc: '전 프로젝트 커밋을 1년 캘린더로 한눈에' },
 };
 
 /**
@@ -725,8 +726,12 @@ const HOME_ROW_UNIT = 8;      // masonry 미세 행 단위(px) — 행 스팬 �
 const HOME_H_MIN = 120;       // 사용자 지정 높이 하한(px)
 const HOME_H_MAX = 1600;      // 상한(px)
 
-/** shelfWide 는 기본 전체폭, 그 외는 기본 1열(사용자 미조절 시 기본 스팬). */
-function homeDefaultSpan(id) { return id === 'shelfWide' ? HOME_MAX_COLS : 1; }
+/** shelfWide 는 기본 전체폭, 커밋 히트맵은 기본 2열(가로로 긴 캘린더), 그 외는 기본 1열(사용자 미조절 시 기본 스팬). */
+function homeDefaultSpan(id) {
+  if (id === 'shelfWide') return HOME_MAX_COLS;
+  if (id === 'commitHeatmap') return 2;
+  return 1;
+}
 
 /** 콘텐츠 너비(px)에서 반응형 열 수 산출(순수) — 최소열너비 기준, [1, HOME_MAX_COLS] 캡. */
 function computeHomeCols(contentW) {
@@ -746,6 +751,61 @@ function densityTier(px) {
   if (w >= DENSITY_L_MIN) return 'L';
   if (w >= DENSITY_M_MIN) return 'M';
   return 'S';
+}
+
+/* [로드맵 Phase 3·G] 통합 커밋 히트맵 — 일별 커밋 수를 GitHub 스타일 주간 캘린더 격자로 변환(순수·헤드리스).
+ *   입력 days=[{date:'YYYY-MM-DD', count}] (오래된→최신, buildDailySeries 출력). 색 강도는 고정 임계(집계값). */
+const HEATMAP_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const HEATMAP_MONTHS = ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월'];
+/** 커밋 수 → 색 강도 레벨 0..4(순수). 전 프로젝트 합산이라 임계를 다소 높게. */
+function heatmapLevel(count) {
+  const c = (typeof count === 'number' && count > 0) ? count : 0;
+  if (c === 0) return 0;
+  if (c <= 2) return 1;
+  if (c <= 5) return 2;
+  if (c <= 9) return 3;
+  return 4;
+}
+/**
+ * 일별 시계열 → { weeks:[[cell|null x7]], months:[{col,label}], total, activeDays, days }.
+ *   weeks = 열(주). 각 열은 7행(0=일..6=토). 첫 날 요일만큼 선행 null 패딩(GitHub식 일요일 시작).
+ *   cell = { date, count, level }. months 는 열이 새 달로 넘어가는 지점 라벨.
+ */
+function buildHeatmapModel(days) {
+  const valid = [];
+  if (Array.isArray(days)) {
+    for (const d of days) {
+      if (d && typeof d === 'object' && HEATMAP_DATE_RE.test(d.date)) {
+        const count = (typeof d.count === 'number' && d.count > 0) ? Math.floor(d.count) : 0;
+        valid.push({ date: d.date, count: count });
+      }
+    }
+  }
+  if (valid.length === 0) return { weeks: [], months: [], total: 0, activeDays: 0, days: 0 };
+  // 첫 날 요일만큼 선행 패딩 후 7개씩 열로 청크.
+  const first = valid[0].date.split('-');
+  const firstDow = new Date(Number(first[0]), Number(first[1]) - 1, Number(first[2])).getDay();
+  const flat = [];
+  for (let i = 0; i < firstDow; i++) flat.push(null);
+  let total = 0;
+  let activeDays = 0;
+  for (const v of valid) {
+    total += v.count;
+    if (v.count > 0) activeDays += 1;
+    flat.push({ date: v.date, count: v.count, level: heatmapLevel(v.count) });
+  }
+  const weeks = [];
+  for (let i = 0; i < flat.length; i += 7) weeks.push(flat.slice(i, i + 7));
+  // 월 라벨 — 각 열의 첫 유효 셀 달이 직전 열과 다르면 라벨.
+  const months = [];
+  let prevMonth = -1;
+  for (let col = 0; col < weeks.length; col++) {
+    const cell = weeks[col].find((c) => c);
+    if (!cell) continue;
+    const m = Number(cell.date.split('-')[1]) - 1;
+    if (m !== prevMonth) { months.push({ col: col, label: HEATMAP_MONTHS[m] || '' }); prevMonth = m; }
+  }
+  return { weeks: weeks, months: months, total: total, activeDays: activeDays, days: valid.length };
 }
 
 /**
@@ -1580,6 +1640,10 @@ function initBrowser() {
     commitActivity: null,        // {days:[{date,count}],total,repos,scanned}
     busyCommitActivity: false,   // getCommitActivity in-flight
     commitActivityLoaded: false, // 1회 로드 표식
+    // [로드맵 Phase 3·G] 통합 커밋 히트맵 — 1년(365일) 커밋 빈도(getCommitActivity days=365). 위젯 표시 시에만 지연 로드(무거운 git).
+    commitHeatmap: null,         // {days:[{date,count}],total,repos,scanned}
+    busyCommitHeatmap: false,    // in-flight
+    commitHeatmapLoaded: false,  // 1회 로드 표식
     langPrev: {},                // 직전 스캔 언어 카운트(추세 ▲▼ 비교용)
     // [항목3] 연결된 LLM 모델 토큰 사용량(getUiState.aiUsage 적재 — 브리핑 생성 시 누적).
     aiUsage: null,               // {calls,promptTokens,completionTokens,totalTokens,lastModel,lastAt}
@@ -2355,6 +2419,7 @@ function initBrowser() {
     maybeInitBriefing();
     maybeLoadMailSummary();
     maybeLoadCommitActivity();
+    maybeLoadCommitHeatmap();
     maybeLoadClaudeUsage();
     maybeLoadShelf();
     var vms = store.viewModels || [];
@@ -2522,6 +2587,7 @@ function initBrowser() {
       case 'shelf':        return renderHomeShelf();
       case 'shelfWide':    return renderHomeShelf();
       case 'scratchpad':   return renderHomeScratchpad();
+      case 'commitHeatmap': return renderHomeCommitHeatmap();
       case 'featureAdd':   return renderHomeFeatureAdd();
       default:             return null;
     }
@@ -3406,6 +3472,26 @@ function initBrowser() {
   function maybeLoadCommitActivity() {
     if (bridgeHas('getCommitActivity') && !store.commitActivityLoaded && !store.busyCommitActivity) refreshCommitActivity();
   }
+  /** [로드맵 Phase 3·G] 커밋 히트맵 — 위젯이 실제 표시(레이아웃 내 & 미숨김)될 때만 1년치 로드(무거운 365일 git 회피). */
+  function homeWidgetVisible(id) {
+    var hidden = store.hiddenWidgets || [];
+    return applyHomeLayout(store.homeLayout).indexOf(id) >= 0 && hidden.indexOf(id) < 0;
+  }
+  function maybeLoadCommitHeatmap() {
+    if (!bridgeHas('getCommitActivity') || store.commitHeatmapLoaded || store.busyCommitHeatmap) return;
+    if (!homeWidgetVisible('commitHeatmap')) return; // opt-in·숨김이면 무거운 호출 회피
+    refreshCommitHeatmap();
+  }
+  async function refreshCommitHeatmap() {
+    if (!bridgeHas('getCommitActivity') || store.busyCommitHeatmap) return;
+    store.busyCommitHeatmap = true;
+    if (store.state.view === 'home') render(); // 로딩 표시
+    var res = await ipc('getCommitActivity', 365);
+    store.busyCommitHeatmap = false;
+    store.commitHeatmapLoaded = true;
+    store.commitHeatmap = (res && res.ok) ? res : { days: [], total: 0, repos: 0 };
+    if (store.state.view === 'home') render();
+  }
   // [항목2] Claude Code 로컬 로그 토큰 사용량 — 무거운 스캔이라 홈 진입 시 1회만 자동 로드(수동 새로고침 가능).
   function maybeLoadClaudeUsage() {
     if (bridgeHas('getClaudeUsage') && !store.claudeUsageLoaded && !store.busyClaudeUsage) refreshClaudeUsage();
@@ -3645,6 +3731,87 @@ function initBrowser() {
     split.appendChild(el('div', { cls: 'hw-vrule', style: 'width:1px;background:#f0efed;flex:0 0 auto;' })); // [반응형] 스택 시 숨김
     split.appendChild(right);
     card.appendChild(split);
+    return card;
+  }
+
+  /* [로드맵 Phase 3·G] 통합 커밋 히트맵 위젯 — 전 프로젝트 커밋(365일)을 GitHub 스타일 캘린더로.
+   *   데이터는 getCommitActivity(365) 지연 로드(무거운 git, 표시 시에만). 모델은 buildHeatmapModel(순수).
+   *   반응형: 격자는 .heatmap-scroll(overflow-x:auto)로 좁으면 내부 가로 스크롤(페이지 스크롤 안 남김 — CLAUDE.md UI 규약).
+   *   L-1: 라벨·툴팁은 textContent/title(고정 팔레트·검증 날짜만). 색은 setAttribute 아닌 클래스(lvl-0..4). */
+  var HEATMAP_WD = ['일', '월', '화', '수', '목', '금', '토'];
+  function renderHomeCommitHeatmap() {
+    var card = el('div', { style: HOME_CARD + 'padding:18px 18px 14px;display:flex;flex-direction:column;min-height:0;' });
+    var loaded = store.commitHeatmapLoaded;
+    var busy = store.busyCommitHeatmap;
+    var data = store.commitHeatmap || { days: [], total: 0, repos: 0, scanned: 0 };
+    var model = buildHeatmapModel(data.days);
+
+    // 헤더 — 제목 + 요약 + 새로고침.
+    var head = el('div', { style: 'display:flex;align-items:center;gap:10px;margin-bottom:12px;' });
+    head.appendChild(el('div', { text: '커밋 히트맵', style: 'font-size:15px;font-weight:600;flex:1 1 0%;' }));
+    if (loaded && model.total > 0) {
+      head.appendChild(el('span', { text: model.total + '커밋 · ' + model.activeDays + '일 활동', style: HOME_MONO + 'font-size:11px;color:#78716c;flex:0 0 auto;' }));
+    }
+    head.appendChild(el('button', {
+      cls: 'home-mail-more', text: busy ? '집계 중…' : '새로고침',
+      attrs: Object.assign({ type: 'button', 'aria-label': '커밋 히트맵 새로고침' }, busy ? { disabled: 'disabled' } : {}),
+      style: 'appearance:none;border:none;background:none;cursor:' + (busy ? 'default' : 'pointer') + ';font-size:12px;font-weight:600;color:' + (busy ? '#a8a29e' : '#4f46e5') + ';padding:0 2px;',
+      on: { click: function () { if (!busy) { store.commitHeatmapLoaded = false; refreshCommitHeatmap(); } } },
+    }));
+    card.appendChild(head);
+
+    // 본문 — 로딩/빈/격자.
+    if (!loaded && busy) {
+      card.appendChild(el('div', { text: '커밋을 집계하는 중…', style: 'font-size:12px;color:#a8a29e;padding:8px 2px;' }));
+      return card;
+    }
+    if (!loaded) {
+      card.appendChild(el('div', { text: '‘새로고침’으로 전 프로젝트 커밋을 집계합니다.', style: 'font-size:12px;color:#a8a29e;padding:8px 2px;' }));
+      return card;
+    }
+    if (model.weeks.length === 0) {
+      card.appendChild(el('div', { text: (data.scanned ? '최근 1년 커밋 기록이 없습니다.' : '등록된 프로젝트가 없습니다.'), style: 'font-size:12px;color:#a8a29e;padding:8px 2px;' }));
+      return card;
+    }
+
+    var scroll = el('div', { cls: 'heatmap-scroll spip-scroll' });
+    var inner = el('div', { cls: 'heatmap-inner' });
+    // 월 라벨 행 — 좌측 요일 라벨 폭만큼 밀고, 열마다 span(달 시작 열에만 텍스트).
+    var monthAt = {};
+    model.months.forEach(function (m) { monthAt[m.col] = m.label; });
+    var topRow = el('div', { cls: 'heatmap-toprow' });
+    topRow.appendChild(el('div', { cls: 'heatmap-wdspacer' }));
+    var monthRow = el('div', { cls: 'heatmap-months' });
+    for (var c = 0; c < model.weeks.length; c++) monthRow.appendChild(el('span', { cls: 'heatmap-mlabel', text: monthAt[c] || '' }));
+    topRow.appendChild(monthRow);
+    inner.appendChild(topRow);
+    // 본문 행 — 좌측 요일(월·수·금) + 주 열 격자.
+    var bodyRow = el('div', { cls: 'heatmap-bodyrow' });
+    var wdCol = el('div', { cls: 'heatmap-wdcol' });
+    for (var r = 0; r < 7; r++) wdCol.appendChild(el('span', { cls: 'heatmap-wd', text: (r === 1 || r === 3 || r === 5) ? HEATMAP_WD[r] : '' }));
+    bodyRow.appendChild(wdCol);
+    var grid = el('div', { cls: 'heatmap-grid', attrs: { role: 'img', 'aria-label': '최근 1년 커밋 히트맵: 총 ' + model.total + '커밋, ' + model.activeDays + '일 활동' } });
+    model.weeks.forEach(function (week) {
+      var col = el('div', { cls: 'heatmap-col' });
+      for (var i = 0; i < 7; i++) {
+        var cell = week[i];
+        var sq = el('div', { cls: 'heatmap-cell' + (cell ? ' lvl-' + cell.level : ' heatmap-cell--pad') });
+        if (cell) sq.setAttribute('title', cell.date + ' · 커밋 ' + cell.count + '건');
+        col.appendChild(sq);
+      }
+      grid.appendChild(col);
+    });
+    bodyRow.appendChild(grid);
+    inner.appendChild(bodyRow);
+    scroll.appendChild(inner);
+    card.appendChild(scroll);
+
+    // 범례 — 적음 ▢▢▢▢▢ 많음.
+    var legend = el('div', { cls: 'heatmap-legend' });
+    legend.appendChild(el('span', { text: '적음', style: 'font-size:10px;color:#a8a29e;' }));
+    for (var L = 0; L <= 4; L++) legend.appendChild(el('div', { cls: 'heatmap-cell lvl-' + L }));
+    legend.appendChild(el('span', { text: '많음', style: 'font-size:10px;color:#a8a29e;' }));
+    card.appendChild(legend);
     return card;
   }
 
@@ -8964,6 +9131,9 @@ if (typeof module !== 'undefined' && module.exports) {
     densityTier,
     DENSITY_M_MIN,
     DENSITY_L_MIN,
+    // [로드맵 Phase 3·G] 커밋 히트맵 모델(순수 — 일별 시계열→주간 격자·레벨, 헤드리스 테스트)
+    buildHeatmapModel,
+    heatmapLevel,
     // [위젯 추가/제거] 토글 가능 위젯 목록(메인 동형 교차검증용)
     TOGGLEABLE_WIDGET_IDS,
     // [SH-2] 즐겨찾기 셸프 위젯 순수 뷰모델/헬퍼(헤드리스 테스트)
