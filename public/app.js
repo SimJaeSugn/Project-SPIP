@@ -777,6 +777,24 @@ function applyWidgetPositions(input) {
   return out;
 }
 
+/** [로드맵 Phase 5·M] 그룹 방어 적재 — [{id,name,collapsed,members[]}]. members 는 토글 위젯·그룹 간 유일(메인이 단일 신뢰 경계). */
+function applyGroups(input) {
+  if (!Array.isArray(input)) return [];
+  const out = [];
+  const claimed = new Set();
+  const seen = new Set();
+  for (const g of input) {
+    if (!g || typeof g !== 'object' || typeof g.id !== 'string' || seen.has(g.id)) continue;
+    seen.add(g.id);
+    const members = [];
+    if (Array.isArray(g.members)) for (const m of g.members) {
+      if (TOGGLEABLE_WIDGET_IDS.indexOf(m) >= 0 && !claimed.has(m) && members.indexOf(m) < 0) { members.push(m); claimed.add(m); }
+    }
+    out.push({ id: g.id, name: (typeof g.name === 'string' && g.name) ? g.name : '그룹', collapsed: !!g.collapsed, members: members });
+  }
+  return out;
+}
+
 /* [홈 위젯 크기] 폭(열 스팬)·높이(px) — homeLayout(순서)·hiddenWidgets(표시)와 직교. 메인 uiStateStore 와 상수 동형. */
 const HOME_MAX_COLS = 4;      // 폭 스팬 상한(반응형 최대 열 수)
 const HOME_COL_MIN_W = 300;   // 열 최소 너비(px) — 이 폭 기준으로 반응형 열 수 산출
@@ -1776,6 +1794,11 @@ function initBrowser() {
     layoutMode: 'masonry',
     widgetPositions: {},         // { id:{x,y} } 프리폼 그리드 셀 좌표
     _freeDrag: null,             // 프리폼 드래그 세션
+    // [로드맵 Phase 5·M] 활성 프리셋 그룹/섹션 [{id,name,collapsed,members[]}]. 접기 섹션으로 표시.
+    groups: [],
+    _groupRenameId: null,        // 인라인 이름변경 중인 그룹 id
+    _groupRenameVal: null,
+    _groupAddFor: null,          // 위젯 추가 피커가 열린 그룹 id
     // [로드맵 Phase 3·G] 스크래치패드 메모(전역 콘텐츠) — getUiState.scratchpad 적재, 디바운스 저장.
     scratchpad: { text: '', updatedAt: null },
     _scratchSaveTimer: null,   // 입력 디바운스 타이머 핸들
@@ -2660,6 +2683,13 @@ function initBrowser() {
         on: { click: function () { onAutoArrange(); } },
       }));
     }
+    // [로드맵 Phase 5·M] 그룹은 격자(masonry) 모드에서만 — 편집 모드에서 그룹 추가.
+    if (editing && !freeform && bridgeHas('setGroups')) {
+      editBar.appendChild(el('button', {
+        cls: 'home-editmode', text: '+ 그룹', attrs: { type: 'button', 'aria-label': '그룹 추가' },
+        on: { click: function () { onAddGroup(); } },
+      }));
+    }
     editBar.appendChild(el('button', {
       cls: 'home-editmode' + (editing ? ' is-on' : ''),
       text: editing ? '편집 완료' : '위젯 편집',
@@ -2669,9 +2699,14 @@ function initBrowser() {
     wrap.appendChild(editBar);
     var grid = el('div', { cls: 'home-masonry' + (editing ? ' home-masonry--editing' : '') + (freeform ? ' home-masonry--freeform' : ''), style: 'padding:20px 30px 36px;' });
     var hidden = store.hiddenWidgets || [];
+    // [로드맵 Phase 5·M] 그룹은 masonry 모드에서만 적용. 그룹 소속 위젯은 메인 격자에서 빼고 아래 그룹 섹션에 렌더.
+    var groups = (!freeform && Array.isArray(store.groups)) ? store.groups : [];
+    var groupedOf = {};
+    groups.forEach(function (g) { (g.members || []).forEach(function (m) { groupedOf[m] = g.id; }); });
     applyHomeLayout(store.homeLayout).forEach(function (id) {
       // [위젯 추가/제거] 미적용(숨김) 콘텐츠 위젯은 건너뜀. featureAdd(추가 트리거)는 항상 표시.
       if (id !== 'featureAdd' && hidden.indexOf(id) >= 0) return;
+      if (groupedOf[id]) return; // [Phase 5·M] 그룹 소속 위젯은 그룹 섹션에서 렌더
       var node = renderHomeSection(id, reclaim);
       if (!node) return;
       // data-home-section 은 고정 enum 값만(L-2/L-3: 스캔 유래 신뢰 못 할 데이터 아님). 드래그 이동 단위.
@@ -2693,6 +2728,8 @@ function initBrowser() {
       grid.appendChild(cell);
     });
     wrap.appendChild(grid);
+    // [로드맵 Phase 5·M] 그룹 섹션(격자 아래 전체폭 접기 밴드) — masonry 모드에서만.
+    if (!freeform && (groups.length > 0)) wrap.appendChild(renderHomeGroups(groups, hidden, reclaim, editing));
 
     main.appendChild(wrap);
     root.appendChild(main);
@@ -8534,6 +8571,8 @@ function initBrowser() {
     // [로드맵 Phase 5·B] 활성 프리셋 레이아웃 모드·프리폼 좌표 적재.
     store.layoutMode = applyLayoutMode(res && res.ok !== false ? res.layoutMode : null);
     store.widgetPositions = applyWidgetPositions(res && res.ok !== false ? res.homeWidgetPositions : null);
+    // [로드맵 Phase 5·M] 활성 프리셋 그룹 적재.
+    store.groups = applyGroups(res && res.ok !== false ? res.homeWidgetGroups : null);
     // [항목3] 연결된 LLM 모델 토큰 사용량 누적 적재(브리핑 생성 시 메인이 누적·영속).
     store.aiUsage = (res && res.ok !== false && res.aiUsage && typeof res.aiUsage === 'object') ? res.aiUsage : null;
     // [M13] 브리핑 carry-over 항목(open) 적재 — 영속 단일 출처. 실시간 생성상태는 push 로 갱신.
@@ -8558,6 +8597,7 @@ function initBrowser() {
     // [로드맵 Phase 5·B] 프리셋 전환/변경 시 레이아웃 모드·좌표도 활성 프리셋 기준으로 스왑.
     store.layoutMode = applyLayoutMode(res.layoutMode);
     store.widgetPositions = applyWidgetPositions(res.homeWidgetPositions);
+    store.groups = applyGroups(res.homeWidgetGroups); // [Phase 5·M] 그룹도 활성 프리셋 기준 스왑
     store._presetRenameId = null;
     render();
     return true;
@@ -8593,6 +8633,135 @@ function initBrowser() {
     var v = (store._presetRenameVal || '').trim();
     store._presetRenameId = null;
     if (v) onRenamePreset(id, v); else render();
+  }
+
+  // ── [로드맵 Phase 5·M] 그룹/섹션 — 전체폭 접기 밴드. 위젯을 묶고 접어 홈을 정돈. 검증 단일 신뢰 경계는 메인(normalizeGroups). ──
+  function genGroupId() { return 'g' + Date.now().toString(36) + Math.floor(Math.random() * 1e8).toString(36); }
+  /** 그룹 배열 영속(낙관적) — 메인 normalizeGroups 가 단일 신뢰 경계. */
+  function commitGroups(next) {
+    store.groups = applyGroups(next);
+    render();
+    if (!bridgeHas('setGroups')) return;
+    ipc('setGroups', next).then(function (res) {
+      if (res && res.ok && Array.isArray(res.homeWidgetGroups)) { store.groups = applyGroups(res.homeWidgetGroups); render(); }
+    }).catch(function () { /* graceful */ });
+  }
+  function onAddGroup() {
+    if (!bridgeHas('setGroups')) return;
+    if ((store.groups || []).length >= 12) { toast('그룹이 너무 많습니다.', true); return; }
+    var g = { id: genGroupId(), name: '새 그룹', collapsed: false, members: [] };
+    commitGroups((store.groups || []).concat([g]));
+  }
+  function onToggleGroupCollapse(id) {
+    commitGroups((store.groups || []).map(function (g) { return g.id === id ? Object.assign({}, g, { collapsed: !g.collapsed }) : g; }));
+  }
+  function onRenameGroup(id, name) {
+    var v = (name || '').trim();
+    store._groupRenameId = null; store._groupRenameVal = null;
+    if (!v) { render(); return; }
+    commitGroups((store.groups || []).map(function (g) { return g.id === id ? Object.assign({}, g, { name: v }) : g; }));
+  }
+  function commitGroupRename(id) {
+    var v = (store._groupRenameVal || '').trim();
+    store._groupRenameId = null;
+    if (v) onRenameGroup(id, v); else render();
+  }
+  function onDeleteGroup(id) {
+    if (store._groupAddFor === id) store._groupAddFor = null;
+    commitGroups((store.groups || []).filter(function (g) { return g.id !== id; }));
+  }
+  function onAddToGroup(groupId, widgetId) {
+    store._groupAddFor = null;
+    commitGroups((store.groups || []).map(function (g) {
+      // 다른 그룹에서 제거 후 대상 그룹에 추가(위젯은 한 그룹에만).
+      var members = (g.members || []).filter(function (m) { return m !== widgetId; });
+      if (g.id === groupId && members.indexOf(widgetId) < 0) members = members.concat([widgetId]);
+      return Object.assign({}, g, { members: members });
+    }));
+  }
+  function onRemoveFromGroup(widgetId) {
+    commitGroups((store.groups || []).map(function (g) { return Object.assign({}, g, { members: (g.members || []).filter(function (m) { return m !== widgetId; }) }); }));
+  }
+  /** 그룹 섹션 렌더 — 각 그룹을 전체폭 접기 밴드로. 멤버 위젯은 내부 auto-fit 격자. */
+  function renderHomeGroups(groups, hidden, reclaim, editing) {
+    var wrap = el('div', { cls: 'home-groups', style: 'padding:0 30px 30px;' });
+    groups.forEach(function (g) {
+      var block = el('div', { cls: 'home-group' + (g.collapsed ? ' is-collapsed' : '') });
+      var head = el('div', { cls: 'home-group__head' });
+      head.appendChild(el('button', {
+        cls: 'home-group__chev', text: g.collapsed ? '▶' : '▼',
+        attrs: { type: 'button', 'aria-label': g.collapsed ? '펼치기' : '접기', 'aria-expanded': String(!g.collapsed) },
+        on: { click: function () { onToggleGroupCollapse(g.id); } },
+      }));
+      if (editing && store._groupRenameId === g.id) {
+        var inp = el('input', {
+          cls: 'home-group__rename', attrs: { type: 'text', 'aria-label': '그룹 이름', maxlength: '60', autocomplete: 'off', spellcheck: 'false' },
+          on: {
+            click: function (e) { e.stopPropagation(); },
+            input: function (e) { store._groupRenameVal = e.target.value; },
+            keydown: function (e) { e.stopPropagation(); if (e.key === 'Enter') { e.preventDefault(); commitGroupRename(g.id); } else if (e.key === 'Escape') { e.preventDefault(); store._groupRenameId = null; render(); } },
+            blur: function () { if (store._groupRenameId === g.id) commitGroupRename(g.id); },
+          },
+        });
+        inp.value = (store._groupRenameVal != null) ? store._groupRenameVal : g.name;
+        head.appendChild(inp);
+        setTimeout(function () { try { inp.focus(); inp.select(); } catch (_) { /* ignore */ } }, 0);
+      } else {
+        head.appendChild(el('span', { cls: 'home-group__name', text: g.name }));
+      }
+      head.appendChild(el('span', { cls: 'home-group__count', text: (g.members || []).length + '개' }));
+      head.appendChild(el('span', { style: 'flex:1 1 auto;' }));
+      if (editing) {
+        var mkMini = function (txt, label, fn) {
+          return el('span', { cls: 'preset-mini', text: txt, attrs: { role: 'button', tabindex: '0', 'aria-label': label, title: label },
+            on: { click: function (e) { e.stopPropagation(); fn(); }, keydown: function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); fn(); } } } });
+        };
+        head.appendChild(mkMini('✎', '이름 변경', function () { store._groupRenameId = g.id; store._groupRenameVal = g.name; render(); }));
+        head.appendChild(mkMini('＋', '위젯 추가', function () { store._groupAddFor = (store._groupAddFor === g.id) ? null : g.id; render(); }));
+        head.appendChild(mkMini('✕', '그룹 삭제', function () { onDeleteGroup(g.id); }));
+      }
+      block.appendChild(head);
+      if (!g.collapsed) {
+        var inner = el('div', { cls: 'home-group__grid' });
+        (g.members || []).forEach(function (id) {
+          if (hidden.indexOf(id) >= 0) return; // 숨긴 멤버 skip
+          var node = renderHomeSection(id, reclaim);
+          if (!node) return;
+          var cell = el('div', { cls: 'home-section home-group__member', attrs: { 'data-home-section': id } });
+          if (editing) cell.appendChild(el('button', {
+            cls: 'widget-remove', attrs: { type: 'button', 'aria-label': '그룹에서 빼기', title: '그룹에서 빼기' },
+            on: { click: function (e) { e.stopPropagation(); onRemoveFromGroup(id); } },
+            children: [svg([{ t: 'path', d: 'M5 12h14' }], { size: 13, stroke: '#78716c', sw: 2 })],
+          }));
+          var content = el('div', { cls: 'home-section__content' });
+          content.appendChild(node);
+          cell.appendChild(content);
+          inner.appendChild(cell);
+        });
+        if (editing && store._groupAddFor === g.id) inner.appendChild(renderGroupAddPicker(g.id));
+        if ((g.members || []).length === 0 && !(editing && store._groupAddFor === g.id)) {
+          inner.appendChild(el('div', { cls: 'home-group__empty', text: editing ? '＋ 로 위젯을 추가하세요.' : '빈 그룹' }));
+        }
+        block.appendChild(inner);
+      }
+      wrap.appendChild(block);
+    });
+    return wrap;
+  }
+  /** 그룹에 추가할 위젯 선택 목록 — 어느 그룹에도 없고 숨기지 않은 토글 위젯. */
+  function renderGroupAddPicker(groupId) {
+    var pick = el('div', { cls: 'home-group__picker' });
+    var claimed = {};
+    (store.groups || []).forEach(function (g) { (g.members || []).forEach(function (m) { claimed[m] = 1; }); });
+    var hidden = store.hiddenWidgets || [];
+    var avail = TOGGLEABLE_WIDGET_IDS.filter(function (id) { return !claimed[id] && hidden.indexOf(id) < 0; });
+    pick.appendChild(el('div', { cls: 'home-group__picker-title', text: '위젯 추가' }));
+    if (avail.length === 0) { pick.appendChild(el('div', { cls: 'home-group__empty', text: '추가할 수 있는 위젯이 없습니다(모두 그룹에 있거나 숨김).' })); return pick; }
+    avail.forEach(function (id) {
+      var meta = WIDGET_META[id] || { name: id };
+      pick.appendChild(el('button', { cls: 'home-group__pick', text: '＋ ' + meta.name, attrs: { type: 'button' }, on: { click: function () { onAddToGroup(groupId, id); } } }));
+    });
+    return pick;
   }
 
   // ── [로드맵 Phase 1·K] 대시보드 내보내기/가져오기 — 백업·공유·기기 이전. 정규화 단일 신뢰 경계는 메인(importDashboard). ──

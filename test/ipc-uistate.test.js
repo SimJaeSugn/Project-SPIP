@@ -122,6 +122,23 @@ test('setLayoutMode/setWidgetPositions — 활성 프리셋 반영·정규화·g
   assert.strictEqual(uiState.setLayoutMode({ mode: 'bogus' }, ctx).layoutMode, 'masonry');
 });
 
+// ── [로드맵 Phase 5·M] setGroups ──
+test('setGroups — 활성 프리셋 그룹 정규화·영속·getUiState 노출', () => {
+  const s = memStore();
+  const ctx = ctxWith(s);
+  assert.deepStrictEqual(uiState.getUiState(ctx).homeWidgetGroups, []);
+  const r = uiState.setGroups({ groups: [
+    { id: 'g0001', name: '작업', collapsed: false, members: ['mail', 'disk', 'bogus', 'featureAdd'] },
+    { id: 'g0002', name: '기타', members: ['disk', 'todos'] }, // disk 선점됨 → todos 만
+  ] }, ctx);
+  assert.strictEqual(r.ok, true);
+  assert.deepStrictEqual(r.homeWidgetGroups, [
+    { id: 'g0001', name: '작업', collapsed: false, members: ['mail', 'disk'] },
+    { id: 'g0002', name: '기타', collapsed: false, members: ['todos'] },
+  ]);
+  assert.deepStrictEqual(uiState.getUiState(ctx).homeWidgetGroups, r.homeWidgetGroups, '영속·노출');
+});
+
 // ── [로드맵 Phase 3·G] setScratchpad ──
 test('setScratchpad — 텍스트 정규화·영속·updatedAt 메인 스탬프 + getUiState 노출', () => {
   const s = memStore();

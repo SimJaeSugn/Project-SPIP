@@ -161,6 +161,8 @@ contextBridge.exposeInMainWorld('spip', {
   // [로드맵 Phase 5·B] 프리폼 — 활성 프리셋 레이아웃 모드(masonry|freeform) + 위젯 좌표 { id:{x,y} }. 검증은 main.
   setLayoutMode: (mode) => ipcRenderer.invoke('spip:setLayoutMode', { mode: String(mode) }),
   setWidgetPositions: (positions) => ipcRenderer.invoke('spip:setWidgetPositions', { positions: (positions && typeof positions === 'object') ? positions : {} }),
+  // [로드맵 Phase 5·M] 그룹/섹션 배열 [{id,name,collapsed,members[]}]. 검증은 main normalizeGroups.
+  setGroups: (groups) => ipcRenderer.invoke('spip:setGroups', { groups: Array.isArray(groups) ? groups : [] }),
   // [로드맵 Phase 1·K] 대시보드 내보내기(JSON 문자열)/가져오기(백업·공유·기기 이전). 가져오기 검증은 main.
   exportDashboard: () => ipcRenderer.invoke('spip:exportDashboard'),
   importDashboard: (json) => ipcRenderer.invoke('spip:importDashboard', { json: String(json) }),

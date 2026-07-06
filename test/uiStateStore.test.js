@@ -245,6 +245,34 @@ test('write/read — homeLayout 라운드트립 보존 (C-M-1)', () => {
   assert.deepStrictEqual(back.homeLayout, custom, 'read 후에도 동일 순서(키가 버려지지 않음)');
 });
 
+// ── [로드맵 Phase 5·M] 그룹/섹션 정규화 ──
+test('normalizeGroups — id 형식·중복·members(토글·그룹간 유일)·이름·collapsed·상한', () => {
+  const g = store.normalizeGroups([
+    { id: 'gabc1', name: '  작업  ', collapsed: true, members: ['mail', 'disk', 'mail', 'bogus', 'featureAdd'] },
+    { id: 'gabc2', name: '', members: ['disk', 'todos'] }, // disk 는 g1 이 선점 → 제거
+    { id: 'BADID', members: [] },                            // id 형식 불량 → 제거
+    { id: 'gabc1', name: 'dup' },                            // 중복 id → 제거
+  ]);
+  assert.strictEqual(g.length, 2);
+  assert.deepStrictEqual(g[0], { id: 'gabc1', name: '작업', collapsed: true, members: ['mail', 'disk'] });
+  assert.deepStrictEqual(g[1], { id: 'gabc2', name: '그룹', collapsed: false, members: ['todos'] });
+  // 비배열/손상 graceful.
+  assert.deepStrictEqual(store.normalizeGroups(null), []);
+  assert.deepStrictEqual(store.normalizeGroups('x'), []);
+  // 개수 상한.
+  const many = [];
+  for (let i = 0; i < 20; i++) many.push({ id: 'g' + i.toString(36).padStart(4, '0'), name: 'g' + i, members: [] });
+  assert.strictEqual(store.normalizeGroups(many).length, store.MAX_GROUPS);
+});
+
+test('normalizePreset — groups 스키마 정규화(예약 [] → 실제)', () => {
+  const d = store.normalizeDashboardState({
+    activePreset: 'a',
+    presets: [{ id: 'a', name: 'x', groups: [{ id: 'gaa11', name: '섹션', members: ['mail'] }] }],
+  });
+  assert.deepStrictEqual(d.presets[0].groups, [{ id: 'gaa11', name: '섹션', collapsed: false, members: ['mail'] }]);
+});
+
 // ── [로드맵 Phase 3·G] 스크래치패드 메모 정규화 ──
 test('normalizeScratchpad — 개행/탭 보존·제어문자 제거·길이 상한·updatedAt 정규화', () => {
   // 개행(\n)·탭(\t)은 보존, BEL(\x07)·DEL(\x7f)·NUL(\x00)은 제거.

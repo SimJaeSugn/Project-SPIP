@@ -52,9 +52,11 @@ function toResponse(state) {
     // [로드맵 Phase 3·G] 스크래치패드 메모(전역 콘텐츠) — 렌더러 위젯이 표시·편집.
     scratchpad: state.scratchpad || uiStateStore.defaultScratchpad(),
     // [로드맵 Phase 5·B] 활성 프리셋의 레이아웃 모드·프리폼 좌표 — 렌더러가 masonry/freeform 분기·배치에 사용.
-    //   layout/hidden/sizes 는 레거시 키(위)와 동기지만, layoutMode/positions 는 프리셋에만 있어 별도 노출.
+    //   layout/hidden/sizes 는 레거시 키(위)와 동기지만, layoutMode/positions/groups 는 프리셋에만 있어 별도 노출.
     layoutMode: activePresetField(state, 'layoutMode', 'masonry'),
     homeWidgetPositions: activePresetField(state, 'positions', {}),
+    // [로드맵 Phase 5·M] 활성 프리셋 그룹/섹션 — 렌더러가 접기 섹션으로 표시.
+    homeWidgetGroups: activePresetField(state, 'groups', []),
   };
 }
 
@@ -323,6 +325,17 @@ function setWidgetPositions(args, ctx) {
   return Object.assign({ ok: true }, toResponse(written));
 }
 
+/** [로드맵 Phase 5·M] spip:setGroups { groups } — 활성 프리셋 그룹/섹션 배열 설정.
+ *   렌더러 입력 불신 — normalizeGroups(presetUpdate 내부)가 유일 검증 경계(id·이름·members·상한). */
+function setGroups(args, ctx) {
+  const groups = (args && typeof args === 'object') ? args.groups : undefined;
+  const { store, storeCtx } = resolveStore(ctx);
+  const state = store.read(storeCtx);
+  const dashboard = uiStateStore.presetUpdate(state.dashboard, state.dashboard.activePreset, { groups: groups });
+  const written = store.write(Object.assign({}, state, { dashboard }), storeCtx);
+  return Object.assign({ ok: true }, toResponse(written));
+}
+
 /** spip:exportDashboard — 현재 대시보드(전 프리셋)를 버전드 JSON 문자열로. */
 function exportDashboard(ctx) {
   const { store, storeCtx } = resolveStore(ctx);
@@ -441,4 +454,4 @@ function updateLangTrend(args, ctx) {
   return { ok: true, prev: written.langTrend.prev, cur: written.langTrend.cur };
 }
 
-module.exports = { getUiState, setFavorite, setOrder, setSortMode, setHomeLayout, setHiddenWidgets, setHomeWidgetSizes, setProjectName, setTheme, setScratchpad, addTodo, toggleTodo, removeTodo, setTodoDue, updateLangTrend, setActivePreset, addPreset, duplicatePreset, renamePreset, removePreset, setLayoutMode, setWidgetPositions, exportDashboard, importDashboard };
+module.exports = { getUiState, setFavorite, setOrder, setSortMode, setHomeLayout, setHiddenWidgets, setHomeWidgetSizes, setProjectName, setTheme, setScratchpad, addTodo, toggleTodo, removeTodo, setTodoDue, updateLangTrend, setActivePreset, addPreset, duplicatePreset, renamePreset, removePreset, setLayoutMode, setWidgetPositions, setGroups, exportDashboard, importDashboard };

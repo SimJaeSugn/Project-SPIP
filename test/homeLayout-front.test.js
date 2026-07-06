@@ -133,6 +133,29 @@ test('로드맵 Phase 4·D — 팔레트 렌더 배선: Cmd+K 토글·액션 레
   assert.ok(!/function renderPalette\([\s\S]{0,1400}innerHTML/.test(APP_SRC), '팔레트 렌더 innerHTML 미사용(L-1)');
 });
 
+// ── [로드맵 Phase 5·M] 그룹/섹션 — 렌더·CRUD·접기·멤버 관리 배선 ──
+test('로드맵 Phase 5·M — 그룹: 렌더·CRUD·접기·멤버 배정·격자 제외·masonry 전용', () => {
+  const CSS = fs.readFileSync(path.join(__dirname, '..', 'public', 'styles.css'), 'utf8');
+  // 편집 모드 그룹 추가 버튼(masonry 전용).
+  assert.ok(/text:\s*'\+ 그룹'/.test(APP_SRC), '그룹 추가 버튼');
+  assert.ok(/editing && !freeform && bridgeHas\('setGroups'\)/.test(APP_SRC), '그룹은 masonry 편집 모드에서만');
+  // 그룹 소속 위젯은 메인 격자에서 제외.
+  assert.ok(/if \(groupedOf\[id\]\) return;/.test(APP_SRC), '그룹 위젯은 메인 격자에서 제외');
+  assert.ok(/renderHomeGroups\(groups, hidden, reclaim, editing\)/.test(APP_SRC), '그룹 섹션 렌더 호출');
+  // 렌더 함수 + CRUD 핸들러.
+  assert.ok(/function renderHomeGroups\(/.test(APP_SRC) && /function renderGroupAddPicker\(/.test(APP_SRC), '그룹 렌더·피커');
+  assert.ok(/function onAddGroup\(/.test(APP_SRC) && /function onDeleteGroup\(/.test(APP_SRC) && /function onToggleGroupCollapse\(/.test(APP_SRC), 'CRUD·접기 핸들러');
+  assert.ok(/function onAddToGroup\(/.test(APP_SRC) && /function onRemoveFromGroup\(/.test(APP_SRC), '멤버 배정/제거');
+  assert.ok(/ipc\('setGroups',\s*next\)/.test(APP_SRC), 'setGroups IPC 영속');
+  // 하이드레이션.
+  assert.ok(/store\.groups\s*=\s*applyGroups\(/.test(APP_SRC) && /function applyGroups\(/.test(APP_SRC), '그룹 하이드레이션·방어 적재');
+  // 멤버 한 그룹에만(배정 시 타 그룹서 제거).
+  assert.ok(/function onAddToGroup\([\s\S]{0,320}filter\(function \(m\) \{ return m !== widgetId/.test(APP_SRC), '배정 시 타 그룹서 제거(유일)');
+  // CSS.
+  assert.ok(/\.home-group__grid\s*\{[^}]*repeat\(auto-fit/.test(CSS), '멤버 auto-fit 격자');
+  assert.ok(/\.home-group\.is-collapsed/.test(CSS), '접기 상태 CSS');
+});
+
 // ── [로드맵 Phase 5·B] 프리폼(자유 배치) — 순수 좌표 유틸 + 렌더/드래그 배선 ──
 test('로드맵 Phase 5·B — freeformSeedPositions: 미배치만 순차 패킹, 기존 좌표 유지·클램프', () => {
   const r = freeformSeedPositions(['a', 'b', 'c', 'd', 'e'], { b: { x: 9, y: 1 } }, 2);

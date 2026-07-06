@@ -516,6 +516,23 @@ input, button, select { font-family: inherit; }
 .home-masonry--freeform.home-masonry--editing .home-section--free { cursor: grab; }
 .home-masonry--freeform .home-section--dragging { cursor: grabbing; z-index: 20; box-shadow: 0 16px 40px rgba(28, 25, 23, .22); opacity: .96; }
 body.home-freedragging { user-select: none; cursor: grabbing; }
+
+/* [로드맵 Phase 5·M] 그룹/섹션 — 전체폭 접기 밴드(격자 아래). 멤버는 내부 auto-fit 격자. */
+.home-groups { display: flex; flex-direction: column; gap: 16px; }
+.home-group { border: 1px solid var(--border, #e7e5e4); border-radius: 14px; background: var(--panel, #fff); overflow: hidden; }
+.home-group__head { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--border, #f0efed); }
+.home-group.is-collapsed .home-group__head { border-bottom: none; }
+.home-group__chev { appearance: none; border: none; background: none; cursor: pointer; font-size: 11px; color: var(--t2, #57534e); padding: 2px 4px; }
+.home-group__name { font-size: 14px; font-weight: 700; color: var(--t1, #1c1917); }
+.home-group__count { font-size: 11px; font-weight: 600; color: #a8a29e; background: #f5f5f4; padding: 2px 8px; border-radius: 6px; }
+.home-group__rename { font: inherit; font-size: 14px; font-weight: 700; border: 1px solid #c7c9f5; border-radius: 6px; padding: 2px 8px; outline: none; }
+.home-group__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; padding: 16px; align-items: start; }
+.home-group__member { position: relative; }
+.home-group__empty { grid-column: 1 / -1; font-size: 12.5px; color: #a8a29e; padding: 8px 2px; }
+.home-group__picker { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px; border: 1px dashed var(--border, #e7e5e4); border-radius: 10px; }
+.home-group__picker-title { font-size: 12px; font-weight: 600; color: #78716c; width: 100%; }
+.home-group__pick { appearance: none; cursor: pointer; font-size: 12.5px; font-weight: 600; padding: 6px 11px; border-radius: 8px; border: 1px solid var(--border, #e7e5e4); background: var(--surface-2, #f5f5f4); color: var(--t2, #57534e); }
+.home-group__pick:hover { background: #eef2ff; }
 /* [홈 위젯 크기] 우하단 리사이즈 핸들 — 평소 옅게, 호버/드래그 시 강조. */
 .home-resize {
   position: absolute; right: 3px; bottom: 3px; z-index: 4;
