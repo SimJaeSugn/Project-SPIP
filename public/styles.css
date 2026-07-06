@@ -376,9 +376,9 @@ input, button, select { font-family: inherit; }
 .home__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
 
 /* [R-32] 홈 섹션 워터폴(masonry) — CSS columns 로 높이 제각각 카드를 빈틈 없이 채운다(Q-B 기본).
- *   columns 단축(열너비 300px + 최대 3열): 폭에 따라 3→2→1열로 자동 반응(별도 미디어쿼리 불요).
- *   floor((content+gap)/(300+gap)) 만큼 열이 생기되 최대 3열로 캡. 넓은 화면 3열, 좁아지면 2·1열. */
-.home-masonry { columns: 300px 3; column-gap: 20px; }
+ *   columns 단축(열너비 300px + 최대 4열): 폭에 따라 4→3→2→1열로 자동 반응(별도 미디어쿼리 불요).
+ *   floor((content+gap)/(300+gap)) 만큼 열이 생기되 최대 4열로 캡. 넓은 화면 4열, 좁아지면 3·2·1열. */
+.home-masonry { columns: 300px 4; column-gap: 20px; }
 .home-section {
   position: relative;             /* [위젯 추가/제거] 제거(×) 버튼 absolute 기준 */
   break-inside: avoid;            /* 섹션이 컬럼 경계에서 쪼개지지 않게(겹침/빈칸 0) */
@@ -430,7 +430,7 @@ input, button, select { font-family: inherit; }
 .home-section--ghost { opacity: .45; outline: 2px dashed var(--accent); outline-offset: -2px; border-radius: 14px; }
 .home-section--chosen { cursor: grabbing; }
 .home-section--drag { box-shadow: 0 14px 40px rgba(28,25,23,.22); }
-/* 반응형(3→2→1열)은 위 `columns: 300px 3` 열너비가 폭에 따라 자동 처리 — 고정 열수 미디어쿼리 제거. */
+/* 반응형(4→3→2→1열)은 위 `columns: 300px 4` 열너비가 폭에 따라 자동 처리 — 고정 열수 미디어쿼리 제거. */
 
 /* =====================================================================
  * [SH-2] 즐겨찾기 셸프 위젯 — 초안(favorites-shelf-widget.dc.html) 디자인 재현.
