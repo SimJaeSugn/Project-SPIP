@@ -397,11 +397,16 @@ input, button, select { font-family: inherit; }
 /* [홈 위젯 반응형] 리스트형 위젯 본문 — auto-fit 로 위젯이 넓으면 여러 열, 좁으면 1열(위젯 크기에 자동 반응).
  *   display 는 클래스가 소유(인라인 미지정) — 넓힘/좁힘에 열 수가 매끄럽게 반응. gap 은 각 위젯 인라인 유지. */
 .hw-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); align-content: start; }
-/* [홈 위젯 반응형] 생산성 2단(차트|언어) — 위젯이 좁아지면 세로 스택 + 세로 구분선 숨김. */
+/* [홈 위젯 반응형] 생산성·토큰 2단(hw-split) — 위젯이 좁아지면 세로 스택 + 세로 구분선 숨김. */
 @container hw (max-width: 480px) {
   .hw-split { flex-direction: column; }
   .hw-split > * { flex: 0 0 auto; }           /* 스택 시 각 단은 자연 높이(가로 basis:0% 잔재 무력화) */
   .hw-split > .hw-vrule { display: none; }
+}
+/* [홈 위젯 반응형] 활동 타임라인 — 위젯이 넓어져 hw-cols 가 다열이 되면(≥480px) 세로 연결선 숨김
+ *   (다열에서 '다음 항목'은 아래가 아니라 우측이라 세로 연결선이 무의미·오해 소지). */
+@container hw (min-width: 480px) {
+  .hw-tl-rail { display: none; }
 }
 /* [홈 위젯 크기] 우하단 리사이즈 핸들 — 평소 옅게, 호버/드래그 시 강조. */
 .home-resize {

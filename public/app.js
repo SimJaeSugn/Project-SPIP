@@ -2575,7 +2575,8 @@ function initBrowser() {
     var events = homeRecentActivity(store.viewModels || [], 6);
     var card = el('div', { style: HOME_CARD + 'padding:21px 22px;' });
     card.appendChild(el('div', { text: '최근 활동 타임라인', style: 'font-size:15px;font-weight:600;margin-bottom:16px;' }));
-    var list = el('div', { style: 'display:flex;flex-direction:column;' });
+    // [반응형] 위젯이 넓으면 다열 — 다열 시 세로 연결선(.hw-tl-rail)은 @container 로 숨김(다음 항목이 우측이라 무의미).
+    var list = el('div', { cls: 'hw-cols', style: 'column-gap:22px;' });
     if (events.length === 0) {
       list.appendChild(el('div', { text: '최근 수정 기록이 없습니다.', style: 'font-size:12.5px;color:#a8a29e;' }));
     }
@@ -2584,7 +2585,7 @@ function initBrowser() {
       var row = el('div', { style: 'display:flex;gap:13px;' });
       var rail = el('div', { style: 'display:flex;flex-direction:column;align-items:center;flex:0 0 auto;' });
       rail.appendChild(el('span', { style: 'width:9px;height:9px;border-radius:2px;flex:0 0 auto;display:inline-block;background:' + langColor(vm.language || ev.name) + ';' }));
-      if (i < events.length - 1) rail.appendChild(el('span', { style: 'width:1.5px;flex:1 1 0%;min-height:18px;background:#e7e5e4;margin-top:3px;' }));
+      if (i < events.length - 1) rail.appendChild(el('span', { cls: 'hw-tl-rail', style: 'width:1.5px;flex:1 1 0%;min-height:18px;background:#e7e5e4;margin-top:3px;' }));
       row.appendChild(rail);
       var body = el('div', { style: 'flex:1 1 0%;min-width:0;padding-bottom:15px;' });
       var top = el('div', { style: 'display:flex;align-items:center;gap:9px;' });
@@ -2635,7 +2636,8 @@ function initBrowser() {
     card.appendChild(head);
 
     // [백로그2-3] 행간 축소: 행 패딩·간격·줄높이 축소(8px/2px/1.4 → 5px/1px/1.3).
-    var list = el('div', { style: 'display:flex;flex-direction:column;gap:1px;' });
+    // [반응형] 위젯이 넓으면 할 일 항목을 다열로(입력/편집기·푸터는 아래 별도 append 로 전체폭 유지).
+    var list = el('div', { cls: 'hw-cols', style: 'gap:1px 22px;' });
     todos.forEach(function (t) {
       var due = t.done ? null : todoDueInfo(t.dueAt); // 완료 항목은 마감 강조 안 함
       var row = el('div', { cls: 'home-todo-row', style: 'display:flex;align-items:flex-start;gap:11px;padding:5px 4px;border-radius:8px;' });
@@ -3469,19 +3471,25 @@ function initBrowser() {
     card.appendChild(homeCardHead(homeTitle('토큰 사용량'), refresh, 6));
     card.appendChild(el('div', { text: 'Claude Code 로컬 로그와 연결된 AI 모델의 토큰 소비량입니다.', style: 'font-size:11.5px;color:#a8a29e;margin-bottom:16px;' }));
 
+    // [홈 위젯 반응형] 두 섹션(Claude Code | 연결된 모델)을 hw-split 로 배치 — 위젯이 넓으면 2단(세로 구분선),
+    //   좁으면 @container(max-width:480px)로 세로 스택(구분선 숨김). 스탯/차트는 각 단 폭에 맞춰 100% 확장.
+    var split = el('div', { cls: 'hw-split', style: 'display:flex;gap:26px;' });
+    var left = el('div', { style: 'flex:1 1 0%;min-width:0;' });
+    var right = el('div', { style: 'flex:1 1 0%;min-width:0;' });
+
     // ── Claude Code(항목2) ──
     var cu = store.claudeUsage;
-    card.appendChild(el('div', { text: 'Claude Code', style: 'font-size:12.5px;font-weight:600;color:#1c1917;margin-bottom:4px;' }));
+    left.appendChild(el('div', { text: 'Claude Code', style: 'font-size:12.5px;font-weight:600;color:#1c1917;margin-bottom:4px;' }));
     if (store.busyClaudeUsage && !cu) {
-      card.appendChild(el('div', { text: '로컬 로그 집계 중…', style: 'font-size:11.5px;color:#a8a29e;padding:4px 0 14px;' }));
+      left.appendChild(el('div', { text: '로컬 로그 집계 중…', style: 'font-size:11.5px;color:#a8a29e;padding:4px 0 14px;' }));
     } else if (!cu || !cu.available) {
-      card.appendChild(el('div', { text: '이 PC에서 Claude Code 사용 기록을 찾지 못했습니다.', style: 'font-size:11.5px;color:#a8a29e;padding:4px 0 14px;line-height:1.6;' }));
+      left.appendChild(el('div', { text: '이 PC에서 Claude Code 사용 기록을 찾지 못했습니다.', style: 'font-size:11.5px;color:#a8a29e;padding:4px 0 14px;line-height:1.6;' }));
     } else {
       var tot = cu.totals || {}; var tod = cu.today || {};
-      card.appendChild(usageStatRow('총 토큰', fmtTokens(tot.totalTokens), true));
-      card.appendChild(usageStatRow('오늘', fmtTokens(tod.totalTokens) + ' 토큰 · ' + (tod.messages || 0) + '회'));
-      card.appendChild(usageStatRow('입력 / 출력', fmtTokens(tot.inputTokens) + ' / ' + fmtTokens(tot.outputTokens)));
-      card.appendChild(usageStatRow('캐시 읽기', fmtTokens(tot.cacheReadTokens)));
+      left.appendChild(usageStatRow('총 토큰', fmtTokens(tot.totalTokens), true));
+      left.appendChild(usageStatRow('오늘', fmtTokens(tod.totalTokens) + ' 토큰 · ' + (tod.messages || 0) + '회'));
+      left.appendChild(usageStatRow('입력 / 출력', fmtTokens(tot.inputTokens) + ' / ' + fmtTokens(tot.outputTokens)));
+      left.appendChild(usageStatRow('캐시 읽기', fmtTokens(tot.cacheReadTokens)));
       // [백로그2-1] 최근 30일 일별 사용량 시각화.
       var daily = Array.isArray(cu.daily) ? cu.daily : [];
       if (daily.length) {
@@ -3489,30 +3497,33 @@ function initBrowser() {
         var dchead = el('div', { style: 'display:flex;align-items:baseline;justify-content:space-between;margin-top:10px;' });
         dchead.appendChild(el('span', { text: '최근 ' + daily.length + '일', style: 'font-size:11px;color:#a8a29e;' }));
         dchead.appendChild(el('span', { text: fmtTokens(sum30) + ' 토큰', style: HOME_MONO + 'font-size:11px;color:#78716c;' }));
-        card.appendChild(dchead);
-        card.appendChild(usageBarChart(daily));
+        left.appendChild(dchead);
+        left.appendChild(usageBarChart(daily));
       }
       // 상위 모델(최대 3).
       var models = Array.isArray(cu.byModel) ? cu.byModel.slice(0, 3) : [];
       models.forEach(function (m) {
-        card.appendChild(usageStatRow(String(m.model || '알 수 없음'), fmtTokens(m.totalTokens)));
+        left.appendChild(usageStatRow(String(m.model || '알 수 없음'), fmtTokens(m.totalTokens)));
       });
-      card.appendChild(el('div', { text: cu.scannedFiles + '개 세션 로그 기준', style: 'font-size:10.5px;color:#c7c2bd;margin-top:4px;' }));
+      left.appendChild(el('div', { text: cu.scannedFiles + '개 세션 로그 기준', style: 'font-size:10.5px;color:#c7c2bd;margin-top:4px;' }));
     }
-
-    card.appendChild(el('div', { style: 'height:1px;background:#f0efed;margin:14px 0;' }));
 
     // ── 연결된 모델(항목3) — 브리핑 생성 시 누적 ──
     var au = store.aiUsage;
-    card.appendChild(el('div', { text: '연결된 모델 (브리핑)', style: 'font-size:12.5px;font-weight:600;color:#1c1917;margin-bottom:4px;' }));
+    right.appendChild(el('div', { text: '연결된 모델 (브리핑)', style: 'font-size:12.5px;font-weight:600;color:#1c1917;margin-bottom:4px;' }));
     if (!au || !(au.calls > 0)) {
-      card.appendChild(el('div', { text: '설정의 AI 브리핑을 켜고 생성하면 토큰 사용량이 집계됩니다.', style: 'font-size:11.5px;color:#a8a29e;padding:4px 0;line-height:1.6;' }));
+      right.appendChild(el('div', { text: '설정의 AI 브리핑을 켜고 생성하면 토큰 사용량이 집계됩니다.', style: 'font-size:11.5px;color:#a8a29e;padding:4px 0;line-height:1.6;' }));
     } else {
-      card.appendChild(usageStatRow('총 토큰', fmtTokens(au.totalTokens), true));
-      card.appendChild(usageStatRow('생성 횟수', String(au.calls || 0) + '회'));
-      card.appendChild(usageStatRow('입력 / 출력', fmtTokens(au.promptTokens) + ' / ' + fmtTokens(au.completionTokens)));
-      if (au.lastModel) card.appendChild(usageStatRow('모델', String(au.lastModel)));
+      right.appendChild(usageStatRow('총 토큰', fmtTokens(au.totalTokens), true));
+      right.appendChild(usageStatRow('생성 횟수', String(au.calls || 0) + '회'));
+      right.appendChild(usageStatRow('입력 / 출력', fmtTokens(au.promptTokens) + ' / ' + fmtTokens(au.completionTokens)));
+      if (au.lastModel) right.appendChild(usageStatRow('모델', String(au.lastModel)));
     }
+
+    split.appendChild(left);
+    split.appendChild(el('div', { cls: 'hw-vrule', style: 'width:1px;background:#f0efed;flex:0 0 auto;' })); // [반응형] 스택 시 숨김
+    split.appendChild(right);
+    card.appendChild(split);
     return card;
   }
 

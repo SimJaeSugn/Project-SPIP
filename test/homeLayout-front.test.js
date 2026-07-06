@@ -164,6 +164,28 @@ test('홈 위젯 반응형 — 컨테이너 컨텍스트 + 반응형 훅 클래�
   assert.ok(/cls:\s*'hw-cols'/.test(APP_SRC), '리스트형 위젯에 hw-cols');
 });
 
+// ── [홈 위젯 반응형] 모든 콘텐츠 위젯이 자기 폭에 반응하는지 함수별 배선 검증(위배 0) ──
+function fnBody(name, len) {
+  const start = APP_SRC.indexOf('function ' + name + '(');
+  assert.ok(start >= 0, name + ' 함수가 있어야 한다');
+  return APP_SRC.slice(start, start + (len || 2000));
+}
+test('홈 위젯 반응형 — 목록형 위젯(활동·할 일)이 hw-cols 로 폭 반응(넓으면 다열)', () => {
+  assert.ok(/cls:\s*'hw-cols'/.test(fnBody('renderHomeActivity', 900)), '활동 타임라인 목록에 hw-cols');
+  assert.ok(/cls:\s*'hw-cols'/.test(fnBody('renderHomeTodos', 1500)), '할 일 목록에 hw-cols');
+});
+test('홈 위젯 반응형 — 활동 다열 시 세로 연결선 숨김(hw-tl-rail 컨테이너 쿼리)', () => {
+  const CSS = fs.readFileSync(path.join(__dirname, '..', 'public', 'styles.css'), 'utf8');
+  assert.ok(/cls:\s*'hw-tl-rail'/.test(fnBody('renderHomeActivity', 1400)), '연결선에 hw-tl-rail 클래스');
+  assert.ok(/@container\s+hw\s*\(min-width:\s*480px\)\s*\{[^}]*\.hw-tl-rail[^}]*display:\s*none/.test(CSS),
+    '다열(min-width:480px)에서 .hw-tl-rail display:none');
+});
+test('홈 위젯 반응형 — 토큰 사용량 2섹션이 hw-split 로 폭 반응(넓으면 2단, 좁으면 스택)', () => {
+  const body = fnBody('renderHomeAiUsage', 6000);
+  assert.ok(/cls:\s*'hw-split'/.test(body), 'aiusage 두 섹션을 hw-split 로 배치');
+  assert.ok(/cls:\s*'hw-vrule'/.test(body), 'aiusage 세로 구분선(hw-vrule)');
+});
+
 test('R-32 — homeSortable: RG.widget 등록 + onEnd 마이크로태스크 패턴(R4) + setHomeLayout 영속', () => {
   // RG.widget 등록.
   assert.ok(/id:\s*'homeSections'/.test(APP_SRC), "RG.widget.define({id:'homeSections'})");
