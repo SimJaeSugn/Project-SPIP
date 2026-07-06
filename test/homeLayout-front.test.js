@@ -8,7 +8,7 @@ const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
 
-const { HOME_SECTION_IDS, applyHomeLayout, TOGGLEABLE_WIDGET_IDS, applyHomeWidgetSizes, computeHomeCols, homeDefaultSpan, HOME_MAX_COLS } = require('../public/app.js');
+const { HOME_SECTION_IDS, applyHomeLayout, TOGGLEABLE_WIDGET_IDS, applyHomeWidgetSizes, computeHomeCols, homeDefaultSpan, HOME_MAX_COLS, applyDashboard } = require('../public/app.js');
 const realStore = require('../lib/common/uiStateStore');
 const APP_SRC = fs.readFileSync(path.join(__dirname, '..', 'public', 'app.js'), 'utf8');
 // 메인 계약(단일 신뢰 경계)과 동형인지 교차 확인.
@@ -219,6 +219,31 @@ test('홈 위젯 반응형/높이 — 메일 위젯: 카드가 위젯 높이를 
   const lm = fnBody('layoutHomeMasonry', 1700);
   assert.ok(/classList\.add\('home-section__content--sized'\)/.test(lm), '사이즈 지정 시 --sized 부여');
   assert.ok(/classList\.remove\('home-section__content--sized'\)/.test(lm), '미지정 시 --sized 제거');
+});
+
+// ── [로드맵 Phase 2] 대시보드(프리셋) 렌더러 배선 ──────────────────────────
+test('로드맵 Phase 2 — applyDashboard: 방어 적재(부재→기본, dangling active 폴백, id 중복 제거)', () => {
+  // 부재/손상 → 단일 기본 프리셋
+  for (const bad of [null, undefined, {}, { presets: [] }, { presets: 'x' }, 7]) {
+    const d = applyDashboard(bad);
+    assert.strictEqual(d.presets.length, 1);
+    assert.strictEqual(d.activePreset, d.presets[0].id);
+  }
+  // 유효 → id/name 보존, dangling active → 첫 프리셋
+  const d = applyDashboard({ activePreset: 'ghost', presets: [{ id: 'a', name: 'A' }, { id: 'a', name: 'dup' }, { id: 'b', name: 'B', layoutMode: 'freeform' }] });
+  assert.deepStrictEqual(d.presets.map((p) => p.id), ['a', 'b'], 'id 중복 제거');
+  assert.strictEqual(d.activePreset, 'a', 'dangling active → 첫 프리셋');
+  assert.strictEqual(d.presets[1].layoutMode, 'freeform');
+});
+
+test('로드맵 Phase 2 — 렌더러 배선: 프리셋 탭 + 전환/추가 핸들러 + dashboard 하이드레이션', () => {
+  const CSS = fs.readFileSync(path.join(__dirname, '..', 'public', 'styles.css'), 'utf8');
+  assert.ok(/cls:\s*'preset-tabs'/.test(APP_SRC), '프리셋 탭 바(preset-tabs)');
+  assert.ok(/function onSwitchPreset\(/.test(APP_SRC) && /function onAddPreset\(/.test(APP_SRC), '전환/추가 핸들러');
+  assert.ok(/function applyPresetResponse\(/.test(APP_SRC), '프리셋 응답 적용기');
+  assert.ok(/store\.dashboard\s*=\s*applyDashboard\(/.test(APP_SRC), 'loadUiState 가 dashboard 하이드레이션');
+  assert.ok(/ipc\('setActivePreset'/.test(APP_SRC) && /ipc\('addPreset'/.test(APP_SRC), '프리셋 IPC 호출');
+  assert.ok(/\.preset-tab\.is-on\s*\{/.test(CSS), '활성 탭 스타일');
 });
 
 // ── [로드맵 Phase 1] 위젯 편집 모드 토글 배선 ──────────────────────────────

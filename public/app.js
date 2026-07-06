@@ -691,6 +691,23 @@ function applyHomeLayout(layout) {
   return out;
 }
 
+/** [로드맵 Phase 2] getUiState.dashboard 방어 적재(렌더러) — 탭 표시에 필요한 {id,name,layoutMode}만.
+ *   레이아웃 자체는 store.homeLayout 등 레거시 키가 권위(활성 프리셋과 동기). 손상/부재 시 단일 기본 프리셋. */
+function applyDashboard(d) {
+  const fallback = { activePreset: 'default', presets: [{ id: 'default', name: '기본', layoutMode: 'masonry' }] };
+  if (!d || typeof d !== 'object' || !Array.isArray(d.presets) || d.presets.length === 0) return fallback;
+  const presets = [];
+  const seen = new Set();
+  for (const p of d.presets) {
+    if (!p || typeof p !== 'object' || typeof p.id !== 'string' || seen.has(p.id)) continue;
+    seen.add(p.id);
+    presets.push({ id: p.id, name: (typeof p.name === 'string' && p.name) ? p.name : '대시보드', layoutMode: (p.layoutMode === 'freeform') ? 'freeform' : 'masonry' });
+  }
+  if (presets.length === 0) return fallback;
+  const active = (typeof d.activePreset === 'string' && presets.some((p) => p.id === d.activePreset)) ? d.activePreset : presets[0].id;
+  return { activePreset: active, presets };
+}
+
 /* [홈 위젯 크기] 폭(열 스팬)·높이(px) — homeLayout(순서)·hiddenWidgets(표시)와 직교. 메인 uiStateStore 와 상수 동형. */
 const HOME_MAX_COLS = 4;      // 폭 스팬 상한(반응형 최대 열 수)
 const HOME_COL_MIN_W = 300;   // 열 최소 너비(px) — 이 폭 기준으로 반응형 열 수 산출
@@ -2370,6 +2387,46 @@ function initBrowser() {
     // [로드맵 Phase 1] 위젯 편집 모드 — 켜면 리사이즈 핸들·제거(×)·셀 윤곽을 상시 노출(평소엔 깔끔).
     //   이후 편집 컨트롤(설정·프리폼·스택)의 집. 재정렬/리사이즈 자체는 평소에도 가능(가산 레이어).
     var editing = !!store.editMode;
+    // [로드맵 Phase 2] 대시보드(프리셋) 탭 — 모드별 배치 전환. 프리셋 1개 & 비편집이면 숨김(깔끔).
+    //   편집 모드에서 이름변경(인라인)·복제·삭제·추가 노출. 활성 프리셋은 store.homeLayout 등과 동기.
+    var dash = store.dashboard || { activePreset: 'default', presets: [{ id: 'default', name: '기본' }] };
+    if (dash.presets.length > 1 || editing) {
+      var presetBar = el('div', { cls: 'preset-tabs', style: 'display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:16px 30px 0;' });
+      dash.presets.forEach(function (p) {
+        var on = p.id === dash.activePreset;
+        var tab = el('button', { cls: 'preset-tab' + (on ? ' is-on' : ''), attrs: { type: 'button', 'aria-pressed': String(on), 'aria-label': '대시보드: ' + p.name }, on: { click: function () { onSwitchPreset(p.id); } } });
+        if (editing && on && store._presetRenameId === p.id) {
+          var inp = el('input', {
+            cls: 'preset-rename', attrs: { type: 'text', 'aria-label': '대시보드 이름', maxlength: '40', autocomplete: 'off', spellcheck: 'false' },
+            on: {
+              click: function (e) { e.stopPropagation(); },
+              input: function (e) { store._presetRenameVal = e.target.value; },
+              keydown: function (e) { e.stopPropagation(); if (e.key === 'Enter') { e.preventDefault(); commitPresetRename(p.id); } else if (e.key === 'Escape') { e.preventDefault(); store._presetRenameId = null; render(); } },
+              blur: function () { if (store._presetRenameId === p.id) commitPresetRename(p.id); },
+            },
+          });
+          inp.value = (store._presetRenameVal != null) ? store._presetRenameVal : p.name;
+          tab.appendChild(inp);
+          setTimeout(function () { try { inp.focus(); inp.select(); } catch (_) { /* ignore */ } }, 0);
+        } else {
+          tab.appendChild(el('span', { text: p.name }));
+          if (editing && on) {
+            var mkMini = function (txt, label, fn) {
+              return el('span', {
+                cls: 'preset-mini', text: txt, attrs: { role: 'button', tabindex: '0', 'aria-label': label, title: label },
+                on: { click: function (e) { e.stopPropagation(); fn(); }, keydown: function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); fn(); } } },
+              });
+            };
+            tab.appendChild(mkMini('✎', '이름 변경', function () { store._presetRenameId = p.id; store._presetRenameVal = p.name; render(); }));
+            tab.appendChild(mkMini('⧉', '복제', function () { onDuplicatePreset(p.id); }));
+            if (dash.presets.length > 1) tab.appendChild(mkMini('✕', '삭제', function () { onRemovePreset(p.id); }));
+          }
+        }
+        presetBar.appendChild(tab);
+      });
+      if (editing) presetBar.appendChild(el('button', { cls: 'preset-tab preset-tab--add', text: '+ 대시보드', attrs: { type: 'button', 'aria-label': '대시보드 추가' }, on: { click: function () { onAddPreset(); } } }));
+      wrap.appendChild(presetBar);
+    }
     var editBar = el('div', { style: 'display:flex;align-items:center;justify-content:flex-end;gap:10px;padding:8px 30px 0;' });
     editBar.appendChild(el('button', {
       cls: 'home-editmode' + (editing ? ' is-on' : ''),
@@ -7805,6 +7862,8 @@ function initBrowser() {
     // [위젯 추가/제거] 숨긴(미적용) 위젯 적재 — 토글 가능 위젯 화이트리스트만(부재/손상 시 빈 = 전부 표시).
     store.hiddenWidgets = (res && res.ok !== false && Array.isArray(res.hiddenWidgets))
       ? res.hiddenWidgets.filter(function (id) { return TOGGLEABLE_WIDGET_IDS.indexOf(id) >= 0; }) : [];
+    // [로드맵 Phase 2] 대시보드(프리셋) 적재 — 탭/전환용. 활성 프리셋은 위 homeLayout/hidden/sizes 와 동기.
+    store.dashboard = applyDashboard(res && res.ok !== false ? res.dashboard : null);
     // [항목3] 연결된 LLM 모델 토큰 사용량 누적 적재(브리핑 생성 시 메인이 누적·영속).
     store.aiUsage = (res && res.ok !== false && res.aiUsage && typeof res.aiUsage === 'object') ? res.aiUsage : null;
     // [M13] 브리핑 carry-over 항목(open) 적재 — 영속 단일 출처. 실시간 생성상태는 push 로 갱신.
@@ -7815,6 +7874,52 @@ function initBrowser() {
     }
     applyProjectNames();   // 별칭을 현재 viewModels에 반영
     applyTheme();          // 테마 적용(라이트/다크/시스템)
+  }
+
+  // ── [로드맵 Phase 2] 대시보드(프리셋) 전환/관리 핸들러 — 응답으로 활성 프리셋 레거시 키 갱신 후 재렌더 ──
+  /** 프리셋 IPC 응답 적용 — dashboard + 활성 프리셋 레거시 키(homeLayout/hidden/sizes) 갱신 후 render. */
+  function applyPresetResponse(res) {
+    if (!res || res.ok === false) return false;
+    store.dashboard = applyDashboard(res.dashboard);
+    store.homeLayout = applyHomeLayout(res.homeLayout);
+    store.homeWidgetSizes = applyHomeWidgetSizes(res.homeWidgetSizes);
+    store.hiddenWidgets = Array.isArray(res.hiddenWidgets)
+      ? res.hiddenWidgets.filter(function (id) { return TOGGLEABLE_WIDGET_IDS.indexOf(id) >= 0; }) : [];
+    store._presetRenameId = null;
+    render();
+    return true;
+  }
+  async function onSwitchPreset(id) {
+    if (!bridgeHas('setActivePreset') || !store.dashboard || store.dashboard.activePreset === id) return;
+    var res = await ipc('setActivePreset', id);
+    if (!applyPresetResponse(res)) toast('대시보드 전환에 실패했습니다.', true);
+  }
+  async function onAddPreset() {
+    if (!bridgeHas('addPreset')) return;
+    var res = await ipc('addPreset', '새 대시보드');
+    if (!applyPresetResponse(res)) toast(res && res.code === 'LIMIT' ? '대시보드가 너무 많습니다.' : '대시보드 추가에 실패했습니다.', true);
+  }
+  async function onDuplicatePreset(id) {
+    if (!bridgeHas('duplicatePreset')) return;
+    var res = await ipc('duplicatePreset', id);
+    if (!applyPresetResponse(res)) toast(res && res.code === 'LIMIT' ? '대시보드가 너무 많습니다.' : '복제에 실패했습니다.', true);
+  }
+  async function onRenamePreset(id, name) {
+    if (!bridgeHas('renamePreset')) { store._presetRenameId = null; render(); return; }
+    var res = await ipc('renamePreset', id, name);
+    if (!applyPresetResponse(res)) { store._presetRenameId = null; render(); }
+  }
+  async function onRemovePreset(id) {
+    if (!bridgeHas('removePreset')) return;
+    if (!store.dashboard || (store.dashboard.presets || []).length <= 1) { toast('마지막 대시보드는 삭제할 수 없습니다.', true); return; }
+    var res = await ipc('removePreset', id);
+    if (!applyPresetResponse(res)) toast('삭제에 실패했습니다.', true);
+  }
+  /** 인라인 이름변경 커밋(빈 이름은 취소). */
+  function commitPresetRename(id) {
+    var v = (store._presetRenameVal || '').trim();
+    store._presetRenameId = null;
+    if (v) onRenamePreset(id, v); else render();
   }
 
   /** viewModels 빌드 직후 감지명을 캡처(별칭 해제 시 복원 기준). */
@@ -8595,6 +8700,7 @@ if (typeof module !== 'undefined' && module.exports) {
     // [R-32] 홈 섹션 화이트리스트 + 순서 정규화(렌더러 동형)
     HOME_SECTION_IDS,
     applyHomeLayout,
+    applyDashboard,
     // [홈 위젯 크기] 폭·높이 정규화 + 반응형 열 수/기본 스팬(렌더러 동형, 헤드리스 테스트)
     applyHomeWidgetSizes,
     computeHomeCols,
