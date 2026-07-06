@@ -35,6 +35,7 @@ function toResponse(state) {
     favorites: state.favorites, order: state.order, sortMode: state.sortMode, names: state.names,
     theme: state.theme, todos: state.todos, langTrend: state.langTrend, homeLayout: state.homeLayout,
     hiddenWidgets: state.hiddenWidgets, // [위젯 추가/제거] 숨긴(미적용) 위젯 집합
+    homeWidgetSizes: state.homeWidgetSizes || {}, // [홈 위젯 크기] 위젯별 폭(열 스팬)·높이(px)
     briefing: { items: openItems, counters: briefing.counters },
     // [항목3] 연결된 LLM 모델 토큰 사용량 누적(표시·집계 전용 수치만). 정규화된 값 그대로 노출.
     aiUsage: state.aiUsage || uiStateStore.defaultAiUsage(),
@@ -130,6 +131,21 @@ function setHomeLayout(args, ctx) {
   const state = store.read(storeCtx);
   const next = store.write(Object.assign({}, state, { homeLayout }), storeCtx);
   return { ok: true, homeLayout: next.homeLayout };
+}
+
+/**
+ * [홈 위젯 크기] spip:setHomeWidgetSizes — 위젯별 폭(열 스팬)·높이(px) 설정.
+ *   렌더러 입력 불신 — normalizeHomeWidgetSizes 가 유일 검증 경계(화이트리스트·클램프). 손상 입력 흡수(에러코드 불요).
+ * @param {object} args { sizes:Object<string,{w,h}> }
+ * @returns {{ok:true, homeWidgetSizes}}
+ */
+function setHomeWidgetSizes(args, ctx) {
+  const sizes = (args && typeof args === 'object') ? args.sizes : undefined;
+  const homeWidgetSizes = uiStateStore.normalizeHomeWidgetSizes(sizes); // 단일 신뢰 경계
+  const { store, storeCtx } = resolveStore(ctx);
+  const state = store.read(storeCtx);
+  const next = store.write(Object.assign({}, state, { homeWidgetSizes }), storeCtx);
+  return { ok: true, homeWidgetSizes: next.homeWidgetSizes };
 }
 
 /**
@@ -294,4 +310,4 @@ function updateLangTrend(args, ctx) {
   return { ok: true, prev: written.langTrend.prev, cur: written.langTrend.cur };
 }
 
-module.exports = { getUiState, setFavorite, setOrder, setSortMode, setHomeLayout, setHiddenWidgets, setProjectName, setTheme, addTodo, toggleTodo, removeTodo, setTodoDue, updateLangTrend };
+module.exports = { getUiState, setFavorite, setOrder, setSortMode, setHomeLayout, setHiddenWidgets, setHomeWidgetSizes, setProjectName, setTheme, addTodo, toggleTodo, removeTodo, setTodoDue, updateLangTrend };

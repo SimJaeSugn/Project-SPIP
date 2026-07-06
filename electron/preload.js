@@ -148,6 +148,8 @@ contextBridge.exposeInMainWorld('spip', {
   setHomeLayout: (ids) => ipcRenderer.invoke('spip:setHomeLayout', { ids: Array.isArray(ids) ? ids.map(String) : [] }),
   // [위젯 추가/제거] 숨긴(미적용) 위젯 집합 — id 배열만. 읽기는 getUiState 응답의 hiddenWidgets. 검증은 main normalizeHiddenWidgets.
   setHiddenWidgets: (ids) => ipcRenderer.invoke('spip:setHiddenWidgets', { ids: Array.isArray(ids) ? ids.map(String) : [] }),
+  // [홈 위젯 크기] 위젯별 폭(열 스팬)·높이(px) 맵 { id:{w,h} }. 읽기는 getUiState 응답의 homeWidgetSizes. 검증은 main normalizeHomeWidgetSizes.
+  setHomeWidgetSizes: (sizes) => ipcRenderer.invoke('spip:setHomeWidgetSizes', { sizes: (sizes && typeof sizes === 'object') ? sizes : {} }),
 
   // 프로젝트 표시 별칭(빈 문자열이면 해제) + 테마(light|dark|system).
   setProjectName: (id, name) => ipcRenderer.invoke('spip:setProjectName', { id: String(id), name: name == null ? '' : String(name) }),

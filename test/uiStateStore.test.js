@@ -178,6 +178,46 @@ test('normalizeHiddenWidgets — 토글 위젯 화이트리스트만·중복 제
   assert.deepStrictEqual(store.TOGGLEABLE_WIDGET_IDS, store.HOME_SECTION_IDS.filter((id) => id !== 'featureAdd'));
 });
 
+// ── [홈 위젯 크기] homeWidgetSizes ──
+
+test('normalizeHomeWidgetSizes — 화이트리스트·클램프(w[1..4]·h[120..1600])·featureAdd 제거', () => {
+  const r = store.normalizeHomeWidgetSizes({
+    mail: { w: 2, h: 300 },
+    aiusage: { w: 9, h: 99999 },   // 상한 클램프 → w:4, h:1600
+    disk: { w: 0, h: 10 },         // 하한 클램프 → w:1, h:120
+    todos: { w: 2, h: null },      // 자동 높이 유지
+    featureAdd: { w: 2, h: 200 },  // 제거(추가 트리거는 리사이즈 대상 아님)
+    bogus: { w: 2, h: 200 },       // 미지 id 제거
+    attention: 'nope',             // 비객체 제거
+  });
+  assert.deepStrictEqual(r, {
+    mail: { w: 2, h: 300 },
+    aiusage: { w: 4, h: 1600 },
+    disk: { w: 1, h: 120 },
+    todos: { w: 2, h: null },
+  });
+});
+
+test('normalizeHomeWidgetSizes — 비객체/손상 입력 → 빈 객체(graceful)', () => {
+  assert.deepStrictEqual(store.normalizeHomeWidgetSizes(null), {});
+  assert.deepStrictEqual(store.normalizeHomeWidgetSizes('nope'), {});
+  assert.deepStrictEqual(store.normalizeHomeWidgetSizes([1, 2]), {});
+  assert.deepStrictEqual(store.normalizeHomeWidgetSizes({ mail: {} }), { mail: { w: 1, h: null } });
+});
+
+test('defaultState/normalizeState — homeWidgetSizes 기본 빈 객체', () => {
+  assert.deepStrictEqual(store.defaultState().homeWidgetSizes, {});
+  assert.deepStrictEqual(store.normalizeState({}).homeWidgetSizes, {});
+});
+
+test('write/read — homeWidgetSizes 라운드트립 보존', () => {
+  const file = tmpFile();
+  const sizes = { mail: { w: 3, h: 260 }, todos: { w: 2, h: null } };
+  const written = store.write({ schemaVersion: 2, homeWidgetSizes: sizes }, { uiStatePath: file });
+  assert.deepStrictEqual(written.homeWidgetSizes, sizes);
+  assert.deepStrictEqual(store.read({ uiStatePath: file }).homeWidgetSizes, sizes);
+});
+
 test('defaultState/normalizeState — hiddenWidgets 시드(셸프 기본 숨김) / v2 입력은 무시드', () => {
   // [SH-1 PM#3] 신규 설치 기본 숨김 시드 — 셸프 2변형이 기본 숨김.
   assert.deepStrictEqual(store.defaultState().hiddenWidgets, ['shelf', 'shelfWide']);

@@ -375,17 +375,46 @@ input, button, select { font-family: inherit; }
 .home__kpi-label { font-size: 12px; color: var(--t3); margin-top: 4px; }
 .home__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
 
-/* [R-32] 홈 섹션 워터폴(masonry) — CSS columns 로 높이 제각각 카드를 빈틈 없이 채운다(Q-B 기본).
- *   columns 단축(열너비 300px + 최대 4열): 폭에 따라 4→3→2→1열로 자동 반응(별도 미디어쿼리 불요).
- *   floor((content+gap)/(300+gap)) 만큼 열이 생기되 최대 4열로 캡. 넓은 화면 4열, 좁아지면 3·2·1열. */
-.home-masonry { columns: 300px 4; column-gap: 20px; }
-.home-section {
-  position: relative;             /* [위젯 추가/제거] 제거(×) 버튼 absolute 기준 */
-  break-inside: avoid;            /* 섹션이 컬럼 경계에서 쪼개지지 않게(겹침/빈칸 0) */
-  -webkit-column-break-inside: avoid;
-  margin: 0 0 20px;               /* 컬럼 내 세로 간격(기존 2-컬럼 gap:20px 유지) */
+/* [R-32/홈 위젯 크기] 홈 섹션 워터폴(masonry) — CSS Grid 기반.
+ *   열 수(--home-cols)는 app.js layoutHomeMasonry 가 콘텐츠 너비→반응형(최대 4열)으로 산출해 주입.
+ *   각 셀은 폭=grid-column span(여러 열 스팬 가능), 높이=grid-row span(미세 8px 행)으로 masonry 팩킹.
+ *   grid-auto-rows(8px) + gap(20px): 셀 span 안의 행 갭은 셀이 덮어 안 보이고, 셀 사이 갭만 20px. */
+.home-masonry {
+  display: grid;
+  grid-template-columns: repeat(var(--home-cols, 1), minmax(0, 1fr));
+  grid-auto-rows: 8px;            /* HOME_ROW_UNIT — 행 스팬 단위 */
+  gap: 20px;                      /* HOME_GAP — 행·열 공통 */
+  align-items: start;            /* 콘텐츠 자연 높이 유지(늘어남 방지) */
 }
-.home-section:first-child { margin-top: 0; }
+.home-section {
+  position: relative;             /* [위젯 추가/제거] 제거(×) 버튼·리사이즈 핸들 absolute 기준 */
+  min-width: 0;                   /* 그리드 셀 오버플로 방지(좁은 열에서 내용 넘침 차단) */
+}
+/* [홈 위젯 크기] 콘텐츠 래퍼 — 높이 조절 대상. 자식 카드가 래퍼 높이를 채우도록 flex.
+ *   [홈 위젯 반응형] inline-size 컨테이너로 지정 → 내부 UI가 뷰포트가 아닌 '위젯 자신의 폭'에 반응한다. */
+.home-section__content { display: flex; flex-direction: column; min-width: 0; container-type: inline-size; container-name: hw; }
+.home-section__content > * { flex: 1 1 auto; min-height: 0; }
+/* [홈 위젯 반응형] 리스트형 위젯 본문 — auto-fit 로 위젯이 넓으면 여러 열, 좁으면 1열(위젯 크기에 자동 반응).
+ *   display 는 클래스가 소유(인라인 미지정) — 넓힘/좁힘에 열 수가 매끄럽게 반응. gap 은 각 위젯 인라인 유지. */
+.hw-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); align-content: start; }
+/* [홈 위젯 반응형] 생산성 2단(차트|언어) — 위젯이 좁아지면 세로 스택 + 세로 구분선 숨김. */
+@container hw (max-width: 480px) {
+  .hw-split { flex-direction: column; }
+  .hw-split > * { flex: 0 0 auto; }           /* 스택 시 각 단은 자연 높이(가로 basis:0% 잔재 무력화) */
+  .hw-split > .hw-vrule { display: none; }
+}
+/* [홈 위젯 크기] 우하단 리사이즈 핸들 — 평소 옅게, 호버/드래그 시 강조. */
+.home-resize {
+  position: absolute; right: 3px; bottom: 3px; z-index: 4;
+  width: 15px; height: 15px; cursor: nwse-resize; opacity: 0;
+  border-right: 2px solid var(--t3); border-bottom: 2px solid var(--t3);
+  border-bottom-right-radius: 6px; transition: opacity .12s ease, border-color .12s ease;
+}
+.home-section:hover .home-resize { opacity: .55; }
+.home-resize:hover { opacity: 1; border-color: var(--accent); }
+.home-section--resizing { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 14px; }
+.home-section--resizing .home-resize { opacity: 1; border-color: var(--accent); }
+body.home-resizing { cursor: nwse-resize; user-select: none; }
 /* [위젯 추가/제거] 위젯 제거(×) 버튼 — 평소 숨김, 카드 호버 시 우상단 노출. */
 .widget-remove {
   position: absolute; top: 8px; right: 8px; z-index: 3;
@@ -430,15 +459,14 @@ input, button, select { font-family: inherit; }
 .home-section--ghost { opacity: .45; outline: 2px dashed var(--accent); outline-offset: -2px; border-radius: 14px; }
 .home-section--chosen { cursor: grabbing; }
 .home-section--drag { box-shadow: 0 14px 40px rgba(28,25,23,.22); }
-/* 반응형(4→3→2→1열)은 위 `columns: 300px 4` 열너비가 폭에 따라 자동 처리 — 고정 열수 미디어쿼리 제거. */
+/* 반응형 열 수(최대 4)·위젯별 폭/높이 스팬은 app.js layoutHomeMasonry 가 CSS Grid 로 처리. */
 
 /* =====================================================================
  * [SH-2] 즐겨찾기 셸프 위젯 — 초안(favorites-shelf-widget.dc.html) 디자인 재현.
  *   레이아웃·색은 app.js 가 CSSOM(node.style)으로 적용(CSP style-src 'self'). 여기엔 애니메이션 keyframes·
  *   :hover 강조·스크롤바 숨김처럼 인라인으로 못 두는 규칙만 둔다.
  * ===================================================================== */
-/* shelfWide 변형 — masonry 컬럼 전체폭 스팬. */
-.home-section--wide { column-span: all; -webkit-column-span: all; break-inside: avoid; }
+/* shelfWide 는 이제 grid-column span(기본 전체폭 = homeDefaultSpan) 으로 처리 — 별도 규칙 불요. */
 /* 셸프 행 가로 스크롤바 숨김(드래그/휠로 이동). */
 .shelf-row.no-sb, .no-sb { scrollbar-width: none; -ms-overflow-style: none; }
 .shelf-row.no-sb::-webkit-scrollbar, .no-sb::-webkit-scrollbar { width: 0; height: 0; display: none; }

@@ -8,7 +8,7 @@ const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
 
-const { HOME_SECTION_IDS, applyHomeLayout, TOGGLEABLE_WIDGET_IDS } = require('../public/app.js');
+const { HOME_SECTION_IDS, applyHomeLayout, TOGGLEABLE_WIDGET_IDS, applyHomeWidgetSizes, computeHomeCols, homeDefaultSpan, HOME_MAX_COLS } = require('../public/app.js');
 const realStore = require('../lib/common/uiStateStore');
 const APP_SRC = fs.readFileSync(path.join(__dirname, '..', 'public', 'app.js'), 'utf8');
 // 메인 계약(단일 신뢰 경계)과 동형인지 교차 확인.
@@ -27,6 +27,34 @@ test('R-32 — 렌더러 HOME_SECTION_IDS 가 메인 uiStateStore 와 동일 집
   assert.ok(m, '메인에 HOME_SECTION_IDS 정의가 있어야 한다');
   const mainIds = (m[1].match(/'([a-zA-Z]+)'/g) || []).map((s) => s.replace(/'/g, ''));
   assert.deepStrictEqual(mainIds, HOME_SECTION_IDS, '렌더러·메인 동형(드리프트 0)');
+});
+
+// ── [홈 위젯 크기] applyHomeWidgetSizes / computeHomeCols / homeDefaultSpan (렌더러 순수) ──
+test('홈 위젯 크기 — applyHomeWidgetSizes: 화이트리스트·클램프(메인 동형)', () => {
+  const r = applyHomeWidgetSizes({
+    mail: { w: 3, h: 250 },
+    aiusage: { w: 99, h: 99999 },  // 클램프 → w:HOME_MAX_COLS, h:1600
+    featureAdd: { w: 2, h: 200 },  // 제거
+    bogus: { w: 2, h: 200 },       // 제거
+  });
+  assert.deepStrictEqual(r, { mail: { w: 3, h: 250 }, aiusage: { w: HOME_MAX_COLS, h: 1600 } });
+  assert.deepStrictEqual(applyHomeWidgetSizes(null), {});
+  assert.deepStrictEqual(applyHomeWidgetSizes([1]), {});
+});
+
+test('홈 위젯 크기 — computeHomeCols: 폭에 따라 1..HOME_MAX_COLS 반응(최소열 300+gap20)', () => {
+  assert.strictEqual(computeHomeCols(0), 1);
+  assert.strictEqual(computeHomeCols(300), 1);      // 1열 최소
+  assert.strictEqual(computeHomeCols(640), 2);      // 2*300+20=620 ≤ 640
+  assert.strictEqual(computeHomeCols(960), 3);      // 3*300+40=940 ≤ 960
+  assert.strictEqual(computeHomeCols(1280), 4);     // 4*300+60=1260 ≤ 1280
+  assert.strictEqual(computeHomeCols(5000), HOME_MAX_COLS); // 최대 캡
+});
+
+test('홈 위젯 크기 — homeDefaultSpan: shelfWide 는 전체폭, 그 외 1', () => {
+  assert.strictEqual(homeDefaultSpan('shelfWide'), HOME_MAX_COLS);
+  assert.strictEqual(homeDefaultSpan('mail'), 1);
+  assert.strictEqual(homeDefaultSpan('attention'), 1);
 });
 
 // ── applyHomeLayout (순서 정규화, 메인 normalizeHomeLayout 과 동일 규칙) ──
@@ -97,6 +125,43 @@ test('R-32 — renderHome 이 homeLayout 순서로 데이터-주도 배치(mason
 test('R-32 — loadUiState 가 res.homeLayout 적재(getUiState 응답 소비)', () => {
   assert.ok(/store\.homeLayout\s*=\s*applyHomeLayout\(res[\s\S]{0,40}homeLayout/.test(APP_SRC),
     'loadUiState 에서 res.homeLayout 을 applyHomeLayout 으로 적재');
+});
+
+// ── [홈 위젯 크기] 렌더 배선(정적 소스 검증 — 이 저장소의 렌더러 배선 검증 관례) ──
+test('홈 위젯 크기 — 렌더가 콘텐츠 래퍼·리사이즈 핸들·레이아웃 예약을 배선', () => {
+  assert.ok(/cls:\s*'home-section__content'/.test(APP_SRC), '콘텐츠 래퍼(.home-section__content) 생성');
+  assert.ok(/homeResizeHandle\(id\)/.test(APP_SRC), '리사이즈 핸들 부착(homeResizeHandle)');
+  assert.ok(/scheduleHomeMasonryLayout\(\)/.test(APP_SRC), 'DOM 삽입 후 레이아웃 예약 호출');
+  // shelfWide 전용 --wide 클래스 제거(이제 grid-column span 으로 처리)
+  assert.ok(!/home-section--wide/.test(APP_SRC), '구 column-span(.home-section--wide) 배선 제거');
+});
+
+test('홈 위젯 크기 — layoutHomeMasonry 가 열 수·폭/높이 스팬을 적용', () => {
+  const start = APP_SRC.indexOf('function layoutHomeMasonry(');
+  assert.ok(start >= 0, 'layoutHomeMasonry 함수 존재');
+  const body = APP_SRC.slice(start, start + 1400);
+  assert.ok(/setProperty\('--home-cols'/.test(body), '반응형 열 수(--home-cols) 주입');
+  assert.ok(/gridColumnEnd\s*=\s*'span '/.test(body), '폭 = grid-column span 적용');
+  assert.ok(/gridRowEnd\s*=\s*'span '/.test(body), '높이 = grid-row span 적용');
+});
+
+test('홈 위젯 크기 — 리사이즈 종료 시 setHomeWidgetSizes 로 영속', () => {
+  assert.ok(/ipc\('setHomeWidgetSizes'/.test(APP_SRC), 'setHomeWidgetSizes IPC 로 크기 영속');
+  assert.ok(/store\._homeResize\s*=\s*\{/.test(APP_SRC), '리사이즈 세션 상태 보관(store._homeResize)');
+});
+
+// ── [홈 위젯 반응형] 위젯 내부 UI 가 자기 폭에 반응(컨테이너 쿼리/auto-fit) ──
+test('홈 위젯 반응형 — 컨테이너 컨텍스트 + 반응형 훅 클래스 배선', () => {
+  const CSS = fs.readFileSync(path.join(__dirname, '..', 'public', 'styles.css'), 'utf8');
+  // 각 위젯이 inline-size 컨테이너
+  assert.ok(/\.home-section__content\s*\{[^}]*container-type:\s*inline-size/.test(CSS), 'content 가 inline-size 컨테이너');
+  // 리스트 다열(auto-fit) + 생산성 스택(@container)
+  assert.ok(/\.hw-cols\s*\{[^}]*repeat\(auto-fit/.test(CSS), 'hw-cols auto-fit 다열');
+  assert.ok(/@container\s+hw\s*\(max-width:\s*480px\)/.test(CSS), '생산성 스택 컨테이너 쿼리');
+  // 렌더가 훅 클래스를 부여
+  assert.ok(/cls:\s*'hw-split'/.test(APP_SRC), '생산성 카드에 hw-split');
+  assert.ok(/cls:\s*'hw-vrule'/.test(APP_SRC), '생산성 구분선에 hw-vrule');
+  assert.ok(/cls:\s*'hw-cols'/.test(APP_SRC), '리스트형 위젯에 hw-cols');
 });
 
 test('R-32 — homeSortable: RG.widget 등록 + onEnd 마이크로태스크 패턴(R4) + setHomeLayout 영속', () => {

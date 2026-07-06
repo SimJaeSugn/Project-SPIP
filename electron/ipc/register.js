@@ -218,6 +218,7 @@ function registerIpcHandlers(deps) {
   guard('spip:setHomeLayout', (args) => uiStateIpc.setHomeLayout(args, ctx));
   // [위젯 추가/제거] 숨긴(미적용) 위젯 집합 — 토글 가능 위젯 화이트리스트만. 검증은 메인 normalizeHiddenWidgets.
   guard('spip:setHiddenWidgets', (args) => uiStateIpc.setHiddenWidgets(args, ctx));
+  guard('spip:setHomeWidgetSizes', (args) => uiStateIpc.setHomeWidgetSizes(args, ctx));
   // 프로젝트 표시 별칭 + 테마(라이트/다크/시스템).
   guard('spip:setProjectName', (args) => uiStateIpc.setProjectName(args, ctx));
   guard('spip:setTheme', (args) => uiStateIpc.setTheme(args, ctx));

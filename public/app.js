@@ -691,6 +691,49 @@ function applyHomeLayout(layout) {
   return out;
 }
 
+/* [홈 위젯 크기] 폭(열 스팬)·높이(px) — homeLayout(순서)·hiddenWidgets(표시)와 직교. 메인 uiStateStore 와 상수 동형. */
+const HOME_MAX_COLS = 4;      // 폭 스팬 상한(반응형 최대 열 수)
+const HOME_COL_MIN_W = 300;   // 열 최소 너비(px) — 이 폭 기준으로 반응형 열 수 산출
+const HOME_GAP = 20;          // 그리드 간격(px, 행·열 공통)
+const HOME_ROW_UNIT = 8;      // masonry 미세 행 단위(px) — 행 스팬 계산 기준
+const HOME_H_MIN = 120;       // 사용자 지정 높이 하한(px)
+const HOME_H_MAX = 1600;      // 상한(px)
+
+/** shelfWide 는 기본 전체폭, 그 외는 기본 1열(사용자 미조절 시 기본 스팬). */
+function homeDefaultSpan(id) { return id === 'shelfWide' ? HOME_MAX_COLS : 1; }
+
+/** 콘텐츠 너비(px)에서 반응형 열 수 산출(순수) — 최소열너비 기준, [1, HOME_MAX_COLS] 캡. */
+function computeHomeCols(contentW) {
+  const w = (typeof contentW === 'number' && contentW > 0) ? contentW : 0;
+  const n = Math.floor((w + HOME_GAP) / (HOME_COL_MIN_W + HOME_GAP));
+  return Math.max(1, Math.min(HOME_MAX_COLS, n));
+}
+
+/**
+ * [홈 위젯 크기] homeWidgetSizes 렌더러측 정규화(순수) — 메인 normalizeHomeWidgetSizes 동형.
+ *   { [id]: {w,h} } 만, id 는 토글 가능 위젯, w∈[1,HOME_MAX_COLS], h∈[HOME_H_MIN,HOME_H_MAX]|null.
+ *   부재/손상 응답에 graceful(메인이 단일 신뢰 경계지만 렌더러도 방어).
+ */
+function applyHomeWidgetSizes(input) {
+  const out = {};
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return out;
+  const allowed = new Set(TOGGLEABLE_WIDGET_IDS);
+  for (const id of Object.keys(input)) {
+    if (!allowed.has(id)) continue;
+    const v = input[id];
+    if (!v || typeof v !== 'object') continue;
+    let w = Number(v.w);
+    w = Number.isFinite(w) ? Math.min(HOME_MAX_COLS, Math.max(1, Math.round(w))) : 1;
+    let h = null;
+    if (v.h !== null && v.h !== undefined) {
+      const hn = Number(v.h);
+      if (Number.isFinite(hn)) h = Math.min(HOME_H_MAX, Math.max(HOME_H_MIN, Math.round(hn)));
+    }
+    out[id] = { w, h };
+  }
+  return out;
+}
+
 /* =====================================================================
  * [SH-2] 즐겨찾기 셸프 위젯 — 순수 뷰모델/헬퍼(헤드리스 테스트 대상).
  *   표시 메타(name/title/sub/desc/color/mono/cat/status/bannerImage)는 main 이 ShelfBookmarkView 로
@@ -1516,6 +1559,8 @@ function initBrowser() {
     mailRefreshTimer: null,       // 홈에서 메일 주기 갱신 타이머
     commitRefreshTimer: null,     // [R-31] 홈에서 커밋 차트 5분 주기 갱신 타이머(홈 이탈/비가시 시 정지)
     homeLayout: HOME_SECTION_IDS.slice(), // [R-32] 홈 섹션 표시 순서(getUiState.homeLayout 적재, 기본=enum 순서)
+    homeWidgetSizes: {},                  // [홈 위젯 크기] { id:{w,h} } 위젯별 폭(열 스팬)·높이(px) — 미조절이면 항목 없음
+    _homeResize: null,                    // 리사이즈 드래그 세션(진행 중 { id, cell, ... })
     // [위젯 추가/제거] 숨긴(미적용) 위젯 id 배열(getUiState.hiddenWidgets 적재) + 위젯 갤러리 팝업 표시 플래그.
     hiddenWidgets: [],
     showWidgetGallery: false,
@@ -2318,9 +2363,10 @@ function initBrowser() {
     heroPad.appendChild(hero);
     wrap.appendChild(heroPad);
 
-    // ── [R-32] 워터폴(masonry) 섹션 — homeLayout 순서로 데이터-주도 배치 + 드래그 재정렬 ──
+    // ── [R-32] CSS Grid 워터폴(masonry) 섹션 — homeLayout 순서로 배치 + 드래그 재정렬 + 리사이즈 ──
     //   각 섹션은 .home-section(data-home-section=enum id) 래퍼로 감싸 SortableJS 가 이동 단위로 잡는다.
-    //   레이아웃은 CSS columns(.home-masonry) — 높이가 제각각인 카드를 빈틈 없이 채운다.
+    //   [홈 위젯 크기] 레이아웃은 CSS Grid — layoutHomeMasonry() 가 폭(열 스팬)·높이(행 스팬)를 계산해
+    //   위젯이 여러 열에 걸치고 높이가 유동 조절되도록 한다(모서리 핸들 드래그로 조절).
     var grid = el('div', { cls: 'home-masonry', style: 'padding:20px 30px 36px;' });
     var hidden = store.hiddenWidgets || [];
     applyHomeLayout(store.homeLayout).forEach(function (id) {
@@ -2329,11 +2375,15 @@ function initBrowser() {
       var node = renderHomeSection(id, reclaim);
       if (!node) return;
       // data-home-section 은 고정 enum 값만(L-2/L-3: 스캔 유래 신뢰 못 할 데이터 아님). 드래그 이동 단위.
-      //   [SH-2] shelfWide 는 masonry 컬럼 전체폭 스팬(.home-section--wide → column-span:all).
-      var cell = el('div', { cls: 'home-section' + (id === 'shelfWide' ? ' home-section--wide' : ''), attrs: { 'data-home-section': id } });
+      var cell = el('div', { cls: 'home-section', attrs: { 'data-home-section': id } });
       // [위젯 추가/제거] featureAdd 외 위젯엔 제거(×) 버튼 오버레이(호버 시 노출).
       if (id !== 'featureAdd') cell.appendChild(widgetRemoveBtn(id));
-      cell.appendChild(node);
+      // [홈 위젯 크기] 콘텐츠 래퍼 — 높이 조절은 이 래퍼에 적용(제거 버튼·핸들은 absolute 라 높이 무관).
+      var content = el('div', { cls: 'home-section__content' });
+      content.appendChild(node);
+      cell.appendChild(content);
+      // [홈 위젯 크기] featureAdd 외 위젯엔 우하단 리사이즈 핸들(폭=열 스냅, 높이=px 유동).
+      if (id !== 'featureAdd') cell.appendChild(homeResizeHandle(id));
       grid.appendChild(cell);
     });
     wrap.appendChild(grid);
@@ -2342,6 +2392,8 @@ function initBrowser() {
     root.appendChild(main);
     if (store.state.selectedId) root.appendChild(renderDrawer());
     if (store.showWidgetGallery) root.appendChild(renderWidgetGallery()); // [위젯 추가/제거] 위젯 갤러리 팝업
+    // [홈 위젯 크기] DOM 삽입 후 1회 레이아웃(폭·높이 스팬) + 콘텐츠 크기 변화 관찰(async 위젯 로드 대응).
+    scheduleHomeMasonryLayout();
     return root;
   }
 
@@ -2450,7 +2502,7 @@ function initBrowser() {
     head.appendChild(icon); head.appendChild(titleWrap); head.appendChild(open);
     card.appendChild(head);
 
-    var listWrap = el('div', { style: 'display:flex;flex-direction:column;gap:2px;' });
+    var listWrap = el('div', { cls: 'hw-cols', style: 'gap:2px 22px;' }); // [반응형] 위젯이 넓으면 다열
     if (items.length === 0) {
       listWrap.appendChild(el('div', { text: '모든 프로젝트가 깔끔합니다.', style: 'font-size:12.5px;color:#a8a29e;padding:8px 6px;' }));
     }
@@ -2472,7 +2524,7 @@ function initBrowser() {
   }
 
   function renderHomeProductivity() {
-    var card = el('div', { style: HOME_CARD + 'padding:21px 22px;display:flex;gap:26px;' });
+    var card = el('div', { cls: 'hw-split', style: HOME_CARD + 'padding:21px 22px;display:flex;gap:26px;' }); // [반응형] 좁으면 세로 스택
     // 좌: 주간 생산성(최근 7일 커밋)
     var leftCol = el('div', { style: 'flex:1.2 1 0%;min-width:0;' });
     var ca = store.commitActivity || { days: [] };
@@ -2490,7 +2542,7 @@ function initBrowser() {
     chartRegion.appendChild(el('div', { cls: 'commit-chart-host', attrs: { 'aria-label': '최근 7일 커밋 빈도 차트' } }));
     leftCol.appendChild(chartRegion);
     card.appendChild(leftCol);
-    card.appendChild(el('div', { style: 'width:1px;background:#f0efed;flex:0 0 auto;' }));
+    card.appendChild(el('div', { cls: 'hw-vrule', style: 'width:1px;background:#f0efed;flex:0 0 auto;' })); // [반응형] 스택 시 숨김
     // 우: 언어 · 스택 추세
     var rightCol = el('div', { style: 'flex:1 1 0%;min-width:0;' });
     rightCol.appendChild(el('div', { text: '언어 · 스택 추세', style: 'font-size:15px;font-weight:600;margin-bottom:3px;' }));
@@ -2763,7 +2815,7 @@ function initBrowser() {
     }));
     card.appendChild(head);
 
-    var list = el('div', { style: 'display:flex;flex-direction:column;' });
+    var list = el('div', { cls: 'hw-cols', style: 'column-gap:22px;' }); // [반응형] 위젯이 넓으면 다열
     if (!store.mailSummaryLoaded && store.busyMailSummary) {
       list.appendChild(el('div', { text: '메일을 확인하는 중…', style: 'font-size:12px;color:#a8a29e;padding:6px 0;' }));
     } else if (items.length === 0) {
@@ -3298,7 +3350,7 @@ function initBrowser() {
     head.appendChild(el('span', { text: reclaim.label, style: 'font-size:22px;font-weight:700;color:#15803d;font-variant-numeric:tabular-nums;letter-spacing:-0.02em;' }));
     card.appendChild(head);
     card.appendChild(el('div', { text: '방치 프로젝트 node_modules 정리 시', style: 'font-size:11.5px;color:#a8a29e;margin-bottom:16px;' }));
-    var list = el('div', { style: 'display:flex;flex-direction:column;gap:12px;' });
+    var list = el('div', { cls: 'hw-cols', style: 'gap:12px 22px;' }); // [반응형] 위젯이 넓으면 다열
     if (reclaim.items.length === 0) {
       list.appendChild(el('div', { text: '설정 → 스캔 옵션에서 용량 수집을 켜면 표시됩니다.', style: 'font-size:11.5px;color:#a8a29e;line-height:1.6;' }));
     }
@@ -7455,6 +7507,153 @@ function initBrowser() {
   }
 
   /* =====================================================================
+   * [홈 위젯 크기] CSS Grid masonry 레이아웃 + 모서리 리사이즈
+   *   layoutHomeMasonry: 콘텐츠 너비→열 수(--home-cols) 산출, 각 셀에 폭(열 스팬)·높이(행 스팬) 적용.
+   *     폭은 저장된 w(없으면 기본 스팬)로 열 span, 높이는 사용자 h(px) 또는 콘텐츠 자연 높이를 측정해 행 span.
+   *   드래그(모서리 핸들): 폭=열 단위 스냅, 높이=px 유동. 종료 시 setHomeWidgetSizes 로 영속.
+   * ===================================================================== */
+  let _homeMasonryRO = null;      // 콘텐츠 크기 변화 관찰(async 위젯 로드 시 재배치)
+  let _homeLayoutRaf = 0;         // rAF 디바운스 핸들
+
+  /** 홈 그리드 레이아웃 1회 예약(rAF) + 콘텐츠 관찰자 재부착. render 직후 호출. */
+  function scheduleHomeMasonryLayout() {
+    if (typeof window === 'undefined' || typeof window.requestAnimationFrame !== 'function') return;
+    if (_homeLayoutRaf) window.cancelAnimationFrame(_homeLayoutRaf);
+    _homeLayoutRaf = window.requestAnimationFrame(function () {
+      _homeLayoutRaf = 0;
+      layoutHomeMasonry();
+      observeHomeMasonry();
+    });
+  }
+
+  /** 콘텐츠 노드 크기 변화(차트/메일 async 로드 등) 관찰 → 리사이즈 중이 아니면 재배치. */
+  function observeHomeMasonry() {
+    if (typeof ResizeObserver === 'undefined') return; // 구형 환경 graceful(초기 1회 배치는 유지)
+    if (_homeMasonryRO) { try { _homeMasonryRO.disconnect(); } catch (_) { /* ignore */ } _homeMasonryRO = null; }
+    var grid = document.querySelector('.home-masonry');
+    if (!grid) return;
+    _homeMasonryRO = new ResizeObserver(function () {
+      if (store._homeResize) return;              // 리사이즈 드래그 중엔 관찰 재배치 금지(충돌 방지)
+      if (_homeLayoutRaf) return;                  // 이미 예약됨
+      _homeLayoutRaf = window.requestAnimationFrame(function () { _homeLayoutRaf = 0; layoutHomeMasonry(); });
+    });
+    var nodes = grid.querySelectorAll('.home-section__content');
+    for (var i = 0; i < nodes.length; i++) _homeMasonryRO.observe(nodes[i]);
+  }
+
+  /** 그리드 콘텐츠 너비(패딩 제외). */
+  function homeGridContentWidth(grid) {
+    var cs = window.getComputedStyle(grid);
+    var padL = parseFloat(cs.paddingLeft) || 0;
+    var padR = parseFloat(cs.paddingRight) || 0;
+    return Math.max(0, grid.clientWidth - padL - padR);
+  }
+
+  /** 홈 그리드 폭·높이 스팬 배치 — 반응형 열 수 + 위젯별 크기 반영. */
+  function layoutHomeMasonry() {
+    if (typeof document === 'undefined') return;
+    var grid = document.querySelector('.home-masonry');
+    if (!grid) return;
+    var contentW = homeGridContentWidth(grid);
+    var cols = computeHomeCols(contentW);
+    grid.style.setProperty('--home-cols', String(cols));
+    var sizes = store.homeWidgetSizes || {};
+    var cells = grid.querySelectorAll('.home-section');
+    for (var i = 0; i < cells.length; i++) {
+      var cell = cells[i];
+      var id = (cell.dataset && cell.dataset.homeSection) || '';
+      var sz = sizes[id] || {};
+      // 폭(열 스팬): 저장 w(없으면 기본 스팬), 현재 열 수로 캡.
+      var w = (typeof sz.w === 'number' && sz.w >= 1) ? sz.w : homeDefaultSpan(id);
+      w = Math.max(1, Math.min(cols, Math.round(w)));
+      cell.style.gridColumnEnd = 'span ' + w;
+      // 높이: 사용자 h면 콘텐츠에 강제(초과분 클립), 아니면 자연 높이.
+      var content = cell.querySelector('.home-section__content');
+      if (content) {
+        if (typeof sz.h === 'number' && sz.h > 0) { content.style.height = sz.h + 'px'; content.style.overflow = 'hidden'; }
+        else { content.style.height = ''; content.style.overflow = ''; }
+      }
+      var hpx = content ? content.getBoundingClientRect().height : cell.getBoundingClientRect().height;
+      var span = Math.max(1, Math.ceil((hpx + HOME_GAP) / (HOME_ROW_UNIT + HOME_GAP)));
+      cell.style.gridRowEnd = 'span ' + span;
+    }
+  }
+
+  /** 리사이즈 핸들 노드(우하단). 포인터다운으로 드래그 리사이즈 시작. */
+  function homeResizeHandle(id) {
+    var h = el('div', { cls: 'home-resize', attrs: { 'aria-hidden': 'true', title: '크기 조절 (드래그: 가로=열, 세로=높이)' } });
+    h.addEventListener('pointerdown', function (e) { onHomeResizeStart(e, id); });
+    return h;
+  }
+
+  function onHomeResizeStart(e, id) {
+    if (e.button != null && e.button !== 0) return; // 좌클릭만
+    var grid = document.querySelector('.home-masonry');
+    var handle = e.currentTarget;
+    var cell = handle && handle.closest ? handle.closest('.home-section') : null;
+    if (!grid || !cell) return;
+    e.preventDefault();
+    e.stopPropagation();
+    var contentW = homeGridContentWidth(grid);
+    var cols = computeHomeCols(contentW);
+    var colW = (contentW - HOME_GAP * (cols - 1)) / cols; // 한 열의 실제 폭(px)
+    var content = cell.querySelector('.home-section__content');
+    var sizes = store.homeWidgetSizes || {};
+    var cur = sizes[id] || {};
+    var startW = Math.max(1, Math.min(cols, (typeof cur.w === 'number' ? cur.w : homeDefaultSpan(id))));
+    var startH = content ? content.getBoundingClientRect().height : 0;
+    store._homeResize = { id: id, cell: cell, content: content, cols: cols, colW: colW, startX: e.clientX, startY: e.clientY, startW: startW, startH: startH, w: startW, h: startH };
+    store._dragging = true;                    // [R-25] 라이브 push/폴링 재렌더 보류(리사이즈 중 DOM 유지)
+    cell.classList.add('home-section--resizing');
+    document.body.classList.add('home-resizing');
+    window.addEventListener('pointermove', onHomeResizeMove);
+    window.addEventListener('pointerup', onHomeResizeEnd, { once: true });
+    try { handle.setPointerCapture(e.pointerId); } catch (_) { /* ignore */ }
+  }
+
+  function onHomeResizeMove(e) {
+    var r = store._homeResize;
+    if (!r) return;
+    var dx = e.clientX - r.startX;
+    var dy = e.clientY - r.startY;
+    var w = r.startW + Math.round(dx / (r.colW + HOME_GAP));  // 폭: 열 단위 스냅
+    w = Math.max(1, Math.min(r.cols, w));
+    var h = Math.max(HOME_H_MIN, Math.min(HOME_H_MAX, r.startH + dy)); // 높이: px 유동
+    r.w = w; r.h = h;
+    r.cell.style.gridColumnEnd = 'span ' + w;
+    if (r.content) { r.content.style.height = h + 'px'; r.content.style.overflow = 'hidden'; }
+    var span = Math.max(1, Math.ceil((h + HOME_GAP) / (HOME_ROW_UNIT + HOME_GAP)));
+    r.cell.style.gridRowEnd = 'span ' + span;
+  }
+
+  function onHomeResizeEnd() {
+    var r = store._homeResize;
+    store._homeResize = null;
+    window.removeEventListener('pointermove', onHomeResizeMove);
+    store._dragging = false;
+    if (typeof document !== 'undefined') document.body.classList.remove('home-resizing');
+    if (!r) return;
+    r.cell.classList.remove('home-section--resizing');
+    // 저장: {w, h}. 폭·높이 모두 기본이면(1열 + 자연높이 근사) 항목 제거해 페이로드 최소화.
+    var sizes = Object.assign({}, store.homeWidgetSizes || {});
+    sizes[r.id] = { w: r.w, h: Math.round(r.h) };
+    store.homeWidgetSizes = sizes;
+    persistHomeWidgetSizes(sizes);
+    layoutHomeMasonry(); // 스팬 변경이 다른 셀 배치에 영향 → 전체 재배치
+  }
+
+  /** [홈 위젯 크기] 크기 맵 영속 — 낙관적 store 반영 + IPC → 응답(메인 정규화)으로 확정 후 재배치. */
+  function persistHomeWidgetSizes(sizes) {
+    if (!bridgeHas('setHomeWidgetSizes')) return; // 웹/테스트 graceful
+    ipc('setHomeWidgetSizes', sizes).then(function (res) {
+      if (res && res.ok && res.homeWidgetSizes && typeof res.homeWidgetSizes === 'object') {
+        store.homeWidgetSizes = applyHomeWidgetSizes(res.homeWidgetSizes);
+        if (!store._homeResize) layoutHomeMasonry();
+      }
+    });
+  }
+
+  /* =====================================================================
    * [R-32] 홈 섹션 드래그 재정렬 (.home-masonry / .home-section)
    *   카드 Sortable 선례와 동형: ghost 프리뷰 + onEnd 마이크로태스크 지연(R4). 드롭 시 DOM 의
    *   data-home-section enum 순서를 읽어 setHomeLayout 영속 → 응답 정규화 순서를 store 반영.
@@ -7476,8 +7675,8 @@ function initBrowser() {
     if (!grid) return; // 홈 뷰 아님
     homeSortable = Sortable.create(grid, {
       draggable: '.home-section',
-      // 섹션 내부 인터랙티브 컨트롤(버튼/링크/입력)에서 시작하는 포인터다운은 드래그로 잡지 않음(클릭 보존).
-      filter: 'button, a, input, select, textarea, .btn',
+      // 섹션 내부 인터랙티브 컨트롤(버튼/링크/입력)·리사이즈 핸들에서 시작하는 포인터다운은 드래그로 잡지 않음.
+      filter: 'button, a, input, select, textarea, .btn, .home-resize',
       preventOnFilter: false,
       animation: prefersReducedMotion() ? 0 : 160,
       easing: 'cubic-bezier(.2,.8,.2,1)',
@@ -7542,6 +7741,8 @@ function initBrowser() {
     store.todos = (res && res.ok !== false && Array.isArray(res.todos)) ? res.todos.filter((t) => t && typeof t.id === 'string') : [];
     // [R-32] 홈 섹션 순서 — getUiState 응답의 homeLayout 적재(부재/손상 시 동형 정규화로 기본 순서 보충).
     store.homeLayout = applyHomeLayout(res && res.ok !== false ? res.homeLayout : null);
+    // [홈 위젯 크기] 위젯별 폭·높이 적재(부재/손상 시 빈 = 전부 기본 크기).
+    store.homeWidgetSizes = applyHomeWidgetSizes(res && res.ok !== false ? res.homeWidgetSizes : null);
     // [위젯 추가/제거] 숨긴(미적용) 위젯 적재 — 토글 가능 위젯 화이트리스트만(부재/손상 시 빈 = 전부 표시).
     store.hiddenWidgets = (res && res.ok !== false && Array.isArray(res.hiddenWidgets))
       ? res.hiddenWidgets.filter(function (id) { return TOGGLEABLE_WIDGET_IDS.indexOf(id) >= 0; }) : [];
@@ -8234,6 +8435,15 @@ function initBrowser() {
   if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
     document.addEventListener('visibilitychange', () => { try { syncHomePolling(); } catch (_) { /* graceful */ } });
   }
+  // [홈 위젯 크기] 창 크기 변경 시 홈 그리드 재배치(열 수·스팬 재계산). 그리드 부재 시 no-op(내부 가드).
+  if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+    let _homeResizeTimer = 0;
+    window.addEventListener('resize', function () {
+      if (store._homeResize) return; // 리사이즈 드래그 중엔 창 리사이즈 재배치 무시
+      if (_homeResizeTimer) clearTimeout(_homeResizeTimer);
+      _homeResizeTimer = setTimeout(function () { _homeResizeTimer = 0; try { layoutHomeMasonry(); } catch (_) { /* graceful */ } }, 120);
+    });
+  }
   // 자동 업데이트 진행 구독(앱 1회). 부재 시 graceful — 내부 가드.
   subscribeUpdateStatus();
   // 런치 시 현재 업데이트 상태를 1회 조회 — main 의 자동 확인이 구독보다 먼저 끝난 경우에도
@@ -8260,6 +8470,7 @@ function initBrowser() {
     unsubscribeElevationWarning(); // [M12 b3] 상승 경고 구독 해제
     RG.coalesce.cancel(); // [D-2] 잔여 디바운스 타이머 정리(unload 중 잉여 render 방지)
     stopOrbit(); // 궤도 캔버스 RAF·리스너 정리
+    if (_homeMasonryRO) { try { _homeMasonryRO.disconnect(); } catch (_) { /* ignore */ } _homeMasonryRO = null; } // [홈 위젯 크기] 관찰자 정리
   }
   if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
     window.addEventListener('pagehide', teardown);
@@ -8325,6 +8536,11 @@ if (typeof module !== 'undefined' && module.exports) {
     // [R-32] 홈 섹션 화이트리스트 + 순서 정규화(렌더러 동형)
     HOME_SECTION_IDS,
     applyHomeLayout,
+    // [홈 위젯 크기] 폭·높이 정규화 + 반응형 열 수/기본 스팬(렌더러 동형, 헤드리스 테스트)
+    applyHomeWidgetSizes,
+    computeHomeCols,
+    homeDefaultSpan,
+    HOME_MAX_COLS,
     // [위젯 추가/제거] 토글 가능 위젯 목록(메인 동형 교차검증용)
     TOGGLEABLE_WIDGET_IDS,
     // [SH-2] 즐겨찾기 셸프 위젯 순수 뷰모델/헬퍼(헤드리스 테스트)
