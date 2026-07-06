@@ -106,3 +106,77 @@ test('Phase0 — layoutMode freeform 은 허용(화이트리스트)', () => {
   const d = S.normalizeDashboardState({ presets: [{ id: 'ff', layoutMode: 'freeform' }] });
   assert.strictEqual(d.presets[0].layoutMode, 'freeform');
 });
+
+// ── [Phase 2 기반] 프리셋 CRUD (순수·결정적) ────────────────────────────────
+test('Phase2 — presetAdd: 기본 배치 프리셋 추가 + 활성 지정 + 결정적 id', () => {
+  const base = S.defaultDashboardState();
+  const r = S.presetAdd(base, '  집중 모드  ');
+  assert.strictEqual(r.state.presets.length, 2);
+  assert.strictEqual(r.id, 'p1');                 // default 는 'default'라 첫 슬롯 p1
+  assert.strictEqual(r.state.activePreset, 'p1');
+  assert.strictEqual(r.state.presets[1].name, '집중 모드'); // trim
+  assert.deepStrictEqual(r.state.presets[1].layout, S.HOME_SECTION_IDS);
+  // 결정적: 같은 입력 → 같은 id
+  assert.strictEqual(S.presetAdd(base, 'x').id, 'p1');
+});
+
+test('Phase2 — presetAdd: MAX_PRESETS 상한 초과 시 무변경(id=null)', () => {
+  let s = S.defaultDashboardState();
+  for (let i = 0; i < S.MAX_PRESETS - 1; i++) s = S.presetAdd(s, 'm' + i).state;
+  assert.strictEqual(s.presets.length, S.MAX_PRESETS);
+  const r = S.presetAdd(s, 'over');
+  assert.strictEqual(r.id, null);
+  assert.strictEqual(r.state.presets.length, S.MAX_PRESETS);
+});
+
+test('Phase2 — presetDuplicate: 내용 복사 + 새 id + 활성 지정 + 뒤에 삽입', () => {
+  const base = S.migrateLegacyToDashboard({ homeLayout: ['mail', 'todos'], homeWidgetSizes: { mail: { w: 2, h: 240 } } });
+  const r = S.presetDuplicate(base, 'default');
+  assert.strictEqual(r.state.presets.length, 2);
+  assert.strictEqual(r.state.presets[1].id, r.id);
+  assert.strictEqual(r.state.activePreset, r.id);
+  assert.deepStrictEqual(r.state.presets[1].sizes, { mail: { w: 2, h: 240 } }); // 내용 복사
+  assert.ok(r.state.presets[1].name.endsWith('복사'));
+});
+
+test('Phase2 — presetRename', () => {
+  const s = S.presetRename(S.defaultDashboardState(), 'default', '아침 브리핑');
+  assert.strictEqual(s.presets[0].name, '아침 브리핑');
+});
+
+test('Phase2 — presetRemove: 마지막 프리셋은 삭제 불가, 활성 삭제 시 인접 이동', () => {
+  // 마지막 1개 보존
+  assert.strictEqual(S.presetRemove(S.defaultDashboardState(), 'default').presets.length, 1);
+  // 3개 중 활성(가운데) 삭제 → 인접으로 이동
+  let s = S.defaultDashboardState();
+  s = S.presetAdd(s, 'A').state; // p1
+  s = S.presetAdd(s, 'B').state; // p2, active p2
+  s = S.presetSetActive(s, 'p1'); // active p1(가운데)
+  const after = S.presetRemove(s, 'p1');
+  assert.strictEqual(after.presets.length, 2);
+  assert.ok(!after.presets.some((p) => p.id === 'p1'));
+  assert.ok(after.presets.some((p) => p.id === after.activePreset), '활성은 실재 프리셋');
+});
+
+test('Phase2 — presetSetActive: 존재할 때만', () => {
+  const base = S.presetAdd(S.defaultDashboardState(), 'A').state; // default, p1(active)
+  assert.strictEqual(S.presetSetActive(base, 'default').activePreset, 'default');
+  assert.strictEqual(S.presetSetActive(base, 'ghost').activePreset, base.activePreset); // 무변경
+});
+
+test('Phase2 — presetUpdate: 활성 프리셋 편집 영속(정규화·화이트리스트)', () => {
+  const base = S.defaultDashboardState();
+  const s = S.presetUpdate(base, 'default', {
+    layout: ['mail', 'todos', 'bogus'],
+    sizes: { mail: { w: 99, h: 5 }, featureAdd: { w: 2, h: 200 } }, // 클램프 + featureAdd 제거
+    layoutMode: 'freeform',
+    positions: { mail: { x: 2, y: 3 } },
+  });
+  const p = s.presets[0];
+  assert.deepStrictEqual(p.layout.slice(0, 2), ['mail', 'todos']);
+  assert.ok(!p.layout.includes('bogus'));
+  assert.deepStrictEqual(p.sizes, { mail: { w: S.HOME_MAX_COLS, h: S.HOME_H_MIN } }); // 99→4, 5→120
+  assert.strictEqual(p.layoutMode, 'freeform');
+  assert.deepStrictEqual(p.positions, { mail: { x: 2, y: 3 } });
+  assert.deepStrictEqual(p.groups, []); // 항상 정규화
+});
