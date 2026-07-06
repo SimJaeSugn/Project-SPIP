@@ -2367,7 +2367,18 @@ function initBrowser() {
     //   각 섹션은 .home-section(data-home-section=enum id) 래퍼로 감싸 SortableJS 가 이동 단위로 잡는다.
     //   [홈 위젯 크기] 레이아웃은 CSS Grid — layoutHomeMasonry() 가 폭(열 스팬)·높이(행 스팬)를 계산해
     //   위젯이 여러 열에 걸치고 높이가 유동 조절되도록 한다(모서리 핸들 드래그로 조절).
-    var grid = el('div', { cls: 'home-masonry', style: 'padding:20px 30px 36px;' });
+    // [로드맵 Phase 1] 위젯 편집 모드 — 켜면 리사이즈 핸들·제거(×)·셀 윤곽을 상시 노출(평소엔 깔끔).
+    //   이후 편집 컨트롤(설정·프리폼·스택)의 집. 재정렬/리사이즈 자체는 평소에도 가능(가산 레이어).
+    var editing = !!store.editMode;
+    var editBar = el('div', { style: 'display:flex;align-items:center;justify-content:flex-end;gap:10px;padding:8px 30px 0;' });
+    editBar.appendChild(el('button', {
+      cls: 'home-editmode' + (editing ? ' is-on' : ''),
+      text: editing ? '편집 완료' : '위젯 편집',
+      attrs: { type: 'button', 'aria-pressed': String(editing), 'aria-label': '위젯 편집 모드 ' + (editing ? '끄기' : '켜기') },
+      on: { click: function () { store.editMode = !store.editMode; render(); } },
+    }));
+    wrap.appendChild(editBar);
+    var grid = el('div', { cls: 'home-masonry' + (editing ? ' home-masonry--editing' : ''), style: 'padding:20px 30px 36px;' });
     var hidden = store.hiddenWidgets || [];
     applyHomeLayout(store.homeLayout).forEach(function (id) {
       // [위젯 추가/제거] 미적용(숨김) 콘텐츠 위젯은 건너뜀. featureAdd(추가 트리거)는 항상 표시.
