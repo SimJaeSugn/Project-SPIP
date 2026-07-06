@@ -196,6 +196,32 @@ test('Phase2배선 — normalizeState: 비활성 프리셋 내용 보존 + 활�
   assert.deepStrictEqual(active.layout.slice(0, 2), ['mail', 'attention'], '활성 프리셋은 레거시로 reconcile');
 });
 
+// ── [Phase 1·K] 내보내기/가져오기 직렬화 (순수·방어) ────────────────────────
+test('Phase1K — serialize→deserialize 라운드트립(프리셋 보존)', () => {
+  let s = S.defaultDashboardState();
+  s = S.presetAdd(s, '집중').state;
+  s = S.presetUpdate(s, s.activePreset, { layout: ['todos', 'mail'], layoutMode: 'freeform' });
+  const json = S.serializeDashboard(s);
+  assert.strictEqual(typeof json, 'string');
+  const back = S.deserializeDashboard(json);
+  assert.strictEqual(back.presets.length, 2);
+  const active = back.presets.find((p) => p.id === back.activePreset);
+  assert.deepStrictEqual(active.layout.slice(0, 2), ['todos', 'mail']);
+  assert.strictEqual(active.layoutMode, 'freeform');
+});
+
+test('Phase1K — deserialize 방어: 비문자열/파싱실패는 null, 베어 객체도 허용', () => {
+  assert.strictEqual(S.deserializeDashboard(null), null);
+  assert.strictEqual(S.deserializeDashboard(123), null);
+  assert.strictEqual(S.deserializeDashboard('{not json'), null);
+  // 래퍼 없는 베어 대시보드도 정규화 허용
+  const bare = S.deserializeDashboard(JSON.stringify({ activePreset: 'x', presets: [{ id: 'x', layout: ['mail'] }] }));
+  assert.ok(bare && bare.presets.length === 1);
+  // 손상 필드가 섞여도 정규화로 방어(항상 유효 대시보드)
+  const messy = S.deserializeDashboard(JSON.stringify({ presets: [{ id: 'a', layout: ['bogus'], layoutMode: 'nope' }] }));
+  assert.strictEqual(messy.presets[0].layoutMode, 'masonry');
+});
+
 test('Phase2 — presetUpdate: 활성 프리셋 편집 영속(정규화·화이트리스트)', () => {
   const base = S.defaultDashboardState();
   const s = S.presetUpdate(base, 'default', {

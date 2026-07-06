@@ -273,6 +273,23 @@ function removePreset(args, ctx) {
   return writeWithActive(store, storeCtx, state, uiStateStore.presetRemove(state.dashboard, id));
 }
 
+/** spip:exportDashboard — 현재 대시보드(전 프리셋)를 버전드 JSON 문자열로. */
+function exportDashboard(ctx) {
+  const { store, storeCtx } = resolveStore(ctx);
+  const state = store.read(storeCtx);
+  return { ok: true, json: uiStateStore.serializeDashboard(state.dashboard) };
+}
+
+/** spip:importDashboard { json } — JSON 을 정규화해 대시보드 교체(활성 프리셋 레거시 스왑). 파싱실패 INVALID. */
+function importDashboard(args, ctx) {
+  const json = (args && typeof args === 'object') ? args.json : undefined;
+  const dashboard = uiStateStore.deserializeDashboard(json);
+  if (!dashboard) return { ok: false, code: 'INVALID' };
+  const { store, storeCtx } = resolveStore(ctx);
+  const state = store.read(storeCtx);
+  return writeWithActive(store, storeCtx, state, dashboard);
+}
+
 /**
  * spip:addTodo — 할 일 추가(메인이 id·createdAt 스탬프). 빈 텍스트 거부, 개수 상한.
  * @param {object} args { text }
@@ -374,4 +391,4 @@ function updateLangTrend(args, ctx) {
   return { ok: true, prev: written.langTrend.prev, cur: written.langTrend.cur };
 }
 
-module.exports = { getUiState, setFavorite, setOrder, setSortMode, setHomeLayout, setHiddenWidgets, setHomeWidgetSizes, setProjectName, setTheme, addTodo, toggleTodo, removeTodo, setTodoDue, updateLangTrend, setActivePreset, addPreset, duplicatePreset, renamePreset, removePreset };
+module.exports = { getUiState, setFavorite, setOrder, setSortMode, setHomeLayout, setHiddenWidgets, setHomeWidgetSizes, setProjectName, setTheme, addTodo, toggleTodo, removeTodo, setTodoDue, updateLangTrend, setActivePreset, addPreset, duplicatePreset, renamePreset, removePreset, exportDashboard, importDashboard };

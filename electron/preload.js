@@ -156,6 +156,9 @@ contextBridge.exposeInMainWorld('spip', {
   duplicatePreset: (id) => ipcRenderer.invoke('spip:duplicatePreset', { id: String(id) }),
   renamePreset: (id, name) => ipcRenderer.invoke('spip:renamePreset', { id: String(id), name: name == null ? '' : String(name) }),
   removePreset: (id) => ipcRenderer.invoke('spip:removePreset', { id: String(id) }),
+  // [로드맵 Phase 1·K] 대시보드 내보내기(JSON 문자열)/가져오기(백업·공유·기기 이전). 가져오기 검증은 main.
+  exportDashboard: () => ipcRenderer.invoke('spip:exportDashboard'),
+  importDashboard: (json) => ipcRenderer.invoke('spip:importDashboard', { json: String(json) }),
 
   // 프로젝트 표시 별칭(빈 문자열이면 해제) + 테마(light|dark|system).
   setProjectName: (id, name) => ipcRenderer.invoke('spip:setProjectName', { id: String(id), name: name == null ? '' : String(name) }),

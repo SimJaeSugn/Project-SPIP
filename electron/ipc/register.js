@@ -225,6 +225,9 @@ function registerIpcHandlers(deps) {
   guard('spip:duplicatePreset', (args) => uiStateIpc.duplicatePreset(args, ctx));
   guard('spip:renamePreset', (args) => uiStateIpc.renamePreset(args, ctx));
   guard('spip:removePreset', (args) => uiStateIpc.removePreset(args, ctx));
+  // [로드맵 Phase 1·K] 대시보드 내보내기/가져오기(JSON). 가져오기는 메인 정규화 단일 경계 통과.
+  guard('spip:exportDashboard', () => uiStateIpc.exportDashboard(ctx));
+  guard('spip:importDashboard', (args) => uiStateIpc.importDashboard(args, ctx));
   // 프로젝트 표시 별칭 + 테마(라이트/다크/시스템).
   guard('spip:setProjectName', (args) => uiStateIpc.setProjectName(args, ctx));
   guard('spip:setTheme', (args) => uiStateIpc.setTheme(args, ctx));

@@ -266,3 +266,22 @@ test('Phase2 IPC — removePreset: 마지막 프리셋은 삭제 불가(무변�
   const r = uiState.removePreset({ id: base }, ctx);
   assert.strictEqual(r.dashboard.presets.length, 1);
 });
+
+test('Phase1K IPC — exportDashboard → JSON, importDashboard → 적용(활성 레거시 스왑)', () => {
+  const ctx = ctxWith(memStore());
+  // 프리셋 2개 구성 후 내보내기
+  uiState.addPreset({ name: '집중' }, ctx);
+  const ex = uiState.exportDashboard(ctx);
+  assert.strictEqual(ex.ok, true);
+  assert.strictEqual(typeof ex.json, 'string');
+  // 새 store 로 가져오기
+  const ctx2 = ctxWith(memStore());
+  const im = uiState.importDashboard({ json: ex.json }, ctx2);
+  assert.strictEqual(im.ok, true);
+  assert.strictEqual(im.dashboard.presets.length, 2);
+});
+
+test('Phase1K IPC — importDashboard: 파싱 실패 → INVALID', () => {
+  assert.deepStrictEqual(uiState.importDashboard({ json: '{broken' }, ctxWith(memStore())), { ok: false, code: 'INVALID' });
+  assert.deepStrictEqual(uiState.importDashboard({ json: 42 }, ctxWith(memStore())), { ok: false, code: 'INVALID' });
+});
