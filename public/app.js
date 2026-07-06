@@ -2582,6 +2582,18 @@ function initBrowser() {
     }).catch(function () { /* graceful — 표시 유지 */ });
   }
 
+  /** 위젯 편집 종료 — 변경은 편집 중 이미 즉시 영속되므로 저장 완료를 안내(토스트). */
+  function exitEditMode() {
+    store.editMode = false;
+    render();
+    toast('대시보드 변경사항이 저장되었습니다.');
+  }
+  /** 편집 토글 — 켤 땐 조용히, 끌 땐 저장 안내. */
+  function toggleEditMode() {
+    if (store.editMode) exitEditMode();
+    else { store.editMode = true; render(); }
+  }
+
   function renderHome() {
     maybeInitBriefing();
     maybeLoadMailSummary();
@@ -2739,7 +2751,7 @@ function initBrowser() {
       cls: 'home-editmode' + (editing ? ' is-on' : ''),
       text: editing ? '편집 완료' : '위젯 편집',
       attrs: { type: 'button', 'aria-pressed': String(editing), 'aria-label': '위젯 편집 모드 ' + (editing ? '끄기' : '켜기') },
-      on: { click: function () { store.editMode = !store.editMode; render(); } },
+      on: { click: function () { toggleEditMode(); } },
     }));
     wrap.appendChild(editBar);
     // [편집 모드 안내] 진입 시 사용 방법 배너(모드별). 일반 모드는 표시 안 함(깔끔).
@@ -2757,7 +2769,7 @@ function initBrowser() {
       }));
       guide.appendChild(el('button', {
         cls: 'home-edit-guide__done', text: '편집 완료', attrs: { type: 'button' },
-        on: { click: function () { store.editMode = false; render(); } },
+        on: { click: function () { exitEditMode(); } },
       }));
       wrap.appendChild(guide);
     }
@@ -9303,7 +9315,7 @@ function initBrowser() {
     acts.push({ id: 'app.rescan', title: '재스캔', group: '앱', keywords: 'rescan scan 스캔 새로고침', enabled: function () { return bridgeHas('rescan'); }, run: function () { onRescan(); } });
     acts.push({ id: 'app.refresh', title: '새로고침', group: '앱', keywords: 'refresh reload 갱신', run: function () { refreshDashboard(); } });
     // 홈 편집·위젯.
-    acts.push({ id: 'home.edit', title: store.editMode ? '위젯 편집 종료' : '위젯 편집', group: '홈', keywords: 'edit widget 편집 위젯', run: function () { store.state.view = 'home'; store.editMode = !store.editMode; render(); } });
+    acts.push({ id: 'home.edit', title: store.editMode ? '위젯 편집 종료' : '위젯 편집', group: '홈', keywords: 'edit widget 편집 위젯', run: function () { store.state.view = 'home'; toggleEditMode(); } });
     acts.push({ id: 'home.gallery', title: '위젯 추가 (갤러리)', group: '홈', keywords: 'widget add gallery 위젯 추가', run: function () { store.state.view = 'home'; store.showWidgetGallery = true; render(); } });
     // 숨긴 위젯을 개별 추가 액션으로.
     (store.hiddenWidgets || []).forEach(function (id) {

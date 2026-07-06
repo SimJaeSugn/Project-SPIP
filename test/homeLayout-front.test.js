@@ -675,7 +675,9 @@ test('로드맵 Phase 1 — 편집 모드: 토글 버튼 + masonry --editing 클
   const CSS = fs.readFileSync(path.join(__dirname, '..', 'public', 'styles.css'), 'utf8');
   // 렌더: 편집 토글 버튼(store.editMode 토글) + 켜짐 시 masonry 에 --editing 클래스
   assert.ok(/cls:\s*'home-editmode'/.test(APP_SRC), '편집 모드 토글 버튼(home-editmode)');
-  assert.ok(/store\.editMode\s*=\s*!store\.editMode/.test(APP_SRC), '버튼이 store.editMode 토글');
+  assert.ok(/function toggleEditMode\(/.test(APP_SRC) && /store\.editMode = true/.test(APP_SRC), '토글 헬퍼(켜기/끄기)');
+  // 편집 종료 시 저장 안내 토스트.
+  assert.ok(/function exitEditMode\(\)[\s\S]{0,140}toast\('대시보드 변경사항이 저장/.test(APP_SRC), '편집 종료 시 저장 안내');
   assert.ok(/home-masonry'\s*\+\s*\(editing\s*\?\s*'\s*home-masonry--editing'/.test(APP_SRC), '편집 시 masonry--editing 클래스 부여');
   // CSS: 편집 모드에서 핸들·제거·셀 윤곽 상시 노출
   assert.ok(/\.home-masonry--editing\s+\.home-resize\s*\{[^}]*opacity/.test(CSS), '편집 시 리사이즈 핸들 노출');
