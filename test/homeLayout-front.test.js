@@ -181,6 +181,9 @@ test('편집 모드 전용 — 삭제·리사이즈·추가·재정렬은 편집
   assert.ok(/\.home-edit-guide\s*\{/.test(CSS), '안내 배너 CSS');
   // 안내 배너에 위젯 갤러리 열기 버튼.
   assert.ok(/cls:\s*'home-edit-guide__gallery'[\s\S]{0,160}store\.showWidgetGallery = true/.test(APP_SRC), '안내에 위젯 갤러리 버튼');
+  // 위젯 삭제(×)는 확인 모달 경유.
+  assert.ok(/onRemoveWidgetConfirm\(id\)/.test(APP_SRC) && /function onRemoveWidgetConfirm\(/.test(APP_SRC), '삭제 버튼 → 확인 모달');
+  assert.ok(/askConfirm\(\{[\s\S]{0,200}onConfirm: function \(\) \{ onRemoveWidget\(id\)/.test(APP_SRC), '확인 시 onRemoveWidget');
 });
 
 // ── [로드맵 Phase 1·J] 테마 개인화(액센트·배율) ──

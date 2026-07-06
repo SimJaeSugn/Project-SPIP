@@ -4263,8 +4263,18 @@ function initBrowser() {
     return el('button', {
       cls: 'widget-remove',
       attrs: { type: 'button', 'aria-label': meta.name + ' 위젯 홈에서 제거', title: '홈에서 제거' },
-      on: { click: function (e) { e.stopPropagation(); onRemoveWidget(id); } },
+      on: { click: function (e) { e.stopPropagation(); onRemoveWidgetConfirm(id); } },
       children: [svg([{ t: 'path', d: 'M18 6L6 18M6 6l12 12' }], { size: 13, stroke: '#78716c', sw: 2 })],
+    });
+  }
+  /** [편집] 위젯 제거 확인 모달 — 실수 제거 방지. 제거해도 데이터 유지·갤러리에서 재추가 가능. */
+  function onRemoveWidgetConfirm(id) {
+    var meta = WIDGET_META[id] || { name: id };
+    askConfirm({
+      title: '위젯 제거',
+      message: '‘' + meta.name + '’ 위젯을 홈에서 제거할까요?\n제거해도 데이터는 사라지지 않으며, 위젯 갤러리에서 다시 추가할 수 있어요.',
+      confirmText: '제거', danger: true,
+      onConfirm: function () { onRemoveWidget(id); },
     });
   }
   /** [로드맵 Phase 4·I] 위젯 포커스(풀스크린) 버튼 — 제거(×) 좌측. 호버/편집 시 노출(§3 코너 규약). */
