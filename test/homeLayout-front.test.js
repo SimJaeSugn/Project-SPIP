@@ -8,7 +8,7 @@ const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
 
-const { HOME_SECTION_IDS, applyHomeLayout, TOGGLEABLE_WIDGET_IDS, applyHomeWidgetSizes, computeHomeCols, homeDefaultSpan, HOME_MAX_COLS, applyDashboard } = require('../public/app.js');
+const { HOME_SECTION_IDS, applyHomeLayout, TOGGLEABLE_WIDGET_IDS, applyHomeWidgetSizes, computeHomeCols, homeDefaultSpan, HOME_MAX_COLS, applyDashboard, densityTier, DENSITY_M_MIN, DENSITY_L_MIN } = require('../public/app.js');
 const realStore = require('../lib/common/uiStateStore');
 const APP_SRC = fs.readFileSync(path.join(__dirname, '..', 'public', 'app.js'), 'utf8');
 // 메인 계약(단일 신뢰 경계)과 동형인지 교차 확인.
@@ -55,6 +55,34 @@ test('홈 위젯 크기 — homeDefaultSpan: shelfWide 는 전체폭, 그 외 1'
   assert.strictEqual(homeDefaultSpan('shelfWide'), HOME_MAX_COLS);
   assert.strictEqual(homeDefaultSpan('mail'), 1);
   assert.strictEqual(homeDefaultSpan('attention'), 1);
+});
+
+// ── [로드맵 Phase 3·C] 위젯 밀도 tier 파생(순수 — 실측 폭 → S|M|L) ──
+test('로드맵 Phase 3·C — densityTier: 실측 폭에서 S|M|L 경계 파생(단조·보수적 폴백)', () => {
+  // 경계값: [<M) = S, [M,L) = M, [L,∞) = L. 경계는 포함(>=).
+  assert.strictEqual(densityTier(0), 'S');            // 0/비유효 → 가장 보수적
+  assert.strictEqual(densityTier(DENSITY_M_MIN - 1), 'S');
+  assert.strictEqual(densityTier(DENSITY_M_MIN), 'M'); // M 하한 포함
+  assert.strictEqual(densityTier(DENSITY_L_MIN - 1), 'M');
+  assert.strictEqual(densityTier(DENSITY_L_MIN), 'L'); // L 하한 포함
+  assert.strictEqual(densityTier(2000), 'L');
+  // 비유효 입력 graceful → S.
+  assert.strictEqual(densityTier(-100), 'S');
+  assert.strictEqual(densityTier(NaN), 'S');
+  assert.strictEqual(densityTier('foo'), 'S');
+  assert.strictEqual(densityTier(undefined), 'S');
+  // 임계 순서 불변식(M<L) — 상수 오설정 방지.
+  assert.ok(DENSITY_M_MIN < DENSITY_L_MIN, 'M 임계 < L 임계');
+});
+
+// ── [로드맵 Phase 3·C] layoutHomeMasonry 가 셀에 [data-density] 훅 부여(배선) ──
+test('로드맵 Phase 3·C — 렌더러: layoutHomeMasonry 가 실측 셀폭→densityTier→data-density 부여', () => {
+  const start = APP_SRC.indexOf('function layoutHomeMasonry(');
+  assert.ok(start >= 0, 'layoutHomeMasonry 함수가 있어야 한다');
+  const body = APP_SRC.slice(start, start + 1900);
+  assert.ok(/colW\s*=\s*\(contentW\s*-\s*HOME_GAP\s*\*\s*\(cols\s*-\s*1\)\)\s*\/\s*cols/.test(body), '한 열 실제 폭(colW) 산출');
+  assert.ok(/cellW\s*=\s*colW\s*\*\s*w\s*\+\s*HOME_GAP\s*\*\s*\(w\s*-\s*1\)/.test(body), '셀 실측 폭(cellW) = colW*스팬 + gap');
+  assert.ok(/cell\.dataset\.density\s*=\s*densityTier\(cellW\)/.test(body), 'densityTier(cellW) → data-density 부여');
 });
 
 // ── applyHomeLayout (순서 정규화, 메인 normalizeHomeLayout 과 동일 규칙) ──
@@ -139,7 +167,7 @@ test('홈 위젯 크기 — 렌더가 콘텐츠 래퍼·리사이즈 핸들·레
 test('홈 위젯 크기 — layoutHomeMasonry 가 열 수·폭/높이 스팬을 적용', () => {
   const start = APP_SRC.indexOf('function layoutHomeMasonry(');
   assert.ok(start >= 0, 'layoutHomeMasonry 함수 존재');
-  const body = APP_SRC.slice(start, start + 1700);
+  const body = APP_SRC.slice(start, start + 2000);
   assert.ok(/setProperty\('--home-cols'/.test(body), '반응형 열 수(--home-cols) 주입');
   assert.ok(/gridColumnEnd\s*=\s*'span '/.test(body), '폭 = grid-column span 적용');
   assert.ok(/gridRowEnd\s*=\s*'span '/.test(body), '높이 = grid-row span 적용');

@@ -726,6 +726,19 @@ function computeHomeCols(contentW) {
   return Math.max(1, Math.min(HOME_MAX_COLS, n));
 }
 
+/* [로드맵 Phase 3·C] 위젯 밀도(정보 밀도) tier — 위젯 셀의 실측 폭(px)에서 S|M|L 파생(순수).
+ *   §1 C 충돌해소: 크기의 '단일 진실'은 연속값(homeWidgetSizes), tier 는 렌더링용 파생일 뿐(별도 크기 모델 아님).
+ *   위젯은 셀의 [data-density] 훅(layoutHomeMasonry 가 부여)으로 크기별 콘텐츠를 분기한다(넓을수록 더 많은 정보). */
+const DENSITY_M_MIN = 380;   // 이 폭(px) 이상이면 M(보통) — 좁은 1열(≈300)보다 넉넉
+const DENSITY_L_MIN = 620;   // 이 폭(px) 이상이면 L(넓음) — 2열 이상에 근접
+/** 위젯 셀 실측 폭(px) → 밀도 tier 'S'|'M'|'L'(순수). 비유효/0 은 'S'(가장 보수적). */
+function densityTier(px) {
+  const w = (typeof px === 'number' && px > 0) ? px : 0;
+  if (w >= DENSITY_L_MIN) return 'L';
+  if (w >= DENSITY_M_MIN) return 'M';
+  return 'S';
+}
+
 /**
  * [홈 위젯 크기] homeWidgetSizes 렌더러측 정규화(순수) — 메인 normalizeHomeWidgetSizes 동형.
  *   { [id]: {w,h} } 만, id 는 토글 가능 위젯, w∈[1,HOME_MAX_COLS], h∈[HOME_H_MIN,HOME_H_MAX]|null.
@@ -7689,6 +7702,7 @@ function initBrowser() {
     var contentW = homeGridContentWidth(grid);
     var cols = computeHomeCols(contentW);
     grid.style.setProperty('--home-cols', String(cols));
+    var colW = (contentW - HOME_GAP * (cols - 1)) / cols; // 한 열의 실제 폭(px) — 밀도 tier 파생용
     var sizes = store.homeWidgetSizes || {};
     var cells = grid.querySelectorAll('.home-section');
     for (var i = 0; i < cells.length; i++) {
@@ -7699,6 +7713,9 @@ function initBrowser() {
       var w = (typeof sz.w === 'number' && sz.w >= 1) ? sz.w : homeDefaultSpan(id);
       w = Math.max(1, Math.min(cols, Math.round(w)));
       cell.style.gridColumnEnd = 'span ' + w;
+      // [로드맵 Phase 3·C] 셀 실측 폭 → 밀도 tier 파생 후 [data-density] 부여. 위젯 CSS/콘텐츠가 이 훅으로 분기.
+      var cellW = colW * w + HOME_GAP * (w - 1);
+      cell.dataset.density = densityTier(cellW);
       // 높이: 사용자 h면 콘텐츠에 강제(초과분 클립), 아니면 자연 높이.
       var content = cell.querySelector('.home-section__content');
       if (content) {
@@ -8858,6 +8875,10 @@ if (typeof module !== 'undefined' && module.exports) {
     computeHomeCols,
     homeDefaultSpan,
     HOME_MAX_COLS,
+    // [로드맵 Phase 3·C] 위젯 밀도 tier 파생(순수 — 실측 폭→S|M|L, 헤드리스 테스트)
+    densityTier,
+    DENSITY_M_MIN,
+    DENSITY_L_MIN,
     // [위젯 추가/제거] 토글 가능 위젯 목록(메인 동형 교차검증용)
     TOGGLEABLE_WIDGET_IDS,
     // [SH-2] 즐겨찾기 셸프 위젯 순수 뷰모델/헬퍼(헤드리스 테스트)
