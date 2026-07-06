@@ -504,7 +504,7 @@ input, button, select { font-family: inherit; }
 
 /* [로드맵 Phase 4·I] 위젯 포커스 버튼(제거 × 좌측) + 풀스크린 오버레이 */
 .widget-focus {
-  position: absolute; top: 8px; right: 40px; z-index: 3;
+  position: absolute; top: 8px; right: 8px; z-index: 3;   /* 일반 모드엔 포커스만 노출되므로 우상단 코너 */
   width: 26px; height: 26px; padding: 0; display: flex; align-items: center; justify-content: center;
   border: 1px solid var(--border); border-radius: 8px; background: var(--panel); cursor: pointer;
   opacity: 0; transition: opacity .12s ease, background .12s ease; box-shadow: 0 2px 8px rgba(28, 25, 23, .12);
@@ -589,7 +589,7 @@ body.home-freedragging { user-select: none; cursor: grabbing; }
 body.home-resizing { cursor: nwse-resize; user-select: none; }
 /* [위젯 추가/제거] 위젯 제거(×) 버튼 — 평소 숨김, 카드 호버 시 우상단 노출. */
 .widget-remove {
-  position: absolute; top: 8px; right: 8px; z-index: 3;
+  position: absolute; top: 8px; right: 40px; z-index: 3;   /* 편집 모드 전용 — 포커스(코너) 좌측 */
   width: 26px; height: 26px; padding: 0; display: flex; align-items: center; justify-content: center;
   border: 1px solid var(--border); border-radius: 8px; background: var(--panel); cursor: pointer;
   opacity: 0; transition: opacity .12s ease, background .12s ease; box-shadow: 0 2px 8px rgba(28,25,23,.12);

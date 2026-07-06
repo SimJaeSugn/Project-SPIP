@@ -160,6 +160,22 @@ test('로드맵 Phase 5·M — 그룹: 렌더·CRUD·접기·멤버 배정·격�
   assert.ok(/closest\('\.home-masonry, \.home-group__grid'\)/.test(APP_SRC), '리사이즈가 속한 격자(메인/그룹) 기준');
 });
 
+// ── [편집 모드 전용] 일반 모드에서 위치변경·크기변경·추가·삭제 미제공 ──
+test('편집 모드 전용 — 삭제·리사이즈·추가·재정렬은 편집 모드에서만(포커스·스택 전환은 뷰라 유지)', () => {
+  // buildHomeCell: 삭제(×)·리사이즈는 editing 게이트, 포커스는 항상.
+  const b = fnBody('buildHomeCell', 900);
+  assert.ok(/if \(editing\) cell\.appendChild\(widgetRemoveBtn\(id\)\)/.test(b), '삭제 버튼 편집 모드 전용');
+  assert.ok(/cell\.appendChild\(widgetFocusBtn\(id\)\)/.test(b), '포커스 버튼은 항상(뷰)');
+  assert.ok(/id !== 'featureAdd' && editing\) cell\.appendChild\(homeResizeHandle/.test(b), '리사이즈 편집 모드 전용');
+  // 그룹 멤버·스택 리사이즈도 editing 게이트.
+  assert.ok(/withResize && editing\) cell\.appendChild\(homeResizeHandle/.test(APP_SRC), '그룹 멤버 리사이즈 편집 모드 전용');
+  // featureAdd(추가) 카드는 편집 모드에서만.
+  assert.ok(/if \(editing\) \{ var faCard = renderHomeSection\('featureAdd'/.test(APP_SRC), 'masonry featureAdd 편집 모드 전용');
+  assert.ok(/if \(editing\) \{ var faFree = buildHomeCell\('featureAdd'/.test(APP_SRC), 'freeform featureAdd 편집 모드 전용');
+  // 재정렬(SortableJS)은 편집 모드에서만.
+  assert.ok(/if \(!store\.editMode\) return;/.test(fnBody('initHomeSortable', 500)), '순서 변경 편집 모드 전용');
+});
+
 // ── [로드맵 Phase 1·J] 테마 개인화(액센트·배율) ──
 test('로드맵 Phase 1·J — 액센트 토큰화·프리셋 CSS + applyTheme data-accent/zoom + 설정 배선', () => {
   const CSS = fs.readFileSync(path.join(__dirname, '..', 'public', 'styles.css'), 'utf8');

@@ -2767,15 +2767,14 @@ function initBrowser() {
         if (editing) { gcell.classList.add('home-section--free'); gcell.addEventListener('pointerdown', function (e) { onFreeformDragStart(e, g.id); }); }
         grid.appendChild(gcell);
       });
-      var faFree = buildHomeCell('featureAdd', reclaim, editing, freeform);
-      if (faFree) grid.appendChild(faFree);
+      // [편집 모드 전용] '+ 위젯 추가' 카드는 편집 모드에서만(일반 모드는 추가 기능 미제공).
+      if (editing) { var faFree = buildHomeCell('featureAdd', reclaim, editing, freeform); if (faFree) grid.appendChild(faFree); }
     }
     wrap.appendChild(grid);
-    // [로드맵 Phase 5·M] masonry: 섹션 그룹(격자 아래 전체폭 접기 밴드) → 그 다음 '+ 위젯 추가' 카드(항상 최하단).
+    // [로드맵 Phase 5·M] masonry: 섹션 그룹(격자 아래 전체폭 접기 밴드) → 그 다음 '+ 위젯 추가' 카드(편집 모드에서만).
     if (!freeform) {
       if (sectionGroups.length > 0) wrap.appendChild(renderHomeGroups(sectionGroups, hidden, reclaim, editing));
-      var faCard = renderHomeSection('featureAdd', reclaim);
-      if (faCard) wrap.appendChild(el('div', { cls: 'home-featureadd', style: 'padding:0 30px 36px;' , children: [faCard] }));
+      if (editing) { var faCard = renderHomeSection('featureAdd', reclaim); if (faCard) wrap.appendChild(el('div', { cls: 'home-featureadd', style: 'padding:0 30px 36px;', children: [faCard] })); }
     }
 
     main.appendChild(wrap);
@@ -2792,11 +2791,15 @@ function initBrowser() {
     var node = renderHomeSection(id, reclaim);
     if (!node) return null;
     var cell = el('div', { cls: 'home-section', attrs: { 'data-home-section': id } });
-    if (id !== 'featureAdd') { cell.appendChild(widgetRemoveBtn(id)); cell.appendChild(widgetFocusBtn(id)); }
+    // [편집 모드 전용] 삭제(×)·리사이즈는 편집 모드에서만 노출. 포커스(크게 보기)는 뷰 동작이라 항상.
+    if (id !== 'featureAdd') {
+      if (editing) cell.appendChild(widgetRemoveBtn(id));
+      cell.appendChild(widgetFocusBtn(id));
+    }
     var content = el('div', { cls: 'home-section__content' });
     content.appendChild(node);
     cell.appendChild(content);
-    if (id !== 'featureAdd') cell.appendChild(homeResizeHandle(id));
+    if (id !== 'featureAdd' && editing) cell.appendChild(homeResizeHandle(id));
     // [로드맵 Phase 5·B] 프리폼 + 편집: 셀 드래그 자유 이동(featureAdd 포함, 이동 임계값으로 클릭 유지).
     if (freeform && editing) {
       cell.classList.add('home-section--free');
@@ -8610,6 +8613,8 @@ function initBrowser() {
   function initHomeSortable() {
     destroyHomeSortable();
     if (typeof document === 'undefined') return;
+    // [편집 모드 전용] 순서 변경(드래그 재정렬)은 편집 모드에서만 — 일반 모드는 위치 변경 미제공.
+    if (!store.editMode) return;
     // [로드맵 Phase 5·B] 프리폼 모드에선 순서 재정렬(SortableJS) 대신 자유 배치 드래그를 쓴다(충돌 방지).
     if (store.layoutMode === 'freeform') return;
     const Sortable = (typeof window !== 'undefined') ? window.Sortable : null;
@@ -8989,7 +8994,7 @@ function initBrowser() {
     }
     cell.appendChild(content);
     if (editing && store._groupAddFor === g.id) cell.appendChild(renderGroupAddPicker(g.id));
-    cell.appendChild(homeResizeHandle(g.id));
+    if (editing) cell.appendChild(homeResizeHandle(g.id)); // 크기 조절 편집 모드에서만(인디케이터 로테이션은 뷰라 유지)
     if (freeform && editing) { cell.classList.add('home-section--free'); cell.addEventListener('pointerdown', function (e) { onFreeformDragStart(e, g.id); }); }
     return cell;
   }
@@ -9048,7 +9053,7 @@ function initBrowser() {
     var content = el('div', { cls: 'home-section__content' });
     content.appendChild(node);
     cell.appendChild(content);
-    if (withResize) cell.appendChild(homeResizeHandle(id));
+    if (withResize && editing) cell.appendChild(homeResizeHandle(id)); // 크기 조절 편집 모드에서만
     return cell;
   }
   /** [masonry] 그룹 섹션 밴드 — 각 그룹을 전체폭 접기 밴드로. 멤버는 내부 masonry 격자(리사이즈·순서변경). */
