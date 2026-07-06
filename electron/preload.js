@@ -158,6 +158,8 @@ contextBridge.exposeInMainWorld('spip', {
   duplicatePreset: (id) => ipcRenderer.invoke('spip:duplicatePreset', { id: String(id) }),
   renamePreset: (id, name) => ipcRenderer.invoke('spip:renamePreset', { id: String(id), name: name == null ? '' : String(name) }),
   removePreset: (id) => ipcRenderer.invoke('spip:removePreset', { id: String(id) }),
+  // [로드맵 Phase 1·L] 템플릿 갤러리 — 템플릿 구성으로 새 프리셋 추가. 검증은 main 프리셋 정규화.
+  addTemplatePreset: (name, template) => ipcRenderer.invoke('spip:addTemplatePreset', { name: name == null ? '' : String(name), template: (template && typeof template === 'object') ? template : {} }),
   // [로드맵 Phase 5·B] 프리폼 — 활성 프리셋 레이아웃 모드(masonry|freeform) + 위젯 좌표 { id:{x,y} }. 검증은 main.
   setLayoutMode: (mode) => ipcRenderer.invoke('spip:setLayoutMode', { mode: String(mode) }),
   setWidgetPositions: (positions) => ipcRenderer.invoke('spip:setWidgetPositions', { positions: (positions && typeof positions === 'object') ? positions : {} }),

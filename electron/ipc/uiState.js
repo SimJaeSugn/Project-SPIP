@@ -275,6 +275,22 @@ function addPreset(args, ctx) {
   return writeWithActive(store, storeCtx, state, r.state);
 }
 
+/** [로드맵 Phase 1·L] spip:addTemplatePreset { name, template } — 템플릿 구성으로 새 프리셋 추가 + 활성 전환.
+ *   template = { layout, hidden, sizes, layoutMode, groups }. 전 필드는 메인 프리셋 정규화(presetUpdate→normalize*)가
+ *   유일 검증 경계(화이트리스트·클램프) — 렌더러 템플릿을 그대로 신뢰하지 않는다. 상한 초과 시 LIMIT. */
+function addTemplatePreset(args, ctx) {
+  const name = (args && typeof args === 'object' && typeof args.name === 'string') ? args.name : '';
+  const tpl = (args && typeof args === 'object' && args.template && typeof args.template === 'object') ? args.template : {};
+  const { store, storeCtx } = resolveStore(ctx);
+  const state = store.read(storeCtx);
+  const r = uiStateStore.presetAdd(state.dashboard, name);
+  if (!r.id) return { ok: false, code: 'LIMIT' };
+  const dashboard = uiStateStore.presetUpdate(r.state, r.id, {
+    layout: tpl.layout, hidden: tpl.hidden, sizes: tpl.sizes, layoutMode: tpl.layoutMode, groups: tpl.groups,
+  });
+  return writeWithActive(store, storeCtx, state, dashboard);
+}
+
 /** spip:duplicatePreset { id } — 프리셋 복제 + 활성 전환. 없거나 상한이면 LIMIT. */
 function duplicatePreset(args, ctx) {
   const id = (args && typeof args === 'object') ? args.id : undefined;
@@ -454,4 +470,4 @@ function updateLangTrend(args, ctx) {
   return { ok: true, prev: written.langTrend.prev, cur: written.langTrend.cur };
 }
 
-module.exports = { getUiState, setFavorite, setOrder, setSortMode, setHomeLayout, setHiddenWidgets, setHomeWidgetSizes, setProjectName, setTheme, setScratchpad, addTodo, toggleTodo, removeTodo, setTodoDue, updateLangTrend, setActivePreset, addPreset, duplicatePreset, renamePreset, removePreset, setLayoutMode, setWidgetPositions, setGroups, exportDashboard, importDashboard };
+module.exports = { getUiState, setFavorite, setOrder, setSortMode, setHomeLayout, setHiddenWidgets, setHomeWidgetSizes, setProjectName, setTheme, setScratchpad, addTodo, toggleTodo, removeTodo, setTodoDue, updateLangTrend, setActivePreset, addPreset, duplicatePreset, renamePreset, removePreset, addTemplatePreset, setLayoutMode, setWidgetPositions, setGroups, exportDashboard, importDashboard };

@@ -723,6 +723,28 @@ const WIDGET_META = {
   systemStatus: { name: '시스템 상태', desc: '개발 머신 CPU·메모리·디스크 사용량' },
 };
 
+/* [로드맵 Phase 1·L] 레이아웃 템플릿 — 갤러리에서 골라 '새 프리셋'으로 적용. visible 외 토글 위젯은 숨김.
+ *   구성은 메인 프리셋 정규화가 단일 신뢰 경계라 렌더러 상수는 편의 데이터일 뿐(보안 의존 금지). */
+const HOME_TEMPLATES = [
+  { id: 'minimal', name: '미니멀', desc: '주의·할 일·메일만 — 깔끔하게', visible: ['attention', 'todos', 'mail'] },
+  { id: 'focus', name: '집중', desc: '할 일·주의·주간 생산성 중심', visible: ['todos', 'attention', 'productivity'] },
+  { id: 'dev', name: '개발 현황', desc: '커밋 히트맵·생산성·활동·시스템 상태', visible: ['commitHeatmap', 'productivity', 'activity', 'systemStatus'] },
+  { id: 'notes', name: '메모 & 할 일', desc: '스크래치패드·할 일·메일', visible: ['scratchpad', 'todos', 'mail'] },
+  { id: 'allinone', name: '올인원', desc: '모든 위젯을 한눈에', visible: TOGGLEABLE_WIDGET_IDS.slice() },
+];
+/** 템플릿 → 프리셋 구성 {layout,hidden,sizes,layoutMode,groups}. hidden=토글 위젯 중 visible 외. 순수. */
+function buildTemplatePreset(tpl) {
+  const vis = new Set(Array.isArray(tpl && tpl.visible) ? tpl.visible : []);
+  const hidden = TOGGLEABLE_WIDGET_IDS.filter((id) => !vis.has(id));
+  return {
+    layout: HOME_SECTION_IDS.slice(),
+    hidden: hidden,
+    sizes: (tpl && tpl.sizes && typeof tpl.sizes === 'object') ? tpl.sizes : {},
+    layoutMode: (tpl && tpl.layoutMode === 'freeform') ? 'freeform' : 'masonry',
+    groups: (tpl && Array.isArray(tpl.groups)) ? tpl.groups : [],
+  };
+}
+
 /**
  * [R-32] 저장된 homeLayout → 렌더 순서로 정규화(순수). 메인 normalizeHomeLayout 과 동일 규칙:
  *   화이트리스트 외 제거·중복 제거·누락 섹션은 기본 순서로 끝에 보충 → 항상 7개 순열.
@@ -1790,6 +1812,7 @@ function initBrowser() {
     // [위젯 추가/제거] 숨긴(미적용) 위젯 id 배열(getUiState.hiddenWidgets 적재) + 위젯 갤러리 팝업 표시 플래그.
     hiddenWidgets: [],
     showWidgetGallery: false,
+    showTemplateGallery: false,   // [로드맵 Phase 1·L] 레이아웃 템플릿 갤러리 모달
     busyWidgets: false,           // setHiddenWidgets in-flight
     // [로드맵 Phase 1·K] 대시보드 내보내기/가져오기 모달 상태. mode='export'면 json에 직렬화 결과, 'import'면 입력값.
     dashIO: { open: false, mode: 'export', json: '', busy: false, error: '' },
@@ -2069,6 +2092,8 @@ function initBrowser() {
     if (store.mailbox && store.mailbox.open) app.appendChild(renderMailboxModal());
     // 메일 본문 팝업(항목 클릭) — 나중에 마운트해 메일함 위에 표시(메일함에서 메일을 읽을 때 위로).
     if (store.mailView && store.mailView.open) app.appendChild(renderMailMessageModal());
+    // [로드맵 Phase 1·L] 레이아웃 템플릿 갤러리 모달.
+    if (store.showTemplateGallery) app.appendChild(renderTemplateGallery());
     // [로드맵 Phase 1·K] 대시보드 내보내기/가져오기 모달.
     if (store.dashIO && store.dashIO.open) app.appendChild(renderDashboardIOModal());
     // [로드맵 Phase 4·I] 포커스(풀스크린) 위젯 오버레이.
@@ -2675,6 +2700,13 @@ function initBrowser() {
       editBar.appendChild(el('button', {
         cls: 'home-editmode', text: '가져오기', attrs: { type: 'button', 'aria-label': '대시보드 가져오기(JSON)' },
         on: { click: function () { openDashboardIO('import'); } },
+      }));
+    }
+    // [로드맵 Phase 1·L] 편집 모드에서 템플릿 갤러리 열기.
+    if (editing && bridgeHas('addTemplatePreset')) {
+      editBar.appendChild(el('button', {
+        cls: 'home-editmode', text: '템플릿', attrs: { type: 'button', 'aria-label': '레이아웃 템플릿 갤러리' },
+        on: { click: function () { store.showTemplateGallery = true; store._templateShown = false; render(); } },
       }));
     }
     // [로드맵 Phase 5·B] 편집 모드에서 자유 배치(프리폼) 토글 + 프리폼일 때 자동 정렬(masonry 복귀).
@@ -8764,6 +8796,40 @@ function initBrowser() {
     if (v) onRenamePreset(id, v); else render();
   }
 
+  // ── [로드맵 Phase 1·L] 레이아웃 템플릿 갤러리 — 템플릿을 '새 프리셋'으로 적용(프리셋 인프라 재사용) ──
+  async function onApplyTemplate(tpl) {
+    if (!bridgeHas('addTemplatePreset')) { toast('이 버전에서는 템플릿을 지원하지 않습니다.', true); return; }
+    var res = await ipc('addTemplatePreset', tpl.name, buildTemplatePreset(tpl));
+    if (applyPresetResponse(res)) { store.showTemplateGallery = false; render(); toast('‘' + tpl.name + '’ 템플릿을 새 대시보드로 적용했습니다.'); }
+    else toast(res && res.code === 'LIMIT' ? '대시보드가 너무 많습니다.' : '템플릿 적용에 실패했습니다.', true);
+  }
+  function renderTemplateGallery() {
+    var enter = !store._templateShown; store._templateShown = true;
+    var close = function () { store.showTemplateGallery = false; store._templateShown = false; render(); };
+    var cards = el('div', { cls: 'template-grid' });
+    HOME_TEMPLATES.forEach(function (tpl) {
+      var vis = new Set(tpl.visible || []);
+      var card = el('div', {
+        cls: 'template-card', attrs: { role: 'button', tabindex: '0', 'aria-label': tpl.name + ' 템플릿 적용' },
+        on: { click: function () { onApplyTemplate(tpl); }, keydown: function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onApplyTemplate(tpl); } } },
+      });
+      // 미리보기 — 포함 위젯을 미니 칩 배치로 표현.
+      var prev = el('div', { cls: 'template-card__preview' });
+      TOGGLEABLE_WIDGET_IDS.forEach(function (id) {
+        prev.appendChild(el('div', { cls: 'template-chip' + (vis.has(id) ? ' is-on' : '') }));
+      });
+      card.appendChild(prev);
+      card.appendChild(el('div', { cls: 'template-card__name', text: tpl.name }));
+      card.appendChild(el('div', { cls: 'template-card__desc', text: tpl.desc }));
+      card.appendChild(el('div', { cls: 'template-card__count', text: (tpl.visible || []).length + '개 위젯' }));
+      cards.appendChild(card);
+    });
+    return buildModal({
+      title: '레이아웃 템플릿', subtitle: '고르면 새 대시보드(프리셋)로 적용됩니다', wide: true,
+      onClose: close, enter: enter, bodyChildren: [cards],
+    });
+  }
+
   // ── [로드맵 Phase 5·M] 그룹/섹션 — 전체폭 접기 밴드. 위젯을 묶고 접어 홈을 정돈. 검증 단일 신뢰 경계는 메인(normalizeGroups). ──
   function genGroupId() { return 'g' + Date.now().toString(36) + Math.floor(Math.random() * 1e8).toString(36); }
   /** 그룹 배열 영속(낙관적) — 메인 normalizeGroups 가 단일 신뢰 경계. */
@@ -10119,6 +10185,9 @@ if (typeof module !== 'undefined' && module.exports) {
     applyHomeLayout,
     applyDashboard,
     applyScratchpad,
+    // [로드맵 Phase 1·L] 레이아웃 템플릿(순수 데이터·구성 빌더, 헤드리스 테스트)
+    HOME_TEMPLATES,
+    buildTemplatePreset,
     // [홈 위젯 크기] 폭·높이 정규화 + 반응형 열 수/기본 스팬(렌더러 동형, 헤드리스 테스트)
     applyHomeWidgetSizes,
     computeHomeCols,

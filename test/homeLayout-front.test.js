@@ -8,7 +8,7 @@ const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
 
-const { HOME_SECTION_IDS, applyHomeLayout, TOGGLEABLE_WIDGET_IDS, applyHomeWidgetSizes, computeHomeCols, homeDefaultSpan, HOME_MAX_COLS, applyDashboard, densityTier, DENSITY_M_MIN, DENSITY_L_MIN, buildHeatmapModel, heatmapLevel, actionMatchScore, filterActions, freeformSeedPositions, freeformSnapCell, freeformCellPx, HOME_FREE_ROW } = require('../public/app.js');
+const { HOME_SECTION_IDS, applyHomeLayout, TOGGLEABLE_WIDGET_IDS, applyHomeWidgetSizes, computeHomeCols, homeDefaultSpan, HOME_MAX_COLS, applyDashboard, densityTier, DENSITY_M_MIN, DENSITY_L_MIN, buildHeatmapModel, heatmapLevel, actionMatchScore, filterActions, freeformSeedPositions, freeformSnapCell, freeformCellPx, HOME_FREE_ROW, HOME_TEMPLATES, buildTemplatePreset } = require('../public/app.js');
 const realStore = require('../lib/common/uiStateStore');
 const APP_SRC = fs.readFileSync(path.join(__dirname, '..', 'public', 'app.js'), 'utf8');
 // 메인 계약(단일 신뢰 경계)과 동형인지 교차 확인.
@@ -158,6 +158,38 @@ test('로드맵 Phase 5·M — 그룹: 렌더·CRUD·접기·멤버 배정·격�
   assert.ok(/function buildGroupMemberCell\(/.test(APP_SRC) && /buildGroupMemberCell\(id, reclaim, editing, true\)/.test(APP_SRC), '밴드 멤버 리사이즈(withResize=true)');
   assert.ok(/function initGroupSortables\(/.test(APP_SRC) && /function commitGroupMembers\(/.test(APP_SRC) && /function commitGroupOrder\(/.test(APP_SRC), '멤버·그룹 순서변경 Sortable/커밋');
   assert.ok(/closest\('\.home-masonry, \.home-group__grid'\)/.test(APP_SRC), '리사이즈가 속한 격자(메인/그룹) 기준');
+});
+
+// ── [로드맵 Phase 1·L] 레이아웃 템플릿 갤러리 ──
+test('로드맵 Phase 1·L — buildTemplatePreset: hidden=토글 위젯 중 visible 외, 기본 masonry', () => {
+  const tpl = { id: 't', name: 'T', visible: ['mail', 'todos'] };
+  const p = buildTemplatePreset(tpl);
+  assert.deepStrictEqual(p.layout, HOME_SECTION_IDS, '전 섹션 기본 순서');
+  assert.strictEqual(p.layoutMode, 'masonry');
+  assert.deepStrictEqual(p.groups, []);
+  const visible = TOGGLEABLE_WIDGET_IDS.filter((id) => p.hidden.indexOf(id) < 0);
+  assert.deepStrictEqual(visible.sort(), ['mail', 'todos']);
+  // 올인원 = 전부 표시(hidden 비어야).
+  const all = buildTemplatePreset(HOME_TEMPLATES.find((t) => t.id === 'allinone'));
+  assert.strictEqual(all.hidden.length, 0);
+  // 손상 입력 graceful(빈 visible → 전부 숨김).
+  assert.strictEqual(buildTemplatePreset({}).hidden.length, TOGGLEABLE_WIDGET_IDS.length);
+});
+
+test('로드맵 Phase 1·L — 템플릿 데이터·갤러리 배선', () => {
+  const CSS = fs.readFileSync(path.join(__dirname, '..', 'public', 'styles.css'), 'utf8');
+  assert.ok(Array.isArray(HOME_TEMPLATES) && HOME_TEMPLATES.length >= 4, '템플릿 4개 이상');
+  HOME_TEMPLATES.forEach((t) => {
+    assert.ok(typeof t.name === 'string' && Array.isArray(t.visible), '템플릿 형태');
+    t.visible.forEach((id) => assert.ok(TOGGLEABLE_WIDGET_IDS.indexOf(id) >= 0, 'visible 는 토글 위젯: ' + id));
+  });
+  // 갤러리 렌더·트리거·적용 핸들러.
+  assert.ok(/function renderTemplateGallery\(/.test(APP_SRC), '갤러리 렌더 함수');
+  assert.ok(/function onApplyTemplate\(/.test(APP_SRC) && /ipc\('addTemplatePreset', tpl\.name, buildTemplatePreset\(tpl\)\)/.test(APP_SRC), '적용=addTemplatePreset IPC');
+  assert.ok(/store\.showTemplateGallery\s*=\s*true/.test(APP_SRC), '트리거 버튼');
+  assert.ok(/store\.showTemplateGallery\) app\.appendChild\(renderTemplateGallery/.test(APP_SRC), 'render 마운트');
+  assert.ok(/applyPresetResponse\(res\)/.test(fnBody('onApplyTemplate', 500)), '적용 후 프리셋 응답 반영');
+  assert.ok(/\.template-card\s*\{/.test(CSS) && /\.template-chip\.is-on/.test(CSS), '템플릿 카드·칩 CSS');
 });
 
 // ── [로드맵 Phase 5·F] 스택(겹침·로테이션) ──

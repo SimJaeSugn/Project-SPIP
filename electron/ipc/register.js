@@ -227,6 +227,8 @@ function registerIpcHandlers(deps) {
   guard('spip:duplicatePreset', (args) => uiStateIpc.duplicatePreset(args, ctx));
   guard('spip:renamePreset', (args) => uiStateIpc.renamePreset(args, ctx));
   guard('spip:removePreset', (args) => uiStateIpc.removePreset(args, ctx));
+  // [로드맵 Phase 1·L] 템플릿 갤러리 — 템플릿 구성으로 새 프리셋 추가. 검증은 메인 프리셋 정규화 단일 경계.
+  guard('spip:addTemplatePreset', (args) => uiStateIpc.addTemplatePreset(args, ctx));
   // [로드맵 Phase 5·B] 프리폼 — 활성 프리셋 레이아웃 모드(masonry/freeform)·위젯 좌표. 검증은 메인 프리셋 정규화 단일 경계.
   guard('spip:setLayoutMode', (args) => uiStateIpc.setLayoutMode(args, ctx));
   guard('spip:setWidgetPositions', (args) => uiStateIpc.setWidgetPositions(args, ctx));

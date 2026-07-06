@@ -122,6 +122,27 @@ test('setLayoutMode/setWidgetPositions — 활성 프리셋 반영·정규화·g
   assert.strictEqual(uiState.setLayoutMode({ mode: 'bogus' }, ctx).layoutMode, 'masonry');
 });
 
+// ── [로드맵 Phase 1·L] addTemplatePreset ──
+test('addTemplatePreset — 템플릿 구성으로 새 프리셋 추가·활성 전환·정규화', () => {
+  const s = memStore();
+  const ctx = ctxWith(s);
+  const before = uiState.getUiState(ctx).dashboard.presets.length;
+  const toggle = realStore.TOGGLEABLE_WIDGET_IDS;
+  const hidden = toggle.filter((id) => ['mail', 'todos'].indexOf(id) < 0);
+  const r = uiState.addTemplatePreset({ name: '미니멀', template: {
+    layout: realStore.HOME_SECTION_IDS.slice(), hidden: hidden, sizes: { mail: { w: 99, h: 5 } }, layoutMode: 'freeform', groups: [],
+  } }, ctx);
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(r.dashboard.presets.length, before + 1, '새 프리셋 추가');
+  // 활성 프리셋(레거시 키)이 템플릿 내용 — 숨김·모드·크기(클램프).
+  assert.deepStrictEqual(r.hiddenWidgets.slice().sort(), hidden.slice().sort());
+  assert.strictEqual(r.layoutMode, 'freeform');
+  assert.deepStrictEqual(r.homeWidgetSizes.mail, { w: realStore.HOME_MAX_COLS, h: realStore.HOME_H_MIN }, '크기 클램프(정규화)');
+  // 상한 초과 시 LIMIT.
+  for (let i = 0; i < 20; i++) uiState.addTemplatePreset({ name: 'x' + i, template: {} }, ctx);
+  assert.strictEqual(uiState.addTemplatePreset({ name: 'over', template: {} }, ctx).code, 'LIMIT');
+});
+
 // ── [로드맵 Phase 5·M] setGroups ──
 test('setGroups — 활성 프리셋 그룹 정규화·영속·getUiState 노출', () => {
   const s = memStore();
