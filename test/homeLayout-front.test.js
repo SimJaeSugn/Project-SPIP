@@ -139,7 +139,7 @@ test('홈 위젯 크기 — 렌더가 콘텐츠 래퍼·리사이즈 핸들·레
 test('홈 위젯 크기 — layoutHomeMasonry 가 열 수·폭/높이 스팬을 적용', () => {
   const start = APP_SRC.indexOf('function layoutHomeMasonry(');
   assert.ok(start >= 0, 'layoutHomeMasonry 함수 존재');
-  const body = APP_SRC.slice(start, start + 1400);
+  const body = APP_SRC.slice(start, start + 1700);
   assert.ok(/setProperty\('--home-cols'/.test(body), '반응형 열 수(--home-cols) 주입');
   assert.ok(/gridColumnEnd\s*=\s*'span '/.test(body), '폭 = grid-column span 적용');
   assert.ok(/gridRowEnd\s*=\s*'span '/.test(body), '높이 = grid-row span 적용');
@@ -200,6 +200,23 @@ test('홈 위젯 반응형 — 셸프 위젯: 좁은 영역용 경량 리스트 
   // 셸프 풀 뷰(shelf-row)는 인라인 display 를 두지 않는다(클래스가 소유해야 전환됨)
   const sb = fnBody('shelfBody', 1500);
   assert.ok(/shelf-view--full[\s\S]*?style:\s*'position:relative;gap:6px/.test(sb), '풀 뷰 인라인 style 에 display 미포함');
+});
+test('홈 위젯 반응형/높이 — 메일 위젯: 카드가 위젯 높이를 채우고 목록이 높이에 반응', () => {
+  const CSS = fs.readFileSync(path.join(__dirname, '..', 'public', 'styles.css'), 'utf8');
+  // .mail-region 이 카드를 세로로 늘림(카드 fill)
+  assert.ok(/\.mail-region\s*\{[^}]*display:\s*flex/.test(CSS), 'mail-region flex 컬럼');
+  assert.ok(/\.mail-region\s*>\s*\*\s*\{[^}]*flex:\s*1 1 auto/.test(CSS), 'mail-region 자식(카드) 높이 채움');
+  // 기본은 목록 캡, 높이 조절 시 채움
+  assert.ok(/\.mail-list\s*\{[^}]*max-height:\s*264px[^}]*overflow-y:\s*auto/.test(CSS), '기본 목록 max-height 캡+스크롤');
+  assert.ok(/\.home-section__content--sized\s+\.mail-list\s*\{[^}]*max-height:\s*none[^}]*flex:\s*1 1 auto/.test(CSS), '높이 조절 시 목록이 카드 채움');
+  // 렌더: 카드 flex 컬럼 + 목록 mail-list 클래스
+  const body = fnBody('renderHomeMailCard', 2400);
+  assert.ok(/flex-direction:column/.test(body), '메일 카드 flex 컬럼');
+  assert.ok(/cls:\s*'hw-cols mail-list'/.test(body), '메일 목록에 mail-list 클래스');
+  // layoutHomeMasonry 가 사용자 높이 지정 시 --sized 표식 토글
+  const lm = fnBody('layoutHomeMasonry', 1700);
+  assert.ok(/classList\.add\('home-section__content--sized'\)/.test(lm), '사이즈 지정 시 --sized 부여');
+  assert.ok(/classList\.remove\('home-section__content--sized'\)/.test(lm), '미지정 시 --sized 제거');
 });
 
 test('R-32 — homeSortable: RG.widget 등록 + onEnd 마이크로태스크 패턴(R4) + setHomeLayout 영속', () => {

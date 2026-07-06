@@ -408,6 +408,14 @@ input, button, select { font-family: inherit; }
 @container hw (min-width: 480px) {
   .hw-tl-rail { display: none; }
 }
+/* [홈 위젯 반응형/높이] 메일 위젯 — 카드가 위젯 높이를 채우고 목록이 높이에 반응.
+ *   .mail-region 이 카드를 세로로 늘려 '영역만 넓어지고 카드는 그대로'인 문제를 해소한다.
+ *   미조절(기본): 목록을 약 5행 높이로 캡·스크롤 → 기본 높이 콤팩트 유지.
+ *   높이 조절 시(.home-section__content--sized): 목록이 카드를 채우고(상단 정렬) 넘치면 스크롤 → 높이에 실제 반응. */
+.mail-region { display: flex; flex-direction: column; min-height: 0; }
+.mail-region > * { flex: 1 1 auto; min-height: 0; }
+.mail-list { max-height: 264px; overflow-y: auto; }
+.home-section__content--sized .mail-list { max-height: none; flex: 1 1 auto; min-height: 0; }
 /* [홈 위젯 크기] 우하단 리사이즈 핸들 — 평소 옅게, 호버/드래그 시 강조. */
 .home-resize {
   position: absolute; right: 3px; bottom: 3px; z-index: 4;

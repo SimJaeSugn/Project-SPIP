@@ -2802,8 +2802,9 @@ function initBrowser() {
   }
   /** 메일 카드 본문(patchMailSection 의 builderFn 이 재사용). 내용·동작은 기존과 동일. */
   function renderHomeMailCard() {
-    var card = el('div', { style: HOME_CARD + 'padding:21px 20px;' });
-    var items = mailFlatItems(5);
+    // [홈 위젯 높이 반응] 카드는 flex 컬럼(헤더 고정 · 목록이 남는 높이 차지). .mail-region 이 카드를 위젯 높이로 늘린다.
+    var card = el('div', { style: HOME_CARD + 'padding:21px 20px;display:flex;flex-direction:column;min-height:0;' });
+    var items = mailFlatItems(12); // 높이가 크면 더 많이 노출(기본은 .mail-list max-height 로 5행 남짓 캡·스크롤)
     var replies = items.filter(function (m) { return homeIsReply(m.subject); }).length;
     var head = el('div', { style: 'display:flex;align-items:center;gap:10px;margin-bottom:14px;' });
     head.appendChild(el('div', { text: '메일', style: 'font-size:15px;font-weight:600;flex:1 1 0%;' }));
@@ -2817,7 +2818,7 @@ function initBrowser() {
     }));
     card.appendChild(head);
 
-    var list = el('div', { cls: 'hw-cols', style: 'column-gap:22px;' }); // [반응형] 위젯이 넓으면 다열
+    var list = el('div', { cls: 'hw-cols mail-list', style: 'column-gap:22px;' }); // [반응형] 넓으면 다열 · [높이] 남는 높이 채우고 넘치면 스크롤
     if (!store.mailSummaryLoaded && store.busyMailSummary) {
       list.appendChild(el('div', { text: '메일을 확인하는 중…', style: 'font-size:12px;color:#a8a29e;padding:6px 0;' }));
     } else if (items.length === 0) {
@@ -7616,8 +7617,9 @@ function initBrowser() {
       // 높이: 사용자 h면 콘텐츠에 강제(초과분 클립), 아니면 자연 높이.
       var content = cell.querySelector('.home-section__content');
       if (content) {
-        if (typeof sz.h === 'number' && sz.h > 0) { content.style.height = sz.h + 'px'; content.style.overflow = 'hidden'; }
-        else { content.style.height = ''; content.style.overflow = ''; }
+        // [홈 위젯 높이 반응] 사용자 지정 높이면 --sized 표식 → 높이 채우는 위젯(예: 메일 목록)이 남는 공간을 활용.
+        if (typeof sz.h === 'number' && sz.h > 0) { content.style.height = sz.h + 'px'; content.style.overflow = 'hidden'; content.classList.add('home-section__content--sized'); }
+        else { content.style.height = ''; content.style.overflow = ''; content.classList.remove('home-section__content--sized'); }
       }
       var hpx = content ? content.getBoundingClientRect().height : cell.getBoundingClientRect().height;
       var span = Math.max(1, Math.ceil((hpx + HOME_GAP) / (HOME_ROW_UNIT + HOME_GAP)));
@@ -7667,7 +7669,7 @@ function initBrowser() {
     var h = Math.max(HOME_H_MIN, Math.min(HOME_H_MAX, r.startH + dy)); // 높이: px 유동
     r.w = w; r.h = h;
     r.cell.style.gridColumnEnd = 'span ' + w;
-    if (r.content) { r.content.style.height = h + 'px'; r.content.style.overflow = 'hidden'; }
+    if (r.content) { r.content.style.height = h + 'px'; r.content.style.overflow = 'hidden'; r.content.classList.add('home-section__content--sized'); } // 드래그 중에도 높이 채움 즉시 반영
     var span = Math.max(1, Math.ceil((h + HOME_GAP) / (HOME_ROW_UNIT + HOME_GAP)));
     r.cell.style.gridRowEnd = 'span ' + span;
   }
