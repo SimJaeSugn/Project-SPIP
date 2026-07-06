@@ -179,6 +179,8 @@ test('편집 모드 전용 — 삭제·리사이즈·추가·재정렬은 편집
   assert.ok(/if \(editing\) \{[\s\S]{0,120}cls:\s*'home-edit-guide'/.test(APP_SRC), '편집 모드 안내 배너(편집 시에만)');
   assert.ok(/자유 배치 모드 —/.test(APP_SRC) && /위젯을 드래그해 순서 변경/.test(APP_SRC), '모드별 안내 문구');
   assert.ok(/\.home-edit-guide\s*\{/.test(CSS), '안내 배너 CSS');
+  // 안내 배너에 위젯 갤러리 열기 버튼.
+  assert.ok(/cls:\s*'home-edit-guide__gallery'[\s\S]{0,160}store\.showWidgetGallery = true/.test(APP_SRC), '안내에 위젯 갤러리 버튼');
 });
 
 // ── [로드맵 Phase 1·J] 테마 개인화(액센트·배율) ──

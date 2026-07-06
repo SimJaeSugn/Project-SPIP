@@ -2750,6 +2750,11 @@ function initBrowser() {
         ? '자유 배치 모드 — 위젯·그룹을 드래그해 원하는 곳에 두고, 우하단 핸들로 크기를 조절하세요. ‘자동 정렬’로 격자로 돌아갑니다.'
         : '위젯을 드래그해 순서 변경 · 우하단 핸들로 크기 조절 · × 로 삭제 · 위 버튼으로 위젯·그룹·스택 추가 · ‘자유 배치’로 좌표 배치.';
       guide.appendChild(el('span', { cls: 'home-edit-guide__txt', text: gt }));
+      // [편집 모드 안내] 위젯 갤러리 바로 열기(추가 트리거를 안내에서 접근).
+      guide.appendChild(el('button', {
+        cls: 'home-edit-guide__gallery', text: '＋ 위젯 갤러리', attrs: { type: 'button', 'aria-label': '위젯 갤러리 열기' },
+        on: { click: function () { store.showWidgetGallery = true; render(); } },
+      }));
       guide.appendChild(el('button', {
         cls: 'home-edit-guide__done', text: '편집 완료', attrs: { type: 'button' },
         on: { click: function () { store.editMode = false; render(); } },
