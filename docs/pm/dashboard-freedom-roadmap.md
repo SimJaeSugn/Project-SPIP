@@ -21,7 +21,8 @@
 | Phase 3 — 신규 위젯(G) | ✅ **배포(v1.22.0)** | ①스크래치패드 · ②통합 커밋 히트맵 · ③시스템 상태(CPU/RAM/디스크). 셋 다 기본숨김(opt-in)·schemaVersion 3 이행·육안 확인 완료 |
 | Phase 4 — 팔레트(D) | ✅ **배포(v1.23.0)** | **액션 레지스트리**(`buildActions` + 순수 `filterActions`/`actionMatchScore`) + **Cmd+K 팔레트**(뷰전환·설정·위젯·프리셋·내보내기·테마·포커스·프로젝트점프, 방향키·부분교체) |
 | Phase 4 — 포커스(I)·딥링크(H) | ✅ **배포(v1.23.0)** | I: 위젯 포커스 버튼 + 풀스크린 오버레이(종료 시 masonry 재측정·컨테이너 컨텍스트 재사용). H: 팔레트 **프로젝트 점프**(→상세 드로어). 데이터 드래그(위젯간 DnD)는 후속(SortableJS·리사이즈 충돌 회피 설계 필요) |
-| Phase 5 — 프리폼(B)·그룹(M)·스택(F) | ⬜ 미착수 | 최고 난이도, 검증 필수 — **다음 작업** |
+| Phase 5 — 프리폼(B) | 🔶 육안 대기 | `layoutMode=freeform` + 위젯 좌표(`positions{x,y}`) — 편집 모드 **자유 배치 토글** + **드래그 이동(스냅)** + **자동 정렬**(격자 복귀). 절대 배치(`layoutHomeFreeform`)·순수 좌표 유틸(`freeformSeedPositions`/`SnapCell`/`CellPx`)·IPC(`setLayoutMode`/`setWidgetPositions`)·프리폼 시 SortableJS 게이팅. 크기 단일 진실은 연속값 유지 |
+| Phase 5 — 그룹(M)·스택(F) | ⬜ 미착수 | M: 그룹/섹션 노드(라벨·접기, 스키마 `groups[]` 예약). F: 위젯 스택(겹침·로테이션). 최고 난이도 |
 
 **배포**: v1.23.0 (Phase 4 — 액션 레지스트리·Cmd+K 팔레트·포커스 위젯·프로젝트 점프 딥링크). 테스트 **1228 그린**. 커밋 `148ae9e`→`6d0eba2`(master).
 직전: v1.22.0 (Phase 1-K 렌더러 + Phase 3 밀도·신규 위젯 3종, 커밋 `1a198af`→`63d5ee4`). v1.21.0 (Phase 0~2 + 편집 모드 + K 백엔드).

@@ -26,6 +26,14 @@ function resolveStore(ctx) {
   return { store, storeCtx };
 }
 
+/** [로드맵 Phase 5·B] 활성 프리셋의 필드 안전 조회(dashboard 부재/손상 graceful). */
+function activePresetField(state, field, fallback) {
+  const d = state && state.dashboard;
+  if (!d || !Array.isArray(d.presets)) return fallback;
+  const p = d.presets.find((x) => x && x.id === d.activePreset) || d.presets[0];
+  return (p && p[field] !== undefined && p[field] !== null) ? p[field] : fallback;
+}
+
 function toResponse(state) {
   // [M13 C-M-1 ③] briefing 포함 — 별도 파일이라 가장 누락되기 쉬움. 누락 시 getUiState 응답에서 사라짐.
   //   carry-over 표시용으로 open 항목만 노출(done/dismissed는 비노출, 표시 안전·페이로드 최소).
@@ -43,6 +51,10 @@ function toResponse(state) {
     dashboard: state.dashboard || uiStateStore.defaultDashboardState(),
     // [로드맵 Phase 3·G] 스크래치패드 메모(전역 콘텐츠) — 렌더러 위젯이 표시·편집.
     scratchpad: state.scratchpad || uiStateStore.defaultScratchpad(),
+    // [로드맵 Phase 5·B] 활성 프리셋의 레이아웃 모드·프리폼 좌표 — 렌더러가 masonry/freeform 분기·배치에 사용.
+    //   layout/hidden/sizes 는 레거시 키(위)와 동기지만, layoutMode/positions 는 프리셋에만 있어 별도 노출.
+    layoutMode: activePresetField(state, 'layoutMode', 'masonry'),
+    homeWidgetPositions: activePresetField(state, 'positions', {}),
   };
 }
 
@@ -290,6 +302,27 @@ function removePreset(args, ctx) {
   return writeWithActive(store, storeCtx, state, uiStateStore.presetRemove(state.dashboard, id));
 }
 
+/** [로드맵 Phase 5·B] spip:setLayoutMode { mode } — 활성 프리셋 레이아웃 모드(masonry|freeform). 검증은 LAYOUT_MODES. */
+function setLayoutMode(args, ctx) {
+  const mode = (args && typeof args === 'object' && uiStateStore.LAYOUT_MODES.has(args.mode)) ? args.mode : 'masonry';
+  const { store, storeCtx } = resolveStore(ctx);
+  const state = store.read(storeCtx);
+  const dashboard = uiStateStore.presetUpdate(state.dashboard, state.dashboard.activePreset, { layoutMode: mode });
+  const written = store.write(Object.assign({}, state, { dashboard }), storeCtx);
+  return Object.assign({ ok: true }, toResponse(written));
+}
+
+/** [로드맵 Phase 5·B] spip:setWidgetPositions { positions } — 활성 프리셋 프리폼 좌표 { id:{x,y} }.
+ *   렌더러 입력 불신 — normalizeWidgetPositions(presetUpdate 내부)가 유일 검증 경계(화이트리스트·정수 클램프). */
+function setWidgetPositions(args, ctx) {
+  const positions = (args && typeof args === 'object') ? args.positions : undefined;
+  const { store, storeCtx } = resolveStore(ctx);
+  const state = store.read(storeCtx);
+  const dashboard = uiStateStore.presetUpdate(state.dashboard, state.dashboard.activePreset, { positions: positions });
+  const written = store.write(Object.assign({}, state, { dashboard }), storeCtx);
+  return Object.assign({ ok: true }, toResponse(written));
+}
+
 /** spip:exportDashboard — 현재 대시보드(전 프리셋)를 버전드 JSON 문자열로. */
 function exportDashboard(ctx) {
   const { store, storeCtx } = resolveStore(ctx);
@@ -408,4 +441,4 @@ function updateLangTrend(args, ctx) {
   return { ok: true, prev: written.langTrend.prev, cur: written.langTrend.cur };
 }
 
-module.exports = { getUiState, setFavorite, setOrder, setSortMode, setHomeLayout, setHiddenWidgets, setHomeWidgetSizes, setProjectName, setTheme, setScratchpad, addTodo, toggleTodo, removeTodo, setTodoDue, updateLangTrend, setActivePreset, addPreset, duplicatePreset, renamePreset, removePreset, exportDashboard, importDashboard };
+module.exports = { getUiState, setFavorite, setOrder, setSortMode, setHomeLayout, setHiddenWidgets, setHomeWidgetSizes, setProjectName, setTheme, setScratchpad, addTodo, toggleTodo, removeTodo, setTodoDue, updateLangTrend, setActivePreset, addPreset, duplicatePreset, renamePreset, removePreset, setLayoutMode, setWidgetPositions, exportDashboard, importDashboard };

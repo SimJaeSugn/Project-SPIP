@@ -227,6 +227,9 @@ function registerIpcHandlers(deps) {
   guard('spip:duplicatePreset', (args) => uiStateIpc.duplicatePreset(args, ctx));
   guard('spip:renamePreset', (args) => uiStateIpc.renamePreset(args, ctx));
   guard('spip:removePreset', (args) => uiStateIpc.removePreset(args, ctx));
+  // [로드맵 Phase 5·B] 프리폼 — 활성 프리셋 레이아웃 모드(masonry/freeform)·위젯 좌표. 검증은 메인 프리셋 정규화 단일 경계.
+  guard('spip:setLayoutMode', (args) => uiStateIpc.setLayoutMode(args, ctx));
+  guard('spip:setWidgetPositions', (args) => uiStateIpc.setWidgetPositions(args, ctx));
   // [로드맵 Phase 1·K] 대시보드 내보내기/가져오기(JSON). 가져오기는 메인 정규화 단일 경계 통과.
   guard('spip:exportDashboard', () => uiStateIpc.exportDashboard(ctx));
   guard('spip:importDashboard', (args) => uiStateIpc.importDashboard(args, ctx));

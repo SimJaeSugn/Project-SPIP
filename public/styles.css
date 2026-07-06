@@ -509,6 +509,13 @@ input, button, select { font-family: inherit; }
 .focusw__close { appearance: none; border: none; background: none; cursor: pointer; font-size: 18px; color: var(--t2, #57534e); width: 32px; height: 32px; border-radius: 8px; }
 .focusw__close:hover { background: var(--surface-2, #f5f5f4); }
 .focusw__body { padding: 22px; overflow: auto; }
+
+/* [로드맵 Phase 5·B] 프리폼(자유 배치) — 셀은 layoutHomeFreeform 이 절대 위치·크기를 인라인으로 부여. */
+.home-masonry--freeform { position: relative; }
+.home-masonry--freeform .home-section { position: absolute; margin: 0; }
+.home-masonry--freeform.home-masonry--editing .home-section--free { cursor: grab; }
+.home-masonry--freeform .home-section--dragging { cursor: grabbing; z-index: 20; box-shadow: 0 16px 40px rgba(28, 25, 23, .22); opacity: .96; }
+body.home-freedragging { user-select: none; cursor: grabbing; }
 /* [홈 위젯 크기] 우하단 리사이즈 핸들 — 평소 옅게, 호버/드래그 시 강조. */
 .home-resize {
   position: absolute; right: 3px; bottom: 3px; z-index: 4;

@@ -760,6 +760,23 @@ function applyScratchpad(s) {
   return { text, updatedAt };
 }
 
+/** [로드맵 Phase 5·B] 레이아웃 모드 방어 적재 — 'masonry'|'freeform'만, 그 외 masonry. */
+function applyLayoutMode(m) { return m === 'freeform' ? 'freeform' : 'masonry'; }
+/** [로드맵 Phase 5·B] 프리폼 좌표 방어 적재 — { id:{x,y} } 토글 위젯·유한 정수만(메인이 단일 신뢰 경계). */
+function applyWidgetPositions(input) {
+  const out = {};
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return out;
+  for (const id of Object.keys(input)) {
+    if (TOGGLEABLE_WIDGET_IDS.indexOf(id) < 0) continue;
+    const v = input[id];
+    if (!v || typeof v !== 'object') continue;
+    const x = Number(v.x), y = Number(v.y);
+    if (!isFinite(x) || !isFinite(y)) continue;
+    out[id] = { x: Math.max(0, Math.round(x)), y: Math.max(0, Math.round(y)) };
+  }
+  return out;
+}
+
 /* [홈 위젯 크기] 폭(열 스팬)·높이(px) — homeLayout(순서)·hiddenWidgets(표시)와 직교. 메인 uiStateStore 와 상수 동형. */
 const HOME_MAX_COLS = 4;      // 폭 스팬 상한(반응형 최대 열 수)
 const HOME_COL_MIN_W = 300;   // 열 최소 너비(px) — 이 폭 기준으로 반응형 열 수 산출
@@ -773,6 +790,40 @@ function homeDefaultSpan(id) {
   if (id === 'shelfWide') return HOME_MAX_COLS;
   if (id === 'commitHeatmap') return 2;
   return 1;
+}
+
+/* [로드맵 Phase 5·B] 프리폼(자유 배치) 좌표 유틸(순수·헤드리스). 좌표=그리드 셀 {x:열, y:세로 스냅 단위}.
+ *   크기 단일 진실은 연속값(homeWidgetSizes) 유지 — 프리폼은 '위치'만 관장(§1 B 충돌해소). */
+const HOME_FREE_ROW = 40;   // 프리폼 세로 스냅 단위(px)
+/** 표시 순서 위젯에 미배치분만 순차 패킹으로 기본 좌표 부여(순수). 기존 좌표는 유지·클램프. */
+function freeformSeedPositions(orderedIds, positions, cols) {
+  const c = Math.max(1, Math.floor(cols) || 1);
+  const out = {};
+  const ids = Array.isArray(orderedIds) ? orderedIds : [];
+  let x = 0, y = 0;
+  for (const id of ids) {
+    const p = positions && positions[id];
+    if (p && typeof p.x === 'number' && typeof p.y === 'number') {
+      out[id] = { x: Math.max(0, Math.min(c - 1, Math.round(p.x))), y: Math.max(0, Math.round(p.y)) };
+    } else {
+      out[id] = { x: x, y: y };
+      x += 1;
+      if (x >= c) { x = 0; y += 4; } // 대략 위젯 1개 높이(≈4 스냅 단위)만큼 다음 줄
+    }
+  }
+  return out;
+}
+/** 픽셀 오프셋(그리드 원점 기준) → 스냅된 셀 좌표(순수). cols·열폭·간격 기준. */
+function freeformSnapCell(leftPx, topPx, colW, gap, cols) {
+  const c = Math.max(1, Math.floor(cols) || 1);
+  const stepX = (colW || 1) + (gap || 0);
+  const x = Math.max(0, Math.min(c - 1, Math.round((leftPx || 0) / stepX)));
+  const y = Math.max(0, Math.round((topPx || 0) / HOME_FREE_ROW));
+  return { x: x, y: y };
+}
+/** 셀 좌표 → 픽셀 오프셋(순수). */
+function freeformCellPx(x, y, colW, gap) {
+  return { left: (x || 0) * ((colW || 0) + (gap || 0)), top: (y || 0) * HOME_FREE_ROW };
 }
 
 /** 콘텐츠 너비(px)에서 반응형 열 수 산출(순수) — 최소열너비 기준, [1, HOME_MAX_COLS] 캡. */
@@ -1721,6 +1772,10 @@ function initBrowser() {
     palette: { open: false, query: '', index: 0 },
     // [로드맵 Phase 4·I] 포커스(풀스크린) 위젯 — 열림·대상 위젯 id.
     focusWidget: { open: false, id: null },
+    // [로드맵 Phase 5·B] 활성 프리셋 레이아웃 모드·프리폼 좌표. getUiState/프리셋 응답에서 적재.
+    layoutMode: 'masonry',
+    widgetPositions: {},         // { id:{x,y} } 프리폼 그리드 셀 좌표
+    _freeDrag: null,             // 프리폼 드래그 세션
     // [로드맵 Phase 3·G] 스크래치패드 메모(전역 콘텐츠) — getUiState.scratchpad 적재, 디바운스 저장.
     scratchpad: { text: '', updatedAt: null },
     _scratchSaveTimer: null,   // 입력 디바운스 타이머 핸들
@@ -2592,6 +2647,19 @@ function initBrowser() {
         on: { click: function () { openDashboardIO('import'); } },
       }));
     }
+    // [로드맵 Phase 5·B] 편집 모드에서 자유 배치(프리폼) 토글 + 프리폼일 때 자동 정렬(masonry 복귀).
+    var freeform = store.layoutMode === 'freeform';
+    if (editing && bridgeHas('setLayoutMode')) {
+      editBar.appendChild(el('button', {
+        cls: 'home-editmode' + (freeform ? ' is-on' : ''),
+        text: '자유 배치', attrs: { type: 'button', 'aria-pressed': String(freeform), 'aria-label': '자유 배치(프리폼) ' + (freeform ? '끄기' : '켜기') },
+        on: { click: function () { onToggleLayoutMode(); } },
+      }));
+      if (freeform) editBar.appendChild(el('button', {
+        cls: 'home-editmode', text: '자동 정렬', attrs: { type: 'button', 'aria-label': '자동 정렬(격자로 복귀)' },
+        on: { click: function () { onAutoArrange(); } },
+      }));
+    }
     editBar.appendChild(el('button', {
       cls: 'home-editmode' + (editing ? ' is-on' : ''),
       text: editing ? '편집 완료' : '위젯 편집',
@@ -2599,7 +2667,7 @@ function initBrowser() {
       on: { click: function () { store.editMode = !store.editMode; render(); } },
     }));
     wrap.appendChild(editBar);
-    var grid = el('div', { cls: 'home-masonry' + (editing ? ' home-masonry--editing' : ''), style: 'padding:20px 30px 36px;' });
+    var grid = el('div', { cls: 'home-masonry' + (editing ? ' home-masonry--editing' : '') + (freeform ? ' home-masonry--freeform' : ''), style: 'padding:20px 30px 36px;' });
     var hidden = store.hiddenWidgets || [];
     applyHomeLayout(store.homeLayout).forEach(function (id) {
       // [위젯 추가/제거] 미적용(숨김) 콘텐츠 위젯은 건너뜀. featureAdd(추가 트리거)는 항상 표시.
@@ -2616,6 +2684,11 @@ function initBrowser() {
       cell.appendChild(content);
       // [홈 위젯 크기] featureAdd 외 위젯엔 우하단 리사이즈 핸들(폭=열 스냅, 높이=px 유동).
       if (id !== 'featureAdd') cell.appendChild(homeResizeHandle(id));
+      // [로드맵 Phase 5·B] 프리폼 + 편집 모드: 셀 드래그로 자유 이동(스냅). 컨트롤(버튼·핸들)은 stopPropagation 으로 분리.
+      if (freeform && editing && id !== 'featureAdd') {
+        cell.classList.add('home-section--free');
+        cell.addEventListener('pointerdown', function (e) { onFreeformDragStart(e, id); });
+      }
       grid.appendChild(cell);
     });
     wrap.appendChild(grid);
@@ -8130,6 +8203,8 @@ function initBrowser() {
     if (typeof document === 'undefined') return;
     var grid = document.querySelector('.home-masonry');
     if (!grid) return;
+    // [로드맵 Phase 5·B] 프리폼이면 절대 배치 레이아웃으로 분기(격자 masonry 미적용).
+    if (store.layoutMode === 'freeform') { layoutHomeFreeform(grid); return; }
     var contentW = homeGridContentWidth(grid);
     var cols = computeHomeCols(contentW);
     grid.style.setProperty('--home-cols', String(cols));
@@ -8158,6 +8233,121 @@ function initBrowser() {
       var span = Math.max(1, Math.ceil((hpx + HOME_GAP) / (HOME_ROW_UNIT + HOME_GAP)));
       cell.style.gridRowEnd = 'span ' + span;
     }
+  }
+
+  /* [로드맵 Phase 5·B] 프리폼 절대 배치 — positions{x,y}(그리드 셀) + sizes(연속 폭·높이)로 각 셀을 배치.
+   *   미배치 위젯은 순차 패킹으로 기본 좌표. 컨테이너 높이는 최하단 셀에 맞춰 설정(absolute 는 높이 기여 0). */
+  function layoutHomeFreeform(grid) {
+    var contentW = homeGridContentWidth(grid);
+    var cols = computeHomeCols(contentW);
+    grid.style.setProperty('--home-cols', String(cols));
+    var colW = (contentW - HOME_GAP * (cols - 1)) / cols;
+    var sizes = store.homeWidgetSizes || {};
+    var cells = grid.querySelectorAll('.home-section');
+    // 표시 순서 기준 시딩(미배치 위젯 기본 좌표) — 렌더된 셀만 대상.
+    var orderedIds = [];
+    for (var k = 0; k < cells.length; k++) { var cid = (cells[k].dataset && cells[k].dataset.homeSection) || ''; if (cid) orderedIds.push(cid); }
+    var pos = freeformSeedPositions(orderedIds, store.widgetPositions || {}, cols);
+    var maxBottom = 0;
+    for (var i = 0; i < cells.length; i++) {
+      var cell = cells[i];
+      var id = (cell.dataset && cell.dataset.homeSection) || '';
+      if (store._freeDrag && store._freeDrag.id === id) continue; // 드래그 중 셀은 라이브 위치 유지
+      var sz = sizes[id] || {};
+      var w = (typeof sz.w === 'number' && sz.w >= 1) ? sz.w : homeDefaultSpan(id);
+      w = Math.max(1, Math.min(cols, Math.round(w)));
+      var p = pos[id] || { x: 0, y: 0 };
+      var px = freeformCellPx(Math.min(p.x, cols - w), p.y, colW, HOME_GAP);
+      var wPx = colW * w + HOME_GAP * (w - 1);
+      cell.style.position = 'absolute';
+      cell.style.left = px.left + 'px';
+      cell.style.top = px.top + 'px';
+      cell.style.width = wPx + 'px';
+      cell.style.gridColumnEnd = '';
+      cell.style.gridRowEnd = '';
+      cell.dataset.density = densityTier(wPx);
+      var content = cell.querySelector('.home-section__content');
+      if (content) {
+        if (typeof sz.h === 'number' && sz.h > 0) { content.style.height = sz.h + 'px'; content.style.overflow = 'hidden'; content.classList.add('home-section__content--sized'); }
+        else { content.style.height = ''; content.style.overflow = ''; content.classList.remove('home-section__content--sized'); }
+      }
+      var hpx = cell.getBoundingClientRect().height;
+      if (px.top + hpx > maxBottom) maxBottom = px.top + hpx;
+    }
+    grid.style.position = 'relative';
+    grid.style.minHeight = (maxBottom + 40) + 'px';
+  }
+
+  /** 프리폼 드래그 시작 — 컨트롤(버튼·핸들) 위에선 무시. 포인터 이동으로 셀을 라이브 이동, 드롭 시 스냅·영속. */
+  function onFreeformDragStart(e, id) {
+    if (e.button != null && e.button !== 0) return;
+    var t = e.target;
+    // 리사이즈 핸들·제거/포커스 버튼·인터랙티브 요소 위에서 시작하면 드래그 안 함(각자 동작).
+    if (t && t.closest && (t.closest('.home-resize') || t.closest('.widget-remove') || t.closest('.widget-focus') || t.closest('button') || t.closest('input') || t.closest('textarea') || t.closest('a'))) return;
+    var grid = document.querySelector('.home-masonry');
+    var cell = e.currentTarget;
+    if (!grid || !cell) return;
+    var gridRect = grid.getBoundingClientRect();
+    var cellRect = cell.getBoundingClientRect();
+    e.preventDefault();
+    store._freeDrag = {
+      id: id, cell: cell, grid: grid,
+      offX: e.clientX - cellRect.left, offY: e.clientY - cellRect.top,
+      gridLeft: gridRect.left + parseFloat(getComputedStyle(grid).paddingLeft || '0'),
+      gridTop: gridRect.top + parseFloat(getComputedStyle(grid).paddingTop || '0'),
+    };
+    cell.classList.add('home-section--dragging');
+    document.body.classList.add('home-freedragging');
+    window.addEventListener('pointermove', onFreeformDragMove);
+    window.addEventListener('pointerup', onFreeformDragEnd, { once: true });
+    try { cell.setPointerCapture(e.pointerId); } catch (_) { /* ignore */ }
+  }
+  function onFreeformDragMove(e) {
+    var d = store._freeDrag; if (!d) return;
+    var left = e.clientX - d.gridLeft - d.offX;
+    var top = e.clientY - d.gridTop - d.offY;
+    d.cell.style.left = Math.max(0, left) + 'px';
+    d.cell.style.top = Math.max(0, top) + 'px';
+    d.left = left; d.top = top;
+  }
+  function onFreeformDragEnd() {
+    var d = store._freeDrag; if (!d) { return; }
+    window.removeEventListener('pointermove', onFreeformDragMove);
+    d.cell.classList.remove('home-section--dragging');
+    document.body.classList.remove('home-freedragging');
+    var grid = d.grid;
+    var contentW = homeGridContentWidth(grid);
+    var cols = computeHomeCols(contentW);
+    var colW = (contentW - HOME_GAP * (cols - 1)) / cols;
+    var cell = freeformSnapCell(d.left || 0, d.top || 0, colW, HOME_GAP, cols);
+    store._freeDrag = null;
+    var next = Object.assign({}, store.widgetPositions || {});
+    next[d.id] = cell;
+    commitWidgetPositions(next);
+  }
+  /** 프리폼 좌표 영속(낙관적) — 메인 normalizeWidgetPositions 가 단일 신뢰 경계. */
+  function commitWidgetPositions(next) {
+    store.widgetPositions = next;
+    render(); // 재배치(스냅 반영)
+    if (!bridgeHas('setWidgetPositions')) return;
+    ipc('setWidgetPositions', next).then(function (res) {
+      if (res && res.ok && res.homeWidgetPositions) { store.widgetPositions = applyWidgetPositions(res.homeWidgetPositions); }
+    }).catch(function () { /* graceful */ });
+  }
+  /** 자유 배치 ↔ 격자 토글. 프리폼 진입 시 현재 순서로 좌표 시딩 후 영속. */
+  function onToggleLayoutMode() {
+    if (!bridgeHas('setLayoutMode')) return;
+    var next = store.layoutMode === 'freeform' ? 'masonry' : 'freeform';
+    store.layoutMode = next;
+    render();
+    ipc('setLayoutMode', next).then(function (res) {
+      if (res && res.ok) { store.layoutMode = applyLayoutMode(res.layoutMode); store.widgetPositions = applyWidgetPositions(res.homeWidgetPositions); render(); }
+    }).catch(function () { /* graceful */ });
+  }
+  /** 자동 정렬 — 격자(masonry)로 복귀(프리폼 좌표는 보존, 다음 프리폼 진입 시 재사용). */
+  function onAutoArrange() {
+    if (store.layoutMode !== 'freeform') return;
+    onToggleLayoutMode(); // freeform → masonry
   }
 
   /** 리사이즈 핸들 노드(우하단). 포인터다운으로 드래그 리사이즈 시작. */
@@ -8250,6 +8440,8 @@ function initBrowser() {
   function initHomeSortable() {
     destroyHomeSortable();
     if (typeof document === 'undefined') return;
+    // [로드맵 Phase 5·B] 프리폼 모드에선 순서 재정렬(SortableJS) 대신 자유 배치 드래그를 쓴다(충돌 방지).
+    if (store.layoutMode === 'freeform') return;
     const Sortable = (typeof window !== 'undefined') ? window.Sortable : null;
     if (!Sortable || typeof Sortable.create !== 'function') return; // 라이브러리 부재 — 재정렬 비활성(표시는 정상)
     const grid = document.querySelector('.home-masonry');
@@ -8331,6 +8523,9 @@ function initBrowser() {
     store.dashboard = applyDashboard(res && res.ok !== false ? res.dashboard : null);
     // [로드맵 Phase 3·G] 스크래치패드 메모 적재(전역 콘텐츠). 부재/손상 시 빈 메모.
     store.scratchpad = applyScratchpad(res && res.ok !== false ? res.scratchpad : null);
+    // [로드맵 Phase 5·B] 활성 프리셋 레이아웃 모드·프리폼 좌표 적재.
+    store.layoutMode = applyLayoutMode(res && res.ok !== false ? res.layoutMode : null);
+    store.widgetPositions = applyWidgetPositions(res && res.ok !== false ? res.homeWidgetPositions : null);
     // [항목3] 연결된 LLM 모델 토큰 사용량 누적 적재(브리핑 생성 시 메인이 누적·영속).
     store.aiUsage = (res && res.ok !== false && res.aiUsage && typeof res.aiUsage === 'object') ? res.aiUsage : null;
     // [M13] 브리핑 carry-over 항목(open) 적재 — 영속 단일 출처. 실시간 생성상태는 push 로 갱신.
@@ -8352,6 +8547,9 @@ function initBrowser() {
     store.homeWidgetSizes = applyHomeWidgetSizes(res.homeWidgetSizes);
     store.hiddenWidgets = Array.isArray(res.hiddenWidgets)
       ? res.hiddenWidgets.filter(function (id) { return TOGGLEABLE_WIDGET_IDS.indexOf(id) >= 0; }) : [];
+    // [로드맵 Phase 5·B] 프리셋 전환/변경 시 레이아웃 모드·좌표도 활성 프리셋 기준으로 스왑.
+    store.layoutMode = applyLayoutMode(res.layoutMode);
+    store.widgetPositions = applyWidgetPositions(res.homeWidgetPositions);
     store._presetRenameId = null;
     render();
     return true;
@@ -9503,6 +9701,11 @@ if (typeof module !== 'undefined' && module.exports) {
     // [로드맵 Phase 3·G] 커밋 히트맵 모델(순수 — 일별 시계열→주간 격자·레벨, 헤드리스 테스트)
     buildHeatmapModel,
     heatmapLevel,
+    // [로드맵 Phase 5·B] 프리폼 좌표 유틸(순수 — 시딩·스냅·픽셀변환, 헤드리스 테스트)
+    freeformSeedPositions,
+    freeformSnapCell,
+    freeformCellPx,
+    HOME_FREE_ROW,
     // [위젯 추가/제거] 토글 가능 위젯 목록(메인 동형 교차검증용)
     TOGGLEABLE_WIDGET_IDS,
     // [SH-2] 즐겨찾기 셸프 위젯 순수 뷰모델/헬퍼(헤드리스 테스트)

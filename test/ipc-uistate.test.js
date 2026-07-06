@@ -101,6 +101,26 @@ test('getUiState — homeLayout 포함(toResponse 노출)', () => {
   assert.strictEqual(r.homeLayout.length, realStore.HOME_SECTION_IDS.length); // 누락 보충
 });
 
+// ── [로드맵 Phase 5·B] setLayoutMode / setWidgetPositions (프리폼) ──
+test('setLayoutMode/setWidgetPositions — 활성 프리셋 반영·정규화·getUiState 노출', () => {
+  const s = memStore();
+  const ctx = ctxWith(s);
+  // 기본 masonry.
+  assert.strictEqual(uiState.getUiState(ctx).layoutMode, 'masonry');
+  // freeform 전환.
+  let r = uiState.setLayoutMode({ mode: 'freeform' }, ctx);
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(r.layoutMode, 'freeform');
+  assert.strictEqual(uiState.getUiState(ctx).layoutMode, 'freeform', '영속·노출');
+  // 좌표 설정 — 미지/featureAdd 제거, 정수 클램프.
+  r = uiState.setWidgetPositions({ positions: { mail: { x: 2, y: 3 }, bogus: { x: 1, y: 1 }, featureAdd: { x: 0, y: 0 }, disk: { x: -5, y: 2.9 } } }, ctx);
+  assert.strictEqual(r.ok, true);
+  assert.deepStrictEqual(r.homeWidgetPositions, { mail: { x: 2, y: 3 }, disk: { x: 0, y: 3 } }, '화이트리스트·클램프·반올림');
+  assert.deepStrictEqual(uiState.getUiState(ctx).homeWidgetPositions, { mail: { x: 2, y: 3 }, disk: { x: 0, y: 3 } });
+  // 무효 모드 → masonry.
+  assert.strictEqual(uiState.setLayoutMode({ mode: 'bogus' }, ctx).layoutMode, 'masonry');
+});
+
 // ── [로드맵 Phase 3·G] setScratchpad ──
 test('setScratchpad — 텍스트 정규화·영속·updatedAt 메인 스탬프 + getUiState 노출', () => {
   const s = memStore();

@@ -8,7 +8,7 @@ const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
 
-const { HOME_SECTION_IDS, applyHomeLayout, TOGGLEABLE_WIDGET_IDS, applyHomeWidgetSizes, computeHomeCols, homeDefaultSpan, HOME_MAX_COLS, applyDashboard, densityTier, DENSITY_M_MIN, DENSITY_L_MIN, buildHeatmapModel, heatmapLevel, actionMatchScore, filterActions } = require('../public/app.js');
+const { HOME_SECTION_IDS, applyHomeLayout, TOGGLEABLE_WIDGET_IDS, applyHomeWidgetSizes, computeHomeCols, homeDefaultSpan, HOME_MAX_COLS, applyDashboard, densityTier, DENSITY_M_MIN, DENSITY_L_MIN, buildHeatmapModel, heatmapLevel, actionMatchScore, filterActions, freeformSeedPositions, freeformSnapCell, freeformCellPx, HOME_FREE_ROW } = require('../public/app.js');
 const realStore = require('../lib/common/uiStateStore');
 const APP_SRC = fs.readFileSync(path.join(__dirname, '..', 'public', 'app.js'), 'utf8');
 // 메인 계약(단일 신뢰 경계)과 동형인지 교차 확인.
@@ -131,6 +131,39 @@ test('로드맵 Phase 4·D — 팔레트 렌더 배선: Cmd+K 토글·액션 레
   // CSS + L-1.
   assert.ok(/\.palette__item\.is-active\s*\{/.test(CSS), '활성 항목 스타일');
   assert.ok(!/function renderPalette\([\s\S]{0,1400}innerHTML/.test(APP_SRC), '팔레트 렌더 innerHTML 미사용(L-1)');
+});
+
+// ── [로드맵 Phase 5·B] 프리폼(자유 배치) — 순수 좌표 유틸 + 렌더/드래그 배선 ──
+test('로드맵 Phase 5·B — freeformSeedPositions: 미배치만 순차 패킹, 기존 좌표 유지·클램프', () => {
+  const r = freeformSeedPositions(['a', 'b', 'c', 'd', 'e'], { b: { x: 9, y: 1 } }, 2);
+  assert.deepStrictEqual(r.a, { x: 0, y: 0 });
+  assert.deepStrictEqual(r.b, { x: 1, y: 1 }, '기존 좌표 유지(x는 cols-1=1로 클램프)');
+  assert.deepStrictEqual(r.c, { x: 1, y: 0 });
+  assert.deepStrictEqual(r.d, { x: 0, y: 4 }, '열 넘치면 다음 줄');
+  assert.deepStrictEqual(freeformSeedPositions(null, {}, 3), {});
+});
+
+test('로드맵 Phase 5·B — freeformSnapCell/CellPx: 픽셀↔셀 스냅(순수·클램프)', () => {
+  assert.deepStrictEqual(freeformSnapCell(5, 5, 300, 20, 4), { x: 0, y: 0 });
+  assert.deepStrictEqual(freeformSnapCell(320, 80, 300, 20, 4), { x: 1, y: 2 }, '열 스텝=colW+gap, 세로=HOME_FREE_ROW');
+  assert.deepStrictEqual(freeformSnapCell(99999, 0, 300, 20, 3), { x: 2, y: 0 }, 'x 는 cols-1 로 클램프');
+  assert.deepStrictEqual(freeformSnapCell(-50, -50, 300, 20, 4), { x: 0, y: 0 }, '음수 → 0');
+  assert.deepStrictEqual(freeformCellPx(2, 3, 300, 20), { left: 640, top: 3 * HOME_FREE_ROW });
+});
+
+test('로드맵 Phase 5·B — 프리폼 렌더/드래그 배선 + SortableJS 게이팅 + IPC', () => {
+  const CSS = fs.readFileSync(path.join(__dirname, '..', 'public', 'styles.css'), 'utf8');
+  assert.ok(/function onToggleLayoutMode\(/.test(APP_SRC) && /function onAutoArrange\(/.test(APP_SRC), '모드 토글/자동 정렬');
+  assert.ok(/ipc\('setLayoutMode',\s*next\)/.test(APP_SRC), 'setLayoutMode IPC');
+  assert.ok(/ipc\('setWidgetPositions',\s*next\)/.test(APP_SRC), 'setWidgetPositions IPC');
+  assert.ok(/store\.layoutMode === 'freeform'\)\s*\{\s*layoutHomeFreeform\(grid\);\s*return/.test(APP_SRC), 'layout 분기(freeform→절대배치)');
+  assert.ok(/function layoutHomeFreeform\(/.test(APP_SRC), '프리폼 레이아웃 함수');
+  assert.ok(/function onFreeformDragStart\(/.test(APP_SRC) && /function onFreeformDragEnd\(/.test(APP_SRC), '프리폼 드래그 시작/종료');
+  assert.ok(/closest\('\.home-resize'\)/.test(APP_SRC) && /closest\('\.widget-remove'\)/.test(APP_SRC), '드래그가 리사이즈·컨트롤과 분리');
+  assert.ok(/freeformSnapCell\(/.test(APP_SRC), '드롭 시 셀 스냅');
+  assert.ok(/if \(store\.layoutMode === 'freeform'\) return;/.test(fnBody('initHomeSortable', 400)), '프리폼에서 Sortable 게이팅');
+  assert.ok(/store\.layoutMode\s*=\s*applyLayoutMode\(/.test(APP_SRC) && /store\.widgetPositions\s*=\s*applyWidgetPositions\(/.test(APP_SRC), 'layoutMode·positions 하이드레이션');
+  assert.ok(/\.home-masonry--freeform \.home-section\s*\{[^}]*position:\s*absolute/.test(CSS), '프리폼 절대 배치 CSS');
 });
 
 // ── [로드맵 Phase 4·I/H] 포커스 위젯 + 딥링크(프로젝트 점프) 배선 ──
@@ -364,7 +397,7 @@ test('홈 위젯 크기 — 렌더가 콘텐츠 래퍼·리사이즈 핸들·레
 test('홈 위젯 크기 — layoutHomeMasonry 가 열 수·폭/높이 스팬을 적용', () => {
   const start = APP_SRC.indexOf('function layoutHomeMasonry(');
   assert.ok(start >= 0, 'layoutHomeMasonry 함수 존재');
-  const body = APP_SRC.slice(start, start + 2000);
+  const body = APP_SRC.slice(start, start + 2400);
   assert.ok(/setProperty\('--home-cols'/.test(body), '반응형 열 수(--home-cols) 주입');
   assert.ok(/gridColumnEnd\s*=\s*'span '/.test(body), '폭 = grid-column span 적용');
   assert.ok(/gridRowEnd\s*=\s*'span '/.test(body), '높이 = grid-row span 적용');
@@ -441,7 +474,7 @@ test('홈 위젯 반응형/높이 — 메일 위젯: 카드가 위젯 높이를 
   assert.ok(/flex-direction:column/.test(body), '메일 카드 flex 컬럼');
   assert.ok(/cls:\s*'hw-cols mail-list'/.test(body), '메일 목록에 mail-list 클래스');
   // layoutHomeMasonry 가 사용자 높이 지정 시 --sized 표식 토글
-  const lm = fnBody('layoutHomeMasonry', 1700);
+  const lm = fnBody('layoutHomeMasonry', 2300);
   assert.ok(/classList\.add\('home-section__content--sized'\)/.test(lm), '사이즈 지정 시 --sized 부여');
   assert.ok(/classList\.remove\('home-section__content--sized'\)/.test(lm), '미지정 시 --sized 제거');
 });
