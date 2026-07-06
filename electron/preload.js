@@ -131,6 +131,8 @@ contextBridge.exposeInMainWorld('spip', {
   getCommitActivity: (days) => ipcRenderer.invoke('spip:getCommitActivity', (days == null ? {} : { days: Number(days) })),
   // [항목2] 홈 인사이트 — Claude Code 로컬 로그 토큰 사용량 집계(인자 없음·읽기 전용).
   getClaudeUsage: () => ipcRenderer.invoke('spip:getClaudeUsage'),
+  // [로드맵 Phase 3·G] 개발 머신 시스템 상태(CPU/RAM/디스크) — 인자 없음·읽기 전용(os + fs.statfs).
+  getSystemStatus: () => ipcRenderer.invoke('spip:getSystemStatus'),
 
   // 자동 업데이트(사용자 주도) — 확인/다운로드/설치 트리거 + 상태 스냅샷. 인자 없음(main이 검증).
   //   진행 상황은 onUpdateStatus(cb) 구독으로 받는다. 채널명 하드코딩(MUST).

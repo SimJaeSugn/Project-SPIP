@@ -659,7 +659,7 @@ function shouldPollCommit(view, visible) {
  */
 // [SH-2] 즐겨찾기 셸프 위젯 2변형('shelf'=일반 컬럼, 'shelfWide'=전체폭 스팬)을 featureAdd 앞에 추가.
 //   둘은 동일 셸프 데이터·로직 공유(폭만 다름)·둘 다 기본 숨김(메인 uiStateStore가 첫 실행 시 hiddenWidgets 시드).
-const HOME_SECTION_IDS = ['attention', 'productivity', 'activity', 'todos', 'mail', 'disk', 'aiusage', 'shelf', 'shelfWide', 'scratchpad', 'commitHeatmap', 'featureAdd'];
+const HOME_SECTION_IDS = ['attention', 'productivity', 'activity', 'todos', 'mail', 'disk', 'aiusage', 'shelf', 'shelfWide', 'scratchpad', 'commitHeatmap', 'systemStatus', 'featureAdd'];
 
 // [위젯 추가/제거] 토글 가능한 콘텐츠 위젯 메타(갤러리·제거 UI용). 'featureAdd'는 추가 트리거라 제외(항상 표시).
 //   메인 uiStateStore.TOGGLEABLE_WIDGET_IDS 와 동형(드리프트 0 — homeLayout-front 테스트가 교차검증).
@@ -676,6 +676,7 @@ const WIDGET_META = {
   shelfWide: { name: '즐겨찾기 셸프 (와이드)', desc: '셸프를 전체폭으로 — 더 많은 즐겨찾기를 한눈에' },
   scratchpad: { name: '스크래치패드 메모', desc: '자유롭게 적어두는 로컬 메모 — 자동 저장' },
   commitHeatmap: { name: '통합 커밋 히트맵', desc: '전 프로젝트 커밋을 1년 캘린더로 한눈에' },
+  systemStatus: { name: '시스템 상태', desc: '개발 머신 CPU·메모리·디스크 사용량' },
 };
 
 /**
@@ -1644,6 +1645,11 @@ function initBrowser() {
     commitHeatmap: null,         // {days:[{date,count}],total,repos,scanned}
     busyCommitHeatmap: false,    // in-flight
     commitHeatmapLoaded: false,  // 1회 로드 표식
+    // [로드맵 Phase 3·G] 시스템 상태(CPU/RAM/디스크) — 표시 중 주기 갱신(경량). getSystemStatus.
+    systemStatus: null,          // {cpu,memory,disks,uptime,platform}
+    busySystemStatus: false,     // in-flight
+    systemStatusLoaded: false,   // 1회 로드 표식
+    _sysStatusTimer: null,       // 표시 중 자동 갱신 타이머
     langPrev: {},                // 직전 스캔 언어 카운트(추세 ▲▼ 비교용)
     // [항목3] 연결된 LLM 모델 토큰 사용량(getUiState.aiUsage 적재 — 브리핑 생성 시 누적).
     aiUsage: null,               // {calls,promptTokens,completionTokens,totalTokens,lastModel,lastAt}
@@ -2420,6 +2426,7 @@ function initBrowser() {
     maybeLoadMailSummary();
     maybeLoadCommitActivity();
     maybeLoadCommitHeatmap();
+    maybeLoadSystemStatus();
     maybeLoadClaudeUsage();
     maybeLoadShelf();
     var vms = store.viewModels || [];
@@ -2588,6 +2595,7 @@ function initBrowser() {
       case 'shelfWide':    return renderHomeShelf();
       case 'scratchpad':   return renderHomeScratchpad();
       case 'commitHeatmap': return renderHomeCommitHeatmap();
+      case 'systemStatus': return renderHomeSystemStatus();
       case 'featureAdd':   return renderHomeFeatureAdd();
       default:             return null;
     }
@@ -3492,6 +3500,47 @@ function initBrowser() {
     store.commitHeatmap = (res && res.ok) ? res : { days: [], total: 0, repos: 0 };
     if (store.state.view === 'home') render();
   }
+  /** [로드맵 Phase 3·G] 시스템 상태 — 표시 중일 때만 초기 로드 + 주기(경량) 자동 갱신. 숨김/이탈 시 타이머 정지. */
+  function maybeLoadSystemStatus() {
+    if (!bridgeHas('getSystemStatus')) return;
+    if (!homeWidgetVisible('systemStatus')) { stopSystemStatusTimer(); return; }
+    if (!store.systemStatusLoaded && !store.busySystemStatus) refreshSystemStatus();
+    ensureSystemStatusTimer();
+  }
+  function ensureSystemStatusTimer() {
+    if (store._sysStatusTimer || typeof setInterval === 'undefined') return;
+    store._sysStatusTimer = setInterval(function () {
+      if (store.state.view !== 'home' || !homeWidgetVisible('systemStatus')) { stopSystemStatusTimer(); return; }
+      if (!store.busySystemStatus) refreshSystemStatus({ silent: true });
+    }, 5000);
+  }
+  function stopSystemStatusTimer() {
+    if (store._sysStatusTimer) { clearInterval(store._sysStatusTimer); store._sysStatusTimer = null; }
+  }
+  async function refreshSystemStatus(opts) {
+    opts = opts || {};
+    if (!bridgeHas('getSystemStatus') || store.busySystemStatus) return;
+    store.busySystemStatus = true;
+    if (!opts.silent && store.state.view === 'home') render(); // 최초/수동만 로딩 표시
+    var res = await ipc('getSystemStatus');
+    store.busySystemStatus = false;
+    store.systemStatusLoaded = true;
+    store.systemStatus = (res && res.ok) ? res : null;
+    if (store.state.view !== 'home') return;
+    // 자동(silent) 갱신은 위젯 본문만 부분 교체(전체 재렌더 회피 → 포커스·스크롤·히트맵 유지).
+    if (opts.silent) { if (!patchSystemStatus()) { /* 위젯 부재 — 무시 */ } }
+    else render();
+  }
+  /** 시스템 상태 위젯 본문(.sysstat-body)만 in-place 재구성 후 masonry 재측정. 위젯 부재 시 false. */
+  function patchSystemStatus() {
+    if (typeof document === 'undefined') return false;
+    var body = document.querySelector('.home-section[data-home-section="systemStatus"] .sysstat-body');
+    if (!body) return false;
+    while (body.firstChild) body.removeChild(body.firstChild);
+    buildSystemStatusBody(body);
+    scheduleHomeMasonryLayout(); // 높이 변화(디스크 수 등) 반영
+    return true;
+  }
   // [항목2] Claude Code 로컬 로그 토큰 사용량 — 무거운 스캔이라 홈 진입 시 1회만 자동 로드(수동 새로고침 가능).
   function maybeLoadClaudeUsage() {
     if (bridgeHas('getClaudeUsage') && !store.claudeUsageLoaded && !store.busyClaudeUsage) refreshClaudeUsage();
@@ -3812,6 +3861,75 @@ function initBrowser() {
     for (var L = 0; L <= 4; L++) legend.appendChild(el('div', { cls: 'heatmap-cell lvl-' + L }));
     legend.appendChild(el('span', { text: '많음', style: 'font-size:10px;color:#a8a29e;' }));
     card.appendChild(legend);
+    return card;
+  }
+
+  /* [로드맵 Phase 3·G] 시스템 상태 위젯 — 개발 머신 CPU·메모리·디스크 사용량(외부 프로세스 0: os + fs.statfs).
+   *   표시 중 5초 주기 자동 갱신(경량, 위젯 본문만 부분 교체). L-1: 수치는 textContent, 막대 색은 클래스.
+   *   반응형: 미터 행은 폭에 따라 자연 축소(라벨/막대/수치 flex). §3 코너 규약과 무관(상시 컨트롤 없음). */
+  function sysBytes(b) {
+    if (typeof b !== 'number' || !isFinite(b) || b < 0) return '—';
+    var TB = 1099511627776, GB = 1073741824, MB = 1048576;
+    if (b >= TB) return (b / TB).toFixed(2) + ' TB';
+    if (b >= GB) return (b / GB).toFixed(1) + ' GB';
+    if (b >= MB) return (b / MB).toFixed(0) + ' MB';
+    return (b / 1024).toFixed(0) + ' KB';
+  }
+  /** 사용률 % → 색 등급 클래스(저<70·중<90·고). */
+  function sysMeterClass(pct) { return pct >= 90 ? 'sysmeter--hi' : (pct >= 70 ? 'sysmeter--mid' : 'sysmeter--ok'); }
+  /** 미터 행 — 라벨 + 진행 막대 + % + 보조 텍스트. 전부 el/textContent(L-1). */
+  function sysMeterRow(label, pct, detail) {
+    var p = (typeof pct === 'number' && isFinite(pct)) ? Math.max(0, Math.min(100, Math.round(pct))) : 0;
+    var row = el('div', { cls: 'sysmeter' });
+    var top = el('div', { cls: 'sysmeter__top' });
+    top.appendChild(el('span', { cls: 'sysmeter__label', text: label }));
+    top.appendChild(el('span', { cls: 'sysmeter__pct', text: p + '%', style: HOME_MONO }));
+    row.appendChild(top);
+    var track = el('div', { cls: 'sysmeter__track' });
+    var fill = el('div', { cls: 'sysmeter__fill ' + sysMeterClass(p) });
+    fill.style.width = p + '%';
+    track.appendChild(fill);
+    row.appendChild(track);
+    if (detail) row.appendChild(el('div', { cls: 'sysmeter__detail', text: detail }));
+    return row;
+  }
+  /** 시스템 상태 본문(.sysstat-body)을 store.systemStatus 로 채운다(부분 교체 대상). */
+  function buildSystemStatusBody(body) {
+    var loaded = store.systemStatusLoaded, busy = store.busySystemStatus, s = store.systemStatus;
+    if (!loaded && busy) { body.appendChild(el('div', { text: '시스템 상태를 읽는 중…', style: 'font-size:12px;color:#a8a29e;padding:6px 0;' })); return; }
+    if (!loaded || !s) { body.appendChild(el('div', { text: '표시하려면 새로고침하세요.', style: 'font-size:12px;color:#a8a29e;padding:6px 0;' })); return; }
+    // CPU.
+    var cpu = s.cpu || {};
+    var cpuDetail = (cpu.cores ? cpu.cores + '코어' : '') + (cpu.model ? (cpu.cores ? ' · ' : '') + cpu.model : '');
+    body.appendChild(sysMeterRow('CPU', cpu.usagePercent, cpuDetail));
+    // 메모리.
+    var mem = s.memory || {};
+    body.appendChild(sysMeterRow('메모리', mem.usagePercent, sysBytes(mem.used) + ' / ' + sysBytes(mem.total)));
+    // 디스크(드라이브별).
+    var disks = Array.isArray(s.disks) ? s.disks : [];
+    if (disks.length === 0) {
+      body.appendChild(el('div', { text: '디스크 정보를 가져올 수 없습니다.', style: 'font-size:11px;color:#c7c2bd;padding:2px 0;' }));
+    } else {
+      disks.forEach(function (d) {
+        body.appendChild(sysMeterRow('디스크 ' + (d.mount || ''), d.usagePercent, sysBytes(d.free) + ' 여유 / ' + sysBytes(d.total)));
+      });
+    }
+  }
+  function renderHomeSystemStatus() {
+    var card = el('div', { style: HOME_CARD + 'padding:18px 18px 16px;display:flex;flex-direction:column;min-height:0;' });
+    var busy = store.busySystemStatus;
+    var head = el('div', { style: 'display:flex;align-items:center;gap:10px;margin-bottom:14px;' });
+    head.appendChild(el('div', { text: '시스템 상태', style: 'font-size:15px;font-weight:600;flex:1 1 0%;' }));
+    head.appendChild(el('button', {
+      cls: 'home-mail-more', text: busy ? '갱신 중…' : '새로고침',
+      attrs: Object.assign({ type: 'button', 'aria-label': '시스템 상태 새로고침' }, busy ? { disabled: 'disabled' } : {}),
+      style: 'appearance:none;border:none;background:none;cursor:' + (busy ? 'default' : 'pointer') + ';font-size:12px;font-weight:600;color:' + (busy ? '#a8a29e' : '#4f46e5') + ';padding:0 2px;',
+      on: { click: function () { if (!busy) refreshSystemStatus(); } },
+    }));
+    card.appendChild(head);
+    var body = el('div', { cls: 'sysstat-body' });
+    buildSystemStatusBody(body);
+    card.appendChild(body);
     return card;
   }
 

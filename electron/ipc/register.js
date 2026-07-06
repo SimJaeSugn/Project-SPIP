@@ -190,6 +190,8 @@ function registerIpcHandlers(deps) {
   guard('spip:getCommitActivity', (args) => insightsIpc.getCommitActivity(ctx, args));
   // [항목2] 홈 인사이트 — Claude Code 로컬 로그 토큰 사용량 집계(읽기 전용·수치만).
   guard('spip:getClaudeUsage', () => insightsIpc.getClaudeUsage(ctx));
+  // [로드맵 Phase 3·G] 개발 머신 시스템 상태(CPU/RAM/디스크) — os + fs.statfs(외부 프로세스 0). 인자 없는 읽기.
+  guard('spip:getSystemStatus', () => insightsIpc.getSystemStatus(ctx));
 
   // [M7 SEC-M2] 즐겨찾기 변경 broadcast(단방향 push) — setFavorite 성공 시 메인 wc + 위젯 wc 양쪽에 동기화.
   //   payload 스키마 = { favorites:string[] }만(경로/실행 인자/내부 상태 금지). 대상 wc는 메인·위젯 2개로

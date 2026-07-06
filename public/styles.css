@@ -463,6 +463,19 @@ input, button, select { font-family: inherit; }
 /* 밀도 S(아주 좁음): 요일 라벨 접어 격자 폭 확보(격자는 어차피 가로 스크롤). */
 .home-section[data-density="S"] .heatmap-wdcol,
 .home-section[data-density="S"] .heatmap-wdspacer { display: none; }
+
+/* [로드맵 Phase 3·G] 시스템 상태 위젯 — CPU/메모리/디스크 미터. 폭에 따라 라벨 생략(...)·막대 유동. */
+.sysstat-body { display: flex; flex-direction: column; gap: 13px; }
+.sysmeter { display: flex; flex-direction: column; gap: 5px; }
+.sysmeter__top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.sysmeter__label { font-size: 12.5px; font-weight: 600; color: #1c1917; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sysmeter__pct { font-size: 12px; color: #57534e; flex: 0 0 auto; }
+.sysmeter__track { height: 7px; border-radius: 4px; background: #f0efed; overflow: hidden; }
+.sysmeter__fill { height: 100%; border-radius: 4px; min-width: 2px; transition: width .3s ease; }
+.sysmeter__fill.sysmeter--ok { background: #4f46e5; }
+.sysmeter__fill.sysmeter--mid { background: #d97706; }
+.sysmeter__fill.sysmeter--hi { background: #dc2626; }
+.sysmeter__detail { font-size: 10.5px; color: #a8a29e; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* [홈 위젯 크기] 우하단 리사이즈 핸들 — 평소 옅게, 호버/드래그 시 강조. */
 .home-resize {
   position: absolute; right: 3px; bottom: 3px; z-index: 4;

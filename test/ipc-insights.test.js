@@ -72,6 +72,33 @@ test('getCommitActivity — args.days 로 범위 조절(하위호환 14 / 클램
   assert.strictEqual(r.days.length, 365, '일별 시리즈 365칸');
 });
 
+// ── [로드맵 Phase 3·G] getSystemStatus ──
+test('getSystemStatus — config.scanRoots 드라이브만 statfs + os/sleep 주입 통합', async () => {
+  const fakeOs = {
+    cpus: () => [{ model: 'CPU', times: { user: 5, nice: 0, sys: 5, idle: 90, irq: 0 } }],
+    totalmem: () => 8e9, freemem: () => 2e9, homedir: () => 'C:\\Users\\x', uptime: () => 100, platform: () => 'win32',
+  };
+  let statfsPaths = [];
+  const statfs = async (p) => { statfsPaths.push(p); return { bsize: 4096, blocks: 1000, bavail: 500, bfree: 500 }; };
+  const r = await insights.getSystemStatus({
+    config: { scanRoots: ['C:\\proj', 'c:\\other', 'D:\\repo'] },
+    os: fakeOs, statfs, sleep: async () => {}, sampleMs: 0,
+  });
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(r.memory.usagePercent, 75);
+  // 드라이브 중복 제거 → C:\, D:\ 두 번만 statfs(임의 경로 미허용).
+  assert.deepStrictEqual(statfsPaths.slice().sort(), ['C:\\', 'D:\\']);
+  assert.strictEqual(r.disks.length, 2);
+});
+
+test('getSystemStatus — 스캔 루트 없으면 홈 드라이브 폴백 + collect 예외 graceful', async () => {
+  const fakeOs = { cpus: () => [], totalmem: () => 0, freemem: () => 0, homedir: () => 'E:\\home', uptime: () => 0, platform: () => 'win32' };
+  const seen = [];
+  const r = await insights.getSystemStatus({ config: {}, os: fakeOs, statfs: async (p) => { seen.push(p); return { bsize: 1, blocks: 10, bavail: 5, bfree: 5 }; }, sleep: async () => {}, sampleMs: 0 });
+  assert.strictEqual(r.ok, true);
+  assert.deepStrictEqual(seen, ['E:\\'], '루트 없으면 홈 드라이브');
+});
+
 // ── [항목2] Claude Code 로컬 로그 토큰 사용량 ──
 
 test('getClaudeUsage — .claude 부재 homeDir → ok:true·available:false(graceful)', () => {

@@ -80,7 +80,7 @@ test('setHomeLayout — 정규화·영속·응답(중복/미지/비배열 흡수
   // 유효 재정렬 + 중복 + 미지 id + 비문자열 → 정규화가 흡수, 누락 섹션 기본 순서 보충.
   const r = uiState.setHomeLayout({ ids: ['mail', 'attention', 'mail', 'bogus', 7] }, ctx);
   assert.strictEqual(r.ok, true);
-  assert.deepStrictEqual(r.homeLayout, ['mail', 'attention', 'productivity', 'activity', 'todos', 'disk', 'aiusage', 'shelf', 'shelfWide', 'scratchpad', 'commitHeatmap', 'featureAdd']);
+  assert.deepStrictEqual(r.homeLayout, ['mail', 'attention', 'productivity', 'activity', 'todos', 'disk', 'aiusage', 'shelf', 'shelfWide', 'scratchpad', 'commitHeatmap', 'systemStatus', 'featureAdd']);
   // 영속 반영 확인(write를 거친 store 상태와 일치).
   assert.deepStrictEqual(s._get().homeLayout, r.homeLayout);
 });

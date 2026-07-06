@@ -15,11 +15,11 @@ const APP_SRC = fs.readFileSync(path.join(__dirname, '..', 'public', 'app.js'), 
 const STORE_SRC = fs.readFileSync(path.join(__dirname, '..', 'lib', 'common', 'uiStateStore.js'), 'utf8');
 
 // ── HOME_SECTION_IDS 계약 동형 ────────────────────────────────────────────
-// [SH-2] 셸프 2변형 + [Phase 3·G] 스크래치패드('scratchpad')·커밋 히트맵('commitHeatmap')을 featureAdd 앞에 → 12섹션 enum.
-const N_SECTIONS = 12;
-test('R-32 — HOME_SECTION_IDS: 12섹션 enum(배열 순서 = 기본 순서)', () => {
+// [SH-2] 셸프 2변형 + [Phase 3·G] 스크래치패드·커밋 히트맵·시스템 상태('systemStatus')를 featureAdd 앞에 → 13섹션 enum.
+const N_SECTIONS = 13;
+test('R-32 — HOME_SECTION_IDS: 13섹션 enum(배열 순서 = 기본 순서)', () => {
   assert.deepStrictEqual(HOME_SECTION_IDS,
-    ['attention', 'productivity', 'activity', 'todos', 'mail', 'disk', 'aiusage', 'shelf', 'shelfWide', 'scratchpad', 'commitHeatmap', 'featureAdd']);
+    ['attention', 'productivity', 'activity', 'todos', 'mail', 'disk', 'aiusage', 'shelf', 'shelfWide', 'scratchpad', 'commitHeatmap', 'systemStatus', 'featureAdd']);
 });
 
 test('R-32 — 렌더러 HOME_SECTION_IDS 가 메인 uiStateStore 와 동일 집합·순서', () => {
@@ -83,6 +83,26 @@ test('로드맵 Phase 3·C — 렌더러: layoutHomeMasonry 가 실측 셀폭→
   assert.ok(/colW\s*=\s*\(contentW\s*-\s*HOME_GAP\s*\*\s*\(cols\s*-\s*1\)\)\s*\/\s*cols/.test(body), '한 열 실제 폭(colW) 산출');
   assert.ok(/cellW\s*=\s*colW\s*\*\s*w\s*\+\s*HOME_GAP\s*\*\s*\(w\s*-\s*1\)/.test(body), '셀 실측 폭(cellW) = colW*스팬 + gap');
   assert.ok(/cell\.dataset\.density\s*=\s*densityTier\(cellW\)/.test(body), 'densityTier(cellW) → data-density 부여');
+});
+
+// ── [로드맵 Phase 3·G] 시스템 상태 위젯 — 렌더 배선·지연로드·주기갱신·L-1 ──
+test('로드맵 Phase 3·G — 시스템 상태 위젯: 렌더·표시시 지연로드·주기갱신 타이머·부분교체·L-1', () => {
+  const CSS = fs.readFileSync(path.join(__dirname, '..', 'public', 'styles.css'), 'utf8');
+  assert.ok(HOME_SECTION_IDS.includes('systemStatus'), '렌더러 enum 에 systemStatus');
+  assert.ok(/function renderHomeSystemStatus\(/.test(APP_SRC), '시스템 상태 렌더 함수');
+  assert.ok(/case 'systemStatus':\s*return renderHomeSystemStatus\(\)/.test(APP_SRC), 'renderHomeSection case');
+  assert.ok(/systemStatus:\s*\{\s*name:/.test(APP_SRC), 'WIDGET_META.systemStatus');
+  // 표시될 때만 로드 + 주기 갱신 타이머(숨김/이탈 시 정지).
+  assert.ok(/function maybeLoadSystemStatus\(/.test(APP_SRC) && /homeWidgetVisible\('systemStatus'\)/.test(APP_SRC), '표시(visible)될 때만 로드');
+  assert.ok(/ipc\('getSystemStatus'\)/.test(APP_SRC), 'getSystemStatus IPC');
+  assert.ok(/setInterval\(/.test(fnBody('ensureSystemStatusTimer', 500)) && /stopSystemStatusTimer/.test(APP_SRC), '주기 갱신 타이머 + 정지');
+  // 자동 갱신은 위젯 본문만 부분 교체(전체 재렌더 회피).
+  assert.ok(/function patchSystemStatus\(/.test(APP_SRC) && /\.sysstat-body/.test(APP_SRC), '본문 부분 교체(patchSystemStatus)');
+  // 미터 색은 클래스(임계 등급), CSS 존재.
+  assert.ok(/\.sysmeter__fill\.sysmeter--hi\s*\{/.test(CSS), '고사용 색 등급 클래스');
+  // L-1: innerHTML 미사용.
+  assert.ok(!/renderHomeSystemStatus[\s\S]{0,1200}innerHTML/.test(APP_SRC), '시스템 상태 렌더 innerHTML 미사용(L-1)');
+  assert.ok(!/buildSystemStatusBody[\s\S]{0,1500}innerHTML/.test(APP_SRC), '본문 빌더 innerHTML 미사용(L-1)');
 });
 
 // ── [로드맵 Phase 3·G] 통합 커밋 히트맵 — 순수 모델 + 렌더 배선 ──
@@ -187,7 +207,7 @@ test('로드맵 Phase 3·C — 메일 위젯 밀도 소비: 요약 노드·시�
 
 // ── applyHomeLayout (순서 정규화, 메인 normalizeHomeLayout 과 동일 규칙) ──
 test('R-32 — applyHomeLayout: 유효 순열은 그대로 유지', () => {
-  const input = ['mail', 'attention', 'disk', 'todos', 'shelf', 'activity', 'productivity', 'aiusage', 'shelfWide', 'scratchpad', 'commitHeatmap', 'featureAdd'];
+  const input = ['mail', 'attention', 'disk', 'todos', 'shelf', 'activity', 'productivity', 'aiusage', 'shelfWide', 'scratchpad', 'commitHeatmap', 'systemStatus', 'featureAdd'];
   assert.deepStrictEqual(applyHomeLayout(input), input);
 });
 
@@ -196,7 +216,7 @@ test('R-32 — applyHomeLayout: 부분 순서는 나머지를 기본 순서로 �
   assert.strictEqual(out.length, N_SECTIONS);
   assert.deepStrictEqual(out.slice(0, 2), ['mail', 'todos']);
   // 나머지는 기본 순서 유지(중복 없이).
-  assert.deepStrictEqual(out, ['mail', 'todos', 'attention', 'productivity', 'activity', 'disk', 'aiusage', 'shelf', 'shelfWide', 'scratchpad', 'commitHeatmap', 'featureAdd']);
+  assert.deepStrictEqual(out, ['mail', 'todos', 'attention', 'productivity', 'activity', 'disk', 'aiusage', 'shelf', 'shelfWide', 'scratchpad', 'commitHeatmap', 'systemStatus', 'featureAdd']);
 });
 
 test('R-32 — applyHomeLayout: 화이트리스트 외·중복·비문자열 제거', () => {
@@ -218,7 +238,7 @@ test('R-32 — applyHomeLayout: 부재/비배열/빈 → 기본 순서(graceful)
 test('R-32 — renderHomeSection 이 모든 enum 섹션을 case 로 처리(누락 0)', () => {
   const start = APP_SRC.indexOf('function renderHomeSection(');
   assert.ok(start >= 0, 'renderHomeSection 함수가 있어야 한다');
-  const body = APP_SRC.slice(start, start + 900);
+  const body = APP_SRC.slice(start, start + 1200);
   const caseIds = new Set((body.match(/case\s+'([a-zA-Z]+)'/g) || []).map((s) => s.replace(/case\s+'|'/g, '')));
   for (const id of HOME_SECTION_IDS) assert.ok(caseIds.has(id), 'renderHomeSection 누락 섹션: ' + id);
 });

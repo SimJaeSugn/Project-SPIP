@@ -17,6 +17,7 @@
 const commitActivity = require('../../lib/scan/collectors/commitActivity');
 const pathGuard = require('../../lib/common/pathGuard');
 const claudeUsage = require('../../lib/ai/claudeUsage');
+const systemStatus = require('../../lib/common/systemStatus');
 
 const MAX_REPOS = 100;
 const DEFAULT_DAYS = 14;
@@ -94,4 +95,23 @@ function getClaudeUsage(ctx) {
   return Object.assign({ ok: true }, res);
 }
 
-module.exports = { getCommitActivity, getClaudeUsage, normalizeDays, MAX_REPOS, DEFAULT_DAYS, MAX_DAYS };
+/**
+ * [로드맵 Phase 3·G] spip:getSystemStatus — 개발 머신 CPU·RAM·디스크 스냅샷(읽기 전용).
+ *   외부 프로세스 0(os + fs.statfs). 디스크 대상 드라이브는 등록 스캔 루트(config.scanRoots) 유래로만 도출
+ *   (렌더러 임의 경로 미허용 — 인자 없는 채널). systemStatus.collect 는 throw 안 함(부분 실패 graceful).
+ * @param {object} ctx { config?, os?, statfs?, sleep?, sampleMs? }(테스트 주입)
+ * @returns {Promise<{ok:true, cpu, memory, disks, uptime, platform}>}
+ */
+async function getSystemStatus(ctx) {
+  ctx = ctx || {};
+  const config = ctx.config || {};
+  const roots = Array.isArray(config.scanRoots) ? config.scanRoots : [];
+  try {
+    return await systemStatus.collect({ roots: roots, os: ctx.os, statfs: ctx.statfs, sleep: ctx.sleep, sampleMs: ctx.sampleMs });
+  } catch (_) {
+    // collect 는 자체 격리하지만 만일을 대비해 graceful 빈 스냅샷.
+    return { ok: true, cpu: { cores: 0, model: '', usagePercent: 0 }, memory: { total: 0, free: 0, used: 0, usagePercent: 0 }, disks: [], uptime: 0, platform: '' };
+  }
+}
+
+module.exports = { getCommitActivity, getClaudeUsage, getSystemStatus, normalizeDays, MAX_REPOS, DEFAULT_DAYS, MAX_DAYS };
