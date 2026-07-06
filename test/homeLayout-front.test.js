@@ -217,6 +217,9 @@ test('로드맵 Phase 5·B — 프리폼 렌더/드래그 배선 + SortableJS �
   // 이동 임계값(클릭 vs 드래그) — featureAdd 클릭(갤러리) 유지.
   assert.ok(/FREE_DRAG_THRESHOLD/.test(APP_SRC) && /if \(!d\.moved\)/.test(APP_SRC), '이동 임계값으로 클릭/드래그 구분');
   assert.ok(/freeformSnapCell\(/.test(APP_SRC), '드롭 시 셀 스냅');
+  // [좌우 여백 대칭] 절대 배치가 좌/상 패딩을 반영해 대칭 여백.
+  assert.ok(/cell\.style\.left = \(padL \+ px\.left\)/.test(APP_SRC), '레이아웃이 좌측 패딩 반영');
+  assert.ok(/d\.cell\.style\.left = \(d\.padL \+ left\)/.test(APP_SRC), '드래그 표시도 좌측 패딩 반영(레이아웃과 동일 좌표계)');
   assert.ok(/if \(store\.layoutMode === 'freeform'\) return;/.test(fnBody('initHomeSortable', 400)), '프리폼에서 Sortable 게이팅');
   assert.ok(/store\.layoutMode\s*=\s*applyLayoutMode\(/.test(APP_SRC) && /store\.widgetPositions\s*=\s*applyWidgetPositions\(/.test(APP_SRC), 'layoutMode·positions 하이드레이션');
   assert.ok(/\.home-masonry--freeform \.home-section\s*\{[^}]*position:\s*absolute/.test(CSS), '프리폼 절대 배치 CSS');

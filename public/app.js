@@ -8321,6 +8321,10 @@ function initBrowser() {
     var cols = computeHomeCols(contentW);
     grid.style.setProperty('--home-cols', String(cols));
     var colW = (contentW - HOME_GAP * (cols - 1)) / cols;
+    // [좌우 여백 대칭] 절대 배치는 패딩 박스 기준이라 좌/상 패딩을 무시한다 → 콘텐츠 시작점(패딩)만큼 오프셋해 대칭.
+    var gcs = window.getComputedStyle(grid);
+    var padL = parseFloat(gcs.paddingLeft) || 0;
+    var padT = parseFloat(gcs.paddingTop) || 0;
     var sizes = store.homeWidgetSizes || {};
     // 직계 셀만(그룹 내부 멤버 .home-section 은 제외 — 그룹 셀 안에서 흐름 배치).
     var cells = [];
@@ -8341,8 +8345,8 @@ function initBrowser() {
       var px = freeformCellPx(Math.min(p.x, cols - w), p.y, colW, HOME_GAP);
       var wPx = colW * w + HOME_GAP * (w - 1);
       cell.style.position = 'absolute';
-      cell.style.left = px.left + 'px';
-      cell.style.top = px.top + 'px';
+      cell.style.left = (padL + px.left) + 'px';   // 좌측 패딩 반영(대칭 여백)
+      cell.style.top = (padT + px.top) + 'px';
       cell.style.width = wPx + 'px';
       cell.style.gridColumnEnd = '';
       cell.style.gridRowEnd = '';
@@ -8353,10 +8357,10 @@ function initBrowser() {
         else { content.style.height = ''; content.style.overflow = ''; content.classList.remove('home-section__content--sized'); }
       }
       var hpx = cell.getBoundingClientRect().height;
-      if (px.top + hpx > maxBottom) maxBottom = px.top + hpx;
+      if (padT + px.top + hpx > maxBottom) maxBottom = padT + px.top + hpx;
     }
     grid.style.position = 'relative';
-    grid.style.minHeight = (maxBottom + 40) + 'px';
+    grid.style.minHeight = (maxBottom + 24) + 'px';
   }
 
   /** 프리폼 드래그 시작 — 리사이즈 핸들·텍스트 입력 위에선 무시. 이동 임계값 초과 시에만 드래그로 전환(그 전엔 클릭 유지). */
@@ -8371,12 +8375,15 @@ function initBrowser() {
     if (!grid || !cell) return;
     var gridRect = grid.getBoundingClientRect();
     var cellRect = cell.getBoundingClientRect();
+    var gcs = getComputedStyle(grid);
+    var padL = parseFloat(gcs.paddingLeft) || 0;
+    var padT = parseFloat(gcs.paddingTop) || 0;
     store._freeDrag = {
       id: id, cell: cell, grid: grid, moved: false, pointerId: e.pointerId,
-      startX: e.clientX, startY: e.clientY,
+      startX: e.clientX, startY: e.clientY, padL: padL, padT: padT,
       offX: e.clientX - cellRect.left, offY: e.clientY - cellRect.top,
-      gridLeft: gridRect.left + parseFloat(getComputedStyle(grid).paddingLeft || '0'),
-      gridTop: gridRect.top + parseFloat(getComputedStyle(grid).paddingTop || '0'),
+      gridLeft: gridRect.left + padL, // 콘텐츠 시작(패딩) 기준 — 스냅 좌표계
+      gridTop: gridRect.top + padT,
     };
     window.addEventListener('pointermove', onFreeformDragMove);
     window.addEventListener('pointerup', onFreeformDragEnd, { once: true });
@@ -8391,10 +8398,11 @@ function initBrowser() {
       try { d.cell.setPointerCapture(d.pointerId); } catch (_) { /* ignore */ }
     }
     e.preventDefault();
-    var left = e.clientX - d.gridLeft - d.offX;
-    var top = e.clientY - d.gridTop - d.offY;
-    d.cell.style.left = Math.max(0, left) + 'px';
-    d.cell.style.top = Math.max(0, top) + 'px';
+    var left = Math.max(0, e.clientX - d.gridLeft - d.offX); // 콘텐츠 시작 기준(스냅 좌표계)
+    var top = Math.max(0, e.clientY - d.gridTop - d.offY);
+    // style.left 은 패딩 박스 기준 → 콘텐츠 시작 좌표에 좌/상 패딩을 더해 표시(레이아웃과 동일 좌표계).
+    d.cell.style.left = (d.padL + left) + 'px';
+    d.cell.style.top = (d.padT + top) + 'px';
     d.left = left; d.top = top;
   }
   function onFreeformDragEnd() {
