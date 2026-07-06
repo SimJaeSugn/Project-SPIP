@@ -8,7 +8,7 @@ const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
 
-const { SETTINGS_CATEGORIES, resolveSettingsTab } = require('../public/app.js');
+const { SETTINGS_CATEGORIES, resolveSettingsTab, updateHasBadge } = require('../public/app.js');
 const APP_SRC = fs.readFileSync(path.join(__dirname, '..', 'public', 'app.js'), 'utf8');
 
 // ── 카테고리 구조 ────────────────────────────────────────────────────────
@@ -67,6 +67,29 @@ test('R-30 — resolveSettingsTab: 유효 카테고리는 그대로 유지(재�
   for (const c of SETTINGS_CATEGORIES) {
     assert.strictEqual(resolveSettingsTab(c.id), c.id);
   }
+});
+
+// ── 업데이트 알림 배지 판정 ──────────────────────────────────────────────
+test('업데이트 배지 — available/downloaded 만 표시(조치 가능 상태)', () => {
+  assert.strictEqual(updateHasBadge({ status: 'available' }), true);
+  assert.strictEqual(updateHasBadge({ status: 'downloaded' }), true);
+});
+
+test('업데이트 배지 — 진행/무해 상태는 미표시', () => {
+  for (const s of ['idle', 'checking', 'downloading', 'not-available', 'error']) {
+    assert.strictEqual(updateHasBadge({ status: s }), false, s + '는 배지 없음');
+  }
+});
+
+test('업데이트 배지 — 잘못된 입력은 false(graceful)', () => {
+  assert.strictEqual(updateHasBadge(null), false);
+  assert.strictEqual(updateHasBadge(undefined), false);
+  assert.strictEqual(updateHasBadge({}), false);
+});
+
+test("업데이트 배지 — '정보' 카테고리만 update 섹션을 포함(배지 부착 대상)", () => {
+  const withUpdate = SETTINGS_CATEGORIES.filter((c) => c.sections.indexOf('update') !== -1);
+  assert.deepStrictEqual(withUpdate.map((c) => c.id), ['info']);
 });
 
 // ── 디스패치–데이터 키 일치(개선 ①): 데이터에 키 추가 후 buildSettingsSection case 누락 방지 ──

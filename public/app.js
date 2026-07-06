@@ -635,6 +635,15 @@ function resolveSettingsTab(stored) {
 }
 
 /**
+ * 업데이트 알림 배지 표시 여부(순수) — 사용자가 조치 가능한 상태에서만 켠다.
+ *   'available'(새 버전 감지) · 'downloaded'(설치 대기)만 배지. checking/downloading/not-available/error/idle 은 미표시.
+ *   설정 아이콘·'정보' 카테고리에서 공용으로 참조하는 단일 판정.
+ */
+function updateHasBadge(u) {
+  return !!u && (u.status === 'available' || u.status === 'downloaded');
+}
+
+/**
  * [R-31] 커밋 차트 5분 폴링 게이트(순수). 홈 뷰 + 창 가시 상태일 때만 폴링한다.
  *   홈 이탈/비가시(visible===false)면 false → 호출측이 타이머를 정지(홈 비활성 시 git 호출 0).
  *   visible 미지정(undefined)은 가시로 간주(visibilityState 미지원 환경 graceful).
@@ -4211,12 +4220,16 @@ function initBrowser() {
     const nav = el('div', { cls: 'settings-nav', attrs: { role: 'tablist', 'aria-label': '설정 카테고리' } });
     SETTINGS_CATEGORIES.forEach((cat) => {
       const active = cat.id === activeTab;
-      nav.appendChild(el('button', {
-        cls: 'settings-nav__item' + (active ? ' is-active' : ''),
+      // 업데이트 섹션을 포함한 카테고리('정보')는 새 버전이 있으면 배지 표시.
+      const showBadge = cat.sections.indexOf('update') !== -1 && updateHasBadge(store.update);
+      const item = el('button', {
+        cls: 'settings-nav__item' + (active ? ' is-active' : '') + (showBadge ? ' has-update' : ''),
         text: cat.label,
         attrs: { type: 'button', role: 'tab', 'aria-selected': active ? 'true' : 'false', 'data-settings-tab': cat.id },
         on: { click: () => { switchSettingsTab(cat.id); } },
-      }));
+      });
+      if (showBadge) item.appendChild(el('span', { cls: 'update-badge', attrs: { 'aria-hidden': 'true', title: '새 업데이트가 있습니다' } }));
+      nav.appendChild(item);
     });
 
     // 우측: 활성 카테고리에 매핑된 섹션만 렌더(나머지 미렌더). .settings-pane 은 스크롤 컨테이너.
@@ -4766,7 +4779,8 @@ function initBrowser() {
     store.update.packaged = !!res.packaged;
     store.update.currentVersion = (typeof res.currentVersion === 'string') ? res.currentVersion : '';
     applyUpdateStatusPayload(res.status);
-    if (store.showSettings) render();
+    // 설정이 열려 있거나, 배지가 켜져야 하는 상태면 재렌더(헤더 아이콘 배지 반영).
+    if (store.showSettings || updateHasBadge(store.update)) render();
   }
 
   /** onUpdateStatus push 페이로드를 store.update 에 반영(순수 매핑). */
@@ -5637,10 +5651,17 @@ function initBrowser() {
       on: { click: exitOrbit },
     }));
     if (bridgeHas('getConfig')) {
-      topRow.appendChild(el('button', {
+      const orbitSettingsBtn = el('button', {
         cls: 'orbit__back', text: '설정', attrs: { type: 'button', 'aria-label': '설정 열기' },
         on: { click: openSettings },
-      }));
+      });
+      if (updateHasBadge(store.update)) {
+        orbitSettingsBtn.classList.add('has-update');
+        orbitSettingsBtn.setAttribute('aria-label', '설정 열기 (업데이트 있음)');
+        orbitSettingsBtn.title = '새 업데이트가 있습니다';
+        orbitSettingsBtn.appendChild(el('span', { cls: 'update-badge', attrs: { 'aria-hidden': 'true' } }));
+      }
+      topRow.appendChild(orbitSettingsBtn);
     }
     aside.appendChild(topRow);
     aside.appendChild(el('div', { children: [
@@ -5889,6 +5910,13 @@ function initBrowser() {
       { t: 'circle', cx: '12', cy: '12', r: '3' },
       { t: 'path', d: 'M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z' },
     ], { size: 13, sw: 1.8 }));
+    // 업데이트 알림 배지 — 새 버전이 있을 때 설정 아이콘에 점 표시.
+    if (updateHasBadge(store.update)) {
+      settingsBtn.classList.add('has-update');
+      settingsBtn.setAttribute('aria-label', '폴더 및 스캔 설정 열기 (업데이트 있음)');
+      settingsBtn.title = '새 업데이트가 있습니다';
+      settingsBtn.appendChild(el('span', { cls: 'update-badge', attrs: { 'aria-hidden': 'true' } }));
+    }
     actions.appendChild(settingsBtn);
 
     // 궤도 맵 진입 버튼(UI 템플릿 이식) — 프로젝트를 별/궤도로 보는 실험적 뷰.
@@ -6844,8 +6872,10 @@ function initBrowser() {
     unsubscribeUpdateStatus();
     if (!hasBridge() || typeof spip.onUpdateStatus !== 'function') return; // graceful
     const unsub = spip.onUpdateStatus((payload) => {
+      const before = updateHasBadge(store.update);
       applyUpdateStatusPayload(payload);
-      if (store.showSettings) render();
+      // 설정이 열려 있거나 배지 표시 여부가 바뀌면 재렌더(헤더/카테고리 배지 반영).
+      if (store.showSettings || before !== updateHasBadge(store.update)) render();
     });
     store.update.unsubscribe = (typeof unsub === 'function') ? unsub : null;
   }
@@ -8206,6 +8236,9 @@ function initBrowser() {
   }
   // 자동 업데이트 진행 구독(앱 1회). 부재 시 graceful — 내부 가드.
   subscribeUpdateStatus();
+  // 런치 시 현재 업데이트 상태를 1회 조회 — main 의 자동 확인이 구독보다 먼저 끝난 경우에도
+  //   마지막 상태(_lastStatus)를 받아 헤더/카테고리 배지에 반영한다(설정 미오픈에도 배지 표시).
+  refreshUpdateState();
   // [M12 b3] 권한 상승 경고 구독(앱 1회). 비상승·웹·테스트면 push 가 없어 배너 미표시(graceful).
   subscribeElevationWarning();
   // 테마 즉시 적용(시스템 기본) + 시스템 테마 변경 구독. ui-state 적재 시 사용자 설정으로 갱신.
@@ -8285,6 +8318,8 @@ if (typeof module !== 'undefined' && module.exports) {
     // [R-30] 설정 2-pane 카테고리 단일 출처 + 활성 탭 정규화
     SETTINGS_CATEGORIES,
     resolveSettingsTab,
+    // 업데이트 알림 배지 표시 판정(순수) — 설정 아이콘·'정보' 카테고리 공용
+    updateHasBadge,
     // [R-31] 커밋 차트 폴링 게이트(홈 뷰 + 가시성)
     shouldPollCommit,
     // [R-32] 홈 섹션 화이트리스트 + 순서 정규화(렌더러 동형)

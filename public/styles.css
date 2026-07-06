@@ -936,6 +936,19 @@ textarea.briefing-systemprompt {
 }
 .settings-nav__item:hover { background: var(--surface-3); color: var(--t1); }
 .settings-nav__item.is-active { background: var(--accent-bg); color: var(--accent-text); font-weight: 600; }
+.settings-nav__item.has-update { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+
+/* ── 업데이트 알림 배지(설정 아이콘 · '정보' 카테고리) ─────────────────── */
+/* 새 버전이 있을 때만 렌더되는 작은 점. 아이콘 버튼은 우상단, 카테고리 항목은 라벨 오른쪽. */
+.btn.has-update, .orbit__back.has-update { position: relative; }
+.update-badge {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--accent); flex: none;
+}
+.btn.has-update > .update-badge, .orbit__back.has-update > .update-badge {
+  position: absolute; top: -2px; right: -2px;
+  box-shadow: 0 0 0 2px var(--panel); /* 배경과 분리되는 링 */
+}
 .settings-pane {
   flex: 1; min-width: 0; padding: 18px 22px; display: flex; flex-direction: column; gap: 16px; overflow-y: auto;
 }

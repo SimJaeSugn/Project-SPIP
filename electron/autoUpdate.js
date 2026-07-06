@@ -26,6 +26,9 @@ const electronUpdater = require('electron-updater');
 //   반드시 런타임(app.isPackaged 가드 통과 후)에만 지연 접근한다.
 function updater() { return electronUpdater.autoUpdater; }
 
+// 런치 시 1회 자동 확인 지연(ms). 시작 시 부하(스캔·창 로드)와 겹치지 않게 살짝 늦춘다.
+const AUTO_CHECK_DELAY_MS = 4000;
+
 // 렌더러로 중계하는 상태 토큰(고정 집합).
 //   idle | checking | available | not-available | downloading | downloaded | error
 let _initialized = false;
@@ -103,6 +106,15 @@ function initAutoUpdate(deps) {
   });
 
   log('info', '자동 업데이트 클라이언트 초기화(사용자 주도)');
+
+  // 런치 시 1회 자동 확인 — 결과(available/not-available/error)는 broadcast 로 렌더러에 전달되어
+  //   설정 아이콘·'정보' 카테고리 배지로 노출된다. 다운로드/설치는 여전히 사용자 버튼으로만 트리거.
+  //   deps.autoCheckOnLaunch===false 로 비활성 가능(테스트). checkForUpdates 가 내부에서 패키징·오류 가드.
+  if (deps.autoCheckOnLaunch !== false) {
+    const delay = (typeof deps.checkDelayMs === 'number' && deps.checkDelayMs >= 0) ? deps.checkDelayMs : AUTO_CHECK_DELAY_MS;
+    const t = setTimeout(() => { checkForUpdates().catch(() => {}); }, delay);
+    if (t && typeof t.unref === 'function') t.unref(); // 대기 타이머가 종료를 막지 않도록
+  }
 }
 
 /** dev/미패키징·미초기화면 NOT_PACKAGED. (모든 제어 함수 공통 가드) */
