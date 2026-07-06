@@ -8359,6 +8359,8 @@ function initBrowser() {
     if (!grid) return;
     // [로드맵 Phase 5·B] 프리폼이면 절대 배치 레이아웃으로 분기(격자 masonry 미적용).
     if (store.layoutMode === 'freeform') { layoutHomeFreeform(grid); return; }
+    // 프리폼→격자 전환 시 남은 절대배치 잔재(높이·position) 제거(잔여 minHeight 로 인한 과도 스크롤 방지).
+    grid.style.minHeight = ''; grid.style.position = '';
     layoutMasonryGrid(grid);
     // [로드맵 Phase 5·M] 그룹 내부 격자도 동일 masonry 배치(멤버 폭·높이 스팬·밀도).
     var groupGrids = document.querySelectorAll('.home-group__grid');
@@ -9482,7 +9484,11 @@ function initBrowser() {
       root.setAttribute('data-theme', resolveTheme());
       // [로드맵 Phase 1·J] 액센트 색(CSS 변수 프리셋 data-accent) + UI 배율(zoom — px 레이아웃 전체 스케일).
       root.setAttribute('data-accent', (typeof store.accent === 'string') ? store.accent : 'indigo');
+      // [배율/스크롤] body zoom 으로 전체 스케일하되, --ui-zoom 을 함께 노출해 .app-root 높이를
+      //   calc(100vh / var(--ui-zoom)) 로 미리 나눠 보정한다(그러지 않으면 100vh 컨테이너가 뷰포트보다
+      //   커져 body 스크롤이 추가로 생겨 스크롤이 2겹이 됨).
       var z = UI_SCALE_ZOOM[store.uiScale] || 1;
+      root.style.setProperty('--ui-zoom', String(z));
       if (document.body) document.body.style.zoom = String(z);
     } catch (_) { /* ignore */ }
   }

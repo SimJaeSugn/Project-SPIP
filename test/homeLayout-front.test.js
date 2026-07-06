@@ -200,6 +200,10 @@ test('로드맵 Phase 1·J — 액센트 토큰화·프리셋 CSS + applyTheme d
   assert.ok(/function onSetThemePrefs\(/.test(APP_SRC) && /ipc\('setThemePrefs'/.test(APP_SRC), '테마 개인화 IPC');
   assert.ok(/cls:\s*'accent-swatch'/.test(APP_SRC) || /accent-swatch/.test(APP_SRC), '액센트 스와치 UI');
   assert.ok(/\.accent-swatch\.is-on/.test(CSS), '스와치 활성 CSS');
+  // [스크롤 2겹 방지] 배율 zoom 시 .app-root 높이를 zoom 만큼 나눠 보정 + --ui-zoom 노출.
+  assert.ok(/\.app-root\s*\{[^}]*calc\(100vh \/ var\(--ui-zoom/.test(CSS), '.app-root 높이 배율 보정');
+  assert.ok(/setProperty\('--ui-zoom'/.test(APP_SRC), 'applyTheme 가 --ui-zoom 노출');
+  assert.ok(/\.dash\s*\{[^}]*height:\s*100%/.test(CSS), '.dash 는 100%(자체 100vh 재지정 금지)');
 });
 
 // ── [로드맵 Phase 1·L] 레이아웃 템플릿 갤러리 ──

@@ -124,7 +124,9 @@ body {
 }
 ::selection { background: #c7d2fe; }
 input, button, select { font-family: inherit; }
-.app-root { height: 100vh; overflow: hidden; }
+/* [배율 보정] body zoom(--ui-zoom) 적용 시 100vh 컨테이너가 뷰포트보다 커져 스크롤이 2겹 되는 것을 막기 위해
+   높이를 zoom 만큼 미리 나눈다(zoom=1 이면 100vh 그대로). */
+.app-root { height: calc(100vh / var(--ui-zoom, 1)); overflow: hidden; }
 .mono { font-family: var(--mono); }
 .muted { color: var(--t4); }
 .spacer { flex: 1; }
@@ -343,7 +345,7 @@ input, button, select { font-family: inherit; }
 }
 
 /* =========================== 대시보드 =========================== */
-.dash { display: flex; flex-direction: column; height: 100vh; }
+.dash { display: flex; flex-direction: column; height: 100%; } /* .app-root(이미 배율 보정) 채움 — 자체 100vh 재지정 금지 */
 
 /* 헤더 */
 .topbar {
