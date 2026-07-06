@@ -185,6 +185,22 @@ test('홈 위젯 반응형 — 토큰 사용량 2섹션이 hw-split 로 폭 반�
   assert.ok(/cls:\s*'hw-split'/.test(body), 'aiusage 두 섹션을 hw-split 로 배치');
   assert.ok(/cls:\s*'hw-vrule'/.test(body), 'aiusage 세로 구분선(hw-vrule)');
 });
+test('홈 위젯 반응형 — 셸프 위젯: 좁은 영역용 경량 리스트 UI(@container 로 책장↔리스트 전환)', () => {
+  const CSS = fs.readFileSync(path.join(__dirname, '..', 'public', 'styles.css'), 'utf8');
+  // display 소유는 클래스(인라인 아님) — 그래야 컨테이너 쿼리로 전환 가능
+  assert.ok(/\.shelf-view--full\s*\{[^}]*display:\s*flex/.test(CSS), '풀 뷰(책장) display 는 클래스가 소유');
+  assert.ok(/\.shelf-view--compact\s*\{[^}]*display:\s*none/.test(CSS), '경량 뷰 기본 숨김');
+  assert.ok(/@container\s+hw\s*\(max-width:\s*440px\)/.test(CSS), '좁은 영역 컨테이너 쿼리(≤440px)');
+  assert.ok(/\.shelf-view--full[^}]*display:\s*none/.test(CSS), '좁으면 책장 숨김');
+  assert.ok(/\.shelf-view--compact[^}]*display:\s*flex/.test(CSS), '좁으면 경량 리스트 표시');
+  // 렌더가 두 뷰 + 경량 행 함수 배선(둘 다 렌더 후 @container 로 택1)
+  assert.ok(/cls:\s*'shelf-view shelf-view--full/.test(APP_SRC), 'shelfBody 가 풀 뷰 클래스 부여');
+  assert.ok(/cls:\s*'shelf-view shelf-view--compact/.test(APP_SRC), 'shelfBody 가 경량 뷰 클래스 부여');
+  assert.ok(/function shelfCompactList\(/.test(APP_SRC) && /function shelfCompactRow\(/.test(APP_SRC), '경량 리스트/행 함수 존재');
+  // 셸프 풀 뷰(shelf-row)는 인라인 display 를 두지 않는다(클래스가 소유해야 전환됨)
+  const sb = fnBody('shelfBody', 1500);
+  assert.ok(/shelf-view--full[\s\S]*?style:\s*'position:relative;gap:6px/.test(sb), '풀 뷰 인라인 style 에 display 미포함');
+});
 
 test('R-32 — homeSortable: RG.widget 등록 + onEnd 마이크로태스크 패턴(R4) + setHomeLayout 영속', () => {
   // RG.widget 등록.

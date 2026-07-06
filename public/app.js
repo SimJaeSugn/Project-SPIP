@@ -3927,7 +3927,7 @@ function initBrowser() {
     titleRow.appendChild(el('span', { text: '즐겨찾기 셸프', style: 'font-size:15.5px;font-weight:600;letter-spacing:-.015em;' }));
     titleRow.appendChild(el('span', { text: String(count), style: HOME_MONO + 'font-size:11px;font-weight:600;color:#78716c;background:#f3f2f0;border:1px solid #e7e5e4;padding:1px 7px;border-radius:6px;' }));
     mid.appendChild(titleRow);
-    mid.appendChild(el('div', { text: '사이트·폴더·파일을 한 셸프에서 즐겨찾기', style: 'font-size:11.5px;color:#a8a29e;margin-top:2px;' }));
+    mid.appendChild(el('div', { cls: 'shelf-sub', text: '사이트·폴더·파일을 한 셸프에서 즐겨찾기', style: 'font-size:11.5px;color:#a8a29e;margin-top:2px;' }));
     head.appendChild(mid);
     return head;
   }
@@ -3983,14 +3983,49 @@ function initBrowser() {
       return wrap;
     }
     if (flags.hasItems) {
-      var row = el('div', { cls: 'shelf-row no-sb', attrs: { role: 'list', 'aria-label': '즐겨찾기 셸프' }, style: 'position:relative;display:flex;gap:6px;height:278px;overflow-x:auto;overflow-y:hidden;padding-bottom:2px;touch-action:pan-x;' });
+      // [홈 위젯 반응형] 넓은 영역 = 책장(스파인↔펼침) 가로 셸프, 좁은 영역 = 경량 세로 리스트.
+      //   두 뷰를 모두 렌더하고 display 는 클래스(.shelf-view--*)가 소유(인라인 미지정) → @container 로 전환.
+      var row = el('div', { cls: 'shelf-view shelf-view--full shelf-row no-sb', attrs: { role: 'list', 'aria-label': '즐겨찾기 셸프' }, style: 'position:relative;gap:6px;height:278px;overflow-x:auto;overflow-y:hidden;padding-bottom:2px;touch-action:pan-x;' });
       panels.forEach(function (p) { row.appendChild(shelfPanel(p)); });
       if (loading) row.appendChild(shelfLoadingSpine());
       wrap.appendChild(row);
+      wrap.appendChild(shelfCompactList(panels, loading)); // 좁을 때만 표시되는 경량 UI
     } else if (flags.isEmpty) {
       wrap.appendChild(shelfEmpty());
     }
     return wrap;
+  }
+  /** [홈 위젯 반응형] 좁은 영역용 경량 셸프 — 책장 대신 세로 리스트(og 배너·펼침 없이 텍스트 위주).
+   *   display 는 .shelf-view--compact 가 소유(넓으면 숨김, @container hw max-width:440px 에서 표시). */
+  function shelfCompactList(panels, loading) {
+    var list = el('div', { cls: 'shelf-view shelf-view--compact', attrs: { role: 'list', 'aria-label': '즐겨찾기 셸프(간략 목록)' } });
+    panels.forEach(function (p) { list.appendChild(shelfCompactRow(p)); });
+    if (loading) list.appendChild(el('div', { text: '불러오는 중…', style: HOME_MONO + 'font-size:11px;color:#a8a29e;padding:6px 2px;' }));
+    return list;
+  }
+  /** 경량 행 — 색 배지 + 이름/부제 + 삭제 + 열기 화살표. 행 클릭/Enter = 열기(shelfOpen). 레이아웃은 .shelf-crow 소유. */
+  function shelfCompactRow(p) {
+    var row = el('div', {
+      cls: 'shelf-crow', attrs: { role: 'listitem', tabindex: '0', 'aria-label': p.name + ' — ' + p.openLabel },
+      on: {
+        click: function () { shelfOpen(p.id); },
+        keydown: function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); shelfOpen(p.id); } },
+      },
+    });
+    row.appendChild(el('div', { text: p.mono, style: 'width:30px;height:30px;border-radius:8px;flex:none;display:flex;align-items:center;justify-content:center;background:' + p.color + ';color:#fff;' + HOME_MONO + 'font-size:14px;font-weight:600;' }));
+    var mid = el('div', { style: 'flex:1;min-width:0;' });
+    mid.appendChild(el('div', { text: p.name, style: 'font-size:13px;font-weight:600;color:#1c1917;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;' }));
+    mid.appendChild(el('div', { text: p.sub, style: HOME_MONO + 'font-size:10.5px;color:#a8a29e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px;' }));
+    row.appendChild(mid);
+    var rm = el('button', {
+      cls: 'shelf-rm', attrs: { type: 'button', title: '삭제', 'aria-label': p.name + ' 삭제' },
+      style: 'appearance:none;border:1px solid #e7e5e4;background:#fff;width:28px;height:28px;border-radius:8px;cursor:pointer;color:#a8a29e;display:flex;align-items:center;justify-content:center;flex:none;',
+      on: { click: function (e) { e.stopPropagation(); shelfRemove(p.id, p.name); } },
+    });
+    rm.appendChild(svg([{ t: 'path', d: 'M5 7h14M9 7V5h6v2M7 7l1 13h8l1-13' }], { size: 13, stroke: 'currentColor', sw: 2 }));
+    row.appendChild(rm);
+    row.appendChild(svg([{ t: 'path', d: 'M9 6l6 6-6 6' }], { size: 15, stroke: '#c7c2bd', sw: 2 }));
+    return row;
   }
   function shelfPanel(p) {
     var outer = 'position:relative;height:100%;border-radius:13px;overflow:hidden;cursor:pointer;will-change:transform;transition:transform .2s cubic-bezier(.22,1,.36,1),box-shadow .2s ease,filter .2s ease;'
@@ -4125,7 +4160,7 @@ function initBrowser() {
     var av = shelfAutoRefreshView(store.shelf.autoRefresh);
     var f = el('div', { style: 'display:flex;align-items:center;gap:10px;padding:12px 20px 14px;border-top:1px solid #f2f1ef;background:#fafaf9;' });
     // 좌: 자동 재크롤 안내(상태에 따라 문구 변경) — 시계 아이콘.
-    var hint = el('div', { style: 'display:flex;align-items:center;gap:7px;flex:1;min-width:0;font-size:11px;color:#a8a29e;' });
+    var hint = el('div', { cls: 'shelf-foot-hint', style: 'flex:1;min-width:0;font-size:11px;color:#a8a29e;' });
     hint.appendChild(svg([{ t: 'circle', cx: '12', cy: '12', r: '9' }, { t: 'path', d: 'M12 8v4l3 2' }], { size: 13, stroke: 'currentColor', sw: 2 }));
     hint.appendChild(el('span', { text: av.hint, style: 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;' }));
     f.appendChild(hint);

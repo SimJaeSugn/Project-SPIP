@@ -503,6 +503,20 @@ body.home-resizing { cursor: nwse-resize; user-select: none; }
 .shelf-slideup { animation: shelfSlideUp .2s ease both; }
 .shelf-spin { animation: spipSpin .7s linear infinite; }
 .shelf-sk { background: linear-gradient(90deg, #eeedeb 0%, #f6f5f3 40%, #eeedeb 80%); background-size: 720px 100%; animation: shelfShimmer 1.2s linear infinite; border-radius: 6px; }
+/* [홈 위젯 반응형] 셸프 위젯 — 넓은 영역=책장(가로 셸프), 좁은 영역=경량 세로 리스트.
+ *   display 를 클래스가 소유(렌더 인라인 미지정)해야 @container 로 뷰를 전환할 수 있다. */
+.shelf-view--full { display: flex; }
+.shelf-view--compact { display: none; flex-direction: column; gap: 6px; }
+.shelf-foot-hint { display: flex; align-items: center; gap: 7px; }
+.shelf-crow { display: flex; align-items: center; gap: 11px; padding: 9px 10px; border: 1px solid #ececea; border-radius: 11px; background: #fff; cursor: pointer; transition: border-color .12s ease, background .12s ease, transform .12s ease; }
+.shelf-crow:hover { border-color: #d6d3d1; background: #fafaf9; transform: translateY(-1px); }
+.shelf-crow:focus-visible { outline: 2px solid var(--accent, #4f46e5); outline-offset: 2px; }
+@container hw (max-width: 440px) {
+  .shelf-view--full { display: none; }              /* 좁으면 책장 숨김 */
+  .shelf-view--compact { display: flex; }           /* 경량 세로 리스트로 교체 */
+  .shelf-sub, .shelf-foot-hint { display: none; }   /* 보조 문구 숨겨 세로 공간 절약 */
+}
+@media (prefers-reduced-motion: reduce) { .shelf-crow { transition: none; } }
 @keyframes shelfUnroll { from { clip-path: inset(0 68% 0 0); transform: translateX(-6px); } to { clip-path: inset(0 0 0 0); transform: none; } }
 @keyframes shelfGrowIn { from { transform: scaleY(.6); transform-origin: bottom; } to { transform: scaleY(1); } }
 @keyframes shelfSlideUp { from { transform: translateY(8px); } to { transform: none; } }
