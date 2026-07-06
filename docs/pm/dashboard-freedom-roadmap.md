@@ -16,12 +16,14 @@
 | Phase 1 — 내보내기/가져오기(K) | 🔶 백엔드 완료 | serialize/deserialize + IPC 완비, **렌더러 버튼만 후속** |
 | Phase 1 — 테마 액센트/밀도(J) | ⛔ 보류 | 하드코딩 색상 다수 → 색상 토큰 리팩터 선행 필요 |
 | Phase 1 — 템플릿 갤러리(L) | ⬜ 미착수 | |
-| Phase 2 — 프리셋 전환(A) | ✅ 완료 | 영속·IPC·렌더러 프리셋 탭(전환/추가/복제/이름변경/삭제). **육안 스모크 권장** |
-| Phase 3 — 밀도(C)·신규 위젯(G) | ⬜ 미착수 | GUI 비중 큼 — 검증 동반 권장 |
-| Phase 4 — 팔레트(D)·딥링크(H)·포커스(I) | ⬜ 미착수 | 액션 레지스트리 위 |
+| Phase 2 — 프리셋 전환(A) | ✅ **배포(v1.21.0)** | 영속·IPC·렌더러 프리셋 탭(전환/추가/복제/이름변경/삭제). 데이터 E2E + 육안 확인 완료 |
+| Phase 3 — 밀도(C)·신규 위젯(G) | ⬜ 미착수 | **다음 작업**. GUI 비중 큼 — 검증 동반 |
+| Phase 4 — 팔레트(D)·딥링크(H)·포커스(I) | ⬜ 미착수 | 액션 레지스트리 **선행 필요(미구현)** |
 | Phase 5 — 프리폼(B)·그룹(M)·스택(F) | ⬜ 미착수 | 최고 난이도, 검증 필수 |
 
-테스트: **1201개 그린**. 커밋: `7dd4e1b`→`440ed0a`(master). 전 증분 하위호환.
+**배포**: v1.21.0 (Phase 0~2 + 편집 모드 + K 백엔드). 테스트 **1201 그린**. 커밋 `7dd4e1b`→`3bc09d3`(master). 전 증분 하위호환.
+
+> ⏭ **다음 세션 이어가기: 문서 맨 아래 §10 핸드오프 참조.**
 
 ## 0. 대상 기능 전체 목록
 
@@ -182,3 +184,60 @@ Phase 5 (프리폼·그룹·스택)  ← Phase 0~4 전부 선행
 1. 본 로드맵 승인 후 **Phase 0 를 `dev-orchestrator`로 정식 설계**(`dashboardState` 스키마·마이그레이션·정규화·레지스트리 ADR).
 2. 설계 확정 → `team-dev`로 Phase 0 구현(마이그레이션 무손실 + 테스트 그린).
 3. 이후 Phase 1~5 순차 진행, 각 페이즈 착수 전 스코프 표(§2)·규약(§3) 재확인.
+
+---
+
+## 10. 다음 세션 이어가기 (Handoff — cold start)
+
+> 이 절만 읽어도 새 세션에서 바로 이어갈 수 있게 정리. 배포 시점: **v1.21.0** (Phase 0~2 완료).
+
+### 10.1 완료된 것의 코드 지도 (건드릴 때 이해 필수)
+- **모델·영속** `lib/common/uiStateStore.js`
+  - `normalizeDashboardState` / `normalizePreset` / `normalizeWidgetPositions` / `migrateLegacyToDashboard` / `defaultDashboardState`
+  - 프리셋 CRUD(순수): `presetAdd` `presetDuplicate` `presetRename` `presetRemove` `presetSetActive` `presetUpdate` `nextPresetId`
+  - 직렬화: `serializeDashboard` / `deserializeDashboard`
+  - **★ 핵심 불변식**: 레거시 키(`homeLayout`/`hiddenWidgets`/`homeWidgetSizes`)가 '활성 뷰의 권위'.
+    `normalizeState`가 매 read/write마다 **활성 프리셋을 레거시 키에 reconcile**(`presetUpdate`)하고,
+    비활성 프리셋 내용은 `dashboard`에 보존. **프리셋 전환 IPC가 레거시 키를 대상 프리셋 내용으로 스왑**.
+    → 렌더 경로/기존 데이터 하위호환. 이 모델을 깨지 말 것.
+  - 프리셋 스키마: `{id(slug),name,layout,hidden,sizes,positions,layoutMode('masonry'|'freeform'),groups[]}`.
+    `positions`=프리폼 예약(Phase 5), `groups`=항상 `[]`로 정규화(Phase 5에서 스키마 확정).
+- **IPC** `electron/ipc/uiState.js` — `setActivePreset`/`addPreset`/`duplicatePreset`/`renamePreset`/`removePreset`/
+  `exportDashboard`/`importDashboard`. 전환·추가·복제·삭제·import는 `writeWithActive`(레거시 스왑). 이름변경은 스왑 불요.
+  응답 `toResponse`에 `dashboard` 포함. 등록: `electron/ipc/register.js`, 노출: `electron/preload.js`.
+- **렌더러** `public/app.js`
+  - `applyDashboard(res.dashboard)`(방어 적재, 탭 표시용 {id,name,layoutMode}만) — export됨(테스트).
+  - `loadUiState`: `store.dashboard = applyDashboard(...)` 하이드레이션.
+  - `renderHome`: 프리셋 탭 바(`.preset-tabs`) — 프리셋>1개 또는 편집모드일 때만 표시. 편집모드에서 ✎/⧉/✕/+.
+  - 핸들러: `onSwitchPreset`/`onAddPreset`/`onDuplicatePreset`/`onRenamePreset`/`onRemovePreset` → `applyPresetResponse`.
+  - 편집 모드: `store.editMode` + `home-masonry--editing` 클래스(CSS: 핸들·×·윤곽 상시).
+  - 상태 키: `store.dashboard` `store.editMode` `store._presetRenameId` `store._presetRenameVal`.
+  - CSS: `public/styles.css`의 `.preset-tab*` / `.home-editmode` / `.home-masonry--editing`.
+- **테스트**: `test/dashboardState.test.js`(모델·CRUD·직렬화·reconcile), `test/ipc-uistate.test.js`(프리셋·export/import IPC),
+  `test/homeLayout-front.test.js`(편집모드·프리셋 탭 배선). 총 1201 그린.
+
+### 10.2 다음 작업 (우선순위 순)
+1. **Phase 1-K 렌더러 버튼**(사소·반나절): 편집 모드 또는 설정에 "대시보드 내보내기/가져오기".
+   IPC(`exportDashboard`/`importDashboard`)는 **완비** → 버튼만. 내보내기=`json` 클립보드 복사/파일 저장,
+   가져오기=textarea/파일→`importDashboard`→`applyPresetResponse`. 육안 검증만 필요.
+2. **Phase 3 — 밀도(C) + 신규 위젯(G)**:
+   - 밀도: `densityTier(측정폭)→'S'|'M'|'L'` 순수 함수부터(헤드리스). 위젯이 크기별 콘텐츠 분기(예 메일 S=숫자/M=3건/L=목록). 기존 `@container` 확장.
+   - 신규 위젯: 런처(핀)·스크래치패드·통합 커밋 히트맵·npm 스크립트 러너·시스템 상태·최근 파일 등.
+   - **★ 위젯 추가 절차**: `HOME_SECTION_IDS`를 `lib/common/uiStateStore.js`와 `public/app.js` **양쪽에 동형 추가**
+     (드리프트 테스트가 잡음) + `renderHomeSection` case + `WIDGET_META` + 반응형 계약(자기 폭·높이) +
+     보안(pathGuard/safeExec/textContent) + 배선 테스트. 프리셋 모델은 새 enum을 자동 수용(마이그레이션 프리).
+3. **Phase 1-J 테마 액센트**: 하드코딩 색상(`#4f46e5` 등) 다수 → **색상 토큰(CSS 변수) 리팩터 선행**. 별도 서브프로젝트로.
+4. **Phase 4 — 팔레트·딥링크·포커스**: ⚠️ **액션 레지스트리는 로드맵 Phase 0에 명시했으나 실제 미구현**. Phase 4 착수 시 먼저 만들 것.
+5. **Phase 5 — 프리폼·그룹·스택**: 최고 난이도. `layoutMode='freeform'`·`positions`는 모델에 준비됨. `groups`는 예약(`[]`)만. §1 충돌 해소·§3 코너 규약 실체화. 검증 루프 필수.
+
+### 10.3 검증 방법 (다음 세션)
+- `npm test` → 1201+ 그린 유지(신규 작업마다 배선/순수 테스트 추가).
+- **실디스크 E2E 스모크**: 이번 세션 스크립트는 스크래치패드(임시)라 세션 종료 시 소멸.
+  → 재작성하거나 `npm run smoke:dashboard`로 리포에 상주화 권장(레거시 시드→마이그레이션→프리셋 독립→export/import 왕복).
+- **렌더러는 헤드리스 시각검증 불가**(메모리 기록) → 렌더러 변경 시 `npm start` 육안 필수.
+
+### 10.4 주의(정직)
+- 액션 레지스트리 **미구현**(Phase 4 전제).
+- Phase 1-K는 **백엔드만**(버튼 없음).
+- Phase 2 렌더러 프리셋 UI는 헤드리스 검증 불가분 — 변경 시 반드시 육안.
+- 릴리즈 절차: `docs/temp/RELEASE_DEPLOY_PROMPT.md` §7, 버전 단조 증가, 미서명 SmartScreen 정상.
