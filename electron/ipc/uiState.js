@@ -41,7 +41,8 @@ function toResponse(state) {
   const openItems = Array.isArray(briefing.items) ? briefing.items.filter((i) => i && i.status === 'open') : [];
   return {
     favorites: state.favorites, order: state.order, sortMode: state.sortMode, names: state.names,
-    theme: state.theme, todos: state.todos, langTrend: state.langTrend, homeLayout: state.homeLayout,
+    theme: state.theme, accent: state.accent || 'indigo', uiScale: state.uiScale || 'normal', // [Phase 1·J] 테마 개인화
+    todos: state.todos, langTrend: state.langTrend, homeLayout: state.homeLayout,
     hiddenWidgets: state.hiddenWidgets, // [위젯 추가/제거] 숨긴(미적용) 위젯 집합
     homeWidgetSizes: state.homeWidgetSizes || {}, // [홈 위젯 크기] 위젯별 폭(열 스팬)·높이(px)
     briefing: { items: openItems, counters: briefing.counters },
@@ -211,6 +212,22 @@ function setProjectName(args, ctx) {
   if (trimmed) names[id] = trimmed; else delete names[id];
   const next = store.write(Object.assign({}, state, { names }), storeCtx);
   return { ok: true, names: next.names };
+}
+
+/**
+ * [로드맵 Phase 1·J] spip:setThemePrefs { accent?, uiScale? } — 액센트 색·UI 배율 설정(전역).
+ *   화이트리스트(THEME_ACCENTS/UI_SCALES)만 — 검증은 메인 단일 경계. 미지정 필드는 기존 유지.
+ * @returns {{ok:true, accent, uiScale}}
+ */
+function setThemePrefs(args, ctx) {
+  args = (args && typeof args === 'object') ? args : {};
+  const { store, storeCtx } = resolveStore(ctx);
+  const state = store.read(storeCtx);
+  const patch = {};
+  if (typeof args.accent === 'string' && uiStateStore.THEME_ACCENTS.has(args.accent)) patch.accent = args.accent;
+  if (typeof args.uiScale === 'string' && uiStateStore.UI_SCALES.has(args.uiScale)) patch.uiScale = args.uiScale;
+  const written = store.write(Object.assign({}, state, patch), storeCtx);
+  return { ok: true, accent: written.accent, uiScale: written.uiScale };
 }
 
 /**
@@ -470,4 +487,4 @@ function updateLangTrend(args, ctx) {
   return { ok: true, prev: written.langTrend.prev, cur: written.langTrend.cur };
 }
 
-module.exports = { getUiState, setFavorite, setOrder, setSortMode, setHomeLayout, setHiddenWidgets, setHomeWidgetSizes, setProjectName, setTheme, setScratchpad, addTodo, toggleTodo, removeTodo, setTodoDue, updateLangTrend, setActivePreset, addPreset, duplicatePreset, renamePreset, removePreset, addTemplatePreset, setLayoutMode, setWidgetPositions, setGroups, exportDashboard, importDashboard };
+module.exports = { getUiState, setFavorite, setOrder, setSortMode, setHomeLayout, setHiddenWidgets, setHomeWidgetSizes, setProjectName, setTheme, setThemePrefs, setScratchpad, addTodo, toggleTodo, removeTodo, setTodoDue, updateLangTrend, setActivePreset, addPreset, duplicatePreset, renamePreset, removePreset, addTemplatePreset, setLayoutMode, setWidgetPositions, setGroups, exportDashboard, importDashboard };

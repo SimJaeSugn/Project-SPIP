@@ -1721,6 +1721,8 @@ function initBrowser() {
     editingName: null,           // 드로어에서 이름 편집 중인 id
     nameInput: '',               // 이름 편집 입력값(컨트롤드)
     theme: 'system',             // 'light' | 'dark' | 'system'
+    accent: 'indigo',            // [로드맵 Phase 1·J] 액센트 색 프리셋
+    uiScale: 'normal',           // [로드맵 Phase 1·J] UI 배율(compact|normal|comfortable|large)
     // R-15: 진행 통지 컨텍스트(Electron push 모델 — 폴링 타이머 제거)
     scan: {
       ownScanId: null,           // rescan SCAN_STARTED scanId(M4-L-1 대조)
@@ -2618,7 +2620,7 @@ function initBrowser() {
     var heroPad = el('div', { style: 'padding:26px 30px 6px;' });
     var hero = el('div', { style: HOME_CARD + 'padding:26px 28px;display:flex;align-items:center;gap:30px;' });
     var heroL = el('div', { style: 'flex:1 1 0%;min-width:0;' });
-    heroL.appendChild(el('div', { text: '오늘의 브리핑', style: HOME_MONO + 'font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:#4f46e5;' }));
+    heroL.appendChild(el('div', { text: '오늘의 브리핑', style: HOME_MONO + 'font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:var(--accent);' }));
     heroL.appendChild(el('h1', { text: g.greeting, style: 'margin:9px 0 7px;font-size:29px;font-weight:700;letter-spacing:-0.022em;line-height:1.12;' }));
     // [M13 R-35/R-40] 정적 브리핑 문장을 브리핑 영역(2단: .briefing-region > 카드)으로 승격.
     //   enabled 면 AI 스트리밍/항목, 아니면 기존 정적 문장 폴백. delta 시 이 영역만 patchRegion 교체.
@@ -2898,7 +2900,7 @@ function initBrowser() {
     titleWrap.appendChild(el('div', { text: '주의가 필요한 프로젝트', style: 'font-size:15px;font-weight:600;letter-spacing:-0.01em;' }));
     titleWrap.appendChild(el('div', { text: '미커밋 · 미푸시 · 방치 ' + items.length + '건', style: 'font-size:11.5px;color:#a8a29e;margin-top:1px;' }));
     var open = el('span', {
-      style: 'font-size:12.5px;font-weight:600;color:#4f46e5;display:inline-flex;align-items:center;gap:4px;cursor:pointer;',
+      style: 'font-size:12.5px;font-weight:600;color:var(--accent);display:inline-flex;align-items:center;gap:4px;cursor:pointer;',
       attrs: { role: 'button', tabindex: '0', 'aria-label': '주의가 필요한 프로젝트 전체보기' },
       on: {
         click: openDashboard,
@@ -3052,7 +3054,7 @@ function initBrowser() {
       var row = el('div', { cls: 'home-todo-row', style: 'display:flex;align-items:flex-start;gap:11px;padding:5px 4px;border-radius:8px;' });
       var box = el('span', {
         attrs: { role: 'checkbox', 'aria-checked': t.done ? 'true' : 'false', 'aria-label': '완료: ' + t.text, tabindex: '0' },
-        style: 'width:18px;height:18px;border-radius:6px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;margin-top:1px;cursor:pointer;' + (t.done ? 'border:1.5px solid #4f46e5;background:#4f46e5;' : 'border:1.5px solid #d6d3d1;background:#fff;'),
+        style: 'width:18px;height:18px;border-radius:6px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;margin-top:1px;cursor:pointer;' + (t.done ? 'border:1.5px solid var(--accent);background:var(--accent);' : 'border:1.5px solid #d6d3d1;background:#fff;'),
         on: { click: function () { onToggleTodo(t.id, !t.done); } },
       });
       if (t.done) box.appendChild(svg([{ t: 'path', d: 'M5 12l4 4 10-10' }], { size: 11, stroke: '#fff', sw: 3 }));
@@ -3097,7 +3099,7 @@ function initBrowser() {
       input.value = store.todoInput;
       input.addEventListener('input', function (e) { store.todoInput = e.target.value || ''; });
       input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); onAddTodo(); } if (e.key === 'Escape') { store.todoAdding = false; store.todoInput = ''; store.todoDueInput = ''; render(); } });
-      var b = el('button', { text: '추가', attrs: { type: 'button' }, style: 'border:none;background:#4f46e5;color:#fff;border-radius:8px;padding:0 14px;font-size:12.5px;font-weight:600;cursor:pointer;', on: { click: onAddTodo } });
+      var b = el('button', { text: '추가', attrs: { type: 'button' }, style: 'border:none;background:var(--accent);color:#fff;border-radius:8px;padding:0 14px;font-size:12.5px;font-weight:600;cursor:pointer;', on: { click: onAddTodo } });
       if (store.busyTodos) { input.disabled = true; b.disabled = true; }
       addRow.appendChild(input); addRow.appendChild(b);
       addWrap.appendChild(addRow);
@@ -3171,7 +3173,7 @@ function initBrowser() {
     inp.value = store.todoDueEditInput || '';
     inp.addEventListener('input', function (e) { store.todoDueEditInput = e.target.value || ''; });
     row.appendChild(inp);
-    row.appendChild(el('button', { text: '설정', attrs: { type: 'button' }, style: 'border:none;background:#4f46e5;color:#fff;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;flex:0 0 auto;', on: { click: function () { onSetTodoDue(t.id, parseDueInput(store.todoDueEditInput)); } } }));
+    row.appendChild(el('button', { text: '설정', attrs: { type: 'button' }, style: 'border:none;background:var(--accent);color:#fff;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;flex:0 0 auto;', on: { click: function () { onSetTodoDue(t.id, parseDueInput(store.todoDueEditInput)); } } }));
     if (t.dueAt) row.appendChild(el('button', { text: '해제', attrs: { type: 'button' }, style: 'border:1px solid #e7e5e4;background:#fff;color:#78716c;border-radius:8px;padding:6px 12px;font-size:12px;cursor:pointer;flex:0 0 auto;', on: { click: function () { onSetTodoDue(t.id, null); } } }));
     row.appendChild(el('button', { text: '닫기', attrs: { type: 'button' }, style: 'border:none;background:none;color:#a8a29e;font-size:12px;cursor:pointer;flex:0 0 auto;', on: { click: function () { store.todoDueEditId = null; render(); } } }));
     wrap.appendChild(row);
@@ -3222,7 +3224,7 @@ function initBrowser() {
     head.appendChild(el('button', {
       cls: 'home-mail-more', text: '메일함',
       attrs: { type: 'button', 'aria-label': '메일함 열기', title: '메일함 — 계정·메일함별 수집 메일' },
-      style: 'appearance:none;border:none;background:none;cursor:pointer;font-size:12px;font-weight:600;color:#4f46e5;padding:0 2px;',
+      style: 'appearance:none;border:none;background:none;cursor:pointer;font-size:12px;font-weight:600;color:var(--accent);padding:0 2px;',
       on: { click: function () { openMailbox(); } },
     }));
     card.appendChild(head);
@@ -3344,7 +3346,7 @@ function initBrowser() {
     }));
     actions.appendChild(el('button', {
       text: c.confirmText, attrs: { type: 'button' },
-      style: 'appearance:none;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;color:#fff;padding:7px 14px;background:' + (c.danger ? '#dc2626' : '#4f46e5') + ';',
+      style: 'appearance:none;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;color:#fff;padding:7px 14px;background:' + (c.danger ? '#dc2626' : 'var(--accent)') + ';',
       on: { click: function () { var fn = c.onConfirm; closeConfirm(); if (fn) try { fn(); } catch (_) { /* noop */ } } },
     }));
     body.push(actions);
@@ -3487,7 +3489,7 @@ function initBrowser() {
     bar.appendChild(el('button', {
       text: mx.syncing ? '동기화 중…' : '동기화',
       attrs: syncAttrs,
-      style: 'appearance:none;border:1px solid #e7e5e4;border-radius:8px;background:#fff;cursor:pointer;font-size:12px;font-weight:600;color:#4f46e5;padding:6px 12px;' + (mx.syncing ? 'opacity:.6;cursor:default;' : ''),
+      style: 'appearance:none;border:1px solid #e7e5e4;border-radius:8px;background:#fff;cursor:pointer;font-size:12px;font-weight:600;color:var(--accent);padding:6px 12px;' + (mx.syncing ? 'opacity:.6;cursor:default;' : ''),
       on: { click: function () { refreshMailSummary(); } },
     }));
     bar.appendChild(el('button', {
@@ -3538,7 +3540,7 @@ function initBrowser() {
           on: { click: (function (id, nm) { return function () { selectMailbox(id, nm); }; })(a.accountId, m.name) },
         });
         row.appendChild(el('span', { text: mbLabel, style: 'flex:1 1 0%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;' }));
-        if (m.unread > 0) row.appendChild(el('span', { text: String(m.unread), style: 'flex:0 0 auto;font-size:10px;font-weight:700;background:#4f46e5;color:#fff;border-radius:9px;padding:1px 6px;' }));
+        if (m.unread > 0) row.appendChild(el('span', { text: String(m.unread), style: 'flex:0 0 auto;font-size:10px;font-weight:700;background:var(--accent);color:#fff;border-radius:9px;padding:1px 6px;' }));
         row.appendChild(el('span', { text: String(m.total), style: 'flex:0 0 auto;font-size:10px;color:#a8a29e;' }));
         tree.appendChild(row);
       });
@@ -3575,7 +3577,7 @@ function initBrowser() {
         // 읽음/안읽음 점.
         row.appendChild(el('span', {
           attrs: { title: m.seen ? '읽음' : '안읽음' },
-          style: 'flex:0 0 auto;width:8px;height:8px;border-radius:50%;background:' + (m.onServer && !m.seen ? '#4f46e5' : '#d6d3d1') + ';',
+          style: 'flex:0 0 auto;width:8px;height:8px;border-radius:50%;background:' + (m.onServer && !m.seen ? 'var(--accent)' : '#d6d3d1') + ';',
         }));
         var mid = el('div', {
           style: 'flex:1 1 0%;min-width:0;cursor:' + (clickable ? 'pointer' : 'default') + ';',
@@ -3939,7 +3941,7 @@ function initBrowser() {
 
     // 헤더 + Claude Code 수동 새로고침.
     var refresh = el('span', {
-      style: 'font-size:12px;font-weight:600;color:#4f46e5;cursor:pointer;' + (store.busyClaudeUsage ? 'opacity:.5;pointer-events:none;' : ''),
+      style: 'font-size:12px;font-weight:600;color:var(--accent);cursor:pointer;' + (store.busyClaudeUsage ? 'opacity:.5;pointer-events:none;' : ''),
       attrs: { role: 'button', tabindex: '0', 'aria-label': 'Claude Code 사용량 새로고침' },
       on: {
         click: function () { store.claudeUsageLoaded = false; refreshClaudeUsage(); },
@@ -4027,7 +4029,7 @@ function initBrowser() {
     head.appendChild(el('button', {
       cls: 'home-mail-more', text: busy ? '집계 중…' : '새로고침',
       attrs: Object.assign({ type: 'button', 'aria-label': '커밋 히트맵 새로고침' }, busy ? { disabled: 'disabled' } : {}),
-      style: 'appearance:none;border:none;background:none;cursor:' + (busy ? 'default' : 'pointer') + ';font-size:12px;font-weight:600;color:' + (busy ? '#a8a29e' : '#4f46e5') + ';padding:0 2px;',
+      style: 'appearance:none;border:none;background:none;cursor:' + (busy ? 'default' : 'pointer') + ';font-size:12px;font-weight:600;color:' + (busy ? '#a8a29e' : 'var(--accent)') + ';padding:0 2px;',
       on: { click: function () { if (!busy) { store.commitHeatmapLoaded = false; refreshCommitHeatmap(); } } },
     }));
     card.appendChild(head);
@@ -4146,7 +4148,7 @@ function initBrowser() {
     head.appendChild(el('button', {
       cls: 'home-mail-more', text: busy ? '갱신 중…' : '새로고침',
       attrs: Object.assign({ type: 'button', 'aria-label': '시스템 상태 새로고침' }, busy ? { disabled: 'disabled' } : {}),
-      style: 'appearance:none;border:none;background:none;cursor:' + (busy ? 'default' : 'pointer') + ';font-size:12px;font-weight:600;color:' + (busy ? '#a8a29e' : '#4f46e5') + ';padding:0 2px;',
+      style: 'appearance:none;border:none;background:none;cursor:' + (busy ? 'default' : 'pointer') + ';font-size:12px;font-weight:600;color:' + (busy ? '#a8a29e' : 'var(--accent)') + ';padding:0 2px;',
       on: { click: function () { if (!busy) refreshSystemStatus(); } },
     }));
     card.appendChild(head);
@@ -4659,12 +4661,12 @@ function initBrowser() {
     });
     input.value = store.shelf.cUrl; // 컨트롤드(캐럿은 patchRegion preserve 로 보존)
     inputBox.appendChild(input);
-    if (vm.cLoading) inputBox.appendChild(el('div', { cls: 'shelf-spin', style: 'width:16px;height:16px;border:2px solid #e7e5e4;border-top-color:#4f46e5;border-radius:50%;flex:none;' }));
+    if (vm.cLoading) inputBox.appendChild(el('div', { cls: 'shelf-spin', style: 'width:16px;height:16px;border:2px solid #e7e5e4;border-top-color:var(--accent);border-radius:50%;flex:none;' }));
     else if (vm.cIdle) inputBox.appendChild(el('span', { text: '⌘V', style: HOME_MONO + 'font-size:10px;color:#c9c6c2;letter-spacing:.04em;flex:none;' }));
     wrap.appendChild(inputBox);
     if (vm.cLoading) {
       var ll = el('div', { style: 'display:flex;align-items:center;gap:7px;margin:9px 2px 2px;' + HOME_MONO + 'font-size:11px;color:#a8a29e;' });
-      ll.appendChild(el('span', { style: 'width:6px;height:6px;border-radius:50%;background:#4f46e5;flex:none;' }));
+      ll.appendChild(el('span', { style: 'width:6px;height:6px;border-radius:50%;background:var(--accent);flex:none;' }));
       ll.appendChild(el('span', { text: vm.crawlingLabel }));
       wrap.appendChild(ll);
     }
@@ -5131,6 +5133,34 @@ function initBrowser() {
       ['dark', '다크', store.theme === 'dark', () => onSetTheme('dark')],
       ['system', '시스템', store.theme === 'system', () => onSetTheme('system')],
     ]));
+    // [로드맵 Phase 1·J] 액센트 색 + UI 배율.
+    if (bridgeHas('setThemePrefs')) {
+      block.appendChild(el('div', { cls: 'settings__opt-title', text: '액센트 색', style: 'margin-top:18px;' }));
+      block.appendChild(el('p', { cls: 'settings__opt-sub', text: '버튼·강조·활성 상태에 쓰이는 포인트 색을 고릅니다.' }));
+      var accents = [
+        ['indigo', '인디고', '#4f46e5'], ['blue', '블루', '#2563eb'], ['violet', '바이올렛', '#7c3aed'],
+        ['emerald', '에메랄드', '#059669'], ['rose', '로즈', '#e11d48'], ['amber', '앰버', '#d97706'],
+      ];
+      var swatches = el('div', { cls: 'accent-swatches' });
+      accents.forEach(function (a) {
+        var on = (store.accent || 'indigo') === a[0];
+        var sw = el('button', {
+          cls: 'accent-swatch' + (on ? ' is-on' : ''), attrs: { type: 'button', 'aria-label': a[1], 'aria-pressed': String(on), title: a[1] },
+          on: { click: function () { onSetThemePrefs({ accent: a[0] }); } },
+        });
+        sw.style.setProperty('--sw', a[2]);
+        swatches.appendChild(sw);
+      });
+      block.appendChild(swatches);
+      block.appendChild(el('div', { cls: 'settings__opt-title', text: '화면 배율', style: 'margin-top:18px;' }));
+      block.appendChild(el('p', { cls: 'settings__opt-sub', text: '컴팩트하게 더 많이 보거나, 여유롭게 크게 봅니다.' }));
+      block.appendChild(segToggle([
+        ['compact', '컴팩트', store.uiScale === 'compact', function () { onSetThemePrefs({ uiScale: 'compact' }); }],
+        ['normal', '기본', (store.uiScale || 'normal') === 'normal', function () { onSetThemePrefs({ uiScale: 'normal' }); }],
+        ['comfortable', '여유', store.uiScale === 'comfortable', function () { onSetThemePrefs({ uiScale: 'comfortable' }); }],
+        ['large', '크게', store.uiScale === 'large', function () { onSetThemePrefs({ uiScale: 'large' }); }],
+      ]));
+    }
     return block;
   }
 
@@ -8716,6 +8746,9 @@ function initBrowser() {
     store.state.sortMode = uv.sortMode;
     store.projectNames = uv.names || {};
     store.theme = uv.theme || 'system';
+    // [로드맵 Phase 1·J] 테마 개인화 적재(액센트·UI 배율). 화이트리스트 폴백.
+    store.accent = (res && res.ok !== false && ['indigo', 'blue', 'violet', 'emerald', 'rose', 'amber'].indexOf(res.accent) >= 0) ? res.accent : 'indigo';
+    store.uiScale = (res && res.ok !== false && ['compact', 'normal', 'comfortable', 'large'].indexOf(res.uiScale) >= 0) ? res.uiScale : 'normal';
     // 할 일(홈 브리핑) — getUiState 응답에 포함. 형식 무효 시 빈 배열.
     store.todos = (res && res.ok !== false && Array.isArray(res.todos)) ? res.todos.filter((t) => t && typeof t.id === 'string') : [];
     // [R-32] 홈 섹션 순서 — getUiState 응답의 homeLayout 적재(부재/손상 시 동형 정규화로 기본 순서 보충).
@@ -9191,7 +9224,7 @@ function initBrowser() {
 
     var actions = el('div', { style: 'display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:16px;flex-wrap:wrap;' });
     var btnGhost = 'appearance:none;border:1px solid #e7e5e4;border-radius:8px;background:#fff;cursor:pointer;font-size:13px;font-weight:600;color:#57534e;padding:7px 14px;';
-    var btnPrimary = 'appearance:none;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;color:#fff;padding:7px 14px;background:#4f46e5;';
+    var btnPrimary = 'appearance:none;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;color:#fff;padding:7px 14px;background:var(--accent);';
 
     if (isExport) {
       if (bridgeHas('copyText')) actions.appendChild(el('button', { text: '복사', attrs: { type: 'button' }, style: btnGhost, on: { click: onDashExportCopy } }));
@@ -9418,8 +9451,24 @@ function initBrowser() {
     if (store.theme === 'light' || store.theme === 'dark') return store.theme;
     return prefersDark() ? 'dark' : 'light'; // system
   }
+  var UI_SCALE_ZOOM = { compact: 0.92, normal: 1, comfortable: 1.08, large: 1.18 };
   function applyTheme() {
-    try { document.documentElement.setAttribute('data-theme', resolveTheme()); } catch (_) { /* ignore */ }
+    try {
+      var root = document.documentElement;
+      root.setAttribute('data-theme', resolveTheme());
+      // [로드맵 Phase 1·J] 액센트 색(CSS 변수 프리셋 data-accent) + UI 배율(zoom — px 레이아웃 전체 스케일).
+      root.setAttribute('data-accent', (typeof store.accent === 'string') ? store.accent : 'indigo');
+      var z = UI_SCALE_ZOOM[store.uiScale] || 1;
+      if (document.body) document.body.style.zoom = String(z);
+    } catch (_) { /* ignore */ }
+  }
+  /** [로드맵 Phase 1·J] 테마 개인화(액센트·배율) 변경 — 낙관적 반영 + IPC 영속. */
+  function onSetThemePrefs(prefs) {
+    if (prefs && typeof prefs.accent === 'string') store.accent = prefs.accent;
+    if (prefs && typeof prefs.uiScale === 'string') store.uiScale = prefs.uiScale;
+    applyTheme();
+    render();
+    if (bridgeHas('setThemePrefs')) ipc('setThemePrefs', { accent: store.accent, uiScale: store.uiScale });
   }
   /** 테마 변경(낙관적 반영 + IPC 영속). */
   function onSetTheme(theme) {

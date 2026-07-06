@@ -122,6 +122,23 @@ test('setLayoutMode/setWidgetPositions — 활성 프리셋 반영·정규화·g
   assert.strictEqual(uiState.setLayoutMode({ mode: 'bogus' }, ctx).layoutMode, 'masonry');
 });
 
+// ── [로드맵 Phase 1·J] setThemePrefs ──
+test('setThemePrefs — 액센트·배율 화이트리스트·영속·getUiState 노출·부분 갱신', () => {
+  const s = memStore();
+  const ctx = ctxWith(s);
+  assert.strictEqual(uiState.getUiState(ctx).accent, 'indigo');
+  assert.strictEqual(uiState.getUiState(ctx).uiScale, 'normal');
+  let r = uiState.setThemePrefs({ accent: 'rose', uiScale: 'large' }, ctx);
+  assert.deepStrictEqual({ ok: r.ok, accent: r.accent, uiScale: r.uiScale }, { ok: true, accent: 'rose', uiScale: 'large' });
+  assert.strictEqual(uiState.getUiState(ctx).accent, 'rose', '영속');
+  // 부분 갱신(accent만) — uiScale 유지.
+  r = uiState.setThemePrefs({ accent: 'blue' }, ctx);
+  assert.strictEqual(r.accent, 'blue');
+  assert.strictEqual(r.uiScale, 'large', '미지정 필드 유지');
+  // 무효 값 무시.
+  assert.strictEqual(uiState.setThemePrefs({ accent: 'neon' }, ctx).accent, 'blue');
+});
+
 // ── [로드맵 Phase 1·L] addTemplatePreset ──
 test('addTemplatePreset — 템플릿 구성으로 새 프리셋 추가·활성 전환·정규화', () => {
   const s = memStore();

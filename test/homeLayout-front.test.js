@@ -160,6 +160,25 @@ test('로드맵 Phase 5·M — 그룹: 렌더·CRUD·접기·멤버 배정·격�
   assert.ok(/closest\('\.home-masonry, \.home-group__grid'\)/.test(APP_SRC), '리사이즈가 속한 격자(메인/그룹) 기준');
 });
 
+// ── [로드맵 Phase 1·J] 테마 개인화(액센트·배율) ──
+test('로드맵 Phase 1·J — 액센트 토큰화·프리셋 CSS + applyTheme data-accent/zoom + 설정 배선', () => {
+  const CSS = fs.readFileSync(path.join(__dirname, '..', 'public', 'styles.css'), 'utf8');
+  // 하드코딩 액센트 → var(--accent) 토큰화(정의는 보존, 순환 없음).
+  assert.ok(/--accent:\s*#4f46e5;/.test(CSS), ':root 액센트 정의 보존');
+  assert.ok(!/--accent:\s*var\(--accent\)/.test(CSS), '순환 참조 없음');
+  assert.ok(/\.palette__item\.is-active\s*\{[^}]*var\(--accent-bg\)/.test(CSS), '팔레트 활성 = var(--accent-bg)');
+  // 액센트 프리셋(data-accent) 라이트/다크.
+  assert.ok(/:root\[data-accent="emerald"\]\s*\{[^}]*--accent:\s*#059669/.test(CSS), 'emerald 프리셋');
+  assert.ok(/:root\[data-theme="dark"\]\[data-accent="rose"\]/.test(CSS), '다크 액센트 프리셋');
+  // applyTheme: data-accent 부여 + zoom 배율.
+  assert.ok(/setAttribute\('data-accent'/.test(APP_SRC), 'applyTheme 가 data-accent 부여');
+  assert.ok(/UI_SCALE_ZOOM/.test(APP_SRC) && /document\.body\.style\.zoom/.test(APP_SRC), 'UI 배율 zoom 적용');
+  // 설정 UI + IPC.
+  assert.ok(/function onSetThemePrefs\(/.test(APP_SRC) && /ipc\('setThemePrefs'/.test(APP_SRC), '테마 개인화 IPC');
+  assert.ok(/cls:\s*'accent-swatch'/.test(APP_SRC) || /accent-swatch/.test(APP_SRC), '액센트 스와치 UI');
+  assert.ok(/\.accent-swatch\.is-on/.test(CSS), '스와치 활성 CSS');
+});
+
 // ── [로드맵 Phase 1·L] 레이아웃 템플릿 갤러리 ──
 test('로드맵 Phase 1·L — buildTemplatePreset: hidden=토글 위젯 중 visible 외, 기본 masonry', () => {
   const tpl = { id: 't', name: 'T', visible: ['mail', 'todos'] };

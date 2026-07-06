@@ -14,7 +14,7 @@
 | Phase 0 — 통합 모델·마이그레이션 | ✅ 완료 | `normalizeDashboardState`/`migrateLegacyToDashboard`/프리셋 CRIT, reconcile 영속 통합 |
 | Phase 1 — 편집 모드(N) | ✅ 완료 | `위젯 편집` 토글 + 핸들·×·셀 윤곽 상시 노출 |
 | Phase 1 — 내보내기/가져오기(K) | ✅ **배포(v1.22.0)** | 백엔드(serialize/IPC) + 렌더러 버튼. 육안 확인 완료 |
-| Phase 1 — 테마 액센트/밀도(J) | ⛔ 보류 | 하드코딩 색상 다수 → 색상 토큰 리팩터 선행 필요 |
+| Phase 1 — 테마 액센트/밀도(J) | 🔶 육안 대기 | 하드코딩 액센트(`#4f46e5` 등 ~64곳)→`var(--accent)` 토큰화(shelfSafeColor·차트·SVG 예외 보존) + **액센트 6색 프리셋**(data-accent 라이트/다크) + **화면 배율**(compact~large, zoom). 설정에 스와치·배율. IPC `setThemePrefs` 전역 영속 |
 | Phase 1 — 템플릿 갤러리(L) | ✅ **배포(v1.27.0)** | 레이아웃 템플릿(미니멀·집중·개발현황·메모·올인원) 갤러리 → 고르면 **새 프리셋**으로 적용. `addTemplatePreset`(프리셋 정규화 단일 경계). 육안 확인 완료 |
 | Phase 2 — 프리셋 전환(A) | ✅ **배포(v1.21.0)** | 영속·IPC·렌더러 프리셋 탭(전환/추가/복제/이름변경/삭제). 데이터 E2E + 육안 확인 완료 |
 | Phase 3 — 밀도(C) | ✅ **배포(v1.22.0)** | `densityTier(px)→S\|M\|L` + `data-density` 훅 + **메일 위젯 showcase 소비**(S=숫자요약/M=목록·시간숨김/L=목록+시간). 타 위젯은 훅 재사용으로 점진 채택 |

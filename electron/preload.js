@@ -172,6 +172,11 @@ contextBridge.exposeInMainWorld('spip', {
   // 프로젝트 표시 별칭(빈 문자열이면 해제) + 테마(light|dark|system).
   setProjectName: (id, name) => ipcRenderer.invoke('spip:setProjectName', { id: String(id), name: name == null ? '' : String(name) }),
   setTheme: (theme) => ipcRenderer.invoke('spip:setTheme', { theme: String(theme) }),
+  // [로드맵 Phase 1·J] 테마 개인화 — 액센트 색·UI 배율. 검증은 main.
+  setThemePrefs: (prefs) => ipcRenderer.invoke('spip:setThemePrefs', {
+    accent: (prefs && prefs.accent != null) ? String(prefs.accent) : undefined,
+    uiScale: (prefs && prefs.uiScale != null) ? String(prefs.uiScale) : undefined,
+  }),
   // [로드맵 Phase 3·G] 스크래치패드 메모 — 텍스트만. 읽기는 getUiState 응답의 scratchpad. 검증은 메인 normalizeScratchpad.
   setScratchpad: (text) => ipcRenderer.invoke('spip:setScratchpad', { text: text == null ? '' : String(text) }),
 

@@ -29,6 +29,16 @@ test('normalizeState — id 형식·중복 제거·sortMode 화이트리스트',
   assert.strictEqual(r.schemaVersion, store.SCHEMA_VERSION);
 });
 
+test('normalizeState — [Phase 1·J] accent·uiScale 화이트리스트·기본값', () => {
+  assert.strictEqual(store.normalizeState({}).accent, 'indigo');
+  assert.strictEqual(store.normalizeState({}).uiScale, 'normal');
+  assert.strictEqual(store.normalizeState({ accent: 'emerald', uiScale: 'compact' }).accent, 'emerald');
+  assert.strictEqual(store.normalizeState({ accent: 'emerald', uiScale: 'compact' }).uiScale, 'compact');
+  assert.strictEqual(store.normalizeState({ accent: 'neon', uiScale: 'huge' }).accent, 'indigo'); // 화이트리스트 외 폴백
+  assert.strictEqual(store.normalizeState({ accent: 'neon', uiScale: 'huge' }).uiScale, 'normal');
+  assert.strictEqual(store.defaultState().accent, 'indigo');
+});
+
 test('normalizeState — 비객체 → 기본 빈 상태', () => {
   assert.deepStrictEqual(store.normalizeState(null), store.defaultState());
   assert.deepStrictEqual(store.normalizeState([1]), store.defaultState());
