@@ -70,10 +70,11 @@ test('Phase0 — normalizePreset: 미지 위젯/모드/좌표 방어', () => {
   assert.ok(!p.layout.includes('bogus'));
   assert.deepStrictEqual(p.hidden, ['disk']);   // featureAdd 제거
   assert.deepStrictEqual(p.sizes.mail, { w: S.HOME_MAX_COLS, h: S.HOME_H_MAX }); // 클램프: w→4, h→1600
-  // positions: featureAdd·bogus 제거, mail 은 [0,MAX_POS] 클램프.
-  assert.deepStrictEqual(Object.keys(p.positions), ['mail']);
+  // positions: bogus(미지) 제거, featureAdd 는 허용(프리폼 배치 대상), mail 은 [0,MAX_POS] 클램프.
+  assert.deepStrictEqual(Object.keys(p.positions).sort(), ['featureAdd', 'mail']);
   assert.strictEqual(p.positions.mail.x, 0);
   assert.strictEqual(p.positions.mail.y, 200);
+  assert.deepStrictEqual(p.positions.featureAdd, { x: 1, y: 1 });
 });
 
 // ── activePreset 폴백 · id 중복 · 개수 상한 ─────────────────────────────────

@@ -767,7 +767,7 @@ function applyWidgetPositions(input) {
   const out = {};
   if (!input || typeof input !== 'object' || Array.isArray(input)) return out;
   for (const id of Object.keys(input)) {
-    if (TOGGLEABLE_WIDGET_IDS.indexOf(id) < 0) continue;
+    if (HOME_SECTION_IDS.indexOf(id) < 0) continue; // featureAdd 포함(프리폼 배치 대상)
     const v = input[id];
     if (!v || typeof v !== 'object') continue;
     const x = Number(v.x), y = Number(v.y);
@@ -2684,8 +2684,9 @@ function initBrowser() {
       cell.appendChild(content);
       // [홈 위젯 크기] featureAdd 외 위젯엔 우하단 리사이즈 핸들(폭=열 스냅, 높이=px 유동).
       if (id !== 'featureAdd') cell.appendChild(homeResizeHandle(id));
-      // [로드맵 Phase 5·B] 프리폼 + 편집 모드: 셀 드래그로 자유 이동(스냅). 컨트롤(버튼·핸들)은 stopPropagation 으로 분리.
-      if (freeform && editing && id !== 'featureAdd') {
+      // [로드맵 Phase 5·B] 프리폼 + 편집 모드: 셀 드래그로 자유 이동(스냅). featureAdd(추가 카드)도 이동 가능.
+      //   이동 임계값 이하의 포인터업은 클릭으로 처리(예: featureAdd 클릭 시 갤러리 열림 유지).
+      if (freeform && editing) {
         cell.classList.add('home-section--free');
         cell.addEventListener('pointerdown', function (e) { onFreeformDragStart(e, id); });
       }
@@ -8278,32 +8279,38 @@ function initBrowser() {
     grid.style.minHeight = (maxBottom + 40) + 'px';
   }
 
-  /** 프리폼 드래그 시작 — 컨트롤(버튼·핸들) 위에선 무시. 포인터 이동으로 셀을 라이브 이동, 드롭 시 스냅·영속. */
+  /** 프리폼 드래그 시작 — 리사이즈 핸들·텍스트 입력 위에선 무시. 이동 임계값 초과 시에만 드래그로 전환(그 전엔 클릭 유지). */
+  var FREE_DRAG_THRESHOLD = 5; // px — 이 이하 이동은 클릭으로 간주(featureAdd 갤러리 열기 등 유지)
   function onFreeformDragStart(e, id) {
     if (e.button != null && e.button !== 0) return;
     var t = e.target;
-    // 리사이즈 핸들·제거/포커스 버튼·인터랙티브 요소 위에서 시작하면 드래그 안 함(각자 동작).
-    if (t && t.closest && (t.closest('.home-resize') || t.closest('.widget-remove') || t.closest('.widget-focus') || t.closest('button') || t.closest('input') || t.closest('textarea') || t.closest('a'))) return;
+    // 리사이즈 핸들·텍스트 입력·링크 위에서 시작하면 각자 동작(드래그 안 함). 버튼은 임계값으로 클릭/드래그 구분.
+    if (t && t.closest && (t.closest('.home-resize') || t.closest('input') || t.closest('textarea') || t.closest('a'))) return;
     var grid = document.querySelector('.home-masonry');
     var cell = e.currentTarget;
     if (!grid || !cell) return;
     var gridRect = grid.getBoundingClientRect();
     var cellRect = cell.getBoundingClientRect();
-    e.preventDefault();
     store._freeDrag = {
-      id: id, cell: cell, grid: grid,
+      id: id, cell: cell, grid: grid, moved: false, pointerId: e.pointerId,
+      startX: e.clientX, startY: e.clientY,
       offX: e.clientX - cellRect.left, offY: e.clientY - cellRect.top,
       gridLeft: gridRect.left + parseFloat(getComputedStyle(grid).paddingLeft || '0'),
       gridTop: gridRect.top + parseFloat(getComputedStyle(grid).paddingTop || '0'),
     };
-    cell.classList.add('home-section--dragging');
-    document.body.classList.add('home-freedragging');
     window.addEventListener('pointermove', onFreeformDragMove);
     window.addEventListener('pointerup', onFreeformDragEnd, { once: true });
-    try { cell.setPointerCapture(e.pointerId); } catch (_) { /* ignore */ }
   }
   function onFreeformDragMove(e) {
     var d = store._freeDrag; if (!d) return;
+    if (!d.moved) {
+      if (Math.abs(e.clientX - d.startX) < FREE_DRAG_THRESHOLD && Math.abs(e.clientY - d.startY) < FREE_DRAG_THRESHOLD) return;
+      d.moved = true; // 임계 초과 → 드래그 확정
+      d.cell.classList.add('home-section--dragging');
+      document.body.classList.add('home-freedragging');
+      try { d.cell.setPointerCapture(d.pointerId); } catch (_) { /* ignore */ }
+    }
+    e.preventDefault();
     var left = e.clientX - d.gridLeft - d.offX;
     var top = e.clientY - d.gridTop - d.offY;
     d.cell.style.left = Math.max(0, left) + 'px';
@@ -8311,8 +8318,9 @@ function initBrowser() {
     d.left = left; d.top = top;
   }
   function onFreeformDragEnd() {
-    var d = store._freeDrag; if (!d) { return; }
+    var d = store._freeDrag; if (!d) return;
     window.removeEventListener('pointermove', onFreeformDragMove);
+    if (!d.moved) { store._freeDrag = null; return; } // 클릭(이동 없음) — 원래 동작 유지(예: 갤러리 열림)
     d.cell.classList.remove('home-section--dragging');
     document.body.classList.remove('home-freedragging');
     var grid = d.grid;

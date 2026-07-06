@@ -159,7 +159,9 @@ test('로드맵 Phase 5·B — 프리폼 렌더/드래그 배선 + SortableJS �
   assert.ok(/store\.layoutMode === 'freeform'\)\s*\{\s*layoutHomeFreeform\(grid\);\s*return/.test(APP_SRC), 'layout 분기(freeform→절대배치)');
   assert.ok(/function layoutHomeFreeform\(/.test(APP_SRC), '프리폼 레이아웃 함수');
   assert.ok(/function onFreeformDragStart\(/.test(APP_SRC) && /function onFreeformDragEnd\(/.test(APP_SRC), '프리폼 드래그 시작/종료');
-  assert.ok(/closest\('\.home-resize'\)/.test(APP_SRC) && /closest\('\.widget-remove'\)/.test(APP_SRC), '드래그가 리사이즈·컨트롤과 분리');
+  assert.ok(/closest\('\.home-resize'\)/.test(APP_SRC) && /closest\('textarea'\)/.test(APP_SRC), '드래그가 리사이즈·텍스트 입력과 분리');
+  // 이동 임계값(클릭 vs 드래그) — featureAdd 클릭(갤러리) 유지.
+  assert.ok(/FREE_DRAG_THRESHOLD/.test(APP_SRC) && /if \(!d\.moved\)/.test(APP_SRC), '이동 임계값으로 클릭/드래그 구분');
   assert.ok(/freeformSnapCell\(/.test(APP_SRC), '드롭 시 셀 스냅');
   assert.ok(/if \(store\.layoutMode === 'freeform'\) return;/.test(fnBody('initHomeSortable', 400)), '프리폼에서 Sortable 게이팅');
   assert.ok(/store\.layoutMode\s*=\s*applyLayoutMode\(/.test(APP_SRC) && /store\.widgetPositions\s*=\s*applyWidgetPositions\(/.test(APP_SRC), 'layoutMode·positions 하이드레이션');
