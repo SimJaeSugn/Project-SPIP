@@ -164,6 +164,38 @@ test('Phase2 — presetSetActive: 존재할 때만', () => {
   assert.strictEqual(S.presetSetActive(base, 'ghost').activePreset, base.activePreset); // 무변경
 });
 
+// ── [Phase 2 배선] normalizeState 통합 — 레거시 키 권위 + 활성 프리셋 reconcile ──────────
+test('Phase2배선 — normalizeState: 레거시 키(no dashboard)를 활성 프리셋에 reconcile + shelf-union', () => {
+  const st = S.normalizeState({ homeLayout: ['mail', 'todos'], hiddenWidgets: ['disk'], homeWidgetSizes: { mail: { w: 2, h: 240 } } });
+  assert.ok(st.dashboard && Array.isArray(st.dashboard.presets));
+  const active = st.dashboard.presets.find((p) => p.id === st.dashboard.activePreset);
+  assert.deepStrictEqual(active.layout.slice(0, 2), ['mail', 'todos']);
+  assert.deepStrictEqual(active.sizes, { mail: { w: 2, h: 240 } });
+  // 레거시(schemaVersion 부재) → shelf-union 반영: hidden 에 disk + shelf/shelfWide
+  assert.ok(active.hidden.includes('disk'));
+  assert.ok(active.hidden.includes('shelf') && active.hidden.includes('shelfWide'));
+  // 레거시 키도 활성 프리셋과 동일(권위 유지)
+  assert.deepStrictEqual(st.homeLayout, active.layout);
+  assert.deepStrictEqual(st.hiddenWidgets, active.hidden);
+  assert.deepStrictEqual(st.homeWidgetSizes, active.sizes);
+});
+
+test('Phase2배선 — normalizeState: 비활성 프리셋 내용 보존 + 활성만 레거시로 reconcile', () => {
+  const dashboard = {
+    activePreset: 'default',
+    presets: [
+      { id: 'default', name: '기본', layout: S.HOME_SECTION_IDS.slice(), hidden: [], sizes: {}, layoutMode: 'masonry' },
+      { id: 'p1', name: '집중', layout: ['todos', 'mail'], hidden: ['disk'], sizes: { todos: { w: 2, h: 300 } }, layoutMode: 'freeform' },
+    ],
+  };
+  const st = S.normalizeState({ schemaVersion: 2, homeLayout: ['mail', 'attention'], hiddenWidgets: [], homeWidgetSizes: {}, dashboard });
+  const p1 = st.dashboard.presets.find((p) => p.id === 'p1');
+  assert.deepStrictEqual(p1.layout.slice(0, 2), ['todos', 'mail'], '비활성 프리셋 배치 보존');
+  assert.strictEqual(p1.layoutMode, 'freeform', '비활성 프리셋 모드 보존');
+  const active = st.dashboard.presets.find((p) => p.id === 'default');
+  assert.deepStrictEqual(active.layout.slice(0, 2), ['mail', 'attention'], '활성 프리셋은 레거시로 reconcile');
+});
+
 test('Phase2 — presetUpdate: 활성 프리셋 편집 영속(정규화·화이트리스트)', () => {
   const base = S.defaultDashboardState();
   const s = S.presetUpdate(base, 'default', {
