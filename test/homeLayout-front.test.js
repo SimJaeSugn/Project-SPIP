@@ -8,7 +8,7 @@ const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
 
-const { HOME_SECTION_IDS, applyHomeLayout, TOGGLEABLE_WIDGET_IDS, applyHomeWidgetSizes, computeHomeCols, homeDefaultSpan, HOME_MAX_COLS, applyDashboard, densityTier, DENSITY_M_MIN, DENSITY_L_MIN, buildHeatmapModel, heatmapLevel } = require('../public/app.js');
+const { HOME_SECTION_IDS, applyHomeLayout, TOGGLEABLE_WIDGET_IDS, applyHomeWidgetSizes, computeHomeCols, homeDefaultSpan, HOME_MAX_COLS, applyDashboard, densityTier, DENSITY_M_MIN, DENSITY_L_MIN, buildHeatmapModel, heatmapLevel, actionMatchScore, filterActions } = require('../public/app.js');
 const realStore = require('../lib/common/uiStateStore');
 const APP_SRC = fs.readFileSync(path.join(__dirname, '..', 'public', 'app.js'), 'utf8');
 // 메인 계약(단일 신뢰 경계)과 동형인지 교차 확인.
@@ -83,6 +83,54 @@ test('로드맵 Phase 3·C — 렌더러: layoutHomeMasonry 가 실측 셀폭→
   assert.ok(/colW\s*=\s*\(contentW\s*-\s*HOME_GAP\s*\*\s*\(cols\s*-\s*1\)\)\s*\/\s*cols/.test(body), '한 열 실제 폭(colW) 산출');
   assert.ok(/cellW\s*=\s*colW\s*\*\s*w\s*\+\s*HOME_GAP\s*\*\s*\(w\s*-\s*1\)/.test(body), '셀 실측 폭(cellW) = colW*스팬 + gap');
   assert.ok(/cell\.dataset\.density\s*=\s*densityTier\(cellW\)/.test(body), 'densityTier(cellW) → data-density 부여');
+});
+
+// ── [로드맵 Phase 4·D] 커맨드 팔레트 — 순수 매칭/랭킹 + 렌더 배선 ──
+test('로드맵 Phase 4·D — actionMatchScore: 접두>부분>키워드>서브시퀀스, 불일치 0', () => {
+  const a = { title: '위젯 편집', keywords: 'edit widget' };
+  assert.ok(actionMatchScore(a, '위젯') > actionMatchScore({ title: '가위젯', keywords: '' }, '위젯'), '제목 접두 > 내부 부분');
+  assert.ok(actionMatchScore(a, 'edit') > 0, '키워드 매칭');
+  assert.strictEqual(actionMatchScore(a, 'zzz'), 0, '불일치 0');
+  assert.strictEqual(actionMatchScore(a, ''), 1, '빈 질의 = 1(전부 통과)');
+  // 서브시퀀스(흩어진 순서).
+  assert.ok(actionMatchScore({ title: 'export dashboard', keywords: '' }, 'exdb') > 0, '서브시퀀스 매칭');
+  assert.strictEqual(actionMatchScore({ title: 'abc', keywords: '' }, 'cba'), 0, '역순은 서브시퀀스 아님');
+});
+
+test('로드맵 Phase 4·D — filterActions: 랭킹·enabled 제외·동점 안정 정렬', () => {
+  const acts = [
+    { id: 'a', title: '위젯 편집', keywords: 'edit' },
+    { id: 'b', title: '설정', keywords: 'settings' },
+    { id: 'c', title: '위젯 추가: 메일', keywords: 'add mail' },
+    { id: 'd', title: '테마: 다크', enabled: () => false },
+  ];
+  const r = filterActions(acts, '위젯');
+  assert.deepStrictEqual(r.map((x) => x.id), ['a', 'c'], '위젯 포함만, 접두(a) 우선');
+  // enabled=false 제외.
+  assert.ok(!filterActions(acts, '').some((x) => x.id === 'd'), 'enabled=false 제외');
+  // 빈 질의는 원래 순서(동점 안정).
+  assert.deepStrictEqual(filterActions(acts, '').map((x) => x.id), ['a', 'b', 'c'], '빈 질의 = 원래 순서(d만 제외)');
+  // enabled throw 는 제외(격리).
+  assert.deepStrictEqual(filterActions([{ id: 'x', title: 'x', enabled: () => { throw new Error('e'); } }], '').map((x) => x.id), []);
+});
+
+test('로드맵 Phase 4·D — 팔레트 렌더 배선: Cmd+K 토글·액션 레지스트리·부분교체·L-1', () => {
+  const CSS = fs.readFileSync(path.join(__dirname, '..', 'public', 'styles.css'), 'utf8');
+  // Cmd/Ctrl+K 토글.
+  assert.ok(/\(e\.ctrlKey \|\| e\.metaKey\)[^\n]*e\.key === 'k'/.test(APP_SRC), 'Cmd/Ctrl+K 토글 바인딩');
+  assert.ok(/function openPalette\(/.test(APP_SRC) && /function closePalette\(/.test(APP_SRC), '열기/닫기 핸들러');
+  assert.ok(/function buildActions\(/.test(APP_SRC), '액션 레지스트리 조립기');
+  assert.ok(/filterActions\(buildActions\(\),\s*store\.palette\.query\)/.test(APP_SRC), '질의로 액션 필터');
+  assert.ok(/store\.palette && store\.palette\.open\)\s*app\.appendChild\(renderPalette/.test(APP_SRC), 'render 에서 팔레트 마운트');
+  // ESC 로 팔레트 우선 닫힘.
+  assert.ok(/store\.palette && store\.palette\.open\)\s*\{\s*closePalette\(\)/.test(APP_SRC), 'ESC 팔레트 우선 닫기');
+  // 질의/선택 부분 교체(입력 포커스 보존).
+  assert.ok(/function patchPaletteList\(/.test(APP_SRC) && /function patchPaletteActive\(/.test(APP_SRC), '목록·선택 부분 교체');
+  // 키보드 내비.
+  assert.ok(/ArrowDown/.test(APP_SRC) && /ArrowUp/.test(APP_SRC) && /function onPaletteKeydown\(/.test(APP_SRC), '방향키 내비게이션');
+  // CSS + L-1.
+  assert.ok(/\.palette__item\.is-active\s*\{/.test(CSS), '활성 항목 스타일');
+  assert.ok(!/function renderPalette\([\s\S]{0,1400}innerHTML/.test(APP_SRC), '팔레트 렌더 innerHTML 미사용(L-1)');
 });
 
 // ── [로드맵 Phase 3·G] 시스템 상태 위젯 — 렌더 배선·지연로드·주기갱신·L-1 ──

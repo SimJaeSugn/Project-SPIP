@@ -603,6 +603,47 @@ function isEditableTarget(el) {
   return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
 }
 
+/* [로드맵 Phase 4·D] 커맨드 팔레트(Cmd+K) 액션 레지스트리 — 순수 매칭/랭킹(헤드리스 테스트).
+ *   액션 = { id, title, group?, keywords?, run(), enabled?() }. 팔레트·딥링크(H)·템플릿(L)이 공유 소비.
+ *   run/enabled 는 렌더러 클로저(IIFE 내부에서 주입), 매칭/랭킹만 순수 분리. */
+/** 액션이 질의에 얼마나 맞는지 점수(순수). 0=불일치. 부분문자열>서브시퀀스, 앞쪽 일치·짧은 제목 가점. */
+function actionMatchScore(action, query) {
+  if (!action || typeof action !== 'object') return 0;
+  const title = (typeof action.title === 'string') ? action.title : '';
+  const kw = (typeof action.keywords === 'string') ? action.keywords : '';
+  const q = (typeof query === 'string') ? query.trim().toLowerCase() : '';
+  if (!q) return 1; // 빈 질의 = 전부 통과(기본 낮은 점수 → 원래 순서 유지)
+  const hayTitle = title.toLowerCase();
+  const hay = (hayTitle + ' ' + kw.toLowerCase()).trim();
+  const ti = hayTitle.indexOf(q);
+  if (ti === 0) return 1000 - title.length;      // 제목 접두 일치 최우선
+  if (ti > 0) return 700 - ti;                    // 제목 내 부분 일치
+  const hi = hay.indexOf(q);
+  if (hi >= 0) return 400 - Math.min(hi, 399);    // 키워드 포함 부분 일치
+  // 서브시퀀스(흩어진 문자 순서 일치).
+  let pos = 0, matched = 0;
+  for (let i = 0; i < q.length; i++) {
+    const f = hay.indexOf(q[i], pos);
+    if (f < 0) return 0;
+    pos = f + 1; matched++;
+  }
+  return matched === q.length ? 50 : 0;
+}
+/** 액션 목록을 질의로 필터·랭킹(순수). enabled()=false 는 제외. 동점은 입력 순서 유지(안정 정렬). */
+function filterActions(actions, query) {
+  const arr = Array.isArray(actions) ? actions : [];
+  const scored = [];
+  for (let i = 0; i < arr.length; i++) {
+    const a = arr[i];
+    if (!a || typeof a !== 'object') continue;
+    if (typeof a.enabled === 'function') { try { if (!a.enabled()) continue; } catch (_) { continue; } }
+    const s = actionMatchScore(a, query);
+    if (s > 0) scored.push({ a: a, s: s, i: i });
+  }
+  scored.sort((x, y) => (y.s - x.s) || (x.i - y.i)); // 점수 내림차순, 동점은 원래 순서
+  return scored.map((x) => x.a);
+}
+
 /**
  * [R-27] 헤더 뷰별 구성 판정(순수). 공통 골격(브랜드·탭·공통 액션)은 모든 뷰가 공유하고,
  *   뷰별 차이는 검색창 노출 하나로 최소화한다(Q5 확정: 검색은 프로젝트 대시보드 전용, 홈 미니멀).
@@ -1676,6 +1717,8 @@ function initBrowser() {
     busyWidgets: false,           // setHiddenWidgets in-flight
     // [로드맵 Phase 1·K] 대시보드 내보내기/가져오기 모달 상태. mode='export'면 json에 직렬화 결과, 'import'면 입력값.
     dashIO: { open: false, mode: 'export', json: '', busy: false, error: '' },
+    // [로드맵 Phase 4·D] 커맨드 팔레트(Cmd+K) 상태 — 열림·질의·선택 인덱스.
+    palette: { open: false, query: '', index: 0 },
     // [로드맵 Phase 3·G] 스크래치패드 메모(전역 콘텐츠) — getUiState.scratchpad 적재, 디바운스 저장.
     scratchpad: { text: '', updatedAt: null },
     _scratchSaveTimer: null,   // 입력 디바운스 타이머 핸들
@@ -1941,6 +1984,8 @@ function initBrowser() {
     if (store.mailView && store.mailView.open) app.appendChild(renderMailMessageModal());
     // [로드맵 Phase 1·K] 대시보드 내보내기/가져오기 모달.
     if (store.dashIO && store.dashIO.open) app.appendChild(renderDashboardIOModal());
+    // [로드맵 Phase 4·D] 커맨드 팔레트(Cmd+K) — 최상단 오버레이.
+    if (store.palette && store.palette.open) app.appendChild(renderPalette());
     // 공용 확인 모달 — 최상단(파괴적 동작 승인).
     if (store.confirm && store.confirm.open) app.appendChild(renderConfirmModal());
     // [R-25 RG-2] 저장한 스크롤 위치 + 검색 입력 포커스/캐럿 복원(타이핑 중 재렌더로 포커스가 풀리는 문제 해결).
@@ -8460,6 +8505,129 @@ function initBrowser() {
     });
   }
 
+  /* ===== [로드맵 Phase 4·D] 커맨드 팔레트(Cmd+K) — 액션 레지스트리 소비 ===== */
+  /** 현재 컨텍스트의 액션 목록을 조립(정적 + 프리셋/위젯 동적). run 은 렌더러 핸들러 클로저.
+   *   H(딥링크)·L(템플릿)도 향후 이 목록에 합류한다(단일 소비 지점). */
+  function buildActions() {
+    var acts = [];
+    var onHome = store.state.view === 'home';
+    // 뷰 전환.
+    acts.push({ id: 'view.home', title: '홈으로', group: '이동', keywords: 'home dashboard 대시보드', run: function () { store.state.view = 'home'; render(); } });
+    acts.push({ id: 'view.projects', title: '프로젝트 대시보드', group: '이동', keywords: 'projects grid 목록', run: function () { store.state.view = 'dashboard'; render(); } });
+    acts.push({ id: 'view.orbit', title: '궤도 맵 (Orbit)', group: '이동', keywords: 'orbit map 궤도', run: function () { store.state.view = 'orbit'; render(); } });
+    // 공통 액션.
+    acts.push({ id: 'app.settings', title: '설정 열기', group: '앱', keywords: 'settings preferences 환경설정', run: function () { openSettings(); } });
+    acts.push({ id: 'app.help', title: '도움말', group: '앱', keywords: 'help 단축키 shortcuts', run: function () { openHelp(); } });
+    acts.push({ id: 'app.rescan', title: '재스캔', group: '앱', keywords: 'rescan scan 스캔 새로고침', enabled: function () { return bridgeHas('rescan'); }, run: function () { onRescan(); } });
+    acts.push({ id: 'app.refresh', title: '새로고침', group: '앱', keywords: 'refresh reload 갱신', run: function () { refreshDashboard(); } });
+    // 홈 편집·위젯.
+    acts.push({ id: 'home.edit', title: store.editMode ? '위젯 편집 종료' : '위젯 편집', group: '홈', keywords: 'edit widget 편집 위젯', run: function () { store.state.view = 'home'; store.editMode = !store.editMode; render(); } });
+    acts.push({ id: 'home.gallery', title: '위젯 추가 (갤러리)', group: '홈', keywords: 'widget add gallery 위젯 추가', run: function () { store.state.view = 'home'; store.showWidgetGallery = true; render(); } });
+    // 숨긴 위젯을 개별 추가 액션으로.
+    (store.hiddenWidgets || []).forEach(function (id) {
+      if (TOGGLEABLE_WIDGET_IDS.indexOf(id) < 0) return;
+      var meta = WIDGET_META[id] || { name: id };
+      acts.push({ id: 'widget.add.' + id, title: '위젯 추가: ' + meta.name, group: '위젯', keywords: 'widget add ' + id, run: function () { store.state.view = 'home'; onAddWidget(id); } });
+    });
+    // 대시보드 프리셋 전환(2개 이상일 때) + 새 프리셋.
+    var dash = store.dashboard;
+    if (dash && Array.isArray(dash.presets)) {
+      dash.presets.forEach(function (p) {
+        if (p.id === dash.activePreset) return;
+        acts.push({ id: 'preset.switch.' + p.id, title: '대시보드 전환: ' + p.name, group: '대시보드', keywords: 'preset switch 대시보드 ' + p.name, run: function () { onSwitchPreset(p.id); } });
+      });
+    }
+    if (bridgeHas('addPreset')) acts.push({ id: 'preset.add', title: '새 대시보드 추가', group: '대시보드', keywords: 'preset add new 대시보드 추가', run: function () { onAddPreset(); } });
+    // 대시보드 내보내기/가져오기.
+    if (bridgeHas('exportDashboard')) acts.push({ id: 'dash.export', title: '대시보드 내보내기', group: '대시보드', keywords: 'export backup json 내보내기 백업', run: function () { store.state.view = 'home'; openDashboardIO('export'); } });
+    if (bridgeHas('importDashboard')) acts.push({ id: 'dash.import', title: '대시보드 가져오기', group: '대시보드', keywords: 'import restore json 가져오기 복원', run: function () { store.state.view = 'home'; openDashboardIO('import'); } });
+    // 테마 전환.
+    ['light', 'dark', 'system'].forEach(function (t) {
+      var label = t === 'light' ? '라이트' : (t === 'dark' ? '다크' : '시스템');
+      acts.push({ id: 'theme.' + t, title: '테마: ' + label, group: '앱', keywords: 'theme 테마 ' + t + ' ' + label, enabled: function () { return store.theme !== t; }, run: function () { setTheme(t); } });
+    });
+    void onHome;
+    return acts;
+  }
+  function openPalette() {
+    store.palette = { open: true, query: '', index: 0 };
+    store._paletteShown = false;
+    render();
+  }
+  function closePalette() {
+    store.palette = { open: false, query: '', index: 0 };
+    store._paletteShown = false;
+    render();
+  }
+  /** 현재 질의로 필터된 액션(팔레트 렌더·실행 공용). */
+  function paletteResults() { return filterActions(buildActions(), store.palette.query); }
+  function runPaletteAction(action) {
+    if (!action || typeof action.run !== 'function') return;
+    closePalette();
+    try { action.run(); } catch (_) { /* graceful */ }
+  }
+  function renderPalette() {
+    var results = paletteResults();
+    // 선택 인덱스 클램프.
+    if (store.palette.index >= results.length) store.palette.index = Math.max(0, results.length - 1);
+    var enter = !store._paletteShown; store._paletteShown = true;
+    var overlay = el('div', { cls: 'palette-overlay', on: { click: function (e) { if (e.target === overlay) closePalette(); } } });
+    var panel = el('div', { cls: 'palette' + (enter ? ' is-enter' : ''), attrs: { role: 'dialog', 'aria-modal': 'true', 'aria-label': '커맨드 팔레트' } });
+    var input = el('input', {
+      cls: 'palette__input',
+      attrs: { type: 'text', placeholder: '명령 검색… (예: 위젯, 설정, 테마)', 'aria-label': '명령 검색', autocomplete: 'off', spellcheck: 'false' },
+    });
+    input.value = store.palette.query;
+    input.addEventListener('input', function (e) { store.palette.query = e.target.value; store.palette.index = 0; patchPaletteList(); });
+    input.addEventListener('keydown', onPaletteKeydown);
+    panel.appendChild(input);
+    var list = el('div', { cls: 'palette__list spip-scroll' });
+    buildPaletteList(list, results);
+    panel.appendChild(list);
+    overlay.appendChild(panel);
+    setTimeout(function () { try { input.focus(); } catch (_) { /* ignore */ } }, 0);
+    return overlay;
+  }
+  /** 결과 목록 DOM 구성(질의 변경 시 이 부분만 교체 — 입력 포커스 유지). */
+  function buildPaletteList(list, results) {
+    if (results.length === 0) { list.appendChild(el('div', { cls: 'palette__empty', text: '일치하는 명령이 없습니다.' })); return; }
+    results.forEach(function (a, i) {
+      var row = el('div', {
+        cls: 'palette__item' + (i === store.palette.index ? ' is-active' : ''),
+        attrs: { role: 'button', tabindex: '-1', 'data-idx': String(i) },
+        on: { click: function () { runPaletteAction(a); }, mousemove: function () { if (store.palette.index !== i) { store.palette.index = i; patchPaletteActive(); } } },
+      });
+      row.appendChild(el('span', { cls: 'palette__item-title', text: a.title }));
+      if (a.group) row.appendChild(el('span', { cls: 'palette__item-group', text: a.group }));
+      list.appendChild(row);
+    });
+  }
+  /** 질의 변경 → 목록만 재구성(입력 포커스·캐럿 보존). */
+  function patchPaletteList() {
+    if (typeof document === 'undefined') return;
+    var list = document.querySelector('.palette__list');
+    if (!list) { render(); return; }
+    while (list.firstChild) list.removeChild(list.firstChild);
+    buildPaletteList(list, paletteResults());
+  }
+  /** 선택 인덱스만 반영(active 클래스 토글 + 스크롤). */
+  function patchPaletteActive() {
+    if (typeof document === 'undefined') return;
+    var items = document.querySelectorAll('.palette__item');
+    for (var i = 0; i < items.length; i++) {
+      var on = i === store.palette.index;
+      items[i].classList.toggle('is-active', on);
+      if (on && typeof items[i].scrollIntoView === 'function') { try { items[i].scrollIntoView({ block: 'nearest' }); } catch (_) { /* ignore */ } }
+    }
+  }
+  function onPaletteKeydown(e) {
+    var results = paletteResults();
+    if (e.key === 'ArrowDown') { e.preventDefault(); store.palette.index = Math.min(results.length - 1, store.palette.index + 1); patchPaletteActive(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); store.palette.index = Math.max(0, store.palette.index - 1); patchPaletteActive(); }
+    else if (e.key === 'Enter') { e.preventDefault(); runPaletteAction(results[store.palette.index]); }
+    else if (e.key === 'Escape') { e.preventDefault(); closePalette(); }
+  }
+
   /** viewModels 빌드 직후 감지명을 캡처(별칭 해제 시 복원 기준). */
   function captureDetectedNames() {
     const det = {};
@@ -9089,9 +9257,18 @@ function initBrowser() {
     }
   }
 
+  // [로드맵 Phase 4·D] 커맨드 팔레트 토글 — Cmd/Ctrl+K. 편집 입력 중에도 동작(전용 조합, 텍스트 충돌 없음).
+  document.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key === 'k' || e.key === 'K')) {
+      e.preventDefault();
+      if (store.palette && store.palette.open) closePalette(); else openPalette();
+    }
+  });
+
   // 전역 ESC로 드로어/설정 닫기(접근성)
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
+    if (store.palette && store.palette.open) { closePalette(); return; }
     if (store.showHelp) { closeHelp(); return; }
     if (store.state.selectedId) { closeDrawer(); return; }
     if (store.showSettings) { closeSettings(); return; }
@@ -9226,6 +9403,9 @@ if (typeof module !== 'undefined' && module.exports) {
     SHORTCUTS,
     matchShortcut,
     isEditableTarget,
+    // [로드맵 Phase 4·D] 커맨드 팔레트 액션 매칭/랭킹(순수, 헤드리스 테스트)
+    actionMatchScore,
+    filterActions,
     // [R-27] 헤더 뷰별 구성(검색 노출 판정)
     headerViewConfig,
     // [R-30] 설정 2-pane 카테고리 단일 출처 + 활성 탭 정규화

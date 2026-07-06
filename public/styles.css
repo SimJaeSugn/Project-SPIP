@@ -476,6 +476,20 @@ input, button, select { font-family: inherit; }
 .sysmeter__fill.sysmeter--mid { background: #d97706; }
 .sysmeter__fill.sysmeter--hi { background: #dc2626; }
 .sysmeter__detail { font-size: 10.5px; color: #a8a29e; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* [로드맵 Phase 4·D] 커맨드 팔레트(Cmd+K) */
+.palette-overlay { position: fixed; inset: 0; z-index: 60; background: rgba(28, 25, 23, .35); display: flex; align-items: flex-start; justify-content: center; padding-top: 12vh; }
+.palette { width: min(560px, 92vw); background: #fff; border: 1px solid #e7e5e4; border-radius: 14px; box-shadow: 0 24px 60px rgba(0, 0, 0, .22); overflow: hidden; display: flex; flex-direction: column; max-height: 64vh; }
+.palette.is-enter { animation: paletteIn .12s ease; }
+@keyframes paletteIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+.palette__input { border: none; border-bottom: 1px solid #f0efed; padding: 15px 18px; font: inherit; font-size: 15px; outline: none; color: #1c1917; }
+.palette__input::placeholder { color: #c7c2bd; }
+.palette__list { overflow-y: auto; padding: 6px; }
+.palette__item { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 8px; cursor: pointer; }
+.palette__item.is-active { background: #eef2ff; }
+.palette__item-title { flex: 1 1 auto; font-size: 13.5px; color: #1c1917; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.palette__item-group { flex: 0 0 auto; font-size: 10.5px; font-weight: 600; color: #a8a29e; background: #f5f5f4; padding: 2px 7px; border-radius: 5px; }
+.palette__empty { padding: 18px; text-align: center; font-size: 13px; color: #a8a29e; }
 /* [홈 위젯 크기] 우하단 리사이즈 핸들 — 평소 옅게, 호버/드래그 시 강조. */
 .home-resize {
   position: absolute; right: 3px; bottom: 3px; z-index: 4;
