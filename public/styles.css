@@ -452,6 +452,111 @@ input, button, select { font-family: inherit; }
 /* 높이 조절 위젯(.--sized)에서는 textarea 가 카드를 채우고 넘치면 내부 스크롤. */
 .home-section__content--sized .scratch-input { min-height: 0; }
 
+/* ===== [탐색기 위젯] 폴더 탐색기 =====
+ *   반응형 계약: 위젯 폭(@container hw)에 따라 수정일→크기 순으로 열을 접고, 루트 칩·브레드크럼을
+ *     가로 스크롤로 흡수한다. 목록(.fx-list)은 남는 높이를 채우고 내부 스크롤 → 높이 가변 대응.
+ *   §3 코너 규약: 상시 컨트롤은 상단 툴바에만. 행 메뉴(⋯)는 행 우측(위젯 우하단 핸들과 무충돌). */
+.fx-card { gap: 10px; }
+.fx-head { display: flex; align-items: center; gap: 10px; flex: 0 0 auto; }
+.fx-title { font-size: 15px; font-weight: 600; flex: 1 1 0%; min-width: 0; }
+.fx-tools { display: flex; align-items: center; gap: 2px; flex: 0 0 auto; }
+.fx-btn {
+  appearance: none; border: none; background: none; cursor: pointer; border-radius: 7px;
+  width: 26px; height: 26px; display: flex; align-items: center; justify-content: center;
+  transition: background .12s ease;
+}
+.fx-btn:hover:not(:disabled) { background: #f5f5f4; }
+.fx-btn:disabled { cursor: default; }
+
+/* 등록된 열람 루트 칩 — 넘치면 가로 스크롤(위젯 폭에 무관하게 무너지지 않음). */
+.fx-roots { display: flex; gap: 6px; overflow-x: auto; overflow-y: hidden; flex: 0 0 auto; padding-bottom: 2px; }
+.fx-root {
+  display: flex; align-items: center; flex: 0 0 auto; border: 1px solid #e7e5e4;
+  border-radius: 999px; background: #fafaf9; overflow: hidden;
+}
+.fx-root--on { border-color: var(--accent-border); background: var(--accent-bg); }
+.fx-root__name {
+  appearance: none; border: none; background: none; cursor: pointer;
+  font-size: 11.5px; font-weight: 600; color: #57534e; padding: 4px 4px 4px 10px;
+  max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.fx-root--on .fx-root__name { color: var(--accent); }
+.fx-root__x {
+  appearance: none; border: none; background: none; cursor: pointer;
+  font-size: 13px; line-height: 1; color: #c7c2bd; padding: 4px 8px 5px 3px;
+}
+.fx-root__x:hover { color: #dc2626; }
+
+/* 브레드크럼 — 조각 클릭으로 상위 이동. 좁으면 가로 스크롤(우측=현재 위치가 보이도록 뒤에서 채움). */
+.fx-crumbs { display: flex; align-items: center; gap: 2px; overflow-x: auto; overflow-y: hidden; flex: 0 0 auto; padding-bottom: 2px; }
+.fx-crumb {
+  appearance: none; border: none; background: none; cursor: pointer; flex: 0 0 auto;
+  font-size: 11px; color: #a8a29e; padding: 2px 4px; border-radius: 5px;
+  max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.fx-crumb:hover { background: #f5f5f4; color: #57534e; }
+.fx-crumb--cur { color: #57534e; font-weight: 600; cursor: default; }
+.fx-crumb--cur:hover { background: none; }
+.fx-crumb__sep { font-size: 11px; color: #d6d3d1; flex: 0 0 auto; }
+
+/* 목록 — 남는 높이를 채우고(상단 정렬) 넘치면 내부 스크롤. 높이 미조절 시 기본 캡. */
+.fx-list { flex: 1 1 auto; min-height: 0; max-height: 320px; overflow-y: auto; overflow-x: hidden; align-content: start; }
+.home-section__content--sized .fx-list { max-height: none; }
+
+.fx-row {
+  position: relative; display: grid; align-items: center; gap: 8px;
+  grid-template-columns: 16px minmax(0, 1fr) 62px 46px 22px;
+  padding: 5px 4px; border-radius: 7px; cursor: default; outline: none;
+}
+.fx-row:hover { background: #fafaf9; }
+.fx-row:focus-visible { box-shadow: inset 0 0 0 1.5px var(--accent-border); }
+.fx-row--sel { background: var(--accent-bg); }
+.fx-row--dim .fx-row__name { color: #a8a29e; }
+.fx-row__icon { display: flex; align-items: center; justify-content: center; }
+.fx-row__name { font-size: 12.5px; color: #1c1917; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fx-row__size { font-size: 10.5px; color: #a8a29e; text-align: right; }
+.fx-row__time { font-size: 10.5px; color: #c7c2bd; text-align: right; }
+.fx-row__more {
+  appearance: none; border: none; background: none; cursor: pointer; border-radius: 5px;
+  font-size: 13px; line-height: 1; color: #c7c2bd; padding: 2px 0; opacity: 0;
+}
+.fx-row:hover .fx-row__more, .fx-row--sel .fx-row__more, .fx-row__more:focus-visible { opacity: 1; }
+.fx-row__more:hover { color: #57534e; background: #f5f5f4; }
+
+/* 행 메뉴 — 행 우측에 절대배치. 위젯 우하단 리사이즈 핸들 영역을 침범하지 않는다(§3). */
+.fx-menu {
+  position: absolute; top: 100%; right: 0; z-index: 20; min-width: 152px;
+  display: flex; flex-direction: column; padding: 4px;
+  background: #fff; border: 1px solid #e7e5e4; border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(28, 25, 23, .1);
+}
+.fx-menu__item {
+  appearance: none; border: none; background: none; cursor: pointer; text-align: left;
+  font-size: 12px; color: #44403c; padding: 6px 9px; border-radius: 6px; white-space: nowrap;
+}
+.fx-menu__item:hover { background: #f5f5f4; }
+.fx-menu__item--danger { color: #dc2626; }
+.fx-menu__item--danger:hover { background: #fef2f2; }
+
+.fx-empty { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 22px 12px; text-align: center; font-size: 12px; color: #a8a29e; }
+.fx-empty__cta {
+  appearance: none; border: none; border-radius: 8px; cursor: pointer;
+  font-size: 12px; font-weight: 700; color: #fff; padding: 7px 14px; background: var(--accent);
+}
+.fx-empty__hint { font-size: 10.5px; color: #c7c2bd; line-height: 1.5; max-width: 280px; }
+.fx-note { flex: 0 0 auto; font-size: 10.5px; color: #a8a29e; padding: 4px 2px 0; }
+
+/* 위젯이 좁아지면 수정일 → 크기 순으로 열을 접는다(이름은 항상 유지). */
+@container hw (max-width: 420px) {
+  .fx-row { grid-template-columns: 16px minmax(0, 1fr) 62px 22px; }
+  .fx-row__time { display: none; }
+}
+@container hw (max-width: 300px) {
+  .fx-row { grid-template-columns: 16px minmax(0, 1fr) 22px; }
+  .fx-row__size { display: none; }
+  .fx-crumbs { display: none; }  /* 극단적으로 좁으면 루트 칩만 남기고 경로 바 생략 */
+}
+
 /* [로드맵 Phase 3·G] 통합 커밋 히트맵 — GitHub 스타일 주간 캘린더. 좁으면 .heatmap-scroll 내부 가로 스크롤. */
 .heatmap-scroll { overflow-x: auto; overflow-y: hidden; padding-bottom: 4px; }
 .heatmap-inner { display: inline-flex; flex-direction: column; gap: 4px; }

@@ -3,7 +3,9 @@
  * electron/preload.js — contextBridge 최소 allowlist (electron-migration §4·§6.2)
  *
  * window.spip에 §4 채널 함수만 노출한다. ipcRenderer 원본·범용 invoke(channel,…)는
- * 노출하지 않으며 채널명을 하드코딩한다(MUST). browseDir 채널 없음(드롭).
+ * 노출하지 않으며 채널명을 하드코딩한다(MUST). 범용 browseDir 채널 없음(드롭) —
+ * 탐색기 위젯(spip.explorer.*)은 dialog로 등록한 루트 하위로만 열람이 제한되고,
+ * 루트 자체를 문자열로 등록하는 채널은 존재하지 않는다(EXP-H-1).
  *
  * contextIsolation:true·sandbox:true 환경에서 동작 — 순수 contextBridge + ipcRenderer만 사용.
  */
@@ -234,6 +236,26 @@ contextBridge.exposeInMainWorld('spip', {
     getSettings: () => ipcRenderer.invoke('spip:shelf:getSettings'),
     setSettings: (autoRefresh) => ipcRenderer.invoke('spip:shelf:setSettings', { autoRefresh: !!autoRefresh }),
     onChanged: (cb) => _sub('spip:shelf:changed', cb),
+  },
+
+  // [탐색기 위젯 EXP-H-1] 폴더 탐색기 — 중첩 네임스페이스(shelf/briefing 패턴). 채널명 하드코딩(MUST).
+  //   루트 등록은 pickRoot(네이티브 dialog)뿐 — 렌더러가 임의 경로를 루트로 주입할 수 없다.
+  //   list/open/… 의 path 는 main 이 매 호출 게이트(canonicalize + 민감경로 deny + 등록 루트 포함)한다.
+  //   trash = 휴지통(shell.trashItem). 영구 삭제 표면 없음.
+  explorer: {
+    getRoots: () => ipcRenderer.invoke('spip:explorer:getRoots'),
+    pickRoot: () => ipcRenderer.invoke('spip:explorer:pickRoot'),
+    removeRoot: (p) => ipcRenderer.invoke('spip:explorer:removeRoot', { path: String(p) }),
+    list: (p) => ipcRenderer.invoke('spip:explorer:list', { path: p == null ? '' : String(p) }),
+    open: (p) => ipcRenderer.invoke('spip:explorer:open', { path: String(p) }),
+    reveal: (p) => ipcRenderer.invoke('spip:explorer:reveal', { path: String(p) }),
+    openWith: (p, toolId) => ipcRenderer.invoke('spip:explorer:openWith', {
+      path: String(p),
+      toolId: toolId ? String(toolId) : undefined,
+    }),
+    mkdir: (p, name) => ipcRenderer.invoke('spip:explorer:mkdir', { path: String(p), name: String(name) }),
+    rename: (p, name) => ipcRenderer.invoke('spip:explorer:rename', { path: String(p), name: String(name) }),
+    trash: (p) => ipcRenderer.invoke('spip:explorer:trash', { path: String(p) }),
   },
 
   // 이벤트 구독(on/send) — 콜백만 받고 ipcRenderer 원본은 노출하지 않음(보안).

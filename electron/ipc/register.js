@@ -19,6 +19,7 @@ const dataIpc = require('./data');
 const actionsIpc = require('./actions');
 const scanIpc = require('./scan');
 const foldersIpc = require('./folders');
+const explorerIpc = require('./explorer');
 const clipboardIpc = require('./clipboard');
 const toolsIpc = require('./tools');
 const mailAccountsIpc = require('./mailAccounts');
@@ -147,6 +148,26 @@ function registerIpcHandlers(deps) {
   guard('spip:removeDetectSignal', (args) => foldersIpc.removeDetectSignal(args, ctx));
   guard('spip:restoreDetectSignals', (args) => foldersIpc.restoreDetectSignals(args, ctx));
   // 드라이브(#5)는 별도 채널 없이 폴더 선택(addRoots/pickFolders)에서 드라이브 루트를 그대로 허용한다.
+
+  // [탐색기 위젯 EXP-H-1] 폴더 탐색기 — 열람 루트는 dialog(pickRoot)로만 등록되고, 모든 경로 인자는
+  //   매 호출 browsePolicy.gate(canonicalize + 민감경로 deny + 등록 루트 포함)를 통과한다.
+  //   folders.js 의 "browseDir 없음" 결정을 사용자 인가(dialog) + 3중 게이트로 최소 완화한 표면이다.
+  //   삭제는 shell.trashItem(휴지통)만 — 영구 삭제 채널 없음.
+  const explorerCtx = () => Object.assign({}, ctx, {
+    shell,
+    dialog,
+    win: (typeof getWin === 'function') ? getWin() : undefined,
+  });
+  guard('spip:explorer:getRoots', (args) => explorerIpc.getRoots(args, explorerCtx()));
+  guard('spip:explorer:pickRoot', (args) => explorerIpc.pickRoot(args, explorerCtx()));
+  guard('spip:explorer:removeRoot', (args) => explorerIpc.removeRoot(args, explorerCtx()));
+  guard('spip:explorer:list', (args) => explorerIpc.list(args, explorerCtx()));
+  guard('spip:explorer:open', (args) => explorerIpc.open(args, explorerCtx()));
+  guard('spip:explorer:reveal', (args) => explorerIpc.reveal(args, explorerCtx()));
+  guard('spip:explorer:openWith', (args) => explorerIpc.openWith(args, explorerCtx()));
+  guard('spip:explorer:mkdir', (args) => explorerIpc.mkdir(args, explorerCtx()));
+  guard('spip:explorer:rename', (args) => explorerIpc.rename(args, explorerCtx()));
+  guard('spip:explorer:trash', (args) => explorerIpc.trash(args, explorerCtx()));
 
   // [M6 R-17] 클립보드 — main clipboard 주입.
   guard('spip:copyText', (args) => clipboardIpc.copyText(args, { clipboard }));

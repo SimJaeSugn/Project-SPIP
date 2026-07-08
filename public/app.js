@@ -700,7 +700,8 @@ function shouldPollCommit(view, visible) {
  */
 // [SH-2] 즐겨찾기 셸프 위젯 2변형('shelf'=일반 컬럼, 'shelfWide'=전체폭 스팬)을 featureAdd 앞에 추가.
 //   둘은 동일 셸프 데이터·로직 공유(폭만 다름)·둘 다 기본 숨김(메인 uiStateStore가 첫 실행 시 hiddenWidgets 시드).
-const HOME_SECTION_IDS = ['attention', 'productivity', 'activity', 'todos', 'mail', 'disk', 'aiusage', 'shelf', 'shelfWide', 'scratchpad', 'commitHeatmap', 'systemStatus', 'featureAdd'];
+// [탐색기 위젯] 폴더 탐색기(explorer) 추가 — 메인 uiStateStore.HOME_SECTION_IDS 와 동형(드리프트 테스트).
+const HOME_SECTION_IDS = ['attention', 'productivity', 'activity', 'todos', 'mail', 'disk', 'aiusage', 'shelf', 'shelfWide', 'scratchpad', 'commitHeatmap', 'systemStatus', 'explorer', 'featureAdd'];
 
 // [위젯 추가/제거] 토글 가능한 콘텐츠 위젯 메타(갤러리·제거 UI용). 'featureAdd'는 추가 트리거라 제외(항상 표시).
 //   메인 uiStateStore.TOGGLEABLE_WIDGET_IDS 와 동형(드리프트 0 — homeLayout-front 테스트가 교차검증).
@@ -721,6 +722,7 @@ const WIDGET_META = {
   scratchpad: { name: '스크래치패드 메모', desc: '자유롭게 적어두는 로컬 메모 — 자동 저장' },
   commitHeatmap: { name: '통합 커밋 히트맵', desc: '전 프로젝트 커밋을 1년 캘린더로 한눈에' },
   systemStatus: { name: '시스템 상태', desc: '개발 머신 CPU·메모리·디스크 사용량' },
+  explorer: { name: '폴더 탐색기', desc: '지정한 폴더의 파일·디렉터리를 탐색하고 열기' },
 };
 
 /* [로드맵 Phase 1·L] 레이아웃 템플릿 — 갤러리에서 골라 '새 프리셋'으로 적용. visible 외 토글 위젯은 숨김.
@@ -831,10 +833,11 @@ const HOME_ROW_UNIT = 8;      // masonry 미세 행 단위(px) — 행 스팬 �
 const HOME_H_MIN = 120;       // 사용자 지정 높이 하한(px)
 const HOME_H_MAX = 1600;      // 상한(px)
 
-/** shelfWide 는 기본 전체폭, 커밋 히트맵·그룹 블록은 기본 2열, 그 외는 기본 1열(사용자 미조절 시 기본 스팬). */
+/** shelfWide 는 기본 전체폭, 커밋 히트맵·탐색기·그룹 블록은 기본 2열, 그 외는 기본 1열(사용자 미조절 시 기본 스팬). */
 function homeDefaultSpan(id) {
   if (id === 'shelfWide') return HOME_MAX_COLS;
   if (id === 'commitHeatmap') return 2;
+  if (id === 'explorer') return 2; // [탐색기 위젯] 이름+크기+수정일 3열이 편하게 들어가는 기본 폭
   if (isGroupId(id)) return 2; // [Phase 5·M] 프리폼 그룹 블록 기본 2열
   return 1;
 }
@@ -1778,6 +1781,8 @@ function initBrowser() {
     mailbox: { open: false, loading: false, syncing: false, accounts: [], code: null, selAccount: null, selMailbox: null, errors: [] },
     // 공용 확인 모달(파괴적 동작 승인) — askConfirm()로 연다.
     confirm: { open: false, title: '', message: '', confirmText: '확인', danger: false, onConfirm: null },
+    // [탐색기 위젯] 공용 입력 모달(새 폴더·이름 변경). 값 검증 단일 신뢰 경계는 메인 sanitizeName.
+    prompt: { open: false, title: '', message: '', value: '', placeholder: '', confirmText: '확인', onConfirm: null },
     // 생산성(홈 브리핑) — 최근 14일 커밋 빈도(getCommitActivity). 수동 새로고침(git 호출 비용).
     commitActivity: null,        // {days:[{date,count}],total,repos,scanned}
     busyCommitActivity: false,   // getCommitActivity in-flight
@@ -1835,6 +1840,21 @@ function initBrowser() {
     scratchpad: { text: '', updatedAt: null },
     _scratchSaveTimer: null,   // 입력 디바운스 타이머 핸들
     _scratchSaved: null,       // 마지막 저장 시각(ms) — '저장됨' 표시용
+    // [탐색기 위젯] 폴더 탐색기 — 데이터는 spip.explorer.* IPC. 경로는 전부 main이 게이트한 실경로다.
+    //   cwd/parent/entries 는 main list() 응답 그대로(렌더러가 경로를 조립하지 않는다 — 이탈 표면 0).
+    explorer: {
+      roots: [],        // 등록된 열람 루트(실경로)
+      cwd: null,        // 현재 디렉터리(실경로)
+      parent: null,     // 상위(실경로) 또는 null(루트)
+      entries: [],      // [{name,kind,size,mtime,hidden}]
+      truncated: false, // 항목 수 상한 절단 여부(조용한 절단 금지 — 배너 표시)
+      total: 0,
+      loaded: false,    // 최초 getRoots 완료
+      loading: false,
+      code: null,       // 실패 코드(고정 토큰)
+      selected: null,   // 선택된 항목 이름(키보드/컨텍스트 메뉴 대상)
+      menu: null,       // 열린 항목 메뉴 { name, x, y }
+    },
     // [SH-2] 즐겨찾기 셸프 위젯 — 렌더러 상태. 데이터는 spip.shelf.list()로 적재, 변경 push(onChanged) 시 재조회.
     shelf: {
       bookmarks: [],              // ShelfBookmarkView[] (main 이 표시 메타 완비)
@@ -2102,6 +2122,8 @@ function initBrowser() {
     if (store.focusWidget && store.focusWidget.open) app.appendChild(renderFocusOverlay());
     // [로드맵 Phase 4·D] 커맨드 팔레트(Cmd+K) — 최상단 오버레이(포커스보다 위).
     if (store.palette && store.palette.open) app.appendChild(renderPalette());
+    // 공용 입력 모달(새 폴더·이름 변경) — 확인 모달 아래.
+    if (store.prompt && store.prompt.open) app.appendChild(renderPromptModal());
     // 공용 확인 모달 — 최상단(파괴적 동작 승인).
     if (store.confirm && store.confirm.open) app.appendChild(renderConfirmModal());
     // [R-25 RG-2] 저장한 스크롤 위치 + 검색 입력 포커스/캐럿 복원(타이핑 중 재렌더로 포커스가 풀리는 문제 해결).
@@ -2602,6 +2624,7 @@ function initBrowser() {
     maybeLoadSystemStatus();
     maybeLoadClaudeUsage();
     maybeLoadShelf();
+    maybeLoadExplorer();
     var vms = store.viewModels || [];
     var g = homeGreeting(store.now);
     var kpis = homeKpis(vms);
@@ -2855,6 +2878,7 @@ function initBrowser() {
       case 'scratchpad':   return renderHomeScratchpad();
       case 'commitHeatmap': return renderHomeCommitHeatmap();
       case 'systemStatus': return renderHomeSystemStatus();
+      case 'explorer':     return renderHomeExplorer();
       case 'featureAdd':   return renderHomeFeatureAdd();
       default:             return null;
     }
@@ -3362,6 +3386,73 @@ function initBrowser() {
     store._confirmShown = false;
     render();
   }
+
+  /* ===== 공용 입력 모달(이름 입력 — 새 폴더·이름 변경) =====
+   *   askConfirm 과 같은 buildModal 을 쓰되 단일 텍스트 입력을 얹는다. 값 검증(단일 세그먼트·예약명)은
+   *   메인 browsePolicy.sanitizeName 이 단일 신뢰 경계 — 여기 검사는 UX(즉시 피드백)일 뿐이다. */
+  function askPrompt(opts) {
+    opts = opts || {};
+    store.prompt = {
+      open: true,
+      title: opts.title || '입력',
+      message: opts.message || '',
+      value: opts.value == null ? '' : String(opts.value),
+      placeholder: opts.placeholder || '',
+      confirmText: opts.confirmText || '확인',
+      onConfirm: (typeof opts.onConfirm === 'function') ? opts.onConfirm : function () {},
+    };
+    store._promptShown = false;
+    render();
+  }
+  function closePrompt() {
+    store.prompt = { open: false, title: '', message: '', value: '', placeholder: '', confirmText: '확인', onConfirm: null };
+    store._promptShown = false;
+    render();
+  }
+  function renderPromptModal() {
+    var c = store.prompt;
+    var enter = !store._promptShown; store._promptShown = true;
+    var body = [];
+    if (c.message) body.push(el('p', { text: c.message, style: 'margin:0 0 12px;font-size:13px;color:#78716c;line-height:1.6;white-space:pre-wrap;' }));
+
+    var input = el('input', {
+      attrs: { type: 'text', spellcheck: 'false', autocomplete: 'off', 'aria-label': c.title, placeholder: c.placeholder },
+      style: 'width:100%;box-sizing:border-box;appearance:none;border:1px solid #e7e5e4;border-radius:8px;background:#fff;font-size:13.5px;color:#1c1917;padding:9px 11px;outline:none;',
+    });
+    input.value = c.value;
+    var submit = function () {
+      var v = input.value;
+      var fn = c.onConfirm;
+      closePrompt();
+      if (fn) try { fn(v); } catch (_) { /* noop */ }
+    };
+    input.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); submit(); }
+      else if (e.key === 'Escape') { e.preventDefault(); closePrompt(); }
+    });
+    body.push(input);
+    // 모달 진입 프레임 이후 포커스(+ 확장자 앞까지 선택 — 이름 변경 UX).
+    setTimeout(function () {
+      if (!input.isConnected) return;
+      input.focus();
+      var dot = input.value.lastIndexOf('.');
+      if (dot > 0) input.setSelectionRange(0, dot); else input.select();
+    }, 0);
+
+    var actions = el('div', { style: 'display:flex;justify-content:flex-end;gap:8px;margin-top:18px;' });
+    actions.appendChild(el('button', {
+      text: '취소', attrs: { type: 'button' },
+      style: 'appearance:none;border:1px solid #e7e5e4;border-radius:8px;background:#fff;cursor:pointer;font-size:13px;font-weight:600;color:#57534e;padding:7px 14px;',
+      on: { click: closePrompt },
+    }));
+    actions.appendChild(el('button', {
+      text: c.confirmText, attrs: { type: 'button' },
+      style: 'appearance:none;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;color:#fff;padding:7px 14px;background:var(--accent);',
+      on: { click: submit },
+    }));
+    body.push(actions);
+    return buildModal({ title: c.title, onClose: closePrompt, enter: enter, bodyChildren: body });
+  }
   function closeConfirm() {
     store.confirm = { open: false, title: '', message: '', confirmText: '확인', danger: false, onConfirm: null };
     store._confirmShown = false;
@@ -3759,6 +3850,13 @@ function initBrowser() {
     store.commitHeatmap = (res && res.ok) ? res : { days: [], total: 0, repos: 0 };
     if (store.state.view === 'home') render();
   }
+  /** [탐색기 위젯] 표시 중일 때만 루트 목록·첫 디렉터리 1회 적재(숨김이면 IPC 0). */
+  function maybeLoadExplorer() {
+    if (!explorerBridge()) return;
+    if (!homeWidgetVisible('explorer')) return;
+    loadExplorer();
+  }
+
   /** [로드맵 Phase 3·G] 시스템 상태 — 표시 중일 때만 초기 로드 + 주기(경량) 자동 갱신. 숨김/이탈 시 타이머 정지. */
   function maybeLoadSystemStatus() {
     if (!bridgeHas('getSystemStatus')) return;
@@ -4250,6 +4348,411 @@ function initBrowser() {
     if (typeof document === 'undefined') return;
     var n = document.querySelector('.scratch-status');
     if (n) n.textContent = text;
+  }
+
+  /* ===== [탐색기 위젯] 폴더 탐색기 =====
+   *   사용자가 dialog 로 등록한 열람 루트(config.explorerRoots) 하위를 탐색·조작한다.
+   *   경로는 **렌더러가 조립하지 않는다** — main list() 응답의 실경로(cwd/parent/name)만 되돌려 보낸다.
+   *   모든 경로 인자는 main 이 매 호출 게이트(canonicalize + 민감경로 deny + 루트 포함, EXP-H-1)한다.
+   *
+   *   L-1: 이름·경로·크기·시각은 전부 textContent(el 헬퍼). innerHTML 미사용.
+   *   반응형 계약: .home-section__content 컨테이너 쿼리(@container hw)로 좁으면 크기/수정일 열을 접고
+   *     경로 바를 축약한다. 목록은 남는 높이를 채우고 내부 스크롤(.fx-list) — 위젯 높이 가변 대응.
+   *   §3 코너 규약: 위젯 우하단에 상시 컨트롤을 두지 않는다(리사이즈 핸들과 충돌) — 액션은 상단 툴바·행 메뉴.
+   */
+  function fxBytes(b) {
+    if (typeof b !== 'number' || !isFinite(b) || b < 0) return '';
+    var GB = 1073741824, MB = 1048576, KB = 1024;
+    if (b >= GB) return (b / GB).toFixed(1) + ' GB';
+    if (b >= MB) return (b / MB).toFixed(1) + ' MB';
+    if (b >= KB) return Math.max(1, Math.round(b / KB)) + ' KB';
+    return b + ' B';
+  }
+  /** 수정일 — 오늘이면 시:분, 올해면 M/D, 그 외 YYYY. 짧게(열 폭 절약). */
+  function fxTime(ms) {
+    if (typeof ms !== 'number' || !isFinite(ms) || ms <= 0) return '';
+    var d = new Date(ms);
+    var now = (store.now instanceof Date) ? store.now : new Date();
+    if (d.toDateString() === now.toDateString()) {
+      return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+    }
+    if (d.getFullYear() === now.getFullYear()) return (d.getMonth() + 1) + '/' + d.getDate();
+    return String(d.getFullYear());
+  }
+  /** 항목 종류 → 아이콘 SVG(폴더/파일/심링크). 색은 고정 팔레트(데이터 인터폴레이션 없음). */
+  function fxIcon(kind) {
+    if (kind === 'dir') return svg([{ t: 'path', d: 'M3 7a2 2 0 0 1 2-2h3.6l2 2H19a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z' }], { size: 15, stroke: '#a8a29e', sw: 1.6 });
+    if (kind === 'symlink') return svg([{ t: 'path', d: 'M10 13a5 5 0 0 0 7.5.5l2-2a5 5 0 0 0-7-7l-1 1' }, { t: 'path', d: 'M14 11a5 5 0 0 0-7.5-.5l-2 2a5 5 0 0 0 7 7l1-1' }], { size: 15, stroke: '#a8a29e', sw: 1.6 });
+    return svg([{ t: 'path', d: 'M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z' }, { t: 'path', d: 'M14 3v5h5' }], { size: 15, stroke: '#c7c2bd', sw: 1.6 });
+  }
+  /** 탐색기 실패 코드 → 사용자 문구(고정 매핑, 내부정보 비노출 L-3). */
+  var FX_CODES = {
+    NO_ROOTS: '표시할 폴더가 없습니다. ‘폴더 추가’로 열람할 폴더를 지정하세요.',
+    PATH_GONE: '경로가 사라졌습니다. 새로고침해 주세요.',
+    PATH_DENIED: '시스템·자격 폴더는 열 수 없습니다.',
+    PATH_NOT_ALLOWED: '등록된 폴더 밖은 열 수 없습니다.',
+    NOT_DIR: '폴더가 아닙니다.',
+    READ_FAILED: '폴더를 읽을 수 없습니다(권한).',
+    BAD_INPUT: '잘못된 경로입니다.',
+    BAD_NAME: '사용할 수 없는 이름입니다.',
+    EXISTS: '같은 이름이 이미 있습니다.',
+    WRITE_FAILED: '변경하지 못했습니다.',
+    TRASH_FAILED: '휴지통으로 보내지 못했습니다.',
+    ROOT_PROTECTED: '등록된 루트 폴더 자체는 변경·삭제할 수 없습니다.',
+    LIMIT: '등록할 수 있는 폴더 수를 초과했습니다.',
+    NOT_DIR_ROOT: '폴더만 등록할 수 있습니다.',
+    CODE_CLI_NOT_FOUND: 'VS Code 실행 파일을 찾지 못했습니다(설정에서 경로 지정).',
+    TOOL_NOT_FOUND: '도구를 찾지 못했습니다.',
+    OPEN_FAILED: '열지 못했습니다.',
+    CANCELLED: '',
+  };
+  function fxMessage(code) { return (code && FX_CODES[code] != null) ? FX_CODES[code] : '작업에 실패했습니다.'; }
+
+  /** 중첩 네임스페이스(spip.explorer) 어댑터 — shelf 패턴 동형. 미배포(웹/테스트) 환경 graceful 폴백. */
+  function explorerBridge() { return (spip && spip.explorer && typeof spip.explorer === 'object') ? spip.explorer : null; }
+  async function explorerIpc(method) {
+    var b = explorerBridge();
+    if (!b || typeof b[method] !== 'function') return bridgeMissing();
+    var rest = Array.prototype.slice.call(arguments, 1);
+    try {
+      return await b[method].apply(b, rest);
+    } catch (err) {
+      return { ok: false, code: 'INTERNAL' }; // L-3: 스택·절대경로 비노출
+    }
+  }
+
+  /** 루트 목록 최초 적재 → 첫 루트를 열어 준다. 홈 진입 시 1회. */
+  async function loadExplorer() {
+    var fx = store.explorer;
+    if (!explorerBridge() || fx.loaded || fx.loading) return;
+    fx.loading = true;
+    var res = await explorerIpc('getRoots');
+    fx.loading = false;
+    fx.loaded = true;
+    fx.roots = (res && res.ok && Array.isArray(res.roots)) ? res.roots : [];
+    if (fx.roots.length === 0) { fx.code = 'NO_ROOTS'; if (store.state.view === 'home') render(); return; }
+    await explorerNavigate(fx.roots[0], { silent: true });
+    if (store.state.view === 'home') render();
+  }
+
+  /** 디렉터리 이동 — main list()가 돌려준 실경로만 넘긴다(렌더러 경로 조립 금지). */
+  async function explorerNavigate(realPath, opts) {
+    opts = opts || {};
+    var fx = store.explorer;
+    fx.loading = true;
+    fx.code = null;
+    if (!opts.silent && store.state.view === 'home') render();
+
+    var res = await explorerIpc('list', realPath);
+    fx.loading = false;
+    if (!res || !res.ok) {
+      fx.code = (res && res.code) || 'INTERNAL';
+      fx.entries = [];
+      // 루트가 사라졌거나 접근 불가면 cwd 는 그대로 두고 오류만 표시(사용자가 상위/다른 루트로 탈출 가능).
+    } else {
+      fx.cwd = res.path;
+      fx.parent = res.parent;
+      fx.entries = Array.isArray(res.entries) ? res.entries : [];
+      fx.truncated = !!res.truncated;
+      fx.total = Number(res.total) || fx.entries.length;
+      fx.selected = null;
+    }
+    fx.menu = null;
+    if (!opts.silent && store.state.view === 'home') render();
+    return res;
+  }
+
+  /** 현재 디렉터리 새로고침(경로 유지). */
+  function explorerRefresh() {
+    var fx = store.explorer;
+    if (!fx.cwd) { fx.loaded = false; loadExplorer(); return; }
+    explorerNavigate(fx.cwd);
+  }
+
+  /** 열람 루트 추가 — 네이티브 dialog(main 주도). 렌더러는 경로를 만들지 않는다. */
+  async function explorerPickRoot() {
+    var res = await explorerIpc('pickRoot');
+    if (!res || !res.ok) {
+      if (res && res.code === 'CANCELLED') return; // 사용자가 닫음 — 조용히
+      toast(fxMessage(res && res.code), true);
+      return;
+    }
+    store.explorer.roots = Array.isArray(res.roots) ? res.roots : store.explorer.roots;
+    store.explorer.code = null;
+    await explorerNavigate(res.added, { silent: true });
+    render();
+  }
+
+  /** 열람 루트 등록 해제(확인 후). 현재 보고 있던 루트를 지우면 남은 첫 루트로 이동. */
+  function explorerRemoveRootConfirm(rootPath) {
+    askConfirm({
+      title: '폴더 등록 해제',
+      message: '이 폴더를 탐색기에서 제거할까요?\n디스크의 폴더는 그대로 남고, 탐색기 목록에서만 사라집니다.',
+      confirmText: '등록 해제',
+      onConfirm: async function () {
+        var res = await explorerIpc('removeRoot', rootPath);
+        if (!res || !res.ok) { toast(fxMessage(res && res.code), true); return; }
+        var fx = store.explorer;
+        fx.roots = Array.isArray(res.roots) ? res.roots : [];
+        if (fx.roots.length === 0) { fx.cwd = null; fx.parent = null; fx.entries = []; fx.code = 'NO_ROOTS'; render(); return; }
+        await explorerNavigate(fx.roots[0], { silent: true });
+        render();
+      },
+    });
+  }
+
+  /** 항목 실경로 — main 이 준 cwd + 이름. 조립은 표시/전달용이며 main 이 매 호출 재게이트한다. */
+  function fxJoin(cwd, name) {
+    if (!cwd) return name;
+    var sep = (cwd.indexOf('\\') >= 0 && cwd.indexOf('/') < 0) ? '\\' : (cwd.indexOf('\\') >= 0 ? '\\' : '/');
+    return cwd.charAt(cwd.length - 1) === sep ? (cwd + name) : (cwd + sep + name);
+  }
+
+  /** 항목 활성화 — 폴더는 진입, 그 외는 OS 기본 프로그램으로 열기. */
+  async function explorerActivate(entry) {
+    var fx = store.explorer;
+    var target = fxJoin(fx.cwd, entry.name);
+    if (entry.kind === 'dir') { explorerNavigate(target); return; }
+    var res = await explorerIpc('open', target);
+    if (!res || !res.ok) toast(fxMessage(res && res.code), true);
+  }
+
+  /** 행 액션 — 열기/탐색기에서 보기/경로 복사/VS Code/이름 변경/휴지통. */
+  async function explorerAction(action, entry) {
+    var fx = store.explorer;
+    var target = fxJoin(fx.cwd, entry.name);
+    fx.menu = null;
+
+    if (action === 'open') { explorerActivate(entry); render(); return; }
+    if (action === 'reveal') {
+      var r1 = await explorerIpc('reveal', target);
+      if (!r1 || !r1.ok) toast(fxMessage(r1 && r1.code), true);
+      render(); return;
+    }
+    if (action === 'copy') {
+      var r2 = await ipc('copyText', target);
+      toast((r2 && r2.ok) ? '경로를 복사했습니다.' : '복사하지 못했습니다.', !(r2 && r2.ok));
+      render(); return;
+    }
+    if (action === 'code') {
+      var r3 = await explorerIpc('openWith', target, 'code');
+      if (!r3 || !r3.ok) toast(fxMessage(r3 && r3.code), true);
+      render(); return;
+    }
+    if (action === 'rename') {
+      render();
+      askPrompt({
+        title: '이름 변경', message: '‘' + entry.name + '’의 새 이름을 입력하세요.',
+        value: entry.name, confirmText: '변경',
+        onConfirm: async function (name) {
+          if (!name || name === entry.name) return;
+          var r = await explorerIpc('rename', target, name);
+          if (!r || !r.ok) { toast(fxMessage(r && r.code), true); return; }
+          explorerRefresh();
+        },
+      });
+      return;
+    }
+    if (action === 'trash') {
+      render();
+      askConfirm({
+        title: '휴지통으로 보내기',
+        message: '‘' + entry.name + '’을(를) 휴지통으로 보낼까요?\n영구 삭제가 아니라 OS 휴지통으로 이동합니다.',
+        confirmText: '휴지통으로', danger: true,
+        onConfirm: async function () {
+          var r = await explorerIpc('trash', target);
+          if (!r || !r.ok) { toast(fxMessage(r && r.code), true); return; }
+          toast('휴지통으로 보냈습니다.');
+          explorerRefresh();
+        },
+      });
+      return;
+    }
+    render();
+  }
+
+  /** 새 폴더 — 현재 디렉터리 아래. 이름 검증 단일 신뢰 경계는 메인 sanitizeName. */
+  function explorerMkdir() {
+    var fx = store.explorer;
+    if (!fx.cwd) return;
+    askPrompt({
+      title: '새 폴더', message: '현재 폴더 안에 만들 새 폴더 이름을 입력하세요.',
+      placeholder: '새 폴더', confirmText: '만들기',
+      onConfirm: async function (name) {
+        if (!name) return;
+        var r = await explorerIpc('mkdir', fx.cwd, name);
+        if (!r || !r.ok) { toast(fxMessage(r && r.code), true); return; }
+        explorerRefresh();
+      },
+    });
+  }
+
+  /** 툴바 아이콘 버튼(공통) — 비활성 시 흐리게. */
+  function fxToolBtn(label, iconPaths, onClick, disabled) {
+    return el('button', {
+      cls: 'fx-btn',
+      attrs: Object.assign({ type: 'button', 'aria-label': label, title: label }, disabled ? { disabled: 'disabled' } : {}),
+      on: { click: function (e) { e.stopPropagation(); if (!disabled) onClick(); } },
+      children: [svg(iconPaths, { size: 14, stroke: disabled ? '#d6d3d1' : '#78716c', sw: 1.8 })],
+    });
+  }
+
+  /** 현재 cwd 를 루트 기준 상대 조각으로 쪼갠 브레드크럼(각 조각 클릭 시 그 지점으로 이동). */
+  function fxBreadcrumb() {
+    var fx = store.explorer;
+    var bar = el('div', { cls: 'fx-crumbs spip-scroll', attrs: { 'aria-label': '현재 경로' } });
+    if (!fx.cwd) return bar;
+
+    // 표시 전용 분해 — 이동 시엔 각 조각까지의 실경로 접두를 그대로 넘기고 main 이 재게이트한다.
+    var sep = fx.cwd.indexOf('\\') >= 0 ? '\\' : '/';
+    var parts = fx.cwd.split(sep).filter(function (s) { return s.length > 0; });
+    var acc = (fx.cwd.charAt(0) === sep) ? sep : '';
+    parts.forEach(function (p, i) {
+      acc = (i === 0 && acc === '') ? p : (acc === sep ? sep + p : acc + sep + p);
+      var here = acc;
+      if (i > 0) bar.appendChild(el('span', { cls: 'fx-crumb__sep', text: '›' }));
+      var isLast = (i === parts.length - 1);
+      bar.appendChild(el('button', {
+        cls: 'fx-crumb' + (isLast ? ' fx-crumb--cur' : ''), text: p,
+        attrs: { type: 'button', title: here },
+        on: { click: function () { if (!isLast) explorerNavigate(here); } },
+      }));
+    });
+    return bar;
+  }
+
+  /** 루트 선택 — 등록 루트가 2개 이상일 때만 노출. 각 항목에 등록 해제(×). */
+  function fxRootBar() {
+    var fx = store.explorer;
+    if (!fx.roots || fx.roots.length === 0) return null;
+    var bar = el('div', { cls: 'fx-roots spip-scroll', attrs: { role: 'tablist', 'aria-label': '등록된 폴더' } });
+    fx.roots.forEach(function (r) {
+      var name = r.split(/[\\/]/).filter(Boolean).pop() || r;
+      var active = !!(fx.cwd && (fx.cwd === r || fx.cwd.indexOf(r) === 0));
+      var chip = el('div', { cls: 'fx-root' + (active ? ' fx-root--on' : '') });
+      chip.appendChild(el('button', {
+        cls: 'fx-root__name', text: name,
+        attrs: { type: 'button', title: r, role: 'tab', 'aria-selected': active ? 'true' : 'false' },
+        on: { click: function () { explorerNavigate(r); } },
+      }));
+      chip.appendChild(el('button', {
+        cls: 'fx-root__x', text: '×',
+        attrs: { type: 'button', 'aria-label': name + ' 등록 해제', title: '등록 해제' },
+        on: { click: function (e) { e.stopPropagation(); explorerRemoveRootConfirm(r); } },
+      }));
+      bar.appendChild(chip);
+    });
+    return bar;
+  }
+
+  /** 행 우측 '⋯' 메뉴(열림 상태는 store.explorer.menu). 우하단 코너를 점유하지 않는다(§3). */
+  function fxRowMenu(entry) {
+    var items = [
+      { id: 'open', label: entry.kind === 'dir' ? '폴더 열기' : '열기' },
+      { id: 'reveal', label: '탐색기에서 보기' },
+      { id: 'copy', label: '경로 복사' },
+      { id: 'code', label: 'VS Code로 열기' },
+      { id: 'rename', label: '이름 변경' },
+      { id: 'trash', label: '휴지통으로', danger: true },
+    ];
+    var menu = el('div', { cls: 'fx-menu', attrs: { role: 'menu' } });
+    items.forEach(function (it) {
+      menu.appendChild(el('button', {
+        cls: 'fx-menu__item' + (it.danger ? ' fx-menu__item--danger' : ''), text: it.label,
+        attrs: { type: 'button', role: 'menuitem' },
+        on: { click: function (e) { e.stopPropagation(); explorerAction(it.id, entry); } },
+      }));
+    });
+    return menu;
+  }
+
+  /** 항목 행 — 아이콘 + 이름 + 크기 + 수정일 + ⋯. 더블클릭/Enter 로 활성화. */
+  function fxRow(entry) {
+    var fx = store.explorer;
+    var selected = fx.selected === entry.name;
+    var open = !!(fx.menu && fx.menu === entry.name);
+    var row = el('div', {
+      cls: 'fx-row' + (selected ? ' fx-row--sel' : '') + (entry.hidden ? ' fx-row--dim' : ''),
+      attrs: { role: 'row', tabindex: '0', title: entry.name },
+      on: {
+        click: function () { fx.selected = entry.name; fx.menu = null; render(); },
+        dblclick: function () { explorerActivate(entry); },
+        keydown: function (e) {
+          if (e.key === 'Enter') { e.preventDefault(); explorerActivate(entry); }
+        },
+        contextmenu: function (e) { e.preventDefault(); fx.selected = entry.name; fx.menu = open ? null : entry.name; render(); },
+        // 편집 모드 재정렬 드래그(SortableJS)와 분리.
+        pointerdown: function (e) { e.stopPropagation(); },
+      },
+    });
+    row.appendChild(el('span', { cls: 'fx-row__icon', children: [fxIcon(entry.kind)] }));
+    row.appendChild(el('span', { cls: 'fx-row__name', text: entry.name }));
+    row.appendChild(el('span', { cls: 'fx-row__size', text: fxBytes(entry.size), style: HOME_MONO }));
+    row.appendChild(el('span', { cls: 'fx-row__time', text: fxTime(entry.mtime), style: HOME_MONO }));
+    var more = el('button', {
+      cls: 'fx-row__more', text: '⋯',
+      attrs: { type: 'button', 'aria-label': entry.name + ' 항목 메뉴', 'aria-expanded': open ? 'true' : 'false' },
+      on: { click: function (e) { e.stopPropagation(); fx.selected = entry.name; fx.menu = open ? null : entry.name; render(); } },
+    });
+    row.appendChild(more);
+    if (open) row.appendChild(fxRowMenu(entry));
+    return row;
+  }
+
+  function renderHomeExplorer() {
+    var fx = store.explorer;
+    var card = el('div', { cls: 'fx-card', style: HOME_CARD + 'padding:16px 16px 12px;display:flex;flex-direction:column;min-height:0;' });
+
+    // 헤더 — 제목 + 툴바(상위/새로고침/새 폴더/폴더 추가). 우하단 코너 미점유(§3 코너 규약).
+    var head = el('div', { cls: 'fx-head' });
+    head.appendChild(el('div', { cls: 'fx-title', text: '폴더 탐색기' }));
+    var tools = el('div', { cls: 'fx-tools' });
+    tools.appendChild(fxToolBtn('상위 폴더', [{ t: 'path', d: 'M12 19V5' }, { t: 'path', d: 'M5 12l7-7 7 7' }],
+      function () { if (fx.parent) explorerNavigate(fx.parent); }, !fx.parent));
+    tools.appendChild(fxToolBtn('새로고침', [{ t: 'path', d: 'M21 12a9 9 0 1 1-3-6.7' }, { t: 'path', d: 'M21 3v6h-6' }],
+      explorerRefresh, !fx.cwd || fx.loading));
+    tools.appendChild(fxToolBtn('새 폴더', [{ t: 'path', d: 'M3 7a2 2 0 0 1 2-2h3.6l2 2H19a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z' }, { t: 'path', d: 'M12 11v6M9 14h6' }],
+      explorerMkdir, !fx.cwd));
+    tools.appendChild(fxToolBtn('폴더 추가', [{ t: 'path', d: 'M12 5v14M5 12h14' }], explorerPickRoot, false));
+    head.appendChild(tools);
+    card.appendChild(head);
+
+    if (fx.roots && fx.roots.length > 0) {
+      var rb = fxRootBar();
+      if (rb) card.appendChild(rb);
+      card.appendChild(fxBreadcrumb());
+    }
+
+    var list = el('div', { cls: 'fx-list spip-scroll', attrs: { role: 'table', 'aria-label': '파일 목록' } });
+
+    if (!explorerBridge()) {
+      list.appendChild(el('div', { cls: 'fx-empty', text: 'Electron 앱에서만 사용할 수 있습니다.' }));
+    } else if (!fx.loaded && fx.loading) {
+      list.appendChild(el('div', { cls: 'fx-empty', text: '불러오는 중…' }));
+    } else if (!fx.roots || fx.roots.length === 0) {
+      var empty = el('div', { cls: 'fx-empty' });
+      empty.appendChild(el('div', { text: '열람할 폴더가 아직 없습니다.' }));
+      empty.appendChild(el('button', {
+        cls: 'fx-empty__cta', text: '폴더 추가',
+        attrs: { type: 'button' },
+        on: { click: explorerPickRoot },
+      }));
+      empty.appendChild(el('div', { cls: 'fx-empty__hint', text: '선택한 폴더와 그 하위만 열람합니다. 시스템·자격 폴더는 열 수 없습니다.' }));
+      list.appendChild(empty);
+    } else if (fx.code) {
+      list.appendChild(el('div', { cls: 'fx-empty', text: fxMessage(fx.code) }));
+    } else if (fx.entries.length === 0) {
+      list.appendChild(el('div', { cls: 'fx-empty', text: fx.loading ? '불러오는 중…' : '빈 폴더입니다.' }));
+    } else {
+      fx.entries.forEach(function (e) { list.appendChild(fxRow(e)); });
+    }
+    card.appendChild(list);
+
+    // 조용한 절단 금지 — 상한을 넘겼으면 명시한다.
+    if (fx.truncated) {
+      card.appendChild(el('div', { cls: 'fx-note', text: '항목이 많아 앞의 ' + fx.entries.length + '개만 표시합니다(전체 ' + fx.total + '개).' }));
+    }
+    return card;
   }
 
   function renderHomeFeatureAdd() {
