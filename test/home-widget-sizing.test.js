@@ -180,11 +180,13 @@ test('6조합 — shelf 1:3·1:4(data-hrow 3·4): 간략 행 강화(배너 썸�
   assert.ok(/cls:\s*'shelf-crow__thumb/.test(body), '행 썸네일 클래스');
   assert.ok(/p\.bannerImage/.test(body) && /cls:\s*'shelf-crow__img'/.test(body), '배너 있으면 이미지 썸네일');
   assert.ok(/cls:\s*'shelf-crow__meta'/.test(body) && /p\.desc\s*\|\|\s*p\.cat/.test(body), '설명/카테고리 메타 줄');
-  // CSS: 기본 숨김, 세로 여유 큰 3·4행에서 노출 + 썸네일 확대.
+  // CSS: 기본 숨김, 세로(hrow 3·4) 또는 가로(density M·L) 여유가 커지면 메타 노출 + 썸네일 확대.
   assert.ok(/\.shelf-crow__meta\s*\{\s*display:\s*none/.test(CSS), '메타 기본 숨김');
-  assert.ok(/\[data-hrow="3"\]\s+\.shelf-crow__meta,\s*\.home-section\[data-hrow="4"\]\s+\.shelf-crow__meta\s*\{[^}]*display:\s*block/.test(CSS),
-    '3·4행에서 메타 노출');
-  assert.ok(/\[data-hrow="3"\]\s+\.shelf-crow__thumb[\s\S]{0,80}width:\s*52px/.test(CSS), '3·4행에서 썸네일 확대');
+  assert.ok(/\.shelf-crow__meta\s*\{[^}]*display:\s*none[\s\S]*?display:\s*block/.test(CSS), '여유 시 메타 display:block 규칙 존재');
+  assert.ok(/\[data-hrow="3"\]\s+\.shelf-crow__meta/.test(CSS), '세로(1:3) 트리거로 메타');
+  assert.ok(/\[data-density="L"\]\s+\.shelf-crow__meta/.test(CSS), '가로(넓음) 트리거로 메타');
+  assert.ok(/\.shelf-crow__thumb[\s\S]{0,140}width:\s*52px/.test(CSS), '여유 시 썸네일 52px 확대 규칙');
+  assert.ok(/\[data-density="L"\]\s+\.shelf-crow__thumb/.test(CSS), '가로(넓음) 트리거로 썸네일 확대');
 });
 test('6조합 — shelf 좁은 목록 모드의 추가 UI 간결화(유형 라벨 접고 입력 슬림)', () => {
   assert.ok(/cls:\s*'shelf-ctype'/.test(fnBody('shelfComposer', 1800)), '유형 행에 shelf-ctype');

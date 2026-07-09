@@ -832,18 +832,27 @@ body.home-resizing { cursor: nwse-resize; user-select: none; }
 .shelf-crow { display: flex; align-items: center; gap: 11px; padding: 9px 10px; border: 1px solid #ececea; border-radius: 11px; background: #fff; cursor: pointer; transition: border-color .12s ease, background .12s ease, transform .12s ease; }
 .shelf-crow:hover { border-color: #d6d3d1; background: #fafaf9; transform: translateY(-1px); }
 .shelf-crow:focus-visible { outline: 2px solid var(--accent, var(--accent)); outline-offset: 2px; }
-/* [6조합 반응형] 간략 행 썸네일/메타 — 기본은 30px 배지(현행 유지). 세로 여유가 큰 1:3·1:4(data-hrow 3·4)에서
- *   썸네일을 배너 비율로 확대하고 설명(desc/cat) 메타 줄을 노출해 넓은 세로 공간을 활용한다. */
+/* [6조합 반응형] 간략 행 썸네일/메타 — 기본은 30px 배지(현행 유지). 여유가 커지면 배너 썸네일을 확대하고
+ *   설명(desc/cat) 메타 줄을 노출해 공간을 활용한다. 트리거는 두 축:
+ *     · 세로 여유 큼 → data-hrow 3·4 (1:3·1:4)
+ *     · 가로 여유 큼 → data-density M·L (2:1·3:1 등 넓은 목록 — 다열 그리드라 각 칸이 배너를 담을 폭)
+ *   (2:2 이상은 책장 뷰라 간략 행 자체가 숨겨져 이 규칙과 무관.) */
 .shelf-crow__thumb { width: 30px; height: 30px; border-radius: 8px; flex: none; display: flex; align-items: center; justify-content: center; overflow: hidden; font-size: 14px; font-weight: 600; }
 .shelf-crow__thumb--img { background: #f0efed; }
 .shelf-crow__img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .shelf-crow__meta { display: none; }
 .home-section[data-hrow="3"] .shelf-crow__thumb,
-.home-section[data-hrow="4"] .shelf-crow__thumb { width: 52px; height: 40px; border-radius: 9px; }
+.home-section[data-hrow="4"] .shelf-crow__thumb,
+.home-section[data-density="M"] .shelf-crow__thumb,
+.home-section[data-density="L"] .shelf-crow__thumb { width: 52px; height: 40px; border-radius: 9px; }
 .home-section[data-hrow="3"] .shelf-crow__meta,
-.home-section[data-hrow="4"] .shelf-crow__meta { display: block; }
+.home-section[data-hrow="4"] .shelf-crow__meta,
+.home-section[data-density="M"] .shelf-crow__meta,
+.home-section[data-density="L"] .shelf-crow__meta { display: block; }
 .home-section[data-hrow="3"] .shelf-crow,
-.home-section[data-hrow="4"] .shelf-crow { padding: 11px 11px; }
+.home-section[data-hrow="4"] .shelf-crow,
+.home-section[data-density="M"] .shelf-crow,
+.home-section[data-density="L"] .shelf-crow { padding: 11px 11px; }
 @container hw (max-width: 440px) {
   .shelf-view--full { display: none; }              /* 좁으면 책장 숨김 */
   .shelf-view--compact { display: grid; }           /* 경량 목록(그리드)로 교체 */
