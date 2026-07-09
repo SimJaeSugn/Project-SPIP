@@ -185,8 +185,11 @@ test('6조합 — shelf 1:3·1:4(data-hrow 3·4): 간략 행 강화(배너 썸�
   assert.ok(/\.shelf-crow__meta\s*\{[^}]*display:\s*none[\s\S]*?display:\s*block/.test(CSS), '여유 시 메타 display:block 규칙 존재');
   assert.ok(/\[data-hrow="3"\]\s+\.shelf-crow__meta/.test(CSS), '세로(1:3) 트리거로 메타');
   assert.ok(/\[data-density="L"\]\s+\.shelf-crow__meta/.test(CSS), '가로(넓음) 트리거로 메타');
-  assert.ok(/\.shelf-crow__thumb[\s\S]{0,140}width:\s*52px/.test(CSS), '여유 시 썸네일 52px 확대 규칙');
-  assert.ok(/\[data-density="L"\]\s+\.shelf-crow__thumb/.test(CSS), '가로(넓음) 트리거로 썸네일 확대');
+  // 확대는 실제 배너 이미지(--img)만 — 아이콘(색 배지)은 확대하지 않는다.
+  assert.ok(/\.shelf-crow__thumb--img[\s\S]{0,180}width:\s*52px/.test(CSS), '여유 시 배너 이미지만 52px 확대');
+  assert.ok(/\[data-density="L"\]\s+\.shelf-crow__thumb--img/.test(CSS), '가로(넓음) 트리거로 배너 이미지 확대');
+  assert.ok(!/\[data-(hrow|density)[^\]]*\]\s+\.shelf-crow__thumb\s*\{[^}]*width:\s*52px/.test(CSS),
+    '아이콘 배지(.shelf-crow__thumb 단독)는 확대 규칙 없음');
 });
 test('6조합 — shelf 좁은 목록 모드의 추가 UI 간결화(유형 라벨 접고 입력 슬림)', () => {
   assert.ok(/cls:\s*'shelf-ctype'/.test(fnBody('shelfComposer', 1800)), '유형 행에 shelf-ctype');

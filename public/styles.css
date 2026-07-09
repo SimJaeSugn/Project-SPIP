@@ -841,10 +841,12 @@ body.home-resizing { cursor: nwse-resize; user-select: none; }
 .shelf-crow__thumb--img { background: #f0efed; }
 .shelf-crow__img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .shelf-crow__meta { display: none; }
-.home-section[data-hrow="3"] .shelf-crow__thumb,
-.home-section[data-hrow="4"] .shelf-crow__thumb,
-.home-section[data-density="M"] .shelf-crow__thumb,
-.home-section[data-density="L"] .shelf-crow__thumb { width: 52px; height: 40px; border-radius: 9px; }
+/* 확대는 '실제 배너 이미지(og:image)'가 있는 항목만(.shelf-crow__thumb--img). 아이콘(색 배지)만 있는
+ *   폴더·파일·미리보기 없는 URL 은 확대하지 않는다 — 의미 없이 커지지 않도록. */
+.home-section[data-hrow="3"] .shelf-crow__thumb--img,
+.home-section[data-hrow="4"] .shelf-crow__thumb--img,
+.home-section[data-density="M"] .shelf-crow__thumb--img,
+.home-section[data-density="L"] .shelf-crow__thumb--img { width: 52px; height: 40px; border-radius: 9px; }
 .home-section[data-hrow="3"] .shelf-crow__meta,
 .home-section[data-hrow="4"] .shelf-crow__meta,
 .home-section[data-density="M"] .shelf-crow__meta,
