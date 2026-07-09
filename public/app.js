@@ -842,6 +842,29 @@ function homeDefaultSpan(id) {
   return 1;
 }
 
+/* [6조합 반응형 계약] 위젯별 최소 높이(px). 각 위젯이 자기 '최소 크기'에서 잘림 없이 핵심 콘텐츠를
+ *   표현하도록 하는 리사이즈 하한. 최소 폭은 모든 위젯 1열(→ (1,·) 조합이 항상 유효) — 위젯이 넓어질 땐
+ *   컨테이너 쿼리/hw-cols 로 공간을 활용하고, 최소보다 더 줄일 수 없게 이 하한이 막는다.
+ *   여기 미지정 위젯은 전역 하한 HOME_H_MIN(120) 사용(예: mail·scratchpad 는 이미 콤팩트에서 안전). */
+const HOME_WIDGET_MIN_H = {
+  attention: 190, productivity: 240, activity: 190, todos: 190,
+  disk: 170, aiusage: 210, commitHeatmap: 200, systemStatus: 150,
+  explorer: 190, shelf: 300, shelfWide: 300,
+};
+/** 위젯 id → 최소 높이(px). 위젯별 값이 전역 하한보다 크면 그 값을, 아니면 HOME_H_MIN. */
+function homeWidgetMinH(id) {
+  var m = HOME_WIDGET_MIN_H[id];
+  return (typeof m === 'number' && m > HOME_H_MIN) ? m : HOME_H_MIN;
+}
+/* [6조합 반응형] 위젯의 지정 높이(px) → '최소 높이의 몇 배(행)'인지 파생(순수) — 1..4, 미지정(자동)이면 0.
+ *   폭 기반 densityTier(S|M|L)와 직교인 '높이 tier'. 위젯은 셀의 [data-hrow] 훅으로 행 단계별 UI를 분기한다
+ *   (예: 셸프는 1행이면 입력 컴포저·책장을 접고 간략 목록만 — (·,1) 조합의 잘림 없는 간략 UI). */
+function homeHRow(id, h) {
+  if (typeof h !== 'number' || !(h > 0)) return 0; // 자동 높이 → 행 단계 없음(상세 UI)
+  var minH = homeWidgetMinH(id);
+  return Math.max(1, Math.min(4, Math.round(h / minH)));
+}
+
 /* [로드맵 Phase 5·B] 프리폼(자유 배치) 좌표 유틸(순수·헤드리스). 좌표=그리드 셀 {x:열, y:세로 스냅 단위}.
  *   크기 단일 진실은 연속값(homeWidgetSizes) 유지 — 프리폼은 '위치'만 관장(§1 B 충돌해소). */
 const HOME_FREE_ROW = 40;   // 프리폼 세로 스냅 단위(px)
@@ -969,7 +992,8 @@ function applyHomeWidgetSizes(input) {
     let h = null;
     if (v.h !== null && v.h !== undefined) {
       const hn = Number(v.h);
-      if (Number.isFinite(hn)) h = Math.min(HOME_H_MAX, Math.max(HOME_H_MIN, Math.round(hn)));
+      // [6조합 반응형] 높이 하한은 위젯별 최소(homeWidgetMinH) — 그룹 블록은 전역 하한.
+      if (Number.isFinite(hn)) h = Math.min(HOME_H_MAX, Math.max(isGroupId(id) ? HOME_H_MIN : homeWidgetMinH(id), Math.round(hn)));
     }
     out[id] = { w, h };
   }
@@ -2950,7 +2974,7 @@ function initBrowser() {
   function renderHomeAttention() {
     var items = homeAttention(store.viewModels || [], 6);
     // 섹션 전체 클릭/커서 제거 — 이동은 아래 '전체보기' 액션만 담당.
-    var card = el('div', { style: HOME_CARD + 'padding:21px 22px;' });
+    var card = el('div', { cls: 'hw-card', style: HOME_CARD + 'padding:21px 22px;' });
     var openDashboard = function () { store.state.view = 'dashboard'; render(); };
     var icon = el('div', { style: 'width:30px;height:30px;border-radius:8px;background:#fef3c7;display:flex;align-items:center;justify-content:center;flex:0 0 auto;' });
     icon.appendChild(svg([{ t: 'path', d: 'M12 9v4M12 17h.01' }, { t: 'path', d: 'M10.3 3.86l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3.14l-8-14a2 2 0 0 0-3.4 0z' }], { size: 16, stroke: '#b45309' }));
@@ -2967,11 +2991,11 @@ function initBrowser() {
     });
     open.appendChild(el('span', { text: '전체보기' }));
     open.appendChild(el('span', { text: '→', style: 'font-size:14px;' }));
-    var head = el('div', { style: 'display:flex;align-items:center;gap:10px;margin-bottom:15px;' });
+    var head = el('div', { style: 'display:flex;align-items:center;gap:10px;margin-bottom:15px;flex:0 0 auto;' });
     head.appendChild(icon); head.appendChild(titleWrap); head.appendChild(open);
     card.appendChild(head);
 
-    var listWrap = el('div', { cls: 'hw-cols', style: 'gap:2px 22px;' }); // [반응형] 위젯이 넓으면 다열
+    var listWrap = el('div', { cls: 'hw-cols hw-body', style: 'gap:2px 22px;' }); // [반응형] 넓으면 다열, 낮으면 내부 스크롤
     if (items.length === 0) {
       listWrap.appendChild(el('div', { text: '모든 프로젝트가 깔끔합니다.', style: 'font-size:12.5px;color:#a8a29e;padding:8px 6px;' }));
     }
@@ -2993,7 +3017,7 @@ function initBrowser() {
   }
 
   function renderHomeProductivity() {
-    var card = el('div', { cls: 'hw-split', style: HOME_CARD + 'padding:21px 22px;display:flex;gap:26px;' }); // [반응형] 좁으면 세로 스택
+    var card = el('div', { cls: 'hw-split hw-cardscroll', style: HOME_CARD + 'padding:21px 22px;display:flex;gap:26px;min-height:0;' }); // [반응형] 좁으면 세로 스택, 낮으면 카드 내부 스크롤
     // 좌: 주간 생산성(최근 7일 커밋)
     var leftCol = el('div', { style: 'flex:1.2 1 0%;min-width:0;' });
     var ca = store.commitActivity || { days: [] };
@@ -3042,10 +3066,10 @@ function initBrowser() {
 
   function renderHomeActivity() {
     var events = homeRecentActivity(store.viewModels || [], 6);
-    var card = el('div', { style: HOME_CARD + 'padding:21px 22px;' });
-    card.appendChild(el('div', { text: '최근 활동 타임라인', style: 'font-size:15px;font-weight:600;margin-bottom:16px;' }));
+    var card = el('div', { cls: 'hw-card', style: HOME_CARD + 'padding:21px 22px;' });
+    card.appendChild(el('div', { text: '최근 활동 타임라인', style: 'font-size:15px;font-weight:600;margin-bottom:16px;flex:0 0 auto;' }));
     // [반응형] 위젯이 넓으면 다열 — 다열 시 세로 연결선(.hw-tl-rail)은 @container 로 숨김(다음 항목이 우측이라 무의미).
-    var list = el('div', { cls: 'hw-cols', style: 'column-gap:22px;' });
+    var list = el('div', { cls: 'hw-cols hw-body', style: 'column-gap:22px;' });
     if (events.length === 0) {
       list.appendChild(el('div', { text: '최근 수정 기록이 없습니다.', style: 'font-size:12.5px;color:#a8a29e;' }));
     }
@@ -3057,9 +3081,9 @@ function initBrowser() {
       if (i < events.length - 1) rail.appendChild(el('span', { cls: 'hw-tl-rail', style: 'width:1.5px;flex:1 1 0%;min-height:18px;background:#e7e5e4;margin-top:3px;' }));
       row.appendChild(rail);
       var body = el('div', { style: 'flex:1 1 0%;min-width:0;padding-bottom:15px;' });
-      var top = el('div', { style: 'display:flex;align-items:center;gap:9px;' });
-      top.appendChild(el('span', { text: ev.name, style: 'font-size:13px;font-weight:600;color:#1c1917;' }));
-      top.appendChild(el('span', { text: rel(ev.when), style: HOME_MONO + 'font-size:10.5px;color:#a8a29e;' }));
+      var top = el('div', { style: 'display:flex;align-items:center;gap:9px;min-width:0;' });
+      top.appendChild(el('span', { text: ev.name, style: 'flex:1 1 0%;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:600;color:#1c1917;' }));
+      top.appendChild(el('span', { text: rel(ev.when), style: HOME_MONO + 'font-size:10.5px;color:#a8a29e;flex:0 0 auto;' }));
       body.appendChild(top);
       var sub = (vm.gitStatus === 'dirty' && (vm.changes || 0) > 0) ? ('미커밋 변경 ' + vm.changes + '건')
         : ((vm.behind || 0) > 0 ? ('받을 커밋 ' + vm.behind + '개')
@@ -3095,8 +3119,8 @@ function initBrowser() {
   function renderHomeTodos() {
     var todos = Array.isArray(store.todos) ? store.todos : [];
     var open = todos.filter(function (t) { return !t.done; }).length;
-    var card = el('div', { style: HOME_CARD + 'padding:21px 20px;' });
-    var head = el('div', { style: 'display:flex;align-items:center;gap:10px;margin-bottom:15px;' });
+    var card = el('div', { cls: 'hw-card', style: HOME_CARD + 'padding:21px 20px;' });
+    var head = el('div', { style: 'display:flex;align-items:center;gap:10px;margin-bottom:15px;flex:0 0 auto;' });
     head.appendChild(el('div', { text: '할 일', style: 'font-size:15px;font-weight:600;flex:1 1 0%;' }));
     var cnt = el('span', { style: HOME_MONO + 'font-size:12px;font-weight:600;color:#1c1917;' });
     cnt.appendChild(el('span', { text: String(open) }));
@@ -3106,7 +3130,7 @@ function initBrowser() {
 
     // [백로그2-3] 행간 축소: 행 패딩·간격·줄높이 축소(8px/2px/1.4 → 5px/1px/1.3).
     // [반응형] 위젯이 넓으면 할 일 항목을 다열로(입력/편집기·푸터는 아래 별도 append 로 전체폭 유지).
-    var list = el('div', { cls: 'hw-cols', style: 'gap:1px 22px;' });
+    var list = el('div', { cls: 'hw-cols hw-body', style: 'gap:1px 22px;' });
     todos.forEach(function (t) {
       var due = t.done ? null : todoDueInfo(t.dueAt); // 완료 항목은 마감 강조 안 함
       var row = el('div', { cls: 'home-todo-row', style: 'display:flex;align-items:flex-start;gap:11px;padding:5px 4px;border-radius:8px;' });
@@ -3959,13 +3983,13 @@ function initBrowser() {
   }
 
   function renderHomeDisk(reclaim) {
-    var card = el('div', { style: HOME_CARD + 'padding:21px 20px;' });
-    var head = el('div', { style: 'display:flex;align-items:baseline;gap:9px;margin-bottom:3px;' });
+    var card = el('div', { cls: 'hw-card', style: HOME_CARD + 'padding:21px 20px;' });
+    var head = el('div', { style: 'display:flex;align-items:baseline;gap:9px;margin-bottom:3px;flex:0 0 auto;' });
     head.appendChild(el('div', { text: '디스크 회수', style: 'font-size:15px;font-weight:600;flex:1 1 0%;' }));
     head.appendChild(el('span', { text: reclaim.label, style: 'font-size:22px;font-weight:700;color:#15803d;font-variant-numeric:tabular-nums;letter-spacing:-0.02em;' }));
     card.appendChild(head);
-    card.appendChild(el('div', { text: '방치 프로젝트 node_modules 정리 시', style: 'font-size:11.5px;color:#a8a29e;margin-bottom:16px;' }));
-    var list = el('div', { cls: 'hw-cols', style: 'gap:12px 22px;' }); // [반응형] 위젯이 넓으면 다열
+    card.appendChild(el('div', { text: '방치 프로젝트 node_modules 정리 시', style: 'font-size:11.5px;color:#a8a29e;margin-bottom:16px;flex:0 0 auto;' }));
+    var list = el('div', { cls: 'hw-cols hw-body', style: 'gap:12px 22px;' }); // [반응형] 넓으면 다열, 낮으면 내부 스크롤
     if (reclaim.items.length === 0) {
       list.appendChild(el('div', { text: '설정 → 스캔 옵션에서 용량 수집을 켜면 표시됩니다.', style: 'font-size:11.5px;color:#a8a29e;line-height:1.6;' }));
     }
@@ -4069,7 +4093,9 @@ function initBrowser() {
 
   /** [항목2·3] 토큰 사용량 인사이트 섹션 — 상단: Claude Code(로컬 로그), 하단: 연결된 모델(브리핑). */
   function renderHomeAiUsage() {
-    var card = el('div', { style: HOME_CARD + 'padding:21px 22px;' });
+    // [6조합 반응형] 차트 툴팁이 미조절 상태에서 카드 밖으로 나갈 수 있어 상시 overflow:hidden(hw-card) 대신
+    //   높이 지정 시에만 카드 전체가 세로 스크롤하는 hw-cardscroll 사용(productivity 와 동일 전략).
+    var card = el('div', { cls: 'hw-cardscroll', style: HOME_CARD + 'padding:21px 22px;min-height:0;' });
 
     // 헤더 + Claude Code 수동 새로고침.
     var refresh = el('span', {
@@ -4081,8 +4107,9 @@ function initBrowser() {
       },
     });
     refresh.appendChild(el('span', { text: store.busyClaudeUsage ? '집계 중…' : '새로고침' }));
-    card.appendChild(homeCardHead(homeTitle('토큰 사용량'), refresh, 6));
-    card.appendChild(el('div', { text: 'Claude Code 로컬 로그와 연결된 AI 모델의 토큰 소비량입니다.', style: 'font-size:11.5px;color:#a8a29e;margin-bottom:16px;' }));
+    var aiHead = homeCardHead(homeTitle('토큰 사용량'), refresh, 6); aiHead.style.flex = '0 0 auto';
+    card.appendChild(aiHead);
+    card.appendChild(el('div', { text: 'Claude Code 로컬 로그와 연결된 AI 모델의 토큰 소비량입니다.', style: 'font-size:11.5px;color:#a8a29e;margin-bottom:16px;flex:0 0 auto;' }));
 
     // [홈 위젯 반응형] 두 섹션(Claude Code | 연결된 모델)을 hw-split 로 배치 — 위젯이 넓으면 2단(세로 구분선),
     //   좁으면 @container(max-width:480px)로 세로 스택(구분선 숨김). 스탯/차트는 각 단 폭에 맞춰 100% 확장.
@@ -4146,14 +4173,14 @@ function initBrowser() {
    *   L-1: 라벨·툴팁은 textContent/title(고정 팔레트·검증 날짜만). 색은 setAttribute 아닌 클래스(lvl-0..4). */
   var HEATMAP_WD = ['일', '월', '화', '수', '목', '금', '토'];
   function renderHomeCommitHeatmap() {
-    var card = el('div', { style: HOME_CARD + 'padding:18px 18px 14px;display:flex;flex-direction:column;min-height:0;' });
+    var card = el('div', { cls: 'hw-card', style: HOME_CARD + 'padding:18px 18px 14px;' });
     var loaded = store.commitHeatmapLoaded;
     var busy = store.busyCommitHeatmap;
     var data = store.commitHeatmap || { days: [], total: 0, repos: 0, scanned: 0 };
     var model = buildHeatmapModel(data.days);
 
     // 헤더 — 제목 + 요약 + 새로고침.
-    var head = el('div', { style: 'display:flex;align-items:center;gap:10px;margin-bottom:12px;' });
+    var head = el('div', { style: 'display:flex;align-items:center;gap:10px;margin-bottom:12px;flex:0 0 auto;' });
     head.appendChild(el('div', { text: '커밋 히트맵', style: 'font-size:15px;font-weight:600;flex:1 1 0%;' }));
     if (loaded && model.total > 0) {
       head.appendChild(el('span', { text: model.total + '커밋 · ' + model.activeDays + '일 활동', style: HOME_MONO + 'font-size:11px;color:#78716c;flex:0 0 auto;' }));
@@ -4273,9 +4300,9 @@ function initBrowser() {
     }
   }
   function renderHomeSystemStatus() {
-    var card = el('div', { style: HOME_CARD + 'padding:18px 18px 16px;display:flex;flex-direction:column;min-height:0;' });
+    var card = el('div', { cls: 'hw-card', style: HOME_CARD + 'padding:18px 18px 16px;' });
     var busy = store.busySystemStatus;
-    var head = el('div', { style: 'display:flex;align-items:center;gap:10px;margin-bottom:14px;' });
+    var head = el('div', { style: 'display:flex;align-items:center;gap:10px;margin-bottom:14px;flex:0 0 auto;' });
     head.appendChild(el('div', { text: '시스템 상태', style: 'font-size:15px;font-weight:600;flex:1 1 0%;' }));
     head.appendChild(el('button', {
       cls: 'home-mail-more', text: busy ? '갱신 중…' : '새로고침',
@@ -4284,7 +4311,7 @@ function initBrowser() {
       on: { click: function () { if (!busy) refreshSystemStatus(); } },
     }));
     card.appendChild(head);
-    var body = el('div', { cls: 'sysstat-body' });
+    var body = el('div', { cls: 'sysstat-body hw-body' });
     buildSystemStatusBody(body);
     card.appendChild(body);
     return card;
@@ -5163,7 +5190,7 @@ function initBrowser() {
     var vm = shelfComposerVM(store.shelf);
     var flags = shelfStateFlags(store.shelf.bookmarks, store.shelf.cState);
     var panels = shelfPanelsVM(store.shelf.bookmarks, store.shelf.active);
-    var card = el('div', { style: 'background:#fff;border:1px solid #e7e5e4;border-radius:18px;overflow:hidden;box-shadow:0 1px 2px rgba(28,25,23,.04);' });
+    var card = el('div', { style: 'background:#fff;border:1px solid #e7e5e4;border-radius:18px;overflow:hidden;box-shadow:0 1px 2px rgba(28,25,23,.04);display:flex;flex-direction:column;min-height:0;' });
     card.appendChild(shelfHeader(flags.count));
     card.appendChild(shelfComposer(vm));
     card.appendChild(shelfBody(panels, flags));
@@ -5171,7 +5198,7 @@ function initBrowser() {
     return card;
   }
   function shelfHeader(count) {
-    var head = el('div', { style: 'display:flex;align-items:center;gap:12px;padding:18px 20px 16px;border-bottom:1px solid #f2f1ef;' });
+    var head = el('div', { style: 'display:flex;align-items:center;gap:12px;padding:18px 20px 16px;border-bottom:1px solid #f2f1ef;flex:0 0 auto;' });
     var ico = el('div', { style: 'width:34px;height:34px;border-radius:10px;background:#eef2ff;display:flex;align-items:center;justify-content:center;flex:none;' });
     ico.appendChild(svg([{ t: 'path', d: 'M4 19.5V5a2 2 0 0 1 2-2h11a1 1 0 0 1 1 1v15' }, { t: 'path', d: 'M6 17h12' }, { t: 'path', d: 'M9 3v14' }], { size: 18, stroke: '#4f46e5', sw: 1.7 }));
     head.appendChild(ico);
@@ -5185,9 +5212,9 @@ function initBrowser() {
     return head;
   }
   function shelfComposer(vm) {
-    var wrap = el('div', { style: 'padding:16px 20px 4px;' });
-    var typeRow = el('div', { style: 'display:flex;align-items:center;gap:6px;margin-bottom:9px;' });
-    typeRow.appendChild(el('span', { text: '유형', style: 'font-size:9.5px;font-weight:600;letter-spacing:.04em;color:#c0bdb8;margin-right:2px;' }));
+    var wrap = el('div', { cls: 'shelf-composer', style: 'padding:16px 20px 4px;flex:0 0 auto;' });
+    var typeRow = el('div', { cls: 'shelf-ctype', style: 'display:flex;align-items:center;gap:6px;margin-bottom:9px;' });
+    typeRow.appendChild(el('span', { cls: 'shelf-ctype__lbl', text: '유형', style: 'font-size:9.5px;font-weight:600;letter-spacing:.04em;color:#c0bdb8;margin-right:2px;' }));
     vm.types.forEach(function (t) {
       typeRow.appendChild(el('button', {
         text: t.label,
@@ -5198,7 +5225,7 @@ function initBrowser() {
       }));
     });
     wrap.appendChild(typeRow);
-    var inputBox = el('div', { style: 'display:flex;align-items:center;gap:10px;background:#fafaf9;border:1.5px solid ' + vm.inputBorder + ';border-radius:12px;padding:0 12px 0 14px;height:46px;transition:border-color .15s;' });
+    var inputBox = el('div', { cls: 'shelf-cbox', style: 'display:flex;align-items:center;gap:10px;background:#fafaf9;border:1.5px solid ' + vm.inputBorder + ';border-radius:12px;padding:0 12px 0 14px;height:46px;transition:border-color .15s;' });
     inputBox.appendChild(svg([{ t: 'path', d: 'M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1' }, { t: 'path', d: 'M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1' }], { size: 17, stroke: '#a8a29e', sw: 2 }));
     var input = el('input', {
       cls: 'shelf-input',
@@ -5226,7 +5253,7 @@ function initBrowser() {
     return wrap;
   }
   function shelfBody(panels, flags) {
-    var wrap = el('div', { style: 'padding:14px 20px 8px;' });
+    var wrap = el('div', { cls: 'shelf-body', style: 'padding:14px 20px 8px;flex:1 1 auto;min-height:0;' });
     var loading = store.shelf.cState === 'loading';
     // 최초 list 적재 중(데이터 0) → 스켈레톤 스파인.
     if (!store.shelf.loaded && store.shelf.busy && store.shelf.bookmarks.length === 0) {
@@ -5265,10 +5292,18 @@ function initBrowser() {
         keydown: function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); shelfOpen(p.id); } },
       },
     });
-    row.appendChild(el('div', { text: p.mono, style: 'width:30px;height:30px;border-radius:8px;flex:none;display:flex;align-items:center;justify-content:center;background:' + p.color + ';color:#fff;' + HOME_MONO + 'font-size:14px;font-weight:600;' }));
+    // 썸네일 — 배너(og:image) 있으면 이미지, 없으면 색 배지(mono). 세로 여유 클 때(1:3·1:4) CSS 가 확대.
+    //   L-1: 배너는 data:image URI(main 검증) <img>, alt 는 빈 문자열. 색·mono 는 검증값/textContent.
+    var thumb = el('div', { cls: 'shelf-crow__thumb' + (p.bannerImage ? ' shelf-crow__thumb--img' : ''), style: p.bannerImage ? '' : ('background:' + p.color + ';color:#fff;' + HOME_MONO) });
+    if (p.bannerImage) thumb.appendChild(el('img', { cls: 'shelf-crow__img', attrs: { src: p.bannerImage, alt: '', loading: 'lazy' } }));
+    else thumb.appendChild(el('span', { text: p.mono }));
+    row.appendChild(thumb);
     var mid = el('div', { style: 'flex:1;min-width:0;' });
     mid.appendChild(el('div', { text: p.name, style: 'font-size:13px;font-weight:600;color:#1c1917;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;' }));
     mid.appendChild(el('div', { text: p.sub, style: HOME_MONO + 'font-size:10.5px;color:#a8a29e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px;' }));
+    // 설명·카테고리 메타 — 세로 여유 클 때(CSS: data-hrow 3·4)만 노출. 없으면 렌더 안 함.
+    var metaText = p.desc || p.cat || '';
+    if (metaText) mid.appendChild(el('div', { cls: 'shelf-crow__meta', text: metaText, style: 'font-size:10.5px;color:#a8a29e;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:3px;' }));
     row.appendChild(mid);
     var rm = el('button', {
       cls: 'shelf-rm', attrs: { type: 'button', title: '삭제', 'aria-label': p.name + ' 삭제' },
@@ -5411,7 +5446,7 @@ function initBrowser() {
   }
   function shelfFooter() {
     var av = shelfAutoRefreshView(store.shelf.autoRefresh);
-    var f = el('div', { style: 'display:flex;align-items:center;gap:10px;padding:12px 20px 14px;border-top:1px solid #f2f1ef;background:#fafaf9;' });
+    var f = el('div', { cls: 'shelf-foot', style: 'align-items:center;gap:10px;padding:12px 20px 14px;border-top:1px solid #f2f1ef;background:#fafaf9;flex:0 0 auto;' });
     // 좌: 자동 재크롤 안내(상태에 따라 문구 변경) — 시계 아이콘.
     var hint = el('div', { cls: 'shelf-foot-hint', style: 'flex:1;min-width:0;font-size:11px;color:#a8a29e;' });
     hint.appendChild(svg([{ t: 'circle', cx: '12', cy: '12', r: '9' }, { t: 'path', d: 'M12 8v4l3 2' }], { size: 13, stroke: 'currentColor', sw: 2 }));
@@ -8878,6 +8913,13 @@ function initBrowser() {
   }
 
   /** 홈 그리드 폭·높이 스팬 배치 — 반응형 열 수 + 위젯별 크기 반영. 메인 격자 + [Phase 5·M] 그룹 내부 격자. */
+  /* [6조합 반응형] 셀에 높이 행 단계([data-hrow]=1..4) 부여 — 지정 높이일 때만, 자동 높이면 제거.
+   *   위젯 CSS 가 이 훅으로 1행(최소 높이) 등에서 간략 UI 로 분기한다(폭 기반 [data-density]와 직교). */
+  function setHomeCellHRow(cell, id, h) {
+    var r = homeHRow(id, h);
+    if (r > 0) cell.dataset.hrow = String(r);
+    else if (cell.dataset) delete cell.dataset.hrow;
+  }
   function layoutHomeMasonry() {
     if (typeof document === 'undefined') return;
     var grid = document.querySelector('.home-masonry');
@@ -8930,6 +8972,7 @@ function initBrowser() {
         if (typeof sz.h === 'number' && sz.h > 0) { content.style.height = sz.h + 'px'; content.style.overflow = 'hidden'; content.classList.add('home-section__content--sized'); }
         else { content.style.height = ''; content.style.overflow = ''; content.classList.remove('home-section__content--sized'); }
       }
+      setHomeCellHRow(cell, id, sz.h);
       var hpx = content ? content.getBoundingClientRect().height : cell.getBoundingClientRect().height;
       var span = Math.max(1, Math.ceil((hpx + HOME_GAP) / (HOME_ROW_UNIT + HOME_GAP)));
       cell.style.gridRowEnd = 'span ' + span;
@@ -8978,6 +9021,7 @@ function initBrowser() {
         if (typeof sz.h === 'number' && sz.h > 0) { content.style.height = sz.h + 'px'; content.style.overflow = 'hidden'; content.classList.add('home-section__content--sized'); }
         else { content.style.height = ''; content.style.overflow = ''; content.classList.remove('home-section__content--sized'); }
       }
+      setHomeCellHRow(cell, id, sz.h);
       var hpx = cell.getBoundingClientRect().height;
       if (padT + px.top + hpx > maxBottom) maxBottom = padT + px.top + hpx;
     }
@@ -9108,10 +9152,12 @@ function initBrowser() {
     var dy = e.clientY - r.startY;
     var w = r.startW + Math.round(dx / (r.colW + HOME_GAP));  // 폭: 열 단위 스냅
     w = Math.max(1, Math.min(r.cols, w));
-    var h = Math.max(HOME_H_MIN, Math.min(HOME_H_MAX, r.startH + dy)); // 높이: px 유동
+    // [6조합 반응형] 높이 하한은 위젯별 최소(homeWidgetMinH) — 아래로 더 못 줄이게 막아 잘림 방지.
+    var h = Math.max(homeWidgetMinH(r.id), Math.min(HOME_H_MAX, r.startH + dy)); // 높이: px 유동
     r.w = w; r.h = h;
     r.cell.style.gridColumnEnd = 'span ' + w;
     if (r.content) { r.content.style.height = h + 'px'; r.content.style.overflow = 'hidden'; r.content.classList.add('home-section__content--sized'); } // 드래그 중에도 높이 채움 즉시 반영
+    setHomeCellHRow(r.cell, r.id, h); // [6조합 반응형] 드래그 중에도 행 단계 즉시 반영(1행 간략 UI 라이브 전환)
     var span = Math.max(1, Math.ceil((h + HOME_GAP) / (HOME_ROW_UNIT + HOME_GAP)));
     r.cell.style.gridRowEnd = 'span ' + span;
   }
@@ -10797,6 +10843,10 @@ if (typeof module !== 'undefined' && module.exports) {
     computeHomeCols,
     homeDefaultSpan,
     HOME_MAX_COLS,
+    // [6조합 반응형] 위젯별 최소 높이(리사이즈 하한) + 높이 행 단계 파생(헤드리스 테스트)
+    homeWidgetMinH,
+    HOME_WIDGET_MIN_H,
+    homeHRow,
     // [로드맵 Phase 3·C] 위젯 밀도 tier 파생(순수 — 실측 폭→S|M|L, 헤드리스 테스트)
     densityTier,
     DENSITY_M_MIN,

@@ -410,6 +410,16 @@ input, button, select { font-family: inherit; }
 /* [홈 위젯 반응형] 리스트형 위젯 본문 — auto-fit 로 위젯이 넓으면 여러 열, 좁으면 1열(위젯 크기에 자동 반응).
  *   display 는 클래스가 소유(인라인 미지정) — 넓힘/좁힘에 열 수가 매끄럽게 반응. gap 은 각 위젯 인라인 유지. */
 .hw-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); align-content: start; }
+/* [6조합 반응형 · 무잘림 계약] 카드형 위젯 공통 패턴 — 카드는 세로 flex 로 위젯 높이를 채우고,
+ *   본문(.hw-body)만 남는 높이를 차지한다. 사용자가 높이를 지정(.home-section__content--sized)해
+ *   콘텐츠보다 낮게 줄이면 본문이 내부 스크롤로 흡수 → 헤더/푸터는 고정, 어떤 높이에서도 잘리지 않는다.
+ *   미조절(자연 높이)일 땐 본문이 자라므로 기존 표시와 동일(스크롤 없음). overflow:hidden 은 잔여 넘침이
+ *   둥근 카드 밖으로 새는 것을 막는 백스톱. */
+.hw-card { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+.hw-body { min-height: 0; }
+.home-section__content--sized .hw-body { flex: 1 1 auto; overflow-y: auto; overflow-x: hidden; }
+/* 카드 전체가 스크롤 흡수하는 변형(2단 통계처럼 헤더/본문 분리가 어려운 위젯용). */
+.home-section__content--sized .hw-cardscroll { overflow-y: auto; overflow-x: hidden; }
 /* [홈 위젯 반응형] 생산성·토큰 2단(hw-split) — 위젯이 좁아지면 세로 스택 + 세로 구분선 숨김. */
 @container hw (max-width: 480px) {
   .hw-split { flex-direction: column; }
@@ -437,6 +447,10 @@ input, button, select { font-family: inherit; }
 .home-section[data-density="S"] .mail-summary { display: flex; }   /* 좁으면 숫자 요약만 */
 .home-section[data-density="S"] .mail-list { display: none; }
 .home-section[data-density="M"] .mail-time { display: none; }      /* 보통이면 목록(시간 숨겨 간결) */
+/* [6조합 반응형] 좁아도(S) 사용자가 높이를 늘리면(--sized, 예: (1,2)·(1,3)·(1,4)) 큰 숫자 요약 대신
+ *   스크롤 목록을 채워 세로 공간을 활용한다(잘림 없이 목록이 남는 높이를 스크롤). */
+.home-section[data-density="S"] .home-section__content--sized .mail-summary { display: none; }
+.home-section[data-density="S"] .home-section__content--sized .mail-list { display: grid; }
 /* L(넓음)은 기본값 — 목록 + 시간 모두 노출 */
 
 /* [로드맵 Phase 3·G] 스크래치패드 메모 위젯 — 카드가 위젯 높이를 채우고 textarea 가 남는 높이 차지(반응형 계약).
@@ -581,6 +595,10 @@ input, button, select { font-family: inherit; }
 /* 밀도 S(아주 좁음): 요일 라벨 접어 격자 폭 확보(격자는 어차피 가로 스크롤). */
 .home-section[data-density="S"] .heatmap-wdcol,
 .home-section[data-density="S"] .heatmap-wdspacer { display: none; }
+/* [6조합 반응형] 높이를 낮게 지정하면 격자 영역이 남는 높이를 차지하고 넘치면 세로 스크롤(가로 스크롤은 유지).
+ *   범례는 항상 하단 고정 → 높이가 작아도 격자·범례가 잘리지 않는다. */
+.home-section__content--sized .heatmap-scroll { flex: 1 1 auto; overflow-y: auto; }
+.heatmap-legend { flex: 0 0 auto; }
 
 /* [로드맵 Phase 3·G] 시스템 상태 위젯 — CPU/메모리/디스크 미터. 폭에 따라 라벨 생략(...)·막대 유동. */
 .sysstat-body { display: flex; flex-direction: column; gap: 13px; }
@@ -594,6 +612,10 @@ input, button, select { font-family: inherit; }
 .sysmeter__fill.sysmeter--mid { background: #d97706; }
 .sysmeter__fill.sysmeter--hi { background: #dc2626; }
 .sysmeter__detail { font-size: 10.5px; color: #a8a29e; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* [6조합 반응형] 위젯이 넓어지면(2·3열, 예: (2,1)·(3,1)) 미터를 다열로 흘려 가로 공간을 쓰고 세로 높이를 줄인다. */
+@container hw (min-width: 520px) {
+  .sysstat-body { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 13px 24px; align-content: start; }
+}
 
 /* [로드맵 Phase 4·D] 커맨드 팔레트(Cmd+K) */
 .palette-overlay { position: fixed; inset: 0; z-index: 60; background: rgba(28, 25, 23, .35); display: flex; align-items: flex-start; justify-content: center; padding-top: 12vh; }
@@ -803,16 +825,53 @@ body.home-resizing { cursor: nwse-resize; user-select: none; }
 /* [홈 위젯 반응형] 셸프 위젯 — 넓은 영역=책장(가로 셸프), 좁은 영역=경량 세로 리스트.
  *   display 를 클래스가 소유(렌더 인라인 미지정)해야 @container 로 뷰를 전환할 수 있다. */
 .shelf-view--full { display: flex; }
-.shelf-view--compact { display: none; flex-direction: column; gap: 6px; }
+/* [6조합 반응형] 간략 목록 — auto-fit 그리드로 위젯이 넓으면 다열(가로 공간 활용), 좁으면 1열.
+ *   display 는 아래 토글 규칙이 grid/none 로 소유(위젯 폭·행 단계에 따라 노출). */
+.shelf-view--compact { display: none; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 6px; align-content: start; }
 .shelf-foot-hint { display: flex; align-items: center; gap: 7px; }
 .shelf-crow { display: flex; align-items: center; gap: 11px; padding: 9px 10px; border: 1px solid #ececea; border-radius: 11px; background: #fff; cursor: pointer; transition: border-color .12s ease, background .12s ease, transform .12s ease; }
 .shelf-crow:hover { border-color: #d6d3d1; background: #fafaf9; transform: translateY(-1px); }
 .shelf-crow:focus-visible { outline: 2px solid var(--accent, var(--accent)); outline-offset: 2px; }
+/* [6조합 반응형] 간략 행 썸네일/메타 — 기본은 30px 배지(현행 유지). 세로 여유가 큰 1:3·1:4(data-hrow 3·4)에서
+ *   썸네일을 배너 비율로 확대하고 설명(desc/cat) 메타 줄을 노출해 넓은 세로 공간을 활용한다. */
+.shelf-crow__thumb { width: 30px; height: 30px; border-radius: 8px; flex: none; display: flex; align-items: center; justify-content: center; overflow: hidden; font-size: 14px; font-weight: 600; }
+.shelf-crow__thumb--img { background: #f0efed; }
+.shelf-crow__img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.shelf-crow__meta { display: none; }
+.home-section[data-hrow="3"] .shelf-crow__thumb,
+.home-section[data-hrow="4"] .shelf-crow__thumb { width: 52px; height: 40px; border-radius: 9px; }
+.home-section[data-hrow="3"] .shelf-crow__meta,
+.home-section[data-hrow="4"] .shelf-crow__meta { display: block; }
+.home-section[data-hrow="3"] .shelf-crow,
+.home-section[data-hrow="4"] .shelf-crow { padding: 11px 11px; }
 @container hw (max-width: 440px) {
   .shelf-view--full { display: none; }              /* 좁으면 책장 숨김 */
-  .shelf-view--compact { display: flex; }           /* 경량 세로 리스트로 교체 */
+  .shelf-view--compact { display: grid; }           /* 경량 목록(그리드)로 교체 */
   .shelf-sub, .shelf-foot-hint { display: none; }   /* 보조 문구 숨겨 세로 공간 절약 */
+  /* [6조합 반응형] 좁은 세로 목록(1:2·1:3·1:4)에서 표시되는 '추가 기능'은 간결하게 —
+   *   유형 라벨을 접고 입력창을 슬림하게 해 목록에 세로 공간을 더 준다(유형 버튼·자동감지는 유지). */
+  .shelf-composer { padding-top: 12px; }
+  .shelf-ctype { margin-bottom: 7px; }
+  .shelf-ctype__lbl { display: none; }
+  .shelf-cbox { height: 40px; }
 }
+/* [6조합 반응형] 헤더·입력·푸터는 고정, 본문(.shelf-body)만 남는 높이를 차지. 높이를 낮게 지정하면
+ *   본문이 세로 스크롤로 넘침을 흡수 → 어떤 높이에서도 책장/목록이 카드 밖으로 잘리지 않는다. */
+.shelf-foot { display: flex; }
+/* [6조합 반응형] 셸프는 content > .shelf-region > card 2단 래핑이라, content 의 flex 스트레치가 카드까지
+ *   전달되도록 region 도 세로 flex 패스스루로 만든다. (없으면 카드가 자연 높이가 돼 --sized 높이를 채우지
+ *   못하고, .shelf-body 의 flex:1/스크롤이 작동하지 않아 목록이 스크롤 없이 잘린다.) */
+.shelf-region { display: flex; flex-direction: column; min-height: 0; }
+.shelf-region > * { flex: 1 1 auto; min-height: 0; }
+.home-section__content--sized .shelf-body { overflow-y: auto; }
+/* [6조합 반응형] 셸프 1행(최소 높이 = (·,1) 조합) — 책장(가로 스파인)은 세로 공간이 부족하므로 접고
+ *   간략 세로 목록으로 바꾼다(폭과 무관, 높이 기준). 목록은 .shelf-body 내부 스크롤로 흡수 → 잘림 0.
+ *   [추가 기능은 항상 노출] 입력 컴포저·푸터는 높이로 숨기지 않는다 — 컴팩트 컴포저는 최소 높이에서도
+ *   스크롤 목록과 함께 잘림 없이 들어가므로, 어떤 크기(1행 포함)에서도 '추가'가 가능해야 한다.
+ *   부제(.shelf-sub)만 접어 세로 공간을 아낀다. (2행 이상 + 넓으면 책장 상세 UI로 복귀.) */
+.home-section[data-hrow="1"] .shelf-sub { display: none; }
+.home-section[data-hrow="1"] .shelf-view--full { display: none; }
+.home-section[data-hrow="1"] .shelf-view--compact { display: grid; }
 @media (prefers-reduced-motion: reduce) { .shelf-crow { transition: none; } }
 @keyframes shelfUnroll { from { clip-path: inset(0 68% 0 0); transform: translateX(-6px); } to { clip-path: inset(0 0 0 0); transform: none; } }
 @keyframes shelfGrowIn { from { transform: scaleY(.6); transform-origin: bottom; } to { transform: scaleY(1); } }

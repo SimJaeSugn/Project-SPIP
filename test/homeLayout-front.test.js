@@ -586,7 +586,8 @@ test('홈 위젯 반응형 — 컨테이너 컨텍스트 + 반응형 훅 클래�
   // 렌더가 훅 클래스를 부여
   assert.ok(/cls:\s*'hw-split'/.test(APP_SRC), '생산성 카드에 hw-split');
   assert.ok(/cls:\s*'hw-vrule'/.test(APP_SRC), '생산성 구분선에 hw-vrule');
-  assert.ok(/cls:\s*'hw-cols'/.test(APP_SRC), '리스트형 위젯에 hw-cols');
+  // [6조합 반응형] 리스트형 위젯은 폭 반응(hw-cols) + 높이 낮춤 시 내부 스크롤(hw-body)을 함께 갖는다.
+  assert.ok(/cls:\s*'hw-cols hw-body'/.test(APP_SRC), '리스트형 위젯에 hw-cols hw-body');
 });
 
 // ── [홈 위젯 반응형] 모든 콘텐츠 위젯이 자기 폭에 반응하는지 함수별 배선 검증(위배 0) ──
@@ -596,8 +597,8 @@ function fnBody(name, len) {
   return APP_SRC.slice(start, start + (len || 2000));
 }
 test('홈 위젯 반응형 — 목록형 위젯(활동·할 일)이 hw-cols 로 폭 반응(넓으면 다열)', () => {
-  assert.ok(/cls:\s*'hw-cols'/.test(fnBody('renderHomeActivity', 900)), '활동 타임라인 목록에 hw-cols');
-  assert.ok(/cls:\s*'hw-cols'/.test(fnBody('renderHomeTodos', 1500)), '할 일 목록에 hw-cols');
+  assert.ok(/cls:\s*'hw-cols hw-body'/.test(fnBody('renderHomeActivity', 900)), '활동 타임라인 목록에 hw-cols hw-body');
+  assert.ok(/cls:\s*'hw-cols hw-body'/.test(fnBody('renderHomeTodos', 1500)), '할 일 목록에 hw-cols hw-body');
 });
 test('홈 위젯 반응형 — 활동 다열 시 세로 연결선 숨김(hw-tl-rail 컨테이너 쿼리)', () => {
   const CSS = fs.readFileSync(path.join(__dirname, '..', 'public', 'styles.css'), 'utf8');
@@ -617,7 +618,7 @@ test('홈 위젯 반응형 — 셸프 위젯: 좁은 영역용 경량 리스트 
   assert.ok(/\.shelf-view--compact\s*\{[^}]*display:\s*none/.test(CSS), '경량 뷰 기본 숨김');
   assert.ok(/@container\s+hw\s*\(max-width:\s*440px\)/.test(CSS), '좁은 영역 컨테이너 쿼리(≤440px)');
   assert.ok(/\.shelf-view--full[^}]*display:\s*none/.test(CSS), '좁으면 책장 숨김');
-  assert.ok(/\.shelf-view--compact[^}]*display:\s*flex/.test(CSS), '좁으면 경량 리스트 표시');
+  assert.ok(/\.shelf-view--compact[^}]*display:\s*grid/.test(CSS), '좁으면 경량 리스트(그리드) 표시');
   // 렌더가 두 뷰 + 경량 행 함수 배선(둘 다 렌더 후 @container 로 택1)
   assert.ok(/cls:\s*'shelf-view shelf-view--full/.test(APP_SRC), 'shelfBody 가 풀 뷰 클래스 부여');
   assert.ok(/cls:\s*'shelf-view shelf-view--compact/.test(APP_SRC), 'shelfBody 가 경량 뷰 클래스 부여');
