@@ -736,13 +736,20 @@ const HOME_TEMPLATES = [
   { id: 'notes', name: '메모 & 할 일', desc: '스크래치패드·할 일·메일', visible: ['scratchpad', 'todos', 'mail'] },
   { id: 'allinone', name: '올인원', desc: '모든 위젯을 한눈에', visible: TOGGLEABLE_WIDGET_IDS.slice() },
 ];
-/** 템플릿 → 프리셋 구성 {layout,hidden,sizes,layoutMode,groups}. hidden=토글 위젯 중 visible 외. 순수. */
+/** 템플릿 → 프리셋 구성 {widgets,sizes,layoutMode,groups}. 순수.
+ *   [위젯 인스턴스] visible(타입 목록) → widgets(인스턴스 목록). 템플릿은 타입당 1개씩 배치하므로
+ *   iid = 타입 id 로 둔다(메인 정규화가 형식·중복을 다시 검증한다 — 렌더러 값은 편의일 뿐). */
 function buildTemplatePreset(tpl) {
-  const vis = new Set(Array.isArray(tpl && tpl.visible) ? tpl.visible : []);
-  const hidden = TOGGLEABLE_WIDGET_IDS.filter((id) => !vis.has(id));
+  const vis = Array.isArray(tpl && tpl.visible) ? tpl.visible : [];
+  const seen = new Set();
+  const widgets = [];
+  for (const type of vis) {
+    if (TOGGLEABLE_WIDGET_IDS.indexOf(type) < 0 || seen.has(type)) continue;
+    seen.add(type);
+    widgets.push({ iid: type, type, name: '' });
+  }
   return {
-    layout: HOME_SECTION_IDS.slice(),
-    hidden: hidden,
+    widgets,
     sizes: (tpl && tpl.sizes && typeof tpl.sizes === 'object') ? tpl.sizes : {},
     layoutMode: (tpl && tpl.layoutMode === 'freeform') ? 'freeform' : 'masonry',
     groups: (tpl && Array.isArray(tpl.groups)) ? tpl.groups : [],
@@ -751,8 +758,10 @@ function buildTemplatePreset(tpl) {
 
 /**
  * [R-32] 저장된 homeLayout → 렌더 순서로 정규화(순수). 메인 normalizeHomeLayout 과 동일 규칙:
- *   화이트리스트 외 제거·중복 제거·누락 섹션은 기본 순서로 끝에 보충 → 항상 7개 순열.
- *   메인이 단일 신뢰 경계지만, 렌더러도 동형 정규화로 부재/손상 응답에 graceful 대응.
+ *   화이트리스트 외 제거·중복 제거·누락 섹션은 기본 순서로 끝에 보충 → 항상 전체 순열.
+ *
+ * [위젯 인스턴스 v6] 배치의 진실은 이제 store.homeWidgets(인스턴스 목록)다. 이 함수는 **레거시 응답
+ *   (구버전 preload/저장본)에 대한 graceful 폴백 경로에서만** 쓰인다 — 새 배치 정규화는 applyHomeWidgets.
  */
 function applyHomeLayout(layout) {
   const out = [], seen = new Set();
@@ -764,8 +773,66 @@ function applyHomeLayout(layout) {
   return out;
 }
 
+/* ── [위젯 인스턴스 v6] 배치 = [{iid,type,name}] ─────────────────────────────────────────────
+ * 배열 순서 = 배치 순서. 목록에 없으면 미배치(옛 '숨김'). 같은 type 이 여러 번 올 수 있다(중복 배치).
+ * iid 는 sizes/positions/groups 의 키이자 DOM 의 data-home-section 값 — 그래서 인스턴스마다
+ * 크기·좌표·그룹·UI 상태가 독립한다. 메인 normalizeHomeWidgets 가 단일 신뢰 경계고, 여기 정규화는
+ * 부재/손상 응답에 대한 렌더러측 graceful 대응이다(보안 의존 금지).
+ */
+const IID_RE_FRONT = /^[a-z][a-zA-Z0-9]{0,31}$/;
+function isIid(id) { return typeof id === 'string' && IID_RE_FRONT.test(id) && !isGroupId(id); }
+
+/** getUiState.homeWidgets 방어 적재(순수) — 메인 normalizeHomeWidgets 동형. */
+function applyHomeWidgets(input) {
+  const out = [], seen = new Set();
+  if (!Array.isArray(input)) return out;
+  for (const w of input) {
+    if (!w || typeof w !== 'object') continue;
+    if (!isIid(w.iid) || seen.has(w.iid)) continue;
+    if (TOGGLEABLE_WIDGET_IDS.indexOf(w.type) < 0) continue;
+    seen.add(w.iid);
+    out.push({ iid: w.iid, type: w.type, name: (typeof w.name === 'string') ? w.name : '' });
+  }
+  return out;
+}
+
+/** [레거시 폴백] 구버전 응답(homeLayout+hiddenWidgets)만 있을 때 인스턴스 목록을 파생(순수). */
+function widgetsFromLegacy(homeLayout, hiddenWidgets) {
+  const hidden = new Set(Array.isArray(hiddenWidgets) ? hiddenWidgets : []);
+  return applyHomeLayout(homeLayout)
+    .filter((t) => t !== 'featureAdd' && !hidden.has(t))
+    .map((t) => ({ iid: t, type: t, name: '' }));
+}
+
+/** iid → 위젯 타입. 미배치 id(그룹 id·타입 id 그대로 넘어온 경우)는 그대로 돌려준다(폴백). */
+function widgetTypeOf(id) {
+  const list = (typeof store !== 'undefined' && store && Array.isArray(store.homeWidgets)) ? store.homeWidgets : [];
+  for (let i = 0; i < list.length; i++) if (list[i].iid === id) return list[i].type;
+  return id;
+}
+/** iid → 배치 인스턴스({iid,type,name}) 또는 null. */
+function widgetInstance(iid) {
+  const list = (typeof store !== 'undefined' && store && Array.isArray(store.homeWidgets)) ? store.homeWidgets : [];
+  for (let i = 0; i < list.length; i++) if (list[i].iid === iid) return list[i];
+  return null;
+}
+/** 표시명 — 사용자가 붙인 이름이 있으면 그것, 없으면 타입 기본명. */
+function widgetDisplayName(inst) {
+  if (!inst) return '';
+  if (inst.name) return inst.name;
+  const meta = WIDGET_META[inst.type];
+  return (meta && meta.name) ? meta.name : inst.type;
+}
+/** iid 로 표시명(그룹 id·미지 id 는 폴백). 렌더 함수들이 카드 제목에 쓴다. */
+function widgetTitleOf(id) {
+  const inst = widgetInstance(id);
+  if (inst) return widgetDisplayName(inst);
+  const meta = WIDGET_META[id];
+  return (meta && meta.name) ? meta.name : id;
+}
+
 /** [로드맵 Phase 2] getUiState.dashboard 방어 적재(렌더러) — 탭 표시에 필요한 {id,name,layoutMode}만.
- *   레이아웃 자체는 store.homeLayout 등 레거시 키가 권위(활성 프리셋과 동기). 손상/부재 시 단일 기본 프리셋. */
+ *   배치 자체는 store.homeWidgets(인스턴스 목록)가 권위(활성 프리셋과 동기). 손상/부재 시 단일 기본 프리셋. */
 function applyDashboard(d) {
   const fallback = { activePreset: 'default', presets: [{ id: 'default', name: '기본', layoutMode: 'masonry' }] };
   if (!d || typeof d !== 'object' || !Array.isArray(d.presets) || d.presets.length === 0) return fallback;
@@ -789,6 +856,17 @@ function applyScratchpad(s) {
   return { text, updatedAt };
 }
 
+/** [위젯 인스턴스] getUiState.scratchpads 방어 적재 — { iid: {text,updatedAt} }. 메인이 단일 신뢰 경계. */
+function applyScratchpads(input) {
+  const out = {};
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return out;
+  for (const iid of Object.keys(input)) {
+    if (!isIid(iid)) continue;
+    out[iid] = applyScratchpad(input[iid]);
+  }
+  return out;
+}
+
 /** [로드맵 Phase 5·B] 레이아웃 모드 방어 적재 — 'masonry'|'freeform'만, 그 외 masonry. */
 function applyLayoutMode(m) { return m === 'freeform' ? 'freeform' : 'masonry'; }
 /** [로드맵 Phase 5·B] 프리폼 좌표 방어 적재 — { id:{x,y} } 토글 위젯·유한 정수만(메인이 단일 신뢰 경계). */
@@ -796,7 +874,8 @@ function applyWidgetPositions(input) {
   const out = {};
   if (!input || typeof input !== 'object' || Array.isArray(input)) return out;
   for (const id of Object.keys(input)) {
-    if (HOME_SECTION_IDS.indexOf(id) < 0 && !isGroupId(id)) continue; // 홈 섹션(featureAdd) + 그룹 블록(프리폼)
+    // [위젯 인스턴스] iid(배치된 위젯) + 그룹 블록 + featureAdd(추가 카드도 프리폼에서 자유 배치).
+    if (id !== 'featureAdd' && !isIid(id) && !isGroupId(id)) continue;
     const v = input[id];
     if (!v || typeof v !== 'object') continue;
     const x = Number(v.x), y = Number(v.y);
@@ -806,7 +885,8 @@ function applyWidgetPositions(input) {
   return out;
 }
 
-/** [로드맵 Phase 5·M] 그룹 방어 적재 — [{id,name,collapsed,members[]}]. members 는 토글 위젯·그룹 간 유일(메인이 단일 신뢰 경계). */
+/** [로드맵 Phase 5·M] 그룹 방어 적재 — [{id,name,collapsed,members[]}].
+ *   [위젯 인스턴스] members 는 **iid** — 같은 타입 위젯 둘 중 하나만 그룹에 들어갈 수 있다. 그룹 간 유일(메인이 단일 신뢰 경계). */
 function applyGroups(input) {
   if (!Array.isArray(input)) return [];
   const out = [];
@@ -817,7 +897,7 @@ function applyGroups(input) {
     seen.add(g.id);
     const members = [];
     if (Array.isArray(g.members)) for (const m of g.members) {
-      if (TOGGLEABLE_WIDGET_IDS.indexOf(m) >= 0 && !claimed.has(m) && members.indexOf(m) < 0) { members.push(m); claimed.add(m); }
+      if (isIid(m) && !claimed.has(m) && members.indexOf(m) < 0) { members.push(m); claimed.add(m); }
     }
     var mode = (g.mode === 'stack') ? 'stack' : 'section';
     var active = Number(g.active);
@@ -835,12 +915,15 @@ const HOME_ROW_UNIT = 8;      // masonry 미세 행 단위(px) — 행 스팬 �
 const HOME_H_MIN = 120;       // 사용자 지정 높이 하한(px)
 const HOME_H_MAX = 1600;      // 상한(px)
 
-/** shelfWide 는 기본 전체폭, 커밋 히트맵·탐색기·그룹 블록은 기본 2열, 그 외는 기본 1열(사용자 미조절 시 기본 스팬). */
+/** shelfWide 는 기본 전체폭, 커밋 히트맵·탐색기·그룹 블록은 기본 2열, 그 외는 기본 1열(사용자 미조절 시 기본 스팬).
+ *   [위젯 인스턴스] 인자는 iid 다 — 기본 스팬은 **타입**의 성질이므로 iid → type 으로 해석해 판정한다.
+ *   (미배치 id 는 widgetTypeOf 가 그대로 돌려주므로 타입 id 를 직접 넘겨도 동작 — 그룹 id·테스트 호환.) */
 function homeDefaultSpan(id) {
-  if (id === 'shelfWide') return HOME_MAX_COLS;
-  if (id === 'commitHeatmap') return 2;
-  if (id === 'explorer') return 2; // [탐색기 위젯] 이름+크기+수정일 3열이 편하게 들어가는 기본 폭
-  if (id === 'mdedit') return 2;   // [MD 편집기] 편집+미리보기 2단이 펴지는 기본 폭
+  const t = widgetTypeOf(id);
+  if (t === 'shelfWide') return HOME_MAX_COLS;
+  if (t === 'commitHeatmap') return 2;
+  if (t === 'explorer') return 2; // [탐색기 위젯] 이름+크기+수정일 3열이 편하게 들어가는 기본 폭
+  if (t === 'mdedit') return 2;   // [MD 편집기] 편집+미리보기 2단이 펴지는 기본 폭
   if (isGroupId(id)) return 2; // [Phase 5·M] 프리폼 그룹 블록 기본 2열
   return 1;
 }
@@ -856,9 +939,10 @@ const HOME_WIDGET_MIN_H = {
   // [MD 편집기] 툴바 + 문서 바 + 에디터 최소 높이. 이보다 낮추면 편집 영역이 사라지므로 하한.
   mdedit: 240,
 };
-/** 위젯 id → 최소 높이(px). 위젯별 값이 전역 하한보다 크면 그 값을, 아니면 HOME_H_MIN. */
+/** 위젯 id → 최소 높이(px). 위젯별 값이 전역 하한보다 크면 그 값을, 아니면 HOME_H_MIN.
+ *   [위젯 인스턴스] 최소 높이는 **타입**의 성질 — iid 를 받으면 타입으로 해석해 조회한다. */
 function homeWidgetMinH(id) {
-  var m = HOME_WIDGET_MIN_H[id];
+  var m = HOME_WIDGET_MIN_H[widgetTypeOf(id)];
   return (typeof m === 'number' && m > HOME_H_MIN) ? m : HOME_H_MIN;
 }
 /* [6조합 반응형] 위젯의 지정 높이(px) → '최소 높이의 몇 배(행)'인지 파생(순수) — 1..4, 미지정(자동)이면 0.
@@ -987,9 +1071,12 @@ function buildHeatmapModel(days) {
 function applyHomeWidgetSizes(input) {
   const out = {};
   if (!input || typeof input !== 'object' || Array.isArray(input)) return out;
-  const allowed = new Set(TOGGLEABLE_WIDGET_IDS);
   for (const id of Object.keys(input)) {
-    if (!allowed.has(id) && !isGroupId(id)) continue; // [Phase 5·M] 그룹 블록 폭도 허용
+    // [위젯 인스턴스] 키는 iid(배치된 위젯) 또는 그룹 id — 타입 화이트리스트가 아니다.
+    //   그래야 같은 타입 위젯 두 개가 각자의 크기를 가진다. 형식 검증만 하고(메인이 단일 신뢰 경계 —
+    //   배치에서 사라진 iid 는 메인이 이미 정리해서 내려준다). featureAdd 는 리사이즈 대상이 아니다.
+    if (id === 'featureAdd') continue;
+    if (!isIid(id) && !isGroupId(id)) continue;
     const v = input[id];
     if (!v || typeof v !== 'object') continue;
     let w = Number(v.w);
@@ -1842,14 +1929,19 @@ function initBrowser() {
     mailUpdatedUnsubscribe: null, // 메일 갱신 push(spip.onMailUpdated) 구독 해제 함수
     mailRefreshTimer: null,       // 홈에서 메일 주기 갱신 타이머
     commitRefreshTimer: null,     // [R-31] 홈에서 커밋 차트 5분 주기 갱신 타이머(홈 이탈/비가시 시 정지)
-    homeLayout: HOME_SECTION_IDS.slice(), // [R-32] 홈 섹션 표시 순서(getUiState.homeLayout 적재, 기본=enum 순서)
-    homeWidgetSizes: {},                  // [홈 위젯 크기] { id:{w,h} } 위젯별 폭(열 스팬)·높이(px) — 미조절이면 항목 없음
+    // [위젯 인스턴스] 홈 배치 — [{iid,type,name}]. 배열 순서 = 배치 순서, 없으면 미배치.
+    //   같은 type 이 여러 번 올 수 있다(중복 배치). getUiState.homeWidgets 적재.
+    homeWidgets: [],
+    homeWidgetSizes: {},                  // [홈 위젯 크기] { iid:{w,h} } 인스턴스별 폭(열 스팬)·높이(px) — 미조절이면 항목 없음
     _homeResize: null,                    // 리사이즈 드래그 세션(진행 중 { id, cell, ... })
-    // [위젯 추가/제거] 숨긴(미적용) 위젯 id 배열(getUiState.hiddenWidgets 적재) + 위젯 갤러리 팝업 표시 플래그.
-    hiddenWidgets: [],
+    // [위젯 인스턴스] 인스턴스별 UI 상태 — { [iid]: {...} }. 같은 타입 위젯 둘이 서로 다른 문서/폴더를 열도록
+    //   '뷰 상태'를 iid 로 가른다. 공유 데이터(문서 목록·북마크·커밋 집계 등)는 전역 슬롯에 그대로 둔다.
+    wstate: {},
+    _renameWidgetId: null,        // 인라인 이름 변경 중인 iid(프리셋 rename 패턴 동형)
+    _renameWidgetVal: null,
     showWidgetGallery: false,
     showTemplateGallery: false,   // [로드맵 Phase 1·L] 레이아웃 템플릿 갤러리 모달
-    busyWidgets: false,           // setHiddenWidgets in-flight
+    busyWidgets: false,           // addWidget/removeWidget in-flight
     // [로드맵 Phase 1·K] 대시보드 내보내기/가져오기 모달 상태. mode='export'면 json에 직렬화 결과, 'import'면 입력값.
     dashIO: { open: false, mode: 'export', json: '', busy: false, error: '' },
     // [로드맵 Phase 4·D] 커맨드 팔레트(Cmd+K) 상태 — 열림·질의·선택 인덱스.
@@ -1865,56 +1957,33 @@ function initBrowser() {
     _groupRenameId: null,        // 인라인 이름변경 중인 그룹 id
     _groupRenameVal: null,
     _groupAddFor: null,          // 위젯 추가 피커가 열린 그룹 id
-    // [로드맵 Phase 3·G] 스크래치패드 메모(전역 콘텐츠) — getUiState.scratchpad 적재, 디바운스 저장.
-    scratchpad: { text: '', updatedAt: null },
-    _scratchSaveTimer: null,   // 입력 디바운스 타이머 핸들
-    _scratchSaved: null,       // 마지막 저장 시각(ms) — '저장됨' 표시용
+    // [로드맵 Phase 3·G] 스크래치패드 메모 — 이제 **인스턴스별** 텍스트다(getUiState.scratchpads 적재).
+    //   { [iid]: { text, updatedAt } }. 메모 위젯을 2개 놓으면 서로 다른 메모를 쓴다.
+    scratchpads: {},
     // [탐색기 위젯] 폴더 탐색기 — 데이터는 spip.explorer.* IPC. 경로는 전부 main이 게이트한 실경로다.
-    //   cwd/parent/entries 는 main list() 응답 그대로(렌더러가 경로를 조립하지 않는다 — 이탈 표면 0).
+    //   [위젯 인스턴스] 열람 루트(roots)는 앱 설정이라 전역 공유. 현재 위치·선택·메뉴는 인스턴스별(wstate).
     explorer: {
-      roots: [],        // 등록된 열람 루트(실경로)
-      cwd: null,        // 현재 디렉터리(실경로)
-      parent: null,     // 상위(실경로) 또는 null(루트)
-      entries: [],      // [{name,kind,size,mtime,hidden}]
-      truncated: false, // 항목 수 상한 절단 여부(조용한 절단 금지 — 배너 표시)
-      total: 0,
+      roots: [],        // 등록된 열람 루트(실경로) — 전역 공유(main config.explorerRoots)
       loaded: false,    // 최초 getRoots 완료
       loading: false,
-      code: null,       // 실패 코드(고정 토큰)
-      selected: null,   // 선택된 항목 이름(키보드/컨텍스트 메뉴 대상)
-      menu: null,       // 열린 항목 메뉴 { name, x, y }
+      code: null,       // 루트 조회 실패 코드(고정 토큰)
     },
     // [MD 편집기 위젯] 마크다운 편집기 — 데이터는 spip.md.* IPC. 문서 id·시각은 main 이 발급/스탬프한다.
-    //   본문(body)은 열린 문서 1건만 메모리에 둔다(목록 응답은 메타만 — 수 MB 회송 방지).
+    //   [위젯 인스턴스] 문서 '목록'은 하나의 라이브러리라 전역 공유. 어떤 문서를 열었는지·본문·뷰 모드는
+    //   인스턴스별(wstate) — 그래서 편집기 2개가 서로 다른 문서를 나란히 연다.
     mdedit: {
-      docs: [],          // 목록 메타 [{id,title,createdAt,updatedAt,size}] — 최근 수정순
-      activeId: null,    // 열린 문서 id
-      body: '',          // 열린 문서 본문(편집 중 원본)
-      view: 'split',     // 'edit' | 'preview' | 'split' — 좁은 폭에선 CSS 가 split 을 단일 뷰로 접는다
-      listOpen: false,   // 문서 목록 시트 열림(좁은 폭에서 목록을 오버레이로)
+      docs: [],          // 목록 메타 [{id,title,createdAt,updatedAt,size}] — 최근 수정순(전역 공유)
       loaded: false,     // 최초 list() 완료
       loading: false,
-      busy: false,       // create/import/export 등 in-flight
-      dirty: false,      // 미저장 변경 있음
-      code: null,        // 실패 코드(고정 토큰)
-      _saveTimer: null,  // 입력 디바운스 타이머
-      _savedAt: null,    // 마지막 저장 시각(ms) — '저장됨' 표시용
     },
     // [SH-2] 즐겨찾기 셸프 위젯 — 렌더러 상태. 데이터는 spip.shelf.list()로 적재, 변경 push(onChanged) 시 재조회.
+    //   [위젯 인스턴스] 북마크는 하나의 셸프라 전역 공유. 펼친 항목·컴포저 입력은 인스턴스별(wstate).
     shelf: {
-      bookmarks: [],              // ShelfBookmarkView[] (main 이 표시 메타 완비)
-      active: null,               // 펼친(활성) 항목 id
+      bookmarks: [],              // ShelfBookmarkView[] (main 이 표시 메타 완비) — 전역 공유
       loaded: false,              // list() 1회 적재 표식
       busy: false,                // list/add in-flight
-      cType: 'url',               // 컴포저 유형 토글(url|folder|file)
-      cUrl: '',                   // 컴포저 입력(컨트롤드)
-      cState: 'idle',             // 컴포저 상태(idle|loading|error)
-      cErr: null,                 // 마지막 add 에러 메시지(error 상태 표시용)
       autoRefresh: true,          // [SH-4] 자동 재크롤(6시간) 토글 — list 응답 autoRefresh 로 초기 적재(기본 ON)
       busyAuto: false,            // setSettings in-flight
-      _focusPending: false,       // 활성 변경 후 마운트 시 자동 스크롤 1회 트리거
-      editing: null,              // 인라인 책 제목 편집 중인 항목 id(없으면 null)
-      _editValue: null,           // 편집 입력값 버퍼(재렌더 보존)
       _addTimer: null,            // 디바운스 add 타이머
       _addSeq: 0,                 // add 경합 가드(취소분 무시)
       unsub: null,                // onChanged 구독 해제
@@ -1978,6 +2047,80 @@ function initBrowser() {
   //   preload 미배포 환경(웹/테스트·devops 미병합)에서도 brideMissing 으로 안전 폴백한다.
   //   (정합 테스트는 ipc('리터럴')만 대조하므로 신규 채널은 호출부가 직접 ipc(varMethod) 사용.)
   function bridgeHas(method) { return !!(spip && typeof spip[method] === 'function'); }
+
+  /* ---- [위젯 인스턴스] 인스턴스별 UI 상태 ------------------------------------------------
+   * 같은 타입 위젯을 여러 개 배치할 수 있으므로, "어떤 문서를 열었나 / 어떤 폴더를 보고 있나" 같은
+   * **뷰 상태**는 인스턴스(iid)마다 따로 가진다. 반면 "문서 목록·북마크·커밋 집계" 같은 **공유
+   * 데이터**는 전역 슬롯(store.mdedit.docs 등)에 그대로 둔다 — 같은 걸 두 번 불러올 이유가 없다.
+   */
+  function makeWState(type) {
+    if (type === 'mdedit') {
+      return {
+        activeId: null,   // 이 편집기가 연 문서 id
+        body: '',         // 편집 중 본문
+        view: 'split',    // 'edit' | 'preview' | 'split'
+        busy: false,      // create/import/export in-flight
+        dirty: false,     // 미저장 변경
+        code: null,       // 실패 코드(고정 토큰)
+        _saveTimer: null,
+        _savedAt: null,
+      };
+    }
+    if (type === 'explorer') {
+      return {
+        cwd: null,        // 이 탐색기가 보고 있는 디렉터리(실경로 — main 이 게이트한 값)
+        parent: null,
+        entries: [],
+        truncated: false,
+        total: 0,
+        loading: false,
+        code: null,
+        selected: null,
+        menu: null,
+      };
+    }
+    if (type === 'shelf' || type === 'shelfWide') {
+      return {
+        active: null,       // 펼친 항목 id
+        cType: 'url',       // 컴포저 유형(url|folder|file)
+        cUrl: '',
+        cState: 'idle',
+        cErr: null,
+        editing: null,      // 인라인 제목 편집 중인 항목 id
+        _editValue: null,
+        _focusPending: false,
+      };
+    }
+    if (type === 'scratchpad') {
+      return { _saveTimer: null, _savedAt: null };
+    }
+    return {};
+  }
+  /** iid → 인스턴스 UI 상태(없으면 타입에 맞춰 생성). */
+  function wstate(iid) {
+    if (!store.wstate[iid]) store.wstate[iid] = makeWState(widgetTypeOf(iid));
+    return store.wstate[iid];
+  }
+  /** 배치에서 사라진 인스턴스의 UI 상태를 정리(메모리 누수·유령 상태 방지). */
+  function pruneWState() {
+    var live = {};
+    (store.homeWidgets || []).forEach(function (w) { live[w.iid] = 1; });
+    Object.keys(store.wstate).forEach(function (iid) { if (!live[iid]) delete store.wstate[iid]; });
+  }
+  /** 배치된 인스턴스 중 해당 타입의 것들(지연 적재·패치 대상 순회에 쓴다). */
+  function widgetsOfType(type) {
+    return (store.homeWidgets || []).filter(function (w) { return w.type === type; });
+  }
+  /** 그 타입의 위젯이 하나라도 배치돼 있는가 — 지연 적재 게이트(숨김이면 IPC 0). */
+  function homeWidgetVisible(type) {
+    return widgetsOfType(type).length > 0;
+  }
+  /** 인스턴스 셀 내부의 노드를 찾는다(같은 타입 위젯이 여럿이라 document 전역 조회는 틀린다). */
+  function cellQuery(iid, selector) {
+    if (typeof document === 'undefined') return null;
+    var cell = document.querySelector('.home-section[data-home-section="' + iid + '"]');
+    return cell ? cell.querySelector(selector) : null;
+  }
 
   /* ---- DOM 빌더 헬퍼 (L-1: 텍스트는 항상 textContent) ---- */
   function el(tag, opts) {
@@ -2732,7 +2875,7 @@ function initBrowser() {
     //   이후 편집 컨트롤(설정·프리폼·스택)의 집. 재정렬/리사이즈 자체는 평소에도 가능(가산 레이어).
     var editing = !!store.editMode;
     // [로드맵 Phase 2] 대시보드(프리셋) 탭 — 모드별 배치 전환. 프리셋 1개 & 비편집이면 숨김(깔끔).
-    //   편집 모드에서 이름변경(인라인)·복제·삭제·추가 노출. 활성 프리셋은 store.homeLayout 등과 동기.
+    //   편집 모드에서 이름변경(인라인)·복제·삭제·추가 노출. 활성 프리셋은 store.homeWidgets 등과 동기.
     var dash = store.dashboard || { activePreset: 'default', presets: [{ id: 'default', name: '기본' }] };
     if (dash.presets.length > 1 || editing) {
       var presetBar = el('div', { cls: 'preset-tabs', style: 'display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:16px 30px 0;' });
@@ -2829,7 +2972,7 @@ function initBrowser() {
       guide.appendChild(el('span', { cls: 'home-edit-guide__ico', text: '✎', attrs: { 'aria-hidden': 'true' } }));
       var gt = freeform
         ? '자유 배치 모드 — 위젯·그룹을 드래그해 원하는 곳에 두고, 우하단 핸들로 크기를 조절하세요. ‘자동 정렬’로 격자로 돌아갑니다.'
-        : '위젯을 드래그해 순서 변경 · 우하단 핸들로 크기 조절 · × 로 삭제 · 위 버튼으로 위젯·그룹·스택 추가 · ‘자유 배치’로 좌표 배치.';
+        : '위젯을 드래그해 순서 변경 · 우하단 핸들로 크기 조절 · ✎ 로 이름 변경 · × 로 삭제 · 같은 위젯을 여러 개 추가할 수 있어요.';
       guide.appendChild(el('span', { cls: 'home-edit-guide__txt', text: gt }));
       // [편집 모드 안내] 위젯 갤러리 바로 열기(추가 트리거를 안내에서 접근).
       guide.appendChild(el('button', {
@@ -2843,19 +2986,17 @@ function initBrowser() {
       wrap.appendChild(guide);
     }
     var grid = el('div', { cls: 'home-masonry' + (editing ? ' home-masonry--editing' : '') + (freeform ? ' home-masonry--freeform' : ''), style: 'padding:20px 30px 36px;' });
-    var hidden = store.hiddenWidgets || [];
     // [로드맵 Phase 5·M/F] 그룹 — 소속 위젯은 메인 격자에서 빼고 그룹으로 렌더. 스택(mode=stack)은 셀(한 자리 겹침),
     //   섹션(mode=section)은 masonry=밴드/freeform=자유 셀.
     var groups = Array.isArray(store.groups) ? store.groups : [];
     var stackGroups = groups.filter(function (g) { return g.mode === 'stack'; });
     var sectionGroups = groups.filter(function (g) { return g.mode !== 'stack'; });
     var groupedOf = {};
-    groups.forEach(function (g) { (g.members || []).forEach(function (m) { groupedOf[m] = g.id; }); });
-    applyHomeLayout(store.homeLayout).forEach(function (id) {
-      if (id === 'featureAdd') return; // [Phase 5·M] '+ 위젯 추가' 카드는 항상 마지막(그룹 아래)에 별도 렌더
-      if (hidden.indexOf(id) >= 0) return; // 미적용(숨김) 위젯 건너뜀
-      if (groupedOf[id]) return; // 그룹 소속 위젯은 그룹/스택에서 렌더
-      var cell = buildHomeCell(id, reclaim, editing, freeform);
+    groups.forEach(function (g) { (g.members || []).forEach(function (m) { groupedOf[m] = g.id; }); }); // iid → 그룹 id
+    // [위젯 인스턴스] 배치된 인스턴스를 순서대로 — '숨김' 필터가 없다(목록에 없으면 애초에 미배치).
+    (store.homeWidgets || []).forEach(function (inst) {
+      if (groupedOf[inst.iid]) return; // 그룹 소속 인스턴스는 그룹/스택에서 렌더
+      var cell = buildHomeCell(inst, reclaim, editing, freeform);
       if (cell) grid.appendChild(cell);
     });
     // [로드맵 Phase 5·F] 스택은 위젯처럼 셀로 격자에 배치(masonry 흐름 / freeform 자유 배치 — renderStackCell 내부 처리).
@@ -2863,7 +3004,7 @@ function initBrowser() {
     // [로드맵 Phase 5·M] 프리폼: 섹션 그룹·featureAdd 도 자유 배치 셀로 격자에 추가(좌표·드래그 대상).
     if (freeform) {
       sectionGroups.forEach(function (g) {
-        var gcell = renderGroupFreeCell(g, hidden, reclaim, editing);
+        var gcell = renderGroupFreeCell(g, reclaim, editing);
         if (editing) { gcell.classList.add('home-section--free'); gcell.addEventListener('pointerdown', function (e) { onFreeformDragStart(e, g.id); }); }
         grid.appendChild(gcell);
       });
@@ -2873,8 +3014,8 @@ function initBrowser() {
     wrap.appendChild(grid);
     // [로드맵 Phase 5·M] masonry: 섹션 그룹(격자 아래 전체폭 접기 밴드) → 그 다음 '+ 위젯 추가' 카드(편집 모드에서만).
     if (!freeform) {
-      if (sectionGroups.length > 0) wrap.appendChild(renderHomeGroups(sectionGroups, hidden, reclaim, editing));
-      if (editing) { var faCard = renderHomeSection('featureAdd', reclaim); if (faCard) wrap.appendChild(el('div', { cls: 'home-featureadd', style: 'padding:0 30px 36px;', children: [faCard] })); }
+      if (sectionGroups.length > 0) wrap.appendChild(renderHomeGroups(sectionGroups, reclaim, editing));
+      if (editing) { var faCard = renderHomeFeatureAdd(); if (faCard) wrap.appendChild(el('div', { cls: 'home-featureadd', style: 'padding:0 30px 36px;', children: [faCard] })); }
     }
 
     main.appendChild(wrap);
@@ -2886,20 +3027,28 @@ function initBrowser() {
     return root;
   }
 
-  /** 홈 위젯 셀 빌더 — .home-section 래퍼 + 제거/포커스/리사이즈(featureAdd 제외) + 프리폼 드래그. null=미지/미표시. */
-  function buildHomeCell(id, reclaim, editing, freeform) {
-    var node = renderHomeSection(id, reclaim);
+  /** 홈 위젯 셀 빌더 — .home-section 래퍼 + 이름변경/제거/포커스/리사이즈 + 프리폼 드래그. null=미지.
+   *   [위젯 인스턴스] inst = {iid,type,name} 또는 'featureAdd'(추가 카드 — 인스턴스가 아닌 상시 트리거).
+   *   셀의 data-home-section 은 **iid** 다 — masonry·Sortable·프리폼·그룹이 전부 이 값을 배치 키로 읽는다. */
+  function buildHomeCell(inst, reclaim, editing, freeform) {
+    var isAdd = (inst === 'featureAdd');
+    var id = isAdd ? 'featureAdd' : inst.iid;
+    var node = isAdd ? renderHomeFeatureAdd() : renderHomeSection(inst.type, reclaim, inst);
     if (!node) return null;
     var cell = el('div', { cls: 'home-section', attrs: { 'data-home-section': id } });
-    // [편집 모드 전용] 삭제(×)·리사이즈는 편집 모드에서만 노출. 포커스(크게 보기)는 뷰 동작이라 항상.
-    if (id !== 'featureAdd') {
-      if (editing) cell.appendChild(widgetRemoveBtn(id));
-      cell.appendChild(widgetFocusBtn(id));
+    // [편집 모드 전용] 이름변경(✎)·삭제(×)·리사이즈는 편집 모드에서만. 포커스(크게 보기)는 뷰 동작이라 항상.
+    if (!isAdd) {
+      if (editing) {
+        cell.appendChild(widgetRenameBtn(inst));
+        cell.appendChild(widgetRemoveBtn(inst));
+        if (store._renameWidgetId === inst.iid) cell.appendChild(widgetRenameInput(inst));
+      }
+      cell.appendChild(widgetFocusBtn(inst));
     }
     var content = el('div', { cls: 'home-section__content' });
     content.appendChild(node);
     cell.appendChild(content);
-    if (id !== 'featureAdd' && editing) cell.appendChild(homeResizeHandle(id));
+    if (!isAdd && editing) cell.appendChild(homeResizeHandle(id));
     // [로드맵 Phase 5·B] 프리폼 + 편집: 셀 드래그 자유 이동(featureAdd 포함, 이동 임계값으로 클릭 유지).
     if (freeform && editing) {
       cell.classList.add('home-section--free');
@@ -2908,24 +3057,25 @@ function initBrowser() {
     return cell;
   }
 
-  /** [R-32] 홈 섹션 id(enum) → 섹션 DOM 빌더. 기존 render*Home* 함수를 그대로 호출(내용·동작 불변).
-   *   reclaim 은 디스크 섹션 입력(renderHome 에서 1회 계산해 전달). 미지 id 는 null(graceful). */
-  function renderHomeSection(id, reclaim) {
-    switch (id) {
-      case 'attention':    return renderHomeAttention();
-      case 'productivity': return renderHomeProductivity();
-      case 'activity':     return renderHomeActivity();
-      case 'todos':        return renderHomeTodos();
-      case 'mail':         return renderHomeMail();
-      case 'disk':         return renderHomeDisk(reclaim);
-      case 'aiusage':      return renderHomeAiUsage();
-      case 'shelf':        return renderHomeShelf();
-      case 'shelfWide':    return renderHomeShelf();
-      case 'scratchpad':   return renderHomeScratchpad();
-      case 'commitHeatmap': return renderHomeCommitHeatmap();
-      case 'systemStatus': return renderHomeSystemStatus();
-      case 'explorer':     return renderHomeExplorer();
-      case 'mdedit':       return renderHomeMdEdit();
+  /** [R-32] 위젯 **타입** → 섹션 DOM 빌더. 기존 render*Home* 함수를 호출한다.
+   *   [위젯 인스턴스] inst 를 함께 넘긴다 — 인스턴스별 상태(wstate)·표시명이 필요한 위젯이 쓴다.
+   *   reclaim 은 디스크 섹션 입력(renderHome 에서 1회 계산해 전달). 미지 타입은 null(graceful). */
+  function renderHomeSection(type, reclaim, inst) {
+    switch (type) {
+      case 'attention':    return renderHomeAttention(inst);
+      case 'productivity': return renderHomeProductivity(inst);
+      case 'activity':     return renderHomeActivity(inst);
+      case 'todos':        return renderHomeTodos(inst);
+      case 'mail':         return renderHomeMail(inst);
+      case 'disk':         return renderHomeDisk(reclaim, inst);
+      case 'aiusage':      return renderHomeAiUsage(inst);
+      case 'shelf':        return renderHomeShelf(inst);
+      case 'shelfWide':    return renderHomeShelf(inst);
+      case 'scratchpad':   return renderHomeScratchpad(inst);
+      case 'commitHeatmap': return renderHomeCommitHeatmap(inst);
+      case 'systemStatus': return renderHomeSystemStatus(inst);
+      case 'explorer':     return renderHomeExplorer(inst);
+      case 'mdedit':       return renderHomeMdEdit(inst);
       case 'featureAdd':   return renderHomeFeatureAdd();
       default:             return null;
     }
@@ -3877,11 +4027,8 @@ function initBrowser() {
   function maybeLoadCommitActivity() {
     if (bridgeHas('getCommitActivity') && !store.commitActivityLoaded && !store.busyCommitActivity) refreshCommitActivity();
   }
-  /** [로드맵 Phase 3·G] 커밋 히트맵 — 위젯이 실제 표시(레이아웃 내 & 미숨김)될 때만 1년치 로드(무거운 365일 git 회피). */
-  function homeWidgetVisible(id) {
-    var hidden = store.hiddenWidgets || [];
-    return applyHomeLayout(store.homeLayout).indexOf(id) >= 0 && hidden.indexOf(id) < 0;
-  }
+  /** [로드맵 Phase 3·G] 커밋 히트맵 — 위젯이 실제 배치돼 있을 때만 1년치 로드(무거운 365일 git 회피).
+   *   [위젯 인스턴스] 표시 판정은 homeWidgetVisible(type)(= 그 타입의 인스턴스가 1개 이상 배치) — 위쪽 정의. */
   function maybeLoadCommitHeatmap() {
     if (!bridgeHas('getCommitActivity') || store.commitHeatmapLoaded || store.busyCommitHeatmap) return;
     if (!homeWidgetVisible('commitHeatmap')) return; // opt-in·숨김이면 무거운 호출 회피
@@ -3942,13 +4089,21 @@ function initBrowser() {
     if (opts.silent) { if (!patchSystemStatus()) { /* 위젯 부재 — 무시 */ } }
     else render();
   }
-  /** 시스템 상태 위젯 본문(.sysstat-body)만 in-place 재구성 후 masonry 재측정. 위젯 부재 시 false. */
+  /** 시스템 상태 위젯 본문(.sysstat-body)만 in-place 재구성 후 masonry 재측정. 위젯 부재 시 false.
+   *   [위젯 인스턴스] 시스템 상태를 2개 배치할 수 있으므로 **배치된 인스턴스 전부** 갱신한다
+   *   (querySelector 로 첫 셀만 고치면 나머지가 멈춘 화면으로 남는다). */
   function patchSystemStatus() {
     if (typeof document === 'undefined') return false;
-    var body = document.querySelector('.home-section[data-home-section="systemStatus"] .sysstat-body');
-    if (!body) return false;
-    while (body.firstChild) body.removeChild(body.firstChild);
-    buildSystemStatusBody(body);
+    var insts = widgetsOfType('systemStatus');
+    var patched = 0;
+    insts.forEach(function (w) {
+      var body = cellQuery(w.iid, '.sysstat-body');
+      if (!body) return;
+      while (body.firstChild) body.removeChild(body.firstChild);
+      buildSystemStatusBody(body);
+      patched++;
+    });
+    if (!patched) return false;
     scheduleHomeMasonryLayout(); // 높이 변화(디스크 수 등) 반영
     return true;
   }
@@ -4347,25 +4502,28 @@ function initBrowser() {
     return card;
   }
 
-  /* [로드맵 Phase 3·G] 스크래치패드 메모 위젯 — 자유 로컬 메모(전역 콘텐츠). 자동 저장(디바운스+blur).
+  /* [로드맵 Phase 3·G / 위젯 인스턴스] 스크래치패드 메모 위젯 — 자유 로컬 메모. 자동 저장(디바운스+blur).
+   *   메모는 **인스턴스별**이다 — 메모 위젯을 2개 놓으면 서로 다른 메모를 쓴다(store.scratchpads[iid]).
    *   반응형 계약: 카드가 위젯 높이를 채우고 textarea 가 남는 높이를 차지(상단 정렬·내부 스크롤).
    *   §3 코너 규약: textarea 우하단 네이티브 리사이즈(resize:none)로 위젯 리사이즈 핸들과 충돌 회피.
-   *   L-1: 표시·저장 모두 textContent/value(마크업 해석 없음). 검증 단일 신뢰 경계는 메인 normalizeScratchpad. */
-  function renderHomeScratchpad() {
+   *   L-1: 표시·저장 모두 textContent/value(마크업 해석 없음). 검증 단일 신뢰 경계는 메인 normalizeScratchpads. */
+  function renderHomeScratchpad(inst) {
+    var iid = inst.iid;
+    var st = wstate(iid);
+    var memo = store.scratchpads[iid] || { text: '', updatedAt: null };
     var card = el('div', { style: HOME_CARD + 'padding:18px 18px 14px;display:flex;flex-direction:column;min-height:0;' });
     var head = el('div', { style: 'display:flex;align-items:center;gap:10px;margin-bottom:10px;' });
-    head.appendChild(el('div', { text: '메모', style: 'font-size:15px;font-weight:600;flex:1 1 0%;' }));
+    head.appendChild(el('div', { text: widgetDisplayName(inst) || '메모', style: 'font-size:15px;font-weight:600;flex:1 1 0%;' }));
     // 저장 상태 표시 — 디바운스 저장 완료 시 직접 DOM 갱신(재렌더 없이 포커스 보존).
-    head.appendChild(el('span', { cls: 'scratch-status', text: store._scratchSaved ? '저장됨' : '자동 저장', style: 'font-size:11px;color:#a8a29e;flex:0 0 auto;' }));
+    head.appendChild(el('span', { cls: 'scratch-status', text: st._savedAt ? '저장됨' : '자동 저장', style: 'font-size:11px;color:#a8a29e;flex:0 0 auto;' }));
 
     var ta = el('textarea', {
       cls: 'scratch-input spip-scroll',
       attrs: { 'aria-label': '스크래치패드 메모', placeholder: '자유롭게 적어두세요… (자동 저장)', spellcheck: 'false', autocomplete: 'off' },
     });
-    ta.value = (store.scratchpad && typeof store.scratchpad.text === 'string') ? store.scratchpad.text : '';
-    ta.addEventListener('input', function (e) { onScratchpadInput(e.target.value); });
-    ta.addEventListener('focus', function () { store._scratchEditing = true; });
-    ta.addEventListener('blur', function () { store._scratchEditing = false; flushScratchpad(); });
+    ta.value = (typeof memo.text === 'string') ? memo.text : '';
+    ta.addEventListener('input', function (e) { onScratchpadInput(iid, e.target.value); });
+    ta.addEventListener('blur', function () { flushScratchpad(iid); });
     // 편집 중 재정렬 드래그(SortableJS)와 분리 — 텍스트 선택/캐럿 이동이 드래그로 오인되지 않도록.
     ta.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
     card.appendChild(head);
@@ -4373,37 +4531,39 @@ function initBrowser() {
     return card;
   }
   /** 입력(디바운스) — 낙관적으로 store 갱신(재렌더 안 함: 포커스/캐럿 보존), 600ms 후 저장. */
-  function onScratchpadInput(text) {
-    if (!store.scratchpad) store.scratchpad = { text: '', updatedAt: null };
-    store.scratchpad.text = text;
-    setScratchStatus('편집 중…');
-    if (store._scratchSaveTimer) clearTimeout(store._scratchSaveTimer);
-    store._scratchSaveTimer = setTimeout(commitScratchpad, 600);
+  function onScratchpadInput(iid, text) {
+    var st = wstate(iid);
+    if (!store.scratchpads[iid]) store.scratchpads[iid] = { text: '', updatedAt: null };
+    store.scratchpads[iid].text = text;
+    setScratchStatus(iid, '편집 중…');
+    if (st._saveTimer) clearTimeout(st._saveTimer);
+    st._saveTimer = setTimeout(function () { commitScratchpad(iid); }, 600);
   }
   /** blur 시 즉시 저장(디바운스 대기 중이면 앞당김). */
-  function flushScratchpad() {
-    if (store._scratchSaveTimer) { clearTimeout(store._scratchSaveTimer); store._scratchSaveTimer = null; commitScratchpad(); }
+  function flushScratchpad(iid) {
+    var st = wstate(iid);
+    if (st._saveTimer) { clearTimeout(st._saveTimer); st._saveTimer = null; commitScratchpad(iid); }
   }
-  /** 실제 저장 — 메인 normalizeScratchpad 확정본으로 갱신. 재렌더 없이 상태 표시만 직접 DOM 갱신(포커스 보존). */
-  function commitScratchpad() {
-    store._scratchSaveTimer = null;
-    if (!bridgeHas('setScratchpad')) { setScratchStatus('자동 저장'); return; }
-    var text = (store.scratchpad && store.scratchpad.text) || '';
-    ipc('setScratchpad', text).then(function (res) {
-      if (res && res.ok && res.scratchpad && typeof res.scratchpad === 'object') {
-        // 메인이 길이 상한 등으로 자른 확정본을 보관. 단, 사용자가 계속 타이핑 중이면 value 덮어쓰기 금지(캐럿 보존).
-        store.scratchpad = applyScratchpad(res.scratchpad);
-        store._scratchSaved = Date.now();
-        setScratchStatus('저장됨');
+  /** 실제 저장 — 메인 확정본으로 갱신. 재렌더 없이 상태 표시만 직접 DOM 갱신(포커스 보존). */
+  function commitScratchpad(iid) {
+    var st = wstate(iid);
+    st._saveTimer = null;
+    if (!bridgeHas('setScratchpad')) { setScratchStatus(iid, '자동 저장'); return; }
+    var text = (store.scratchpads[iid] && store.scratchpads[iid].text) || '';
+    ipc('setScratchpad', iid, text).then(function (res) {
+      if (res && res.ok && res.scratchpads && typeof res.scratchpads === 'object') {
+        // 메인이 길이 상한 등으로 자른 확정본을 보관. 사용자가 계속 타이핑 중이면 value 덮어쓰기는 하지 않는다(캐럿 보존).
+        store.scratchpads = applyScratchpads(res.scratchpads);
+        st._savedAt = Date.now();
+        setScratchStatus(iid, '저장됨');
       } else {
-        setScratchStatus('저장 실패');
+        setScratchStatus(iid, '저장 실패');
       }
     });
   }
-  /** 저장 상태 라벨 직접 갱신(재렌더 없이) — 스크래치패드가 화면에 있을 때만. */
-  function setScratchStatus(text) {
-    if (typeof document === 'undefined') return;
-    var n = document.querySelector('.scratch-status');
+  /** 저장 상태 라벨 직접 갱신(재렌더 없이) — **그 인스턴스 셀 안의** 라벨만(메모가 여럿일 수 있다). */
+  function setScratchStatus(iid, text) {
+    var n = cellQuery(iid, '.scratch-status');
     if (n) n.textContent = text;
   }
 
@@ -4478,24 +4638,37 @@ function initBrowser() {
     }
   }
 
-  /** 루트 목록 최초 적재 → 첫 루트를 열어 준다. 홈 진입 시 1회. */
+  /* [위젯 인스턴스] 열람 루트(roots)는 앱 설정이라 전역 공유(store.explorer.roots)하고,
+   * '지금 어느 폴더를 보고 있나'(cwd/entries/selected/menu)는 인스턴스별(wstate)이다 —
+   * 그래서 탐색기 2개가 서로 다른 폴더를 나란히 연다. 액션 함수는 모두 iid 를 받는다. */
+
+  /** 루트 목록 최초 적재(전역) → 아직 아무 폴더도 안 연 탐색기 인스턴스에 첫 루트를 열어 준다. */
   async function loadExplorer() {
     var fx = store.explorer;
-    if (!explorerBridge() || fx.loaded || fx.loading) return;
-    fx.loading = true;
-    var res = await explorerIpc('getRoots');
-    fx.loading = false;
-    fx.loaded = true;
-    fx.roots = (res && res.ok && Array.isArray(res.roots)) ? res.roots : [];
-    if (fx.roots.length === 0) { fx.code = 'NO_ROOTS'; if (store.state.view === 'home') render(); return; }
-    await explorerNavigate(fx.roots[0], { silent: true });
+    if (!explorerBridge()) return;
+    if (!fx.loaded && !fx.loading) {
+      fx.loading = true;
+      var res = await explorerIpc('getRoots');
+      fx.loading = false;
+      fx.loaded = true;
+      fx.roots = (res && res.ok && Array.isArray(res.roots)) ? res.roots : [];
+    }
+    if (fx.roots.length === 0) {
+      widgetsOfType('explorer').forEach(function (w) { wstate(w.iid).code = 'NO_ROOTS'; });
+      if (store.state.view === 'home') render();
+      return;
+    }
+    var pending = widgetsOfType('explorer').filter(function (w) { return !wstate(w.iid).cwd; });
+    for (var i = 0; i < pending.length; i++) {
+      await explorerNavigate(pending[i].iid, fx.roots[0], { silent: true });
+    }
     if (store.state.view === 'home') render();
   }
 
   /** 디렉터리 이동 — main list()가 돌려준 실경로만 넘긴다(렌더러 경로 조립 금지). */
-  async function explorerNavigate(realPath, opts) {
+  async function explorerNavigate(iid, realPath, opts) {
     opts = opts || {};
-    var fx = store.explorer;
+    var fx = wstate(iid);
     fx.loading = true;
     fx.code = null;
     if (!opts.silent && store.state.view === 'home') render();
@@ -4520,14 +4693,15 @@ function initBrowser() {
   }
 
   /** 현재 디렉터리 새로고침(경로 유지). */
-  function explorerRefresh() {
-    var fx = store.explorer;
-    if (!fx.cwd) { fx.loaded = false; loadExplorer(); return; }
-    explorerNavigate(fx.cwd);
+  function explorerRefresh(iid) {
+    var fx = wstate(iid);
+    if (!fx.cwd) { store.explorer.loaded = false; loadExplorer(); return; }
+    explorerNavigate(iid, fx.cwd);
   }
 
-  /** 열람 루트 추가 — 네이티브 dialog(main 주도). 렌더러는 경로를 만들지 않는다. */
-  async function explorerPickRoot() {
+  /** 열람 루트 추가 — 네이티브 dialog(main 주도). 렌더러는 경로를 만들지 않는다.
+   *   루트는 전역이지만, 추가 직후 **그 탐색기 인스턴스**가 새 루트로 이동한다(다른 탐색기는 그대로). */
+  async function explorerPickRoot(iid) {
     var res = await explorerIpc('pickRoot');
     if (!res || !res.ok) {
       if (res && res.code === 'CANCELLED') return; // 사용자가 닫음 — 조용히
@@ -4535,13 +4709,13 @@ function initBrowser() {
       return;
     }
     store.explorer.roots = Array.isArray(res.roots) ? res.roots : store.explorer.roots;
-    store.explorer.code = null;
-    await explorerNavigate(res.added, { silent: true });
+    wstate(iid).code = null;
+    await explorerNavigate(iid, res.added, { silent: true });
     render();
   }
 
-  /** 열람 루트 등록 해제(확인 후). 현재 보고 있던 루트를 지우면 남은 첫 루트로 이동. */
-  function explorerRemoveRootConfirm(rootPath) {
+  /** 열람 루트 등록 해제(확인 후). 그 루트를 보고 있던 **모든** 탐색기를 남은 첫 루트로 옮긴다. */
+  function explorerRemoveRootConfirm(iid, rootPath) {
     askConfirm({
       title: '폴더 등록 해제',
       message: '이 폴더를 탐색기에서 제거할까요?\n디스크의 폴더는 그대로 남고, 탐색기 목록에서만 사라집니다.',
@@ -4549,10 +4723,16 @@ function initBrowser() {
       onConfirm: async function () {
         var res = await explorerIpc('removeRoot', rootPath);
         if (!res || !res.ok) { toast(fxMessage(res && res.code), true); return; }
-        var fx = store.explorer;
-        fx.roots = Array.isArray(res.roots) ? res.roots : [];
-        if (fx.roots.length === 0) { fx.cwd = null; fx.parent = null; fx.entries = []; fx.code = 'NO_ROOTS'; render(); return; }
-        await explorerNavigate(fx.roots[0], { silent: true });
+        store.explorer.roots = Array.isArray(res.roots) ? res.roots : [];
+        var roots = store.explorer.roots;
+        var insts = widgetsOfType('explorer');
+        for (var i = 0; i < insts.length; i++) {
+          var st = wstate(insts[i].iid);
+          // 해제된 루트 하위를 보고 있던 탐색기만 이동(다른 폴더를 보던 탐색기는 그대로).
+          if (st.cwd && st.cwd.indexOf(rootPath) !== 0) continue;
+          if (roots.length === 0) { st.cwd = null; st.parent = null; st.entries = []; st.code = 'NO_ROOTS'; continue; }
+          await explorerNavigate(insts[i].iid, roots[0], { silent: true });
+        }
         render();
       },
     });
@@ -4566,21 +4746,21 @@ function initBrowser() {
   }
 
   /** 항목 활성화 — 폴더는 진입, 그 외는 OS 기본 프로그램으로 열기. */
-  async function explorerActivate(entry) {
-    var fx = store.explorer;
+  async function explorerActivate(iid, entry) {
+    var fx = wstate(iid);
     var target = fxJoin(fx.cwd, entry.name);
-    if (entry.kind === 'dir') { explorerNavigate(target); return; }
+    if (entry.kind === 'dir') { explorerNavigate(iid, target); return; }
     var res = await explorerIpc('open', target);
     if (!res || !res.ok) toast(fxMessage(res && res.code), true);
   }
 
   /** 행 액션 — 열기/탐색기에서 보기/경로 복사/VS Code/이름 변경/휴지통. */
-  async function explorerAction(action, entry) {
-    var fx = store.explorer;
+  async function explorerAction(iid, action, entry) {
+    var fx = wstate(iid);
     var target = fxJoin(fx.cwd, entry.name);
     fx.menu = null;
 
-    if (action === 'open') { explorerActivate(entry); render(); return; }
+    if (action === 'open') { explorerActivate(iid, entry); render(); return; }
     if (action === 'reveal') {
       var r1 = await explorerIpc('reveal', target);
       if (!r1 || !r1.ok) toast(fxMessage(r1 && r1.code), true);
@@ -4605,7 +4785,7 @@ function initBrowser() {
           if (!name || name === entry.name) return;
           var r = await explorerIpc('rename', target, name);
           if (!r || !r.ok) { toast(fxMessage(r && r.code), true); return; }
-          explorerRefresh();
+          explorerRefreshAll(fx.cwd); // 같은 폴더를 보고 있는 다른 탐색기도 함께 갱신
         },
       });
       return;
@@ -4620,7 +4800,7 @@ function initBrowser() {
           var r = await explorerIpc('trash', target);
           if (!r || !r.ok) { toast(fxMessage(r && r.code), true); return; }
           toast('휴지통으로 보냈습니다.');
-          explorerRefresh();
+          explorerRefreshAll(fx.cwd);
         },
       });
       return;
@@ -4628,9 +4808,19 @@ function initBrowser() {
     render();
   }
 
+  /** [위젯 인스턴스] 디스크가 바뀌었으니 **그 폴더를 보고 있는 모든 탐색기**를 새로고침한다
+   *   (한쪽에서 파일을 지웠는데 다른 탐색기에 유령 항목이 남지 않게). */
+  function explorerRefreshAll(dirPath) {
+    widgetsOfType('explorer').forEach(function (w) {
+      var st = wstate(w.iid);
+      if (st.cwd === dirPath) explorerNavigate(w.iid, dirPath, { silent: true });
+    });
+    render();
+  }
+
   /** 새 폴더 — 현재 디렉터리 아래. 이름 검증 단일 신뢰 경계는 메인 sanitizeName. */
-  function explorerMkdir() {
-    var fx = store.explorer;
+  function explorerMkdir(iid) {
+    var fx = wstate(iid);
     if (!fx.cwd) return;
     askPrompt({
       title: '새 폴더', message: '현재 폴더 안에 만들 새 폴더 이름을 입력하세요.',
@@ -4639,7 +4829,7 @@ function initBrowser() {
         if (!name) return;
         var r = await explorerIpc('mkdir', fx.cwd, name);
         if (!r || !r.ok) { toast(fxMessage(r && r.code), true); return; }
-        explorerRefresh();
+        explorerRefreshAll(fx.cwd);
       },
     });
   }
@@ -4655,8 +4845,8 @@ function initBrowser() {
   }
 
   /** 현재 cwd 를 루트 기준 상대 조각으로 쪼갠 브레드크럼(각 조각 클릭 시 그 지점으로 이동). */
-  function fxBreadcrumb() {
-    var fx = store.explorer;
+  function fxBreadcrumb(iid) {
+    var fx = wstate(iid);
     var bar = el('div', { cls: 'fx-crumbs spip-scroll', attrs: { 'aria-label': '현재 경로' } });
     if (!fx.cwd) return bar;
 
@@ -4672,38 +4862,39 @@ function initBrowser() {
       bar.appendChild(el('button', {
         cls: 'fx-crumb' + (isLast ? ' fx-crumb--cur' : ''), text: p,
         attrs: { type: 'button', title: here },
-        on: { click: function () { if (!isLast) explorerNavigate(here); } },
+        on: { click: function () { if (!isLast) explorerNavigate(iid, here); } },
       }));
     });
     return bar;
   }
 
-  /** 루트 선택 — 등록 루트가 2개 이상일 때만 노출. 각 항목에 등록 해제(×). */
-  function fxRootBar() {
-    var fx = store.explorer;
-    if (!fx.roots || fx.roots.length === 0) return null;
+  /** 루트 선택 — 등록 루트는 전역(모든 탐색기 공유). 어느 루트가 '활성'인지는 인스턴스별 cwd 기준. */
+  function fxRootBar(iid) {
+    var fx = wstate(iid);
+    var roots = store.explorer.roots || [];
+    if (roots.length === 0) return null;
     var bar = el('div', { cls: 'fx-roots spip-scroll', attrs: { role: 'tablist', 'aria-label': '등록된 폴더' } });
-    fx.roots.forEach(function (r) {
+    roots.forEach(function (r) {
       var name = r.split(/[\\/]/).filter(Boolean).pop() || r;
       var active = !!(fx.cwd && (fx.cwd === r || fx.cwd.indexOf(r) === 0));
       var chip = el('div', { cls: 'fx-root' + (active ? ' fx-root--on' : '') });
       chip.appendChild(el('button', {
         cls: 'fx-root__name', text: name,
         attrs: { type: 'button', title: r, role: 'tab', 'aria-selected': active ? 'true' : 'false' },
-        on: { click: function () { explorerNavigate(r); } },
+        on: { click: function () { explorerNavigate(iid, r); } },
       }));
       chip.appendChild(el('button', {
         cls: 'fx-root__x', text: '×',
         attrs: { type: 'button', 'aria-label': name + ' 등록 해제', title: '등록 해제' },
-        on: { click: function (e) { e.stopPropagation(); explorerRemoveRootConfirm(r); } },
+        on: { click: function (e) { e.stopPropagation(); explorerRemoveRootConfirm(iid, r); } },
       }));
       bar.appendChild(chip);
     });
     return bar;
   }
 
-  /** 행 우측 '⋯' 메뉴(열림 상태는 store.explorer.menu). 우하단 코너를 점유하지 않는다(§3). */
-  function fxRowMenu(entry) {
+  /** 행 우측 '⋯' 메뉴(열림 상태는 인스턴스별 wstate.menu). 우하단 코너를 점유하지 않는다(§3). */
+  function fxRowMenu(iid, entry) {
     var items = [
       { id: 'open', label: entry.kind === 'dir' ? '폴더 열기' : '열기' },
       { id: 'reveal', label: '탐색기에서 보기' },
@@ -4717,15 +4908,15 @@ function initBrowser() {
       menu.appendChild(el('button', {
         cls: 'fx-menu__item' + (it.danger ? ' fx-menu__item--danger' : ''), text: it.label,
         attrs: { type: 'button', role: 'menuitem' },
-        on: { click: function (e) { e.stopPropagation(); explorerAction(it.id, entry); } },
+        on: { click: function (e) { e.stopPropagation(); explorerAction(iid, it.id, entry); } },
       }));
     });
     return menu;
   }
 
   /** 항목 행 — 아이콘 + 이름 + 크기 + 수정일 + ⋯. 더블클릭/Enter 로 활성화. */
-  function fxRow(entry) {
-    var fx = store.explorer;
+  function fxRow(iid, entry) {
+    var fx = wstate(iid);
     var selected = fx.selected === entry.name;
     var open = !!(fx.menu && fx.menu === entry.name);
     var row = el('div', {
@@ -4733,9 +4924,9 @@ function initBrowser() {
       attrs: { role: 'row', tabindex: '0', title: entry.name },
       on: {
         click: function () { fx.selected = entry.name; fx.menu = null; render(); },
-        dblclick: function () { explorerActivate(entry); },
+        dblclick: function () { explorerActivate(iid, entry); },
         keydown: function (e) {
-          if (e.key === 'Enter') { e.preventDefault(); explorerActivate(entry); }
+          if (e.key === 'Enter') { e.preventDefault(); explorerActivate(iid, entry); }
         },
         contextmenu: function (e) { e.preventDefault(); fx.selected = entry.name; fx.menu = open ? null : entry.name; render(); },
         // 편집 모드 재정렬 드래그(SortableJS)와 분리.
@@ -4752,47 +4943,49 @@ function initBrowser() {
       on: { click: function (e) { e.stopPropagation(); fx.selected = entry.name; fx.menu = open ? null : entry.name; render(); } },
     });
     row.appendChild(more);
-    if (open) row.appendChild(fxRowMenu(entry));
+    if (open) row.appendChild(fxRowMenu(iid, entry));
     return row;
   }
 
-  function renderHomeExplorer() {
-    var fx = store.explorer;
+  function renderHomeExplorer(inst) {
+    var iid = inst.iid;
+    var fx = wstate(iid);                 // 인스턴스별: 현재 폴더·항목·선택·메뉴
+    var roots = store.explorer.roots || []; // 전역 공유: 등록된 열람 루트
     var card = el('div', { cls: 'fx-card', style: HOME_CARD + 'padding:16px 16px 12px;display:flex;flex-direction:column;min-height:0;' });
 
-    // 헤더 — 제목 + 툴바(상위/새로고침/새 폴더/폴더 추가). 우하단 코너 미점유(§3 코너 규약).
+    // 헤더 — 표시명(사용자가 붙인 이름 우선) + 툴바. 우하단 코너 미점유(§3 코너 규약).
     var head = el('div', { cls: 'fx-head' });
-    head.appendChild(el('div', { cls: 'fx-title', text: '폴더 탐색기' }));
+    head.appendChild(el('div', { cls: 'fx-title', text: widgetDisplayName(inst) }));
     var tools = el('div', { cls: 'fx-tools' });
     tools.appendChild(fxToolBtn('상위 폴더', [{ t: 'path', d: 'M12 19V5' }, { t: 'path', d: 'M5 12l7-7 7 7' }],
-      function () { if (fx.parent) explorerNavigate(fx.parent); }, !fx.parent));
+      function () { if (fx.parent) explorerNavigate(iid, fx.parent); }, !fx.parent));
     tools.appendChild(fxToolBtn('새로고침', [{ t: 'path', d: 'M21 12a9 9 0 1 1-3-6.7' }, { t: 'path', d: 'M21 3v6h-6' }],
-      explorerRefresh, !fx.cwd || fx.loading));
+      function () { explorerRefresh(iid); }, !fx.cwd || fx.loading));
     tools.appendChild(fxToolBtn('새 폴더', [{ t: 'path', d: 'M3 7a2 2 0 0 1 2-2h3.6l2 2H19a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z' }, { t: 'path', d: 'M12 11v6M9 14h6' }],
-      explorerMkdir, !fx.cwd));
-    tools.appendChild(fxToolBtn('폴더 추가', [{ t: 'path', d: 'M12 5v14M5 12h14' }], explorerPickRoot, false));
+      function () { explorerMkdir(iid); }, !fx.cwd));
+    tools.appendChild(fxToolBtn('폴더 추가', [{ t: 'path', d: 'M12 5v14M5 12h14' }], function () { explorerPickRoot(iid); }, false));
     head.appendChild(tools);
     card.appendChild(head);
 
-    if (fx.roots && fx.roots.length > 0) {
-      var rb = fxRootBar();
+    if (roots.length > 0) {
+      var rb = fxRootBar(iid);
       if (rb) card.appendChild(rb);
-      card.appendChild(fxBreadcrumb());
+      card.appendChild(fxBreadcrumb(iid));
     }
 
     var list = el('div', { cls: 'fx-list spip-scroll', attrs: { role: 'table', 'aria-label': '파일 목록' } });
 
     if (!explorerBridge()) {
       list.appendChild(el('div', { cls: 'fx-empty', text: 'Electron 앱에서만 사용할 수 있습니다.' }));
-    } else if (!fx.loaded && fx.loading) {
+    } else if (!store.explorer.loaded && store.explorer.loading) {
       list.appendChild(el('div', { cls: 'fx-empty', text: '불러오는 중…' }));
-    } else if (!fx.roots || fx.roots.length === 0) {
+    } else if (roots.length === 0) {
       var empty = el('div', { cls: 'fx-empty' });
       empty.appendChild(el('div', { text: '열람할 폴더가 아직 없습니다.' }));
       empty.appendChild(el('button', {
         cls: 'fx-empty__cta', text: '폴더 추가',
         attrs: { type: 'button' },
-        on: { click: explorerPickRoot },
+        on: { click: function () { explorerPickRoot(iid); } },
       }));
       empty.appendChild(el('div', { cls: 'fx-empty__hint', text: '선택한 폴더와 그 하위만 열람합니다. 시스템·자격 폴더는 열 수 없습니다.' }));
       list.appendChild(empty);
@@ -4801,7 +4994,7 @@ function initBrowser() {
     } else if (fx.entries.length === 0) {
       list.appendChild(el('div', { cls: 'fx-empty', text: fx.loading ? '불러오는 중…' : '빈 폴더입니다.' }));
     } else {
-      fx.entries.forEach(function (e) { list.appendChild(fxRow(e)); });
+      fx.entries.forEach(function (e) { list.appendChild(fxRow(iid, e)); });
     }
     card.appendChild(list);
 
@@ -4813,8 +5006,9 @@ function initBrowser() {
   }
 
   function renderHomeFeatureAdd() {
-    // [위젯 추가/제거] 클릭 시 위젯 갤러리 팝업을 연다(기존 설정 열기 → 위젯 추가로 변경).
-    var avail = (store.hiddenWidgets || []).length; // 추가 가능(미적용) 위젯 수
+    // [위젯 인스턴스] 클릭 시 위젯 갤러리 팝업. 갤러리는 누를 때마다 새 인스턴스를 하나씩 추가한다
+    //   ('미적용 위젯 수'라는 개념이 사라졌다 — 같은 위젯을 몇 개든 놓을 수 있다).
+    var placed = (store.homeWidgets || []).length;
     var openGallery = function () { store.showWidgetGallery = true; render(); };
     var card = el('div', {
       style: 'background:#fafafa;border:1.5px dashed #d6d3d1;border-radius:16px;padding:20px;display:flex;align-items:center;gap:13px;cursor:pointer;',
@@ -4824,7 +5018,7 @@ function initBrowser() {
     card.appendChild(el('div', { text: '+', style: 'width:34px;height:34px;border-radius:9px;background:#fff;border:1px solid #e7e5e4;display:flex;align-items:center;justify-content:center;color:#a8a29e;font-size:22px;line-height:1;flex:0 0 auto;' }));
     var t = el('div');
     t.appendChild(el('div', { text: '위젯 추가', style: 'font-size:13px;font-weight:600;color:#57534e;' }));
-    t.appendChild(el('div', { text: avail > 0 ? ('추가 가능한 위젯 ' + avail + '개 · 클릭해 선택') : '모든 위젯이 적용됨 · 클릭해 둘러보기', style: 'font-size:11px;color:#a8a29e;margin-top:2px;' }));
+    t.appendChild(el('div', { text: '현재 ' + placed + '개 배치됨 · 같은 위젯도 여러 개 추가할 수 있어요', style: 'font-size:11px;color:#a8a29e;margin-top:2px;' }));
     card.appendChild(t);
     return card;
   }
@@ -4879,45 +5073,61 @@ function initBrowser() {
   /** 파서(markdown.js 전역). 미로드(테스트/웹) 환경에서도 app.js 가 죽지 않게 지연 참조한다. */
   function mdParser() { return (typeof SpipMarkdown !== 'undefined') ? SpipMarkdown : null; }
 
-  /* ───── 적재·저장 ───── */
+  /* ───── 적재·저장 ─────
+   * [위젯 인스턴스] 문서 '목록'(store.mdedit.docs)은 하나의 라이브러리라 전역 공유하고,
+   * '어떤 문서를 열었나'(activeId/body/view/dirty)는 인스턴스별(wstate)이다 —
+   * 그래서 편집기 2개가 서로 다른 문서를 나란히 연다. 모든 액션 함수는 iid 를 받는다.
+   */
 
-  /** 문서 목록 1회 적재 + 가장 최근 문서 열기. */
+  /** 문서 목록 1회 적재(전역) + 배치된 각 편집기가 아직 문서를 안 열었으면 최근 문서를 하나 연다. */
   async function loadMdEdit() {
     var md = store.mdedit;
-    if (!mdBridge() || md.loaded || md.loading) return;
-    md.loading = true;
-    var res = await mdIpc('list');
-    md.loading = false;
-    md.loaded = true;
-    if (!res || !res.ok) { md.code = (res && res.code) || 'INTERNAL'; render(); return; }
-    md.code = null;
-    md.docs = Array.isArray(res.docs) ? res.docs : [];
-    if (md.docs.length > 0) { await mdOpenDoc(md.docs[0].id, { silent: true }); }
+    if (!mdBridge()) return;
+    if (!md.loaded && !md.loading) {
+      md.loading = true;
+      var res = await mdIpc('list');
+      md.loading = false;
+      md.loaded = true;
+      if (!res || !res.ok) {
+        widgetsOfType('mdedit').forEach(function (w) { wstate(w.iid).code = (res && res.code) || 'INTERNAL'; });
+        render();
+        return;
+      }
+      md.docs = Array.isArray(res.docs) ? res.docs : [];
+    }
+    // 아직 문서를 안 연 편집기 인스턴스에 기본 문서를 열어준다(각자 독립).
+    var pending = widgetsOfType('mdedit').filter(function (w) {
+      var st = wstate(w.iid);
+      return !st.activeId && !st.code;
+    });
+    if (pending.length === 0 || md.docs.length === 0) { render(); return; }
+    for (var i = 0; i < pending.length; i++) {
+      await mdOpenDoc(pending[i].iid, md.docs[0].id, { silent: true });
+    }
     render();
   }
 
   /** 문서 열기 — 본문은 이때만 받아온다(목록 응답엔 본문이 없다). */
-  async function mdOpenDoc(id, opts) {
-    var md = store.mdedit;
-    if (md.activeId === id && !(opts && opts.force)) { md.listOpen = false; if (!(opts && opts.silent)) render(); return; }
-    await mdFlushSave(); // 열기 전에 편집 중이던 문서를 확정 저장(변경 유실 방지)
+  async function mdOpenDoc(iid, id, opts) {
+    var st = wstate(iid);
+    if (st.activeId === id && !(opts && opts.force)) { if (!(opts && opts.silent)) render(); return; }
+    await mdFlushSave(iid); // 열기 전에 이 편집기가 편집 중이던 문서를 확정 저장(변경 유실 방지)
     var res = await mdIpc('get', id);
     if (!res || !res.ok) {
-      md.code = (res && res.code) || 'INTERNAL';
+      st.code = (res && res.code) || 'INTERNAL';
       if (!(opts && opts.silent)) render();
       return;
     }
-    md.code = null;
-    md.activeId = res.doc.id;
-    md.body = res.doc.body;
-    md.dirty = false;
-    md.listOpen = false;
-    md._savedAt = null;
+    st.code = null;
+    st.activeId = res.doc.id;
+    st.body = res.doc.body;
+    st.dirty = false;
+    st._savedAt = null;
     if (!(opts && opts.silent)) render();
   }
 
-  /** 새 문서 — 제목만 물어보고 본문은 제목 h1 로 시작한다(빈 화면 대신 시작점 제공). */
-  function mdNewDoc() {
+  /** 새 문서 — 제목만 물어보고 본문은 제목 h1 로 시작한다(빈 화면 대신 시작점 제공). 만든 문서는 이 편집기가 연다. */
+  function mdNewDoc(iid) {
     askPrompt({
       title: '새 문서',
       message: '문서 제목을 입력하세요.',
@@ -4926,26 +5136,26 @@ function initBrowser() {
       onConfirm: async function (name) {
         var title = String(name == null ? '' : name).trim();
         if (!title) return;
-        var md = store.mdedit;
-        md.busy = true; render();
+        var st = wstate(iid);
+        st.busy = true; render();
         var res = await mdIpc('create', title, '# ' + title + '\n\n');
-        md.busy = false;
-        if (!res || !res.ok) { md.code = (res && res.code) || 'INTERNAL'; toast(mdMessage(md.code), true); render(); return; }
-        md.code = null;
-        md.docs = Array.isArray(res.docs) ? res.docs : md.docs;
-        md.activeId = res.doc.id;
-        md.body = res.doc.body;
-        md.dirty = false;
-        md._savedAt = null;
+        st.busy = false;
+        if (!res || !res.ok) { st.code = (res && res.code) || 'INTERNAL'; toast(mdMessage(st.code), true); render(); return; }
+        st.code = null;
+        store.mdedit.docs = Array.isArray(res.docs) ? res.docs : store.mdedit.docs; // 목록은 전역 공유
+        st.activeId = res.doc.id;
+        st.body = res.doc.body;
+        st.dirty = false;
+        st._savedAt = null;
         render();
       },
     });
   }
 
   /** 문서 이름 변경 — 제목만 갱신(본문 불변). */
-  function mdRenameDoc() {
-    var md = store.mdedit;
-    var cur = mdActiveMeta();
+  function mdRenameDoc(iid) {
+    var st = wstate(iid);
+    var cur = mdActiveMeta(iid);
     if (!cur) return;
     askPrompt({
       title: '이름 변경',
@@ -4955,34 +5165,40 @@ function initBrowser() {
       onConfirm: async function (name) {
         var title = String(name == null ? '' : name).trim();
         if (!title) return;
-        var res = await mdIpc('update', md.activeId, title, null);
+        var res = await mdIpc('update', st.activeId, title, null);
         if (!res || !res.ok) { toast(mdMessage((res && res.code) || 'INTERNAL'), true); return; }
-        md.docs = Array.isArray(res.docs) ? res.docs : md.docs;
+        store.mdedit.docs = Array.isArray(res.docs) ? res.docs : store.mdedit.docs;
         render();
       },
     });
   }
 
-  /** 삭제 — 되돌릴 수 없으므로 확인 모달을 거친다. */
-  function mdRemoveDoc() {
-    var md = store.mdedit;
-    var cur = mdActiveMeta();
+  /** 삭제 — 되돌릴 수 없으므로 확인 모달을 거친다. 문서는 라이브러리 공유라 **다른 편집기에서도 사라진다**. */
+  function mdRemoveDoc(iid) {
+    var st = wstate(iid);
+    var cur = mdActiveMeta(iid);
     if (!cur) return;
+    var docId = st.activeId;
     askConfirm({
       title: '문서 삭제',
       message: '‘' + cur.title + '’ 문서를 삭제할까요?\n되돌릴 수 없습니다. 보관하려면 먼저 파일로 내보내세요.',
       confirmText: '삭제',
       danger: true,
       onConfirm: async function () {
-        if (md._saveTimer) { clearTimeout(md._saveTimer); md._saveTimer = null; } // 삭제 대상 자동저장 취소
-        md.dirty = false;
-        var res = await mdIpc('remove', md.activeId);
+        if (st._saveTimer) { clearTimeout(st._saveTimer); st._saveTimer = null; } // 삭제 대상 자동저장 취소
+        st.dirty = false;
+        var res = await mdIpc('remove', docId);
         if (!res || !res.ok) { toast(mdMessage((res && res.code) || 'INTERNAL'), true); return; }
-        md.docs = Array.isArray(res.docs) ? res.docs : [];
-        md.activeId = md.docs.length > 0 ? md.docs[0].id : null;
-        md.body = '';
-        md._savedAt = null;
-        if (md.activeId) await mdOpenDoc(md.activeId, { silent: true, force: true });
+        store.mdedit.docs = Array.isArray(res.docs) ? res.docs : [];
+        // 이 문서를 열고 있던 **모든** 편집기 인스턴스를 다른 문서로 옮긴다(유령 본문 방지).
+        var fallback = store.mdedit.docs.length > 0 ? store.mdedit.docs[0].id : null;
+        var affected = widgetsOfType('mdedit').filter(function (w) { return wstate(w.iid).activeId === docId; });
+        for (var i = 0; i < affected.length; i++) {
+          var s2 = wstate(affected[i].iid);
+          if (s2._saveTimer) { clearTimeout(s2._saveTimer); s2._saveTimer = null; }
+          s2.activeId = null; s2.body = ''; s2.dirty = false; s2._savedAt = null;
+          if (fallback) await mdOpenDoc(affected[i].iid, fallback, { silent: true, force: true });
+        }
         toast('문서를 삭제했습니다.');
         render();
       },
@@ -4990,35 +5206,35 @@ function initBrowser() {
   }
 
   /** 불러오기 — 경로 인자 없음. 네이티브 dialog 가 고른 파일만 main 이 읽는다(MD-H-1). */
-  async function mdImportDoc() {
-    var md = store.mdedit;
-    md.busy = true; render();
+  async function mdImportDoc(iid) {
+    var st = wstate(iid);
+    st.busy = true; render();
     var res = await mdIpc('importFile');
-    md.busy = false;
+    st.busy = false;
     if (!res || !res.ok) {
       var code = (res && res.code) || 'INTERNAL';
       if (code !== 'CANCELLED') toast(mdMessage(code), true);
       render();
       return;
     }
-    md.code = null;
-    md.docs = Array.isArray(res.docs) ? res.docs : md.docs;
-    md.activeId = res.doc.id;
-    md.body = res.doc.body;
-    md.dirty = false;
-    md._savedAt = null;
+    st.code = null;
+    store.mdedit.docs = Array.isArray(res.docs) ? res.docs : store.mdedit.docs;
+    st.activeId = res.doc.id;
+    st.body = res.doc.body;
+    st.dirty = false;
+    st._savedAt = null;
     toast('문서를 불러왔습니다.');
     render();
   }
 
   /** 내보내기 — 저장 위치는 dialog 가 정한다. 미저장 변경은 먼저 확정 저장한다. */
-  async function mdExportDoc() {
-    var md = store.mdedit;
-    if (!md.activeId) return;
-    await mdFlushSave();
-    md.busy = true; render();
-    var res = await mdIpc('exportFile', md.activeId);
-    md.busy = false;
+  async function mdExportDoc(iid) {
+    var st = wstate(iid);
+    if (!st.activeId) return;
+    await mdFlushSave(iid);
+    st.busy = true; render();
+    var res = await mdIpc('exportFile', st.activeId);
+    st.busy = false;
     if (!res || !res.ok) {
       var code = (res && res.code) || 'INTERNAL';
       if (code !== 'CANCELLED') toast(mdMessage(code), true);
@@ -5030,74 +5246,75 @@ function initBrowser() {
   }
 
   /** 편집 입력 — 디바운스 자동 저장. 전체 render() 를 부르지 않는다(textarea 캐럿 유실 방지). */
-  function mdOnInput(value) {
-    var md = store.mdedit;
-    if (!md.activeId) return;
-    md.body = value;
-    md.dirty = true;
-    mdUpdatePreview();
-    mdSetStatus('편집 중…');
-    if (md._saveTimer) clearTimeout(md._saveTimer);
-    md._saveTimer = setTimeout(function () { md._saveTimer = null; mdSaveNow(); }, 600);
+  function mdOnInput(iid, value) {
+    var st = wstate(iid);
+    if (!st.activeId) return;
+    st.body = value;
+    st.dirty = true;
+    mdUpdatePreview(iid);
+    mdSetStatus(iid, '편집 중…');
+    if (st._saveTimer) clearTimeout(st._saveTimer);
+    st._saveTimer = setTimeout(function () { st._saveTimer = null; mdSaveNow(iid); }, 600);
   }
 
   /** 실제 저장(IPC). 성공 시 목록 메타만 갱신하고 DOM 은 부분 갱신한다(캐럿 보존). */
-  async function mdSaveNow() {
-    var md = store.mdedit;
-    if (!md.activeId || !md.dirty) return;
-    var body = md.body;
-    var res = await mdIpc('update', md.activeId, null, body);
+  async function mdSaveNow(iid) {
+    var st = wstate(iid);
+    if (!st.activeId || !st.dirty) return;
+    var body = st.body;
+    var res = await mdIpc('update', st.activeId, null, body);
     if (!res || !res.ok) {
-      md.code = (res && res.code) || 'INTERNAL';
-      mdSetStatus(mdMessage(md.code));
+      st.code = (res && res.code) || 'INTERNAL';
+      mdSetStatus(iid, mdMessage(st.code));
       return;
     }
     // 저장 중 사용자가 더 입력했으면 dirty 를 유지한다(다음 디바운스가 이어서 저장).
-    if (md.body === body) md.dirty = false;
-    md.code = null;
-    md.docs = Array.isArray(res.docs) ? res.docs : md.docs;
-    md._savedAt = Date.now();
-    mdSetStatus('저장됨');
-    mdSyncActiveTitle();
+    if (st.body === body) st.dirty = false;
+    st.code = null;
+    store.mdedit.docs = Array.isArray(res.docs) ? res.docs : store.mdedit.docs; // 목록은 전역 공유
+    st._savedAt = Date.now();
+    mdSetStatus(iid, '저장됨');
+    mdSyncActiveTitle(iid);
   }
 
   /** 대기 중인 디바운스 저장을 즉시 확정(문서 전환·내보내기 전에 호출). */
-  async function mdFlushSave() {
-    var md = store.mdedit;
-    if (md._saveTimer) { clearTimeout(md._saveTimer); md._saveTimer = null; }
-    if (md.dirty) await mdSaveNow();
+  async function mdFlushSave(iid) {
+    var st = wstate(iid);
+    if (st._saveTimer) { clearTimeout(st._saveTimer); st._saveTimer = null; }
+    if (st.dirty) await mdSaveNow(iid);
   }
 
-  /* ───── 부분 DOM 갱신(전체 render 없이 — 캐럿 보존) ───── */
+  /* ───── 부분 DOM 갱신(전체 render 없이 — 캐럿 보존) ─────
+   * [위젯 인스턴스] 편집기가 여럿일 수 있으므로 document 전역 조회는 틀린다 — 반드시 그 인스턴스의
+   * 셀(.home-section[data-home-section=iid]) 안에서만 찾는다(cellQuery).
+   */
 
-  function mdActiveMeta() {
-    var md = store.mdedit;
-    for (var i = 0; i < md.docs.length; i++) if (md.docs[i].id === md.activeId) return md.docs[i];
+  function mdActiveMeta(iid) {
+    var st = wstate(iid);
+    var docs = store.mdedit.docs || [];
+    for (var i = 0; i < docs.length; i++) if (docs[i].id === st.activeId) return docs[i];
     return null;
   }
 
-  /** 미리보기 패널 내용만 다시 그린다. */
-  function mdUpdatePreview() {
-    if (typeof document === 'undefined') return;
-    var host = document.querySelector('.md-preview');
+  /** 미리보기 패널 내용만 다시 그린다(그 인스턴스의 것만). */
+  function mdUpdatePreview(iid) {
+    var host = cellQuery(iid, '.md-preview');
     if (!host) return;
     while (host.firstChild) host.removeChild(host.firstChild);
-    host.appendChild(mdRenderPreview(store.mdedit.body));
+    host.appendChild(mdRenderPreview(wstate(iid).body));
     scheduleHomeMasonryLayout(); // 미리보기 높이가 바뀌면 masonry 재측정
   }
 
-  /** 상태 문구(저장됨/편집 중)만 갱신. */
-  function mdSetStatus(text) {
-    if (typeof document === 'undefined') return;
-    var node = document.querySelector('.md-status');
+  /** 상태 문구(저장됨/편집 중)만 갱신(그 인스턴스의 것만). */
+  function mdSetStatus(iid, text) {
+    var node = cellQuery(iid, '.md-status');
     if (node) node.textContent = text;
   }
 
-  /** 자동 저장으로 제목이 파생·변경됐을 때 활성 문서 칩 라벨만 갱신. */
-  function mdSyncActiveTitle() {
-    if (typeof document === 'undefined') return;
-    var cur = mdActiveMeta();
-    var node = document.querySelector('.md-doc--on .md-doc__name');
+  /** 자동 저장으로 제목이 파생·변경됐을 때 활성 문서 칩 라벨만 갱신(그 인스턴스의 것만). */
+  function mdSyncActiveTitle(iid) {
+    var cur = mdActiveMeta(iid);
+    var node = cellQuery(iid, '.md-doc--on .md-doc__name');
     if (cur && node) node.textContent = cur.title || '제목 없음';
   }
 
@@ -5300,37 +5517,37 @@ function initBrowser() {
     });
   }
 
-  /** 뷰 전환(편집/미리보기/2단) — 세그먼트 토글. 2단은 좁은 폭에서 CSS 가 자동으로 접는다. */
-  function mdViewToggle() {
-    var md = store.mdedit;
+  /** 뷰 전환(편집/미리보기/2단) — 세그먼트 토글. 2단은 좁은 폭에서 CSS 가 자동으로 접는다. 인스턴스별 상태. */
+  function mdViewToggle(iid) {
+    var st = wstate(iid);
     var seg = el('div', { cls: 'md-seg', attrs: { role: 'group', 'aria-label': '보기 방식' } });
     [
       { id: 'edit', label: '편집' },
       { id: 'split', label: '2단' },
       { id: 'preview', label: '미리보기' },
     ].forEach(function (v) {
-      var on = md.view === v.id;
+      var on = st.view === v.id;
       seg.appendChild(el('button', {
         cls: 'md-seg__btn' + (on ? ' md-seg__btn--on' : '') + (v.id === 'split' ? ' md-seg__btn--split' : ''),
         text: v.label,
         attrs: { type: 'button', 'aria-pressed': on ? 'true' : 'false' },
-        on: { click: function (e) { e.stopPropagation(); md.view = v.id; render(); } },
+        on: { click: function (e) { e.stopPropagation(); st.view = v.id; render(); } },
       }));
     });
     return seg;
   }
 
-  /** 문서 목록 바 — 가로 스크롤 칩. 좁아지면 CSS 가 메타(크기·수정일)를 접는다. */
-  function mdDocBar() {
-    var md = store.mdedit;
+  /** 문서 목록 바 — 가로 스크롤 칩(문서 목록은 전역 공유, '열린 문서'는 인스턴스별). */
+  function mdDocBar(iid) {
+    var st = wstate(iid);
     var bar = el('div', { cls: 'md-docs spip-scroll', attrs: { role: 'tablist', 'aria-label': '문서 목록' } });
-    md.docs.forEach(function (d) {
-      var on = d.id === md.activeId;
+    (store.mdedit.docs || []).forEach(function (d) {
+      var on = d.id === st.activeId;
       var chip = el('button', {
         cls: 'md-doc' + (on ? ' md-doc--on' : ''),
         attrs: { type: 'button', role: 'tab', 'aria-selected': on ? 'true' : 'false', title: d.title || '제목 없음' },
         on: {
-          click: function (e) { e.stopPropagation(); mdOpenDoc(d.id); },
+          click: function (e) { e.stopPropagation(); mdOpenDoc(iid, d.id); },
           // 편집 모드 재정렬 드래그(SortableJS)와 분리.
           pointerdown: function (e) { e.stopPropagation(); },
         },
@@ -5352,29 +5569,31 @@ function initBrowser() {
     return sameDay ? (p2(d.getHours()) + ':' + p2(d.getMinutes())) : ((d.getMonth() + 1) + '/' + d.getDate());
   }
 
-  function renderHomeMdEdit() {
-    var md = store.mdedit;
-    var hasDoc = !!md.activeId;
+  function renderHomeMdEdit(inst) {
+    var iid = inst.iid;
+    var st = wstate(iid);
+    var md = store.mdedit;           // 전역 공유: 문서 목록·로딩 상태
+    var hasDoc = !!st.activeId;
     var card = el('div', {
       cls: 'md-card hw-card',
       style: HOME_CARD + 'padding:16px 16px 12px;',
-      attrs: { 'data-view': md.view },
+      attrs: { 'data-view': st.view },
     });
 
-    // 헤더 — 제목 + 툴바. (우하단 코너 미점유)
+    // 헤더 — 표시명(사용자가 붙인 이름 우선) + 툴바. (우하단 코너 미점유)
     var head = el('div', { cls: 'md-head' });
-    head.appendChild(el('div', { cls: 'md-title', text: '마크다운 편집기' }));
+    head.appendChild(el('div', { cls: 'md-title', text: widgetDisplayName(inst) }));
     var tools = el('div', { cls: 'md-tools' });
-    tools.appendChild(mdViewToggle());
-    tools.appendChild(mdToolBtn('새 문서', [{ t: 'path', d: 'M12 5v14M5 12h14' }], mdNewDoc, md.busy));
-    tools.appendChild(mdToolBtn('불러오기', [{ t: 'path', d: 'M12 3v12' }, { t: 'path', d: 'M7 10l5 5 5-5' }, { t: 'path', d: 'M4 19h16' }], mdImportDoc, md.busy));
-    tools.appendChild(mdToolBtn('파일로 내보내기', [{ t: 'path', d: 'M12 15V3' }, { t: 'path', d: 'M7 8l5-5 5 5' }, { t: 'path', d: 'M4 19h16' }], mdExportDoc, md.busy || !hasDoc));
-    tools.appendChild(mdToolBtn('이름 변경', [{ t: 'path', d: 'M4 20h4l10-10-4-4L4 16z' }, { t: 'path', d: 'M14 6l4 4' }], mdRenameDoc, md.busy || !hasDoc));
-    tools.appendChild(mdToolBtn('삭제', [{ t: 'path', d: 'M4 7h16' }, { t: 'path', d: 'M9 7V5h6v2' }, { t: 'path', d: 'M6 7l1 12h10l1-12' }], mdRemoveDoc, md.busy || !hasDoc));
+    tools.appendChild(mdViewToggle(iid));
+    tools.appendChild(mdToolBtn('새 문서', [{ t: 'path', d: 'M12 5v14M5 12h14' }], function () { mdNewDoc(iid); }, st.busy));
+    tools.appendChild(mdToolBtn('불러오기', [{ t: 'path', d: 'M12 3v12' }, { t: 'path', d: 'M7 10l5 5 5-5' }, { t: 'path', d: 'M4 19h16' }], function () { mdImportDoc(iid); }, st.busy));
+    tools.appendChild(mdToolBtn('파일로 내보내기', [{ t: 'path', d: 'M12 15V3' }, { t: 'path', d: 'M7 8l5-5 5 5' }, { t: 'path', d: 'M4 19h16' }], function () { mdExportDoc(iid); }, st.busy || !hasDoc));
+    tools.appendChild(mdToolBtn('이름 변경', [{ t: 'path', d: 'M4 20h4l10-10-4-4L4 16z' }, { t: 'path', d: 'M14 6l4 4' }], function () { mdRenameDoc(iid); }, st.busy || !hasDoc));
+    tools.appendChild(mdToolBtn('삭제', [{ t: 'path', d: 'M4 7h16' }, { t: 'path', d: 'M9 7V5h6v2' }, { t: 'path', d: 'M6 7l1 12h10l1-12' }], function () { mdRemoveDoc(iid); }, st.busy || !hasDoc));
     head.appendChild(tools);
     card.appendChild(head);
 
-    if (md.docs.length > 0) card.appendChild(mdDocBar());
+    if ((md.docs || []).length > 0) card.appendChild(mdDocBar(iid));
 
     var main = el('div', { cls: 'md-main hw-body' });
 
@@ -5382,12 +5601,12 @@ function initBrowser() {
       main.appendChild(el('div', { cls: 'md-empty', text: 'Electron 앱에서만 사용할 수 있습니다.' }));
     } else if (!md.loaded && md.loading) {
       main.appendChild(el('div', { cls: 'md-empty', text: '불러오는 중…' }));
-    } else if (md.docs.length === 0) {
+    } else if ((md.docs || []).length === 0) {
       var empty = el('div', { cls: 'md-empty' });
       empty.appendChild(el('div', { text: '아직 문서가 없습니다.' }));
       var cta = el('div', { cls: 'md-empty__row' });
-      cta.appendChild(el('button', { cls: 'md-empty__cta', text: '새 문서', attrs: { type: 'button' }, on: { click: mdNewDoc } }));
-      cta.appendChild(el('button', { cls: 'md-empty__cta md-empty__cta--ghost', text: '.md 불러오기', attrs: { type: 'button' }, on: { click: mdImportDoc } }));
+      cta.appendChild(el('button', { cls: 'md-empty__cta', text: '새 문서', attrs: { type: 'button' }, on: { click: function () { mdNewDoc(iid); } } }));
+      cta.appendChild(el('button', { cls: 'md-empty__cta md-empty__cta--ghost', text: '.md 불러오기', attrs: { type: 'button' }, on: { click: function () { mdImportDoc(iid); } } }));
       empty.appendChild(cta);
       empty.appendChild(el('div', { cls: 'md-empty__hint', text: '문서는 앱 데이터 폴더에 저장되며, 언제든 .md 파일로 내보낼 수 있습니다.' }));
       main.appendChild(empty);
@@ -5402,8 +5621,8 @@ function initBrowser() {
           placeholder: '# 제목\n\n**굵게**, *기울임*, `코드`, - 목록, | 표 |, ```코드블록```',
         },
         on: {
-          input: function (e) { mdOnInput(e.target.value); },
-          blur: function () { mdFlushSave(); },
+          input: function (e) { mdOnInput(iid, e.target.value); },
+          blur: function () { mdFlushSave(iid); },
           keydown: function (e) {
             // Tab 은 위젯 간 이동이 아니라 들여쓰기로 — 편집기 안에서만.
             if (e.key === 'Tab') {
@@ -5412,21 +5631,21 @@ function initBrowser() {
               var s = t.selectionStart, en = t.selectionEnd;
               t.value = t.value.slice(0, s) + '  ' + t.value.slice(en);
               t.selectionStart = t.selectionEnd = s + 2;
-              mdOnInput(t.value);
+              mdOnInput(iid, t.value);
             }
             e.stopPropagation(); // 홈 단축키와 충돌 방지
           },
           pointerdown: function (e) { e.stopPropagation(); }, // SortableJS 재정렬과 분리
         },
       });
-      ta.value = md.body; // value 는 속성이 아니라 프로퍼티로(el attrs 는 setAttribute 라 개행이 깨진다)
+      ta.value = st.body; // value 는 속성이 아니라 프로퍼티로(el attrs 는 setAttribute 라 개행이 깨진다)
       editPane.appendChild(ta);
       main.appendChild(editPane);
 
       // 미리보기 패널
       var prevPane = el('div', { cls: 'md-pane md-pane--preview' });
       var preview = el('div', { cls: 'md-preview spip-scroll', attrs: { 'aria-label': '미리보기' } });
-      preview.appendChild(mdRenderPreview(md.body));
+      preview.appendChild(mdRenderPreview(st.body));
       prevPane.appendChild(preview);
       main.appendChild(prevPane);
     }
@@ -5437,10 +5656,10 @@ function initBrowser() {
     var foot = el('div', { cls: 'md-foot' });
     foot.appendChild(el('div', {
       cls: 'md-status',
-      text: md.code ? mdMessage(md.code) : (md.dirty ? '편집 중…' : (md._savedAt ? '저장됨' : (hasDoc ? '자동 저장' : ''))),
+      text: st.code ? mdMessage(st.code) : (st.dirty ? '편집 중…' : (st._savedAt ? '저장됨' : (hasDoc ? '자동 저장' : ''))),
     }));
     if (hasDoc) {
-      foot.appendChild(el('div', { cls: 'md-count', text: md.body.length.toLocaleString() + '자', style: HOME_MONO }));
+      foot.appendChild(el('div', { cls: 'md-count', text: st.body.length.toLocaleString() + '자', style: HOME_MONO }));
     }
     card.appendChild(foot);
 
@@ -5449,33 +5668,95 @@ function initBrowser() {
 
   /* ===== [MD 편집기 위젯] 끝 ================================================================= */
 
-  /** [위젯 추가/제거] 위젯 카드 우상단 제거(×) 버튼 — 호버 시 노출(.home-section:hover .widget-remove). */
-  function widgetRemoveBtn(id) {
-    var meta = WIDGET_META[id] || { name: id };
+  /** [위젯 인스턴스] 위젯 카드 우상단 제거(×) 버튼 — 그 **인스턴스 하나만** 제거한다(같은 타입의 다른 배치는 남는다). */
+  function widgetRemoveBtn(inst) {
+    var name = widgetDisplayName(inst);
     return el('button', {
       cls: 'widget-remove',
-      attrs: { type: 'button', 'aria-label': meta.name + ' 위젯 홈에서 제거', title: '홈에서 제거' },
-      on: { click: function (e) { e.stopPropagation(); onRemoveWidgetConfirm(id); } },
+      attrs: { type: 'button', 'aria-label': name + ' 위젯 홈에서 제거', title: '홈에서 제거' },
+      on: { click: function (e) { e.stopPropagation(); onRemoveWidgetConfirm(inst); } },
       children: [svg([{ t: 'path', d: 'M18 6L6 18M6 6l12 12' }], { size: 13, stroke: '#78716c', sw: 2 })],
     });
   }
   /** [편집] 위젯 제거 확인 모달 — 실수 제거 방지. 제거해도 데이터 유지·갤러리에서 재추가 가능. */
-  function onRemoveWidgetConfirm(id) {
-    var meta = WIDGET_META[id] || { name: id };
+  function onRemoveWidgetConfirm(inst) {
+    var name = widgetDisplayName(inst);
+    var others = widgetsOfType(inst.type).length - 1;
     askConfirm({
       title: '위젯 제거',
-      message: '‘' + meta.name + '’ 위젯을 홈에서 제거할까요?\n제거해도 데이터는 사라지지 않으며, 위젯 갤러리에서 다시 추가할 수 있어요.',
+      message: '‘' + name + '’ 위젯을 홈에서 제거할까요?\n'
+        + (others > 0 ? ('같은 종류의 다른 위젯 ' + others + '개는 그대로 남습니다.\n') : '')
+        + '제거해도 데이터는 사라지지 않으며, 위젯 갤러리에서 다시 추가할 수 있어요.',
       confirmText: '제거', danger: true,
-      onConfirm: function () { onRemoveWidget(id); },
+      onConfirm: function () { onRemoveWidget(inst.iid); },
+    });
+  }
+  /** [위젯 인스턴스] 이름 변경(✎) 버튼 — 배치된 위젯마다 표시명을 붙일 수 있다(같은 위젯 여러 개를 구분).
+   *   편집 모드에서만 노출. 인라인 입력은 카드 헤더가 아니라 셀 상단에 띄운다(위젯 내부 구조 불변). */
+  function widgetRenameBtn(inst) {
+    var name = widgetDisplayName(inst);
+    return el('button', {
+      cls: 'widget-rename',
+      attrs: { type: 'button', 'aria-label': name + ' 위젯 이름 변경', title: '이름 변경' },
+      on: {
+        click: function (e) {
+          e.stopPropagation();
+          store._renameWidgetId = inst.iid;
+          store._renameWidgetVal = inst.name || '';
+          render();
+        },
+      },
+      children: [svg([{ t: 'path', d: 'M4 20h4l10-10-4-4L4 16z' }, { t: 'path', d: 'M14 6l4 4' }], { size: 13, stroke: '#78716c', sw: 2 })],
+    });
+  }
+  /** 이름 변경 인라인 입력(셀 상단 오버레이) — 프리셋/그룹 rename 패턴 동형. 빈 값이면 타입 기본명으로 복귀. */
+  function widgetRenameInput(inst) {
+    var wrap = el('div', { cls: 'widget-rename__bar' });
+    var inp = el('input', {
+      cls: 'widget-rename__input',
+      attrs: { type: 'text', 'aria-label': '위젯 이름', maxlength: '40', autocomplete: 'off', spellcheck: 'false', placeholder: WIDGET_META[inst.type] ? WIDGET_META[inst.type].name : inst.type },
+      on: {
+        click: function (e) { e.stopPropagation(); },
+        pointerdown: function (e) { e.stopPropagation(); }, // SortableJS 드래그와 분리
+        input: function (e) { store._renameWidgetVal = e.target.value; },
+        keydown: function (e) {
+          e.stopPropagation();
+          if (e.key === 'Enter') { e.preventDefault(); commitWidgetRename(inst.iid); }
+          else if (e.key === 'Escape') { e.preventDefault(); store._renameWidgetId = null; render(); }
+        },
+        blur: function () { if (store._renameWidgetId === inst.iid) commitWidgetRename(inst.iid); },
+      },
+    });
+    inp.value = (store._renameWidgetVal != null) ? store._renameWidgetVal : (inst.name || '');
+    wrap.appendChild(inp);
+    setTimeout(function () { try { if (inp.isConnected) { inp.focus(); inp.select(); } } catch (_) { /* ignore */ } }, 0);
+    return wrap;
+  }
+  /** 이름 변경 확정 — main 이 sanitize·상한 검증(단일 신뢰 경계). 빈 문자열은 '이름 해제'. */
+  function commitWidgetRename(iid) {
+    var val = (store._renameWidgetVal != null) ? String(store._renameWidgetVal).trim() : '';
+    store._renameWidgetId = null;
+    store._renameWidgetVal = null;
+    // 낙관적 반영(응답이 최종 확정).
+    store.homeWidgets = (store.homeWidgets || []).map(function (w) {
+      return (w.iid === iid) ? { iid: w.iid, type: w.type, name: val } : w;
+    });
+    render();
+    if (!bridgeHas('renameWidget')) return;
+    ipc('renameWidget', iid, val).then(function (res) {
+      if (res && res.ok && Array.isArray(res.homeWidgets)) {
+        store.homeWidgets = applyHomeWidgets(res.homeWidgets);
+        render();
+      }
     });
   }
   /** [로드맵 Phase 4·I] 위젯 포커스(풀스크린) 버튼 — 제거(×) 좌측. 호버/편집 시 노출(§3 코너 규약). */
-  function widgetFocusBtn(id) {
-    var meta = WIDGET_META[id] || { name: id };
+  function widgetFocusBtn(inst) {
+    var name = widgetDisplayName(inst);
     return el('button', {
       cls: 'widget-focus',
-      attrs: { type: 'button', 'aria-label': meta.name + ' 위젯 포커스(크게 보기)', title: '크게 보기' },
-      on: { click: function (e) { e.stopPropagation(); openFocusWidget(id); } },
+      attrs: { type: 'button', 'aria-label': name + ' 위젯 포커스(크게 보기)', title: '크게 보기' },
+      on: { click: function (e) { e.stopPropagation(); openFocusWidget(inst.iid); } },
       children: [svg([
         { t: 'path', d: 'M8 3H5a2 2 0 0 0-2 2v3' },
         { t: 'path', d: 'M16 3h3a2 2 0 0 1 2 2v3' },
@@ -5485,9 +5766,9 @@ function initBrowser() {
     });
   }
 
-  /** [위젯 추가/제거] 위젯 갤러리 팝업 — 모든 토글 위젯을 미리보기로 보여주고, 미적용 위젯을 선택해 홈에 추가. */
+  /** [위젯 인스턴스] 위젯 갤러리 팝업 — 위젯 타입 목록. 누를 때마다 **새 인스턴스가 하나씩 추가**된다
+   *   (같은 위젯을 여러 개 놓을 수 있다). 카드에는 현재 몇 개 배치돼 있는지 표시한다. */
   function renderWidgetGallery() {
-    var hidden = store.hiddenWidgets || [];
     var close = function () { store.showWidgetGallery = false; render(); };
     var overlay = el('div', {
       cls: 'widget-gallery__overlay',
@@ -5497,7 +5778,7 @@ function initBrowser() {
     var head = el('div', { cls: 'widget-gallery__head' });
     var titleWrap = el('div');
     titleWrap.appendChild(el('div', { text: '위젯 추가', style: 'font-size:17px;font-weight:700;color:#1c1917;' }));
-    titleWrap.appendChild(el('div', { text: '홈 대시보드에 표시할 위젯을 고르세요. 이미 적용된 위젯은 카드의 × 로 제거할 수 있습니다.', style: 'font-size:12px;color:#78716c;margin-top:3px;' }));
+    titleWrap.appendChild(el('div', { text: '누를 때마다 위젯이 하나씩 추가됩니다. 같은 위젯을 여러 개 놓고 각각 다른 이름을 붙일 수 있어요.', style: 'font-size:12px;color:#78716c;margin-top:3px;' }));
     head.appendChild(titleWrap);
     head.appendChild(el('button', {
       cls: 'widget-gallery__close', text: '✕', attrs: { type: 'button', 'aria-label': '닫기' }, on: { click: close },
@@ -5505,17 +5786,15 @@ function initBrowser() {
     panel.appendChild(head);
 
     var gridGal = el('div', { cls: 'widget-gallery__grid' });
-    TOGGLEABLE_WIDGET_IDS.forEach(function (id) {
-      var meta = WIDGET_META[id] || { name: id, desc: '' };
-      var applied = hidden.indexOf(id) < 0;
-      var cardCls = 'widget-card' + (applied ? ' widget-card--applied' : '');
-      var actionAttrs = applied ? {} : { role: 'button', tabindex: '0', 'aria-label': meta.name + ' 홈에 추가' };
+    TOGGLEABLE_WIDGET_IDS.forEach(function (type) {
+      var meta = WIDGET_META[type] || { name: type, desc: '' };
+      var count = widgetsOfType(type).length; // 현재 몇 개 배치돼 있나
       var card = el('div', {
-        cls: cardCls,
-        attrs: actionAttrs,
-        on: applied ? {} : {
-          click: function () { onAddWidget(id); },
-          keydown: function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onAddWidget(id); } },
+        cls: 'widget-card' + (count > 0 ? ' widget-card--applied' : ''),
+        attrs: { role: 'button', tabindex: '0', 'aria-label': meta.name + ' 홈에 추가' + (count > 0 ? (' (현재 ' + count + '개)') : '') },
+        on: {
+          click: function () { onAddWidget(type); },
+          keydown: function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onAddWidget(type); } },
         },
       });
       // 미리보기 — 위젯 모양을 대표하는 미니 목업(제목 + 스켈레톤 라인).
@@ -5527,12 +5806,9 @@ function initBrowser() {
       body.appendChild(el('div', { cls: 'widget-card__name', text: meta.name }));
       body.appendChild(el('div', { cls: 'widget-card__desc', text: meta.desc || '' }));
       card.appendChild(body);
-      // 상태/액션.
-      if (applied) {
-        card.appendChild(el('div', { cls: 'widget-card__badge', text: '✓ 적용됨' }));
-      } else {
-        card.appendChild(el('div', { cls: 'widget-card__add', text: '+ 홈에 추가' }));
-      }
+      // 배치 개수 배지(0개면 없음) + 추가 액션은 항상 활성(중복 배치 허용).
+      if (count > 0) card.appendChild(el('div', { cls: 'widget-card__badge', text: count + '개 배치됨' }));
+      card.appendChild(el('div', { cls: 'widget-card__add', text: '+ 홈에 추가' }));
       gridGal.appendChild(card);
     });
     panel.appendChild(gridGal);
@@ -5540,27 +5816,42 @@ function initBrowser() {
     return overlay;
   }
 
-  /** [위젯 추가/제거] hidden 집합 변경 영속(낙관적) — 메인 normalizeHiddenWidgets가 단일 신뢰 경계. */
-  function commitHiddenWidgets(next) {
-    store.hiddenWidgets = next;
-    render();
-    if (!bridgeHas('setHiddenWidgets')) return; // 웹/테스트 graceful
+  /** [위젯 인스턴스] 타입 1개를 새 인스턴스로 추가 — iid 는 **메인이 발급**한다(낙관적 반영 없음: 응답이 진실). */
+  function onAddWidget(type) {
+    if (TOGGLEABLE_WIDGET_IDS.indexOf(type) < 0) return;
+    if (!bridgeHas('addWidget')) return; // 웹/테스트 graceful
+    if (store.busyWidgets) return;
     store.busyWidgets = true;
-    ipc('setHiddenWidgets', next).then(function (res) {
+    ipc('addWidget', type, '').then(function (res) {
       store.busyWidgets = false;
-      if (res && res.ok && Array.isArray(res.hiddenWidgets)) { store.hiddenWidgets = res.hiddenWidgets; render(); }
+      if (res && res.ok && Array.isArray(res.homeWidgets)) applyWidgetsResponse(res);
+      else if (res && res.code === 'LIMIT') toast('위젯을 더 추가할 수 없습니다(상한 도달).', true);
+      render();
     }).catch(function () { store.busyWidgets = false; });
   }
-  function onAddWidget(id) {
-    if (TOGGLEABLE_WIDGET_IDS.indexOf(id) < 0) return;
-    var next = (store.hiddenWidgets || []).filter(function (x) { return x !== id; }); // 숨김 해제 = 적용
-    commitHiddenWidgets(next);
+  /** [위젯 인스턴스] 인스턴스 1개 제거 — 같은 타입의 다른 배치는 남는다. */
+  function onRemoveWidget(iid) {
+    if (!widgetInstance(iid)) return;
+    if (!bridgeHas('removeWidget')) return;
+    if (store.busyWidgets) return;
+    store.busyWidgets = true;
+    ipc('removeWidget', iid).then(function (res) {
+      store.busyWidgets = false;
+      if (res && res.ok && Array.isArray(res.homeWidgets)) applyWidgetsResponse(res);
+      render();
+    }).catch(function () { store.busyWidgets = false; });
   }
-  function onRemoveWidget(id) {
-    if (TOGGLEABLE_WIDGET_IDS.indexOf(id) < 0) return;
-    var cur = store.hiddenWidgets || [];
-    if (cur.indexOf(id) >= 0) return;
-    commitHiddenWidgets(cur.concat([id])); // 숨김 추가 = 제거
+  /** 위젯 변경 응답(배치·크기) 적재 + 사라진 인스턴스의 UI 상태 정리. */
+  function applyWidgetsResponse(res) {
+    store.homeWidgets = applyHomeWidgets(res.homeWidgets);
+    if (res.homeWidgetSizes && typeof res.homeWidgetSizes === 'object') {
+      store.homeWidgetSizes = applyHomeWidgetSizes(res.homeWidgetSizes);
+    }
+    if (Array.isArray(res.homeWidgetGroups)) store.groups = applyGroups(res.homeWidgetGroups);
+    if (res.homeWidgetPositions && typeof res.homeWidgetPositions === 'object') {
+      store.widgetPositions = applyWidgetPositions(res.homeWidgetPositions);
+    }
+    pruneWState();
   }
 
   /* =====================================================================
@@ -5762,9 +6053,14 @@ function initBrowser() {
   function patchShelfSection() {
     if (typeof document === 'undefined') { render(); return; }
     var regions = document.querySelectorAll('.shelf-region');
-    if (!regions.length) return; // 홈 아님/위젯 숨김 → no-op
+    if (!regions.length) return; // 홈 아님/위젯 미배치 → no-op
     Array.prototype.forEach.call(regions, function (region) {
-      RG.preserve.patchRegion(region, function () { return renderShelfCard(); }, {
+      // [위젯 인스턴스] 이 셸프가 어느 인스턴스인지 셀에서 읽어 표시명을 유지한다
+      //   (제목 없이 재렌더하면 사용자가 붙인 이름이 기본명으로 되돌아간다).
+      var cell = region.closest ? region.closest('.home-section[data-home-section]') : null;
+      var iid = (cell && cell.dataset) ? cell.dataset.homeSection : '';
+      var title = iid ? widgetTitleOf(iid) : '즐겨찾기 셸프';
+      RG.preserve.patchRegion(region, function () { return renderShelfCard(title); }, {
         widgets: ['shelf'],
         preserveFocus: true,
         fallback: function () { render(); },
@@ -5831,30 +6127,34 @@ function initBrowser() {
   }
 
   // ── 렌더 ──
-  function renderHomeShelf() {
+  /* [위젯 인스턴스] 셸프는 **하나의 북마크 라이브러리**를 보여준다 — 여러 개 배치해도 같은 목록이다.
+   *   그래서 펼친 항목·컴포저 입력 같은 뷰 상태는 인스턴스 간 공유한다(문서·폴더처럼 '다른 대상'을
+   *   가리키는 게 아니라 같은 대상을 보는 창이라). 표시명만 인스턴스별로 다르다.
+   *   부분 갱신(patchShelfSection)은 querySelectorAll 로 **모든** 셸프 셀을 갱신한다(유령 화면 방지). */
+  function renderHomeShelf(inst) {
     var region = el('div', { cls: 'shelf-region' });
-    region.appendChild(renderShelfCard());
+    region.appendChild(renderShelfCard(inst ? widgetDisplayName(inst) : '즐겨찾기 셸프'));
     return region;
   }
-  function renderShelfCard() {
+  function renderShelfCard(title) {
     var vm = shelfComposerVM(store.shelf);
     var flags = shelfStateFlags(store.shelf.bookmarks, store.shelf.cState);
     var panels = shelfPanelsVM(store.shelf.bookmarks, store.shelf.active);
     var card = el('div', { style: 'background:#fff;border:1px solid #e7e5e4;border-radius:18px;overflow:hidden;box-shadow:0 1px 2px rgba(28,25,23,.04);display:flex;flex-direction:column;min-height:0;' });
-    card.appendChild(shelfHeader(flags.count));
+    card.appendChild(shelfHeader(flags.count, title));
     card.appendChild(shelfComposer(vm));
     card.appendChild(shelfBody(panels, flags));
     card.appendChild(shelfFooter());
     return card;
   }
-  function shelfHeader(count) {
+  function shelfHeader(count, title) {
     var head = el('div', { style: 'display:flex;align-items:center;gap:12px;padding:18px 20px 16px;border-bottom:1px solid #f2f1ef;flex:0 0 auto;' });
     var ico = el('div', { style: 'width:34px;height:34px;border-radius:10px;background:#eef2ff;display:flex;align-items:center;justify-content:center;flex:none;' });
     ico.appendChild(svg([{ t: 'path', d: 'M4 19.5V5a2 2 0 0 1 2-2h11a1 1 0 0 1 1 1v15' }, { t: 'path', d: 'M6 17h12' }, { t: 'path', d: 'M9 3v14' }], { size: 18, stroke: '#4f46e5', sw: 1.7 }));
     head.appendChild(ico);
     var mid = el('div', { style: 'flex:1;min-width:0;' });
     var titleRow = el('div', { style: 'display:flex;align-items:center;gap:8px;' });
-    titleRow.appendChild(el('span', { text: '즐겨찾기 셸프', style: 'font-size:15.5px;font-weight:600;letter-spacing:-.015em;' }));
+    titleRow.appendChild(el('span', { text: title || '즐겨찾기 셸프', style: 'font-size:15.5px;font-weight:600;letter-spacing:-.015em;' }));
     titleRow.appendChild(el('span', { text: String(count), style: HOME_MONO + 'font-size:11px;font-weight:600;color:#78716c;background:#f3f2f0;border:1px solid #e7e5e4;padding:1px 7px;border-radius:6px;' }));
     mid.appendChild(titleRow);
     mid.appendChild(el('div', { cls: 'shelf-sub', text: '사이트·폴더·파일을 한 셸프에서 즐겨찾기', style: 'font-size:11.5px;color:#a8a29e;margin-top:2px;' }));
@@ -9883,9 +10183,14 @@ function initBrowser() {
         const reorder = !!(evt && evt.oldIndex !== evt.newIndex);
         let ids = [];
         if (reorder) {
-          ids = Array.prototype.slice.call(grid.querySelectorAll('[data-home-section]'))
+          // [위젯 인스턴스] **격자 직계 자식만** 읽는다(:scope >). 스택 셀(data-home-section=그룹 id)과
+          //   그룹 내부 멤버 셀도 같은 속성을 갖기 때문에, 예전처럼 하위 전체를 훑으면 그룹 id 가 순서 배열에
+          //   섞여 들어간다. 예전엔 타입 enum 화이트리스트가 우연히 걸러줬지만 iid 는 형식이 자유로워 그 방어가
+          //   없다 — 여기서 명시적으로 좁힌다(+ 메인도 실재 iid 만 반영하므로 이중 방어).
+          ids = Array.prototype.slice.call(grid.querySelectorAll(':scope > .home-section[data-home-section]'))
+            .filter((n) => !n.classList.contains('home-stack') && !n.classList.contains('home-group--freecell'))
             .map((n) => (n.dataset && n.dataset.homeSection) || '')
-            .filter((x) => typeof x === 'string' && x);
+            .filter((x) => typeof x === 'string' && x && x !== 'featureAdd');
         }
         // [R4] onEnd 도중 RG.widget.destroyAll 이 이 Sortable 을 파괴하지 않도록 마이크로태스크 지연.
         Promise.resolve().then(() => {
@@ -9960,19 +10265,28 @@ function initBrowser() {
     (store.groups || []).forEach(function (g) { if (byId[g.id]) next.push(g); });
     commitGroups(next);
   }
-  /** [R-32] 새 섹션 순서 영속 — 낙관적 store 반영 + setHomeLayout IPC → 응답 정규화 순서로 확정.
-   *   메인 normalizeHomeLayout 이 단일 신뢰 경계(렌더러 ids 는 enum 필터만, UX 편의). */
+  /** [위젯 인스턴스] 새 배치 순서 영속 — 낙관적 store 반영 + setHomeLayout IPC(iid 순열) → 응답으로 확정.
+   *   메인이 단일 신뢰 경계다: 실재하지 않는 iid 는 무시하고, 렌더러가 빠뜨린 iid 는 기존 순서로 보충한다
+   *   (이 채널로는 위젯이 추가·삭제되지 않는다 — 드래그 중 DOM 을 덜 읽어도 위젯이 사라지지 않는다). */
   function commitHomeLayout(ids) {
-    const next = applyHomeLayout(ids);           // 렌더러 동형 정규화(낙관적)
-    store.homeLayout = next;
+    // 낙관적 재정렬 — 보낸 순서대로 앞에, 빠진 건 기존 순서로 뒤에(메인과 동일 규칙).
+    var byIid = {};
+    (store.homeWidgets || []).forEach(function (w) { byIid[w.iid] = w; });
+    var next = [];
+    var seen = {};
+    ids.forEach(function (id) {
+      if (byIid[id] && !seen[id]) { seen[id] = 1; next.push(byIid[id]); }
+    });
+    (store.homeWidgets || []).forEach(function (w) { if (!seen[w.iid]) next.push(w); });
+    store.homeWidgets = next;
     render();                                    // 새 순서 즉시 반영(드래그 종료 후 1회)
     if (!bridgeHas('setHomeLayout')) return;      // 웹/테스트 graceful
-    ipc('setHomeLayout', next).then((res) => {
-      if (res && res.ok && Array.isArray(res.homeLayout)) {
-        store.homeLayout = applyHomeLayout(res.homeLayout); // 메인 정규화 최종 순서로 확정
+    ipc('setHomeLayout', next.map(function (w) { return w.iid; })).then((res) => {
+      if (res && res.ok && Array.isArray(res.homeWidgets)) {
+        store.homeWidgets = applyHomeWidgets(res.homeWidgets); // 메인 정규화 최종 순서로 확정
         render();
       }
-      // 응답 실패여도 낙관적 순서 유지(다음 getUiState 에서 정합) — 토스트 없음(섹션 순서는 비파괴적).
+      // 응답 실패여도 낙관적 순서 유지(다음 getUiState 에서 정합) — 토스트 없음(순서는 비파괴적).
     });
   }
 
@@ -9998,17 +10312,17 @@ function initBrowser() {
     store.uiScale = (res && res.ok !== false && ['compact', 'normal', 'comfortable', 'large'].indexOf(res.uiScale) >= 0) ? res.uiScale : 'normal';
     // 할 일(홈 브리핑) — getUiState 응답에 포함. 형식 무효 시 빈 배열.
     store.todos = (res && res.ok !== false && Array.isArray(res.todos)) ? res.todos.filter((t) => t && typeof t.id === 'string') : [];
-    // [R-32] 홈 섹션 순서 — getUiState 응답의 homeLayout 적재(부재/손상 시 동형 정규화로 기본 순서 보충).
-    store.homeLayout = applyHomeLayout(res && res.ok !== false ? res.homeLayout : null);
-    // [홈 위젯 크기] 위젯별 폭·높이 적재(부재/손상 시 빈 = 전부 기본 크기).
-    store.homeWidgetSizes = applyHomeWidgetSizes(res && res.ok !== false ? res.homeWidgetSizes : null);
-    // [위젯 추가/제거] 숨긴(미적용) 위젯 적재 — 토글 가능 위젯 화이트리스트만(부재/손상 시 빈 = 전부 표시).
-    store.hiddenWidgets = (res && res.ok !== false && Array.isArray(res.hiddenWidgets))
-      ? res.hiddenWidgets.filter(function (id) { return TOGGLEABLE_WIDGET_IDS.indexOf(id) >= 0; }) : [];
-    // [로드맵 Phase 2] 대시보드(프리셋) 적재 — 탭/전환용. 활성 프리셋은 위 homeLayout/hidden/sizes 와 동기.
-    store.dashboard = applyDashboard(res && res.ok !== false ? res.dashboard : null);
-    // [로드맵 Phase 3·G] 스크래치패드 메모 적재(전역 콘텐츠). 부재/손상 시 빈 메모.
-    store.scratchpad = applyScratchpad(res && res.ok !== false ? res.scratchpad : null);
+    // [위젯 인스턴스] 홈 배치 적재 — [{iid,type,name}]. 구버전 응답(homeLayout+hiddenWidgets)만 오면 레거시 폴백.
+    var ok = !!(res && res.ok !== false);
+    store.homeWidgets = (ok && Array.isArray(res.homeWidgets))
+      ? applyHomeWidgets(res.homeWidgets)
+      : widgetsFromLegacy(ok ? res.homeLayout : null, ok ? res.hiddenWidgets : null);
+    // [홈 위젯 크기] 인스턴스별 폭·높이 적재(부재/손상 시 빈 = 전부 기본 크기).
+    store.homeWidgetSizes = applyHomeWidgetSizes(ok ? res.homeWidgetSizes : null);
+    // [로드맵 Phase 2] 대시보드(프리셋) 적재 — 탭/전환용. 활성 프리셋은 위 homeWidgets/sizes 와 동기.
+    store.dashboard = applyDashboard(ok ? res.dashboard : null);
+    // [로드맵 Phase 3·G] 스크래치패드 메모 적재 — 인스턴스별 { iid: {text,updatedAt} }.
+    store.scratchpads = applyScratchpads(ok ? res.scratchpads : null);
     // [로드맵 Phase 5·B] 활성 프리셋 레이아웃 모드·프리폼 좌표 적재.
     store.layoutMode = applyLayoutMode(res && res.ok !== false ? res.layoutMode : null);
     store.widgetPositions = applyWidgetPositions(res && res.ok !== false ? res.homeWidgetPositions : null);
@@ -10022,24 +10336,25 @@ function initBrowser() {
       store.briefing.items = Array.isArray(bf.items) ? bf.items.filter((x) => x && typeof x.key === 'string') : [];
       store.briefing.counters = (bf.counters && typeof bf.counters === 'object') ? bf.counters : null;
     }
+    pruneWState();         // [위젯 인스턴스] 배치에 없는 인스턴스의 UI 상태 정리
     applyProjectNames();   // 별칭을 현재 viewModels에 반영
     applyTheme();          // 테마 적용(라이트/다크/시스템)
   }
 
-  // ── [로드맵 Phase 2] 대시보드(프리셋) 전환/관리 핸들러 — 응답으로 활성 프리셋 레거시 키 갱신 후 재렌더 ──
-  /** 프리셋 IPC 응답 적용 — dashboard + 활성 프리셋 레거시 키(homeLayout/hidden/sizes) 갱신 후 render. */
+  // ── [로드맵 Phase 2] 대시보드(프리셋) 전환/관리 핸들러 — 응답으로 활성 프리셋 키 갱신 후 재렌더 ──
+  /** 프리셋 IPC 응답 적용 — dashboard + 활성 프리셋 배치(homeWidgets/sizes/positions/groups) 갱신 후 render. */
   function applyPresetResponse(res) {
     if (!res || res.ok === false) return false;
     store.dashboard = applyDashboard(res.dashboard);
-    store.homeLayout = applyHomeLayout(res.homeLayout);
+    store.homeWidgets = applyHomeWidgets(res.homeWidgets); // [위젯 인스턴스] 프리셋마다 배치가 다르다
     store.homeWidgetSizes = applyHomeWidgetSizes(res.homeWidgetSizes);
-    store.hiddenWidgets = Array.isArray(res.hiddenWidgets)
-      ? res.hiddenWidgets.filter(function (id) { return TOGGLEABLE_WIDGET_IDS.indexOf(id) >= 0; }) : [];
     // [로드맵 Phase 5·B] 프리셋 전환/변경 시 레이아웃 모드·좌표도 활성 프리셋 기준으로 스왑.
     store.layoutMode = applyLayoutMode(res.layoutMode);
     store.widgetPositions = applyWidgetPositions(res.homeWidgetPositions);
     store.groups = applyGroups(res.homeWidgetGroups); // [Phase 5·M] 그룹도 활성 프리셋 기준 스왑
     store._presetRenameId = null;
+    store._renameWidgetId = null;
+    pruneWState();
     render();
     return true;
   }
@@ -10212,8 +10527,8 @@ function initBrowser() {
   /** [로드맵 Phase 5·F] 스택 셀 — 한 자리에 겹친 멤버 중 active 하나만 표시 + 하단 인디케이터로 전환.
    *   위젯처럼 리사이즈/드래그(그룹 id 좌표·크기). 편집: 헤더로 멤버 추가·모드전환·삭제, 활성 멤버 빼기. */
   function renderStackCell(g, reclaim, editing, freeform) {
-    var hidden = store.hiddenWidgets || [];
-    var members = (g.members || []).filter(function (m) { return hidden.indexOf(m) < 0; });
+    // [위젯 인스턴스] members 는 iid — 배치에 실재하는 것만(제거된 인스턴스는 메인이 이미 정리하지만 방어).
+    var members = (g.members || []).filter(function (m) { return !!widgetInstance(m); });
     var active = Math.min(Math.max(0, g.active || 0), Math.max(0, members.length - 1));
     var cell = el('div', { cls: 'home-section home-stack', attrs: { 'data-home-section': g.id } });
     var content = el('div', { cls: 'home-section__content' });
@@ -10229,7 +10544,8 @@ function initBrowser() {
         on: { click: function (e) { e.stopPropagation(); onRemoveFromGroup(members[active]); }, pointerdown: function (e) { e.stopPropagation(); } },
         children: [svg([{ t: 'path', d: 'M5 12h14' }], { size: 13, stroke: '#78716c', sw: 2 })],
       }));
-      var node = renderHomeSection(members[active], reclaim);
+      var actInst = widgetInstance(members[active]);
+      var node = actInst ? renderHomeSection(actInst.type, reclaim, actInst) : null;
       if (node) body.appendChild(node);
       content.appendChild(body);
       if (members.length > 1) content.appendChild(buildStackIndicator(g, members, active));
@@ -10279,9 +10595,12 @@ function initBrowser() {
     }
     return head;
   }
-  /** 그룹 멤버 셀(그룹서 빼기·포커스·리사이즈 핸들). masonry=true 면 그룹 격자 리사이즈 대상. */
+  /** 그룹 멤버 셀(그룹서 빼기·포커스·리사이즈 핸들). withResize=true 면 그룹 격자 리사이즈 대상.
+   *   [위젯 인스턴스] id 는 iid — 배치에 없는 멤버는 렌더하지 않는다(방어). */
   function buildGroupMemberCell(id, reclaim, editing, withResize) {
-    var node = renderHomeSection(id, reclaim);
+    var inst = widgetInstance(id);
+    if (!inst) return null;
+    var node = renderHomeSection(inst.type, reclaim, inst);
     if (!node) return null;
     var cell = el('div', { cls: 'home-section home-group__member', attrs: { 'data-home-section': id } });
     if (editing) {
@@ -10291,30 +10610,33 @@ function initBrowser() {
         children: [svg([{ t: 'path', d: 'M5 12h14' }], { size: 13, stroke: '#78716c', sw: 2 })],
       }));
     }
-    cell.appendChild(widgetFocusBtn(id));
+    cell.appendChild(widgetFocusBtn(inst));
     var content = el('div', { cls: 'home-section__content' });
     content.appendChild(node);
     cell.appendChild(content);
     if (withResize && editing) cell.appendChild(homeResizeHandle(id)); // 크기 조절 편집 모드에서만
     return cell;
   }
+  /** 그룹의 실재(배치된) 멤버 iid 만. 제거된 인스턴스는 메인이 정리하지만 렌더러도 방어한다. */
+  function liveMembers(g) {
+    return (g.members || []).filter(function (m) { return !!widgetInstance(m); });
+  }
   /** [masonry] 그룹 섹션 밴드 — 각 그룹을 전체폭 접기 밴드로. 멤버는 내부 masonry 격자(리사이즈·순서변경). */
-  function renderHomeGroups(groups, hidden, reclaim, editing) {
+  function renderHomeGroups(groups, reclaim, editing) {
     var wrap = el('div', { cls: 'home-groups', style: 'padding:0 30px 30px;' });
     groups.forEach(function (g) {
       var block = el('div', { cls: 'home-group' + (g.collapsed ? ' is-collapsed' : ''), attrs: { 'data-group-id': g.id } });
       block.appendChild(buildGroupHeader(g, editing));
       if (!g.collapsed) {
         var inner = el('div', { cls: 'home-group__grid' + (editing ? ' home-masonry--editing' : ''), attrs: { 'data-group-id': g.id } });
-        (g.members || []).forEach(function (id) {
-          if (hidden.indexOf(id) >= 0) return;
+        var mem = liveMembers(g);
+        mem.forEach(function (id) {
           var mcell = buildGroupMemberCell(id, reclaim, editing, true);
           if (mcell) inner.appendChild(mcell);
         });
         block.appendChild(inner);
         if (editing && store._groupAddFor === g.id) block.appendChild(renderGroupAddPicker(g.id));
-        var visibleMembers = (g.members || []).filter(function (m) { return hidden.indexOf(m) < 0; });
-        if (visibleMembers.length === 0 && !(editing && store._groupAddFor === g.id)) {
+        if (mem.length === 0 && !(editing && store._groupAddFor === g.id)) {
           block.appendChild(el('div', { cls: 'home-group__empty', text: editing ? '＋ 로 위젯을 추가하세요.' : '빈 그룹' }));
         }
       }
@@ -10323,22 +10645,21 @@ function initBrowser() {
     return wrap;
   }
   /** [freeform] 그룹을 자유 배치 셀로 — 좌표(positions[gId])·폭(sizes[gId]) 대상, 드래그로 이동. 멤버는 내부 auto-fit. */
-  function renderGroupFreeCell(g, hidden, reclaim, editing) {
+  function renderGroupFreeCell(g, reclaim, editing) {
     var cell = el('div', { cls: 'home-section home-group--freecell', attrs: { 'data-home-section': g.id } });
     var content = el('div', { cls: 'home-section__content' });
     var block = el('div', { cls: 'home-group' + (g.collapsed ? ' is-collapsed' : '') });
     block.appendChild(buildGroupHeader(g, editing));
     if (!g.collapsed) {
       var inner = el('div', { cls: 'home-group__gridfree' });
-      (g.members || []).forEach(function (id) {
-        if (hidden.indexOf(id) >= 0) return;
+      var mem = liveMembers(g);
+      mem.forEach(function (id) {
         var mcell = buildGroupMemberCell(id, reclaim, editing, false); // 프리폼 그룹 내부 멤버는 리사이즈 없이 흐름 배치
         if (mcell) inner.appendChild(mcell);
       });
       block.appendChild(inner);
       if (editing && store._groupAddFor === g.id) block.appendChild(renderGroupAddPicker(g.id));
-      var visM = (g.members || []).filter(function (m) { return hidden.indexOf(m) < 0; });
-      if (visM.length === 0 && !(editing && store._groupAddFor === g.id)) {
+      if (mem.length === 0 && !(editing && store._groupAddFor === g.id)) {
         block.appendChild(el('div', { cls: 'home-group__empty', text: editing ? '＋ 로 위젯을 추가하세요.' : '빈 그룹' }));
       }
     }
@@ -10347,18 +10668,20 @@ function initBrowser() {
     if (editing) cell.appendChild(homeResizeHandle(g.id));
     return cell;
   }
-  /** 그룹에 추가할 위젯 선택 목록 — 어느 그룹에도 없고 숨기지 않은 토글 위젯. */
+  /** 그룹에 추가할 위젯 선택 목록 — 배치돼 있고 아직 어느 그룹에도 없는 **인스턴스**.
+   *   [위젯 인스턴스] 같은 타입이 여러 개면 각각 따로 뜬다(표시명으로 구분). */
   function renderGroupAddPicker(groupId) {
     var pick = el('div', { cls: 'home-group__picker' });
     var claimed = {};
     (store.groups || []).forEach(function (g) { (g.members || []).forEach(function (m) { claimed[m] = 1; }); });
-    var hidden = store.hiddenWidgets || [];
-    var avail = TOGGLEABLE_WIDGET_IDS.filter(function (id) { return !claimed[id] && hidden.indexOf(id) < 0; });
+    var avail = (store.homeWidgets || []).filter(function (w) { return !claimed[w.iid]; });
     pick.appendChild(el('div', { cls: 'home-group__picker-title', text: '위젯 추가' }));
-    if (avail.length === 0) { pick.appendChild(el('div', { cls: 'home-group__empty', text: '추가할 수 있는 위젯이 없습니다(모두 그룹에 있거나 숨김).' })); return pick; }
-    avail.forEach(function (id) {
-      var meta = WIDGET_META[id] || { name: id };
-      pick.appendChild(el('button', { cls: 'home-group__pick', text: '＋ ' + meta.name, attrs: { type: 'button' }, on: { click: function () { onAddToGroup(groupId, id); } } }));
+    if (avail.length === 0) { pick.appendChild(el('div', { cls: 'home-group__empty', text: '추가할 수 있는 위젯이 없습니다(배치된 위젯이 모두 그룹에 있습니다).' })); return pick; }
+    avail.forEach(function (w) {
+      pick.appendChild(el('button', {
+        cls: 'home-group__pick', text: '＋ ' + widgetDisplayName(w), attrs: { type: 'button' },
+        on: { click: function () { onAddToGroup(groupId, w.iid); } },
+      }));
     });
     return pick;
   }
@@ -10516,11 +10839,16 @@ function initBrowser() {
     // 홈 편집·위젯.
     acts.push({ id: 'home.edit', title: store.editMode ? '위젯 편집 종료' : '위젯 편집', group: '홈', keywords: 'edit widget 편집 위젯', run: function () { store.state.view = 'home'; toggleEditMode(); } });
     acts.push({ id: 'home.gallery', title: '위젯 추가 (갤러리)', group: '홈', keywords: 'widget add gallery 위젯 추가', run: function () { store.state.view = 'home'; store.showWidgetGallery = true; render(); } });
-    // 숨긴 위젯을 개별 추가 액션으로.
-    (store.hiddenWidgets || []).forEach(function (id) {
-      if (TOGGLEABLE_WIDGET_IDS.indexOf(id) < 0) return;
-      var meta = WIDGET_META[id] || { name: id };
-      acts.push({ id: 'widget.add.' + id, title: '위젯 추가: ' + meta.name, group: '위젯', keywords: 'widget add ' + id, run: function () { store.state.view = 'home'; onAddWidget(id); } });
+    // [위젯 인스턴스] 모든 위젯 타입이 추가 대상이다(중복 배치 허용 — '숨긴 위젯'이라는 개념이 없다).
+    TOGGLEABLE_WIDGET_IDS.forEach(function (type) {
+      var meta = WIDGET_META[type] || { name: type };
+      var n = widgetsOfType(type).length;
+      acts.push({
+        id: 'widget.add.' + type,
+        title: '위젯 추가: ' + meta.name + (n > 0 ? (' (현재 ' + n + '개)') : ''),
+        group: '위젯', keywords: 'widget add 위젯 추가 ' + type,
+        run: function () { store.state.view = 'home'; onAddWidget(type); },
+      });
     });
     // 대시보드 프리셋 전환(2개 이상일 때) + 새 프리셋.
     var dash = store.dashboard;
@@ -10539,12 +10867,14 @@ function initBrowser() {
       var label = t === 'light' ? '라이트' : (t === 'dark' ? '다크' : '시스템');
       acts.push({ id: 'theme.' + t, title: '테마: ' + label, group: '앱', keywords: 'theme 테마 ' + t + ' ' + label, enabled: function () { return store.theme !== t; }, run: function () { setTheme(t); } });
     });
-    // [로드맵 Phase 4·I] 표시 중인 위젯 포커스(풀스크린) 액션.
-    var hidden = store.hiddenWidgets || [];
-    applyHomeLayout(store.homeLayout).forEach(function (id) {
-      if (id === 'featureAdd' || hidden.indexOf(id) >= 0) return;
-      var meta = WIDGET_META[id] || { name: id };
-      acts.push({ id: 'focus.' + id, title: '위젯 포커스: ' + meta.name, group: '포커스', keywords: 'focus fullscreen 포커스 크게 ' + id, run: function () { openFocusWidget(id); } });
+    // [로드맵 Phase 4·I / 위젯 인스턴스] 배치된 **각 인스턴스**를 포커스 액션으로(표시명으로 구분).
+    (store.homeWidgets || []).forEach(function (w) {
+      acts.push({
+        id: 'focus.' + w.iid,
+        title: '위젯 포커스: ' + widgetDisplayName(w),
+        group: '포커스', keywords: 'focus fullscreen 포커스 크게 ' + w.type + ' ' + (w.name || ''),
+        run: function () { openFocusWidget(w.iid); },
+      });
     });
     // [로드맵 Phase 4·H] 딥링크 — 프로젝트로 점프(상세 드로어 열기). viewModels 유래.
     (store.viewModels || []).forEach(function (vm) {
@@ -10634,13 +10964,13 @@ function initBrowser() {
     else if (e.key === 'Escape') { e.preventDefault(); closePalette(); }
   }
 
-  /* ===== [로드맵 Phase 4·I] 포커스(풀스크린) 위젯 — 한 위젯을 오버레이로 크게 ===== */
-  function openFocusWidget(id) {
-    if (HOME_SECTION_IDS.indexOf(id) < 0 || id === 'featureAdd') return;
+  /* ===== [로드맵 Phase 4·I] 포커스(풀스크린) 위젯 — 한 위젯을 오버레이로 크게 =====
+   *   [위젯 인스턴스] 포커스 대상은 **인스턴스**(iid)다 — 같은 타입 위젯 둘 중 하나만 크게 볼 수 있다. */
+  function openFocusWidget(iid) {
+    if (!widgetInstance(iid)) return; // 배치된 인스턴스만
     store.state.view = 'home';
-    store.focusWidget = { open: true, id: id };
+    store.focusWidget = { open: true, id: iid };
     store._focusShown = false;
-    // 포커스 대상이 숨김/미로드 위젯이면 표시되도록(지연 로드 위젯은 오버레이 진입 시 로드).
     render();
   }
   function closeFocusWidget() {
@@ -10651,20 +10981,21 @@ function initBrowser() {
     scheduleHomeMasonryLayout();
   }
   function renderFocusOverlay() {
-    var id = store.focusWidget.id;
-    var meta = WIDGET_META[id] || { name: id };
+    var inst = widgetInstance(store.focusWidget.id);
+    if (!inst) return el('div'); // 배치가 바뀌어 사라진 인스턴스 — 빈 오버레이(다음 render 에서 닫힘)
+    var name = widgetDisplayName(inst);
     var enter = !store._focusShown; store._focusShown = true;
     var overlay = el('div', { cls: 'focusw-overlay', on: { click: function (e) { if (e.target === overlay) closeFocusWidget(); } } });
-    var panel = el('div', { cls: 'focusw' + (enter ? ' is-enter' : ''), attrs: { role: 'dialog', 'aria-modal': 'true', 'aria-label': meta.name + ' 포커스' } });
+    var panel = el('div', { cls: 'focusw' + (enter ? ' is-enter' : ''), attrs: { role: 'dialog', 'aria-modal': 'true', 'aria-label': name + ' 포커스' } });
     var head = el('div', { cls: 'focusw__head' });
-    head.appendChild(el('div', { cls: 'focusw__title', text: meta.name }));
+    head.appendChild(el('div', { cls: 'focusw__title', text: name }));
     head.appendChild(el('button', {
       cls: 'focusw__close', text: '✕', attrs: { type: 'button', 'aria-label': '포커스 닫기' }, on: { click: closeFocusWidget },
     }));
     panel.appendChild(head);
     // 컨테이너 쿼리 컨텍스트 재사용(.home-section__content) — 위젯이 넓은 폭에 반응(밀도 L 등).
     var content = el('div', { cls: 'focusw__body home-section__content', attrs: { 'data-density': 'L' } });
-    var node = renderHomeSection(id);
+    var node = renderHomeSection(inst.type, undefined, inst);
     if (node) content.appendChild(node);
     panel.appendChild(content);
     overlay.appendChild(panel);
@@ -11480,11 +11811,18 @@ if (typeof module !== 'undefined' && module.exports) {
     updateHasBadge,
     // [R-31] 커밋 차트 폴링 게이트(홈 뷰 + 가시성)
     shouldPollCommit,
-    // [R-32] 홈 섹션 화이트리스트 + 순서 정규화(렌더러 동형)
+    // [R-32] 홈 섹션(=위젯 타입) 화이트리스트 + 레거시 순서 정규화(렌더러 동형)
     HOME_SECTION_IDS,
     applyHomeLayout,
     applyDashboard,
     applyScratchpad,
+    // [위젯 인스턴스 v6] 배치 = [{iid,type,name}] — 중복 배치 + 배치별 이름(헤드리스 테스트)
+    applyHomeWidgets,
+    applyScratchpads,
+    applyWidgetPositions,
+    applyGroups,
+    widgetsFromLegacy,
+    isIid,
     // [로드맵 Phase 1·L] 레이아웃 템플릿(순수 데이터·구성 빌더, 헤드리스 테스트)
     HOME_TEMPLATES,
     buildTemplatePreset,

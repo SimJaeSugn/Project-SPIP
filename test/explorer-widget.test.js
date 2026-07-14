@@ -61,7 +61,8 @@ test('탐색기 — 위젯 id 가 세 레지스트리에 모두 배선(HOME_SECT
   assert.ok(HOME_SECTION_IDS.includes('explorer'), 'HOME_SECTION_IDS 에 explorer');
   assert.ok(TOGGLEABLE_WIDGET_IDS.includes('explorer'), '갤러리에서 추가/제거 가능(토글 위젯)');
   assert.ok(/explorer:\s*\{\s*name:\s*'폴더 탐색기'/.test(APP_SRC), 'WIDGET_META 에 표시 메타');
-  assert.ok(/case 'explorer':\s*return renderHomeExplorer\(\);/.test(APP_SRC), 'renderHomeSection switch 배선');
+  // [위젯 인스턴스] 렌더 함수는 인스턴스({iid,type,name})를 받는다 — 같은 위젯을 여러 개 놓을 수 있다.
+  assert.ok(/case 'explorer':\s*return renderHomeExplorer\(inst\);/.test(APP_SRC), 'renderHomeSection switch 배선(인스턴스 전달)');
   assert.ok(/maybeLoadExplorer\(\);/.test(APP_SRC), 'renderHome 에서 지연 적재 호출');
 });
 
@@ -110,7 +111,8 @@ test('탐색기 — 렌더러는 임의 경로 입력을 IPC 로 보내지 않�
   assert.ok(!/explorerIpc\('addRoot'/.test(APP_SRC), 'addRoot(임의 경로 등록) 채널을 쓰지 않는다');
   assert.ok(/explorerIpc\('pickRoot'\)/.test(src), '루트 등록은 pickRoot(dialog)로만');
   // 이동 대상은 main 이 돌려준 실경로(cwd/parent/root) 또는 그 하위 이름 조립 — main 이 매 호출 재게이트.
-  assert.ok(/explorerNavigate\(fx\.parent\)/.test(src), '상위 이동은 main 이 준 parent 실경로');
+  //   [위젯 인스턴스] 이동은 인스턴스별이라 iid 를 함께 넘긴다(탐색기 2개가 서로 다른 폴더를 본다).
+  assert.ok(/explorerNavigate\(iid, fx\.parent\)/.test(src), '상위 이동은 main 이 준 parent 실경로');
 });
 
 test('탐색기 — L-1: 렌더 경로에 innerHTML 없음(전부 textContent/el)', () => {

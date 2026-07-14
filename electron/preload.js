@@ -148,11 +148,18 @@ contextBridge.exposeInMainWorld('spip', {
   setFavorite: (id, on) => ipcRenderer.invoke('spip:setFavorite', { id: String(id), on: !!on }),
   setOrder: (ids) => ipcRenderer.invoke('spip:setOrder', { ids: Array.isArray(ids) ? ids.map(String) : [] }),
   setSortMode: (m) => ipcRenderer.invoke('spip:setSortMode', { mode: String(m) }),
-  // [R-32] 홈 섹션 순서 — 섹션 id 배열만. 읽기는 getUiState 응답의 homeLayout. 검증은 main normalizeHomeLayout.
+  // [위젯 인스턴스] 홈 배치 — 배치 단위는 인스턴스({iid,type,name})라 같은 위젯을 여러 개 놓을 수 있다.
+  //   읽기는 getUiState 응답의 homeWidgets. 검증은 main normalizeHomeWidgets 단일 경계.
+  //   setHomeLayout 은 **순서만** 바꾼다(iid 순열) — 추가/제거/이름은 아래 전용 채널.
   setHomeLayout: (ids) => ipcRenderer.invoke('spip:setHomeLayout', { ids: Array.isArray(ids) ? ids.map(String) : [] }),
-  // [위젯 추가/제거] 숨긴(미적용) 위젯 집합 — id 배열만. 읽기는 getUiState 응답의 hiddenWidgets. 검증은 main normalizeHiddenWidgets.
-  setHiddenWidgets: (ids) => ipcRenderer.invoke('spip:setHiddenWidgets', { ids: Array.isArray(ids) ? ids.map(String) : [] }),
-  // [홈 위젯 크기] 위젯별 폭(열 스팬)·높이(px) 맵 { id:{w,h} }. 읽기는 getUiState 응답의 homeWidgetSizes. 검증은 main normalizeHomeWidgetSizes.
+  // 새 인스턴스 추가 — iid 는 main 이 발급한다(렌더러가 id 를 주입할 수 없다).
+  addWidget: (type, name) => ipcRenderer.invoke('spip:addWidget', {
+    type: String(type), name: name == null ? '' : String(name),
+  }),
+  removeWidget: (iid) => ipcRenderer.invoke('spip:removeWidget', { iid: String(iid) }),
+  // 배치별 표시명 — 빈 문자열이면 타입 기본명으로 복귀.
+  renameWidget: (iid, name) => ipcRenderer.invoke('spip:renameWidget', { iid: String(iid), name: name == null ? '' : String(name) }),
+  // [홈 위젯 크기] 인스턴스별 폭(열 스팬)·높이(px) 맵 { iid:{w,h} }. 읽기는 getUiState 응답의 homeWidgetSizes.
   setHomeWidgetSizes: (sizes) => ipcRenderer.invoke('spip:setHomeWidgetSizes', { sizes: (sizes && typeof sizes === 'object') ? sizes : {} }),
   // [로드맵 Phase 2] 대시보드 프리셋(모드) — 전환/추가/복제/이름변경/삭제. 읽기는 getUiState 응답의 dashboard. 검증은 main 프리셋 CRUD.
   setActivePreset: (id) => ipcRenderer.invoke('spip:setActivePreset', { id: String(id) }),
@@ -179,8 +186,11 @@ contextBridge.exposeInMainWorld('spip', {
     accent: (prefs && prefs.accent != null) ? String(prefs.accent) : undefined,
     uiScale: (prefs && prefs.uiScale != null) ? String(prefs.uiScale) : undefined,
   }),
-  // [로드맵 Phase 3·G] 스크래치패드 메모 — 텍스트만. 읽기는 getUiState 응답의 scratchpad. 검증은 메인 normalizeScratchpad.
-  setScratchpad: (text) => ipcRenderer.invoke('spip:setScratchpad', { text: text == null ? '' : String(text) }),
+  // [로드맵 Phase 3·G / 위젯 인스턴스] 스크래치패드 메모 — 메모는 위젯 인스턴스별이라 iid 를 함께 보낸다.
+  //   읽기는 getUiState 응답의 scratchpads({iid:{text,updatedAt}}). 검증은 메인 normalizeScratchpads.
+  setScratchpad: (iid, text) => ipcRenderer.invoke('spip:setScratchpad', {
+    iid: String(iid), text: text == null ? '' : String(text),
+  }),
 
   // 할 일(홈 브리핑) — 추가/완료토글/삭제/마감설정. 읽기는 getUiState 응답의 todos.
   //   [백로그2-4] dueAt(ms epoch, 선택)·setTodoDue 추가. 빈/무효 dueAt 은 생략(메인이 null 처리).

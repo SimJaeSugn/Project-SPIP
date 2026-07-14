@@ -54,7 +54,8 @@ test('MD-1 — 위젯 id 가 세 레지스트리에 모두 배선(HOME_SECTION_I
   assert.ok(HOME_SECTION_IDS.includes('mdedit'), 'HOME_SECTION_IDS 에 mdedit');
   assert.ok(TOGGLEABLE_WIDGET_IDS.includes('mdedit'), '갤러리에서 추가/제거 가능(토글 위젯)');
   assert.ok(/mdedit:\s*\{\s*name:\s*'마크다운 편집기'/.test(APP_SRC), 'WIDGET_META 에 표시 메타');
-  assert.ok(/case 'mdedit':\s*return renderHomeMdEdit\(\);/.test(APP_SRC), 'renderHomeSection switch 배선');
+  // [위젯 인스턴스] 렌더 함수는 인스턴스({iid,type,name})를 받는다 — 편집기 2개가 다른 문서를 연다.
+  assert.ok(/case 'mdedit':\s*return renderHomeMdEdit\(inst\);/.test(APP_SRC), 'renderHomeSection switch 배선(인스턴스 전달)');
   assert.ok(/maybeLoadMdEdit\(\);/.test(APP_SRC), 'renderHome 에서 지연 적재 호출');
 });
 
@@ -65,16 +66,20 @@ test('MD-1 — 렌더러 HOME_SECTION_IDS 가 메인 uiStateStore 와 동형(드
   assert.ok(mainIds.includes('mdedit'));
 });
 
-test('MD-1 — 신규 위젯은 기본 숨김(갤러리 opt-in) — SCHEMA_VERSION 승격 + NEW_HIDDEN_SINCE', () => {
+test('MD-1 — 신규 위젯은 기본 미배치(갤러리 opt-in) — 레거시 사용자에게 갑툭튀 금지', () => {
   const store = require('../lib/common/uiStateStore');
-  assert.strictEqual(store.SCHEMA_VERSION, 5, '신규 위젯 도입 → 스키마 승격');
-  assert.ok(store.DEFAULT_HIDDEN_WIDGETS.includes('mdedit'), '신규 설치 시드에서 기본 숨김');
+  // [위젯 인스턴스 v6] '숨김'이 '미배치'로 바뀌었다 — 기본 배치에 mdedit 인스턴스가 없다.
+  assert.ok(store.DEFAULT_HIDDEN_WIDGETS.includes('mdedit'), '신규 설치 시드에서 기본 미배치');
+  assert.ok(!store.defaultHomeWidgets().some((w) => w.type === 'mdedit'), '기본 배치에 없음');
   // 레거시(v4) 사용자에게도 갑툭튀하지 않는다.
   const migrated = store.normalizeState({ schemaVersion: 4, hiddenWidgets: [] });
-  assert.ok(migrated.hiddenWidgets.includes('mdedit'), 'v4 사용자에게 union');
-  // 이미 노출을 선택한 사용자는 재숨김하지 않는다(멱등).
-  const optedIn = store.normalizeState({ schemaVersion: 5, hiddenWidgets: [] });
-  assert.ok(!optedIn.hiddenWidgets.includes('mdedit'), '현재 버전 사용자는 재숨김 없음');
+  assert.ok(!migrated.homeWidgets.some((w) => w.type === 'mdedit'), 'v4 사용자에게 미배치');
+  // 사용자가 추가하면 배치된다(그리고 여러 개 추가할 수 있다).
+  const added = store.normalizeState({
+    schemaVersion: store.SCHEMA_VERSION,
+    homeWidgets: [{ iid: 'w1', type: 'mdedit', name: '회의록' }, { iid: 'w2', type: 'mdedit', name: 'TODO' }],
+  });
+  assert.strictEqual(added.homeWidgets.filter((w) => w.type === 'mdedit').length, 2, '중복 배치 가능');
 });
 
 test('MD-1 — 숨김 위젯이면 IPC 0(불필요한 디스크 읽기 회피)', () => {
@@ -239,15 +244,27 @@ test('MD-1 — 편집 중 전체 render() 를 부르지 않는다(textarea 캐�
   const code = mdCode();
   const fn = code.slice(code.indexOf('function mdOnInput'), code.indexOf('function mdSaveNow'));
   assert.ok(!/\brender\(\)/.test(fn), 'mdOnInput 은 전체 render 를 부르지 않는다');
-  assert.ok(/mdUpdatePreview\(\)/.test(fn), '미리보기만 부분 갱신');
+  assert.ok(/mdUpdatePreview\(iid\)/.test(fn), '미리보기만 부분 갱신(그 인스턴스의 것만)');
   assert.ok(/setTimeout\(/.test(fn), '디바운스 자동 저장');
 });
 
 test('MD-1 — 문서 전환·내보내기 전에 미저장 변경을 확정 저장한다(유실 방지)', () => {
   const code = mdCode();
-  assert.ok(/await mdFlushSave\(\)/.test(code.slice(code.indexOf('function mdOpenDoc'))), '문서 전환 전 flush');
-  assert.ok(/await mdFlushSave\(\)/.test(code.slice(code.indexOf('function mdExportDoc'))), '내보내기 전 flush');
-  assert.ok(/blur: function \(\) \{ mdFlushSave\(\); \}/.test(code), '포커스 이탈 시 flush');
+  assert.ok(/await mdFlushSave\(iid\)/.test(code.slice(code.indexOf('function mdOpenDoc'))), '문서 전환 전 flush');
+  assert.ok(/await mdFlushSave\(iid\)/.test(code.slice(code.indexOf('function mdExportDoc'))), '내보내기 전 flush');
+  assert.ok(/blur: function \(\) \{ mdFlushSave\(iid\); \}/.test(code), '포커스 이탈 시 flush');
+});
+
+test('위젯 인스턴스 — 편집기 2개가 서로 다른 문서를 연다(부분 갱신은 그 셀 안에서만)', () => {
+  const code = mdCode();
+  // 열린 문서·본문·뷰 모드는 인스턴스별(wstate). 전역 store.mdedit 은 '문서 목록'만 공유한다.
+  assert.ok(/var st = wstate\(iid\)/.test(code), '인스턴스별 상태(wstate)를 쓴다');
+  assert.ok(!/store\.mdedit\.activeId/.test(code), '열린 문서는 전역 슬롯이 아니다');
+  assert.ok(/store\.mdedit\.docs/.test(code), '문서 목록은 전역 공유(하나의 라이브러리)');
+  // document 전역 조회 금지 — 편집기가 여럿이면 첫 셀만 고쳐 나머지가 멈춘 화면으로 남는다.
+  const patchFns = code.slice(code.indexOf('function mdUpdatePreview'), code.indexOf('function mdInlineNodes'));
+  assert.ok(!/document\.querySelector/.test(patchFns), '부분 갱신에 document 전역 조회 금지');
+  assert.ok(/cellQuery\(iid,/.test(patchFns), '그 인스턴스의 셀 안에서만 찾는다');
 });
 
 test('MD-1 — 편집 모드 재정렬 드래그(SortableJS)와 분리(pointerdown stopPropagation)', () => {
@@ -257,7 +274,7 @@ test('MD-1 — 편집 모드 재정렬 드래그(SortableJS)와 분리(pointerdo
 });
 
 test('MD-1 — textarea 본문은 value 프로퍼티로 넣는다(setAttribute 는 개행을 깨뜨린다)', () => {
-  assert.ok(/ta\.value = md\.body;/.test(mdSection()), 'value 프로퍼티 대입');
+  assert.ok(/ta\.value = st\.body;/.test(mdSection()), 'value 프로퍼티 대입(인스턴스별 본문)');
 });
 
 /* ───── 파서 로드 ───── */

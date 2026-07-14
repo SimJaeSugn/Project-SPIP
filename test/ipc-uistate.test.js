@@ -73,32 +73,92 @@ test('setSortMode — 화이트리스트 외 → auto', () => {
   assert.strictEqual(uiState.setSortMode({ mode: 'manual' }, ctx).sortMode, 'manual');
 });
 
-// ── 홈 섹션 순서(homeLayout) 핸들러 (R-32) ──
-test('setHomeLayout — 정규화·영속·응답(중복/미지/비배열 흡수)', () => {
+// ── [위젯 인스턴스] 배치 순서/추가/제거/이름 핸들러 ──
+test('setHomeLayout — 순서만 바꾼다(iid 순열): 미지 iid 무시, 누락분은 기존 순서로 보충(손실 0)', () => {
   const s = memStore();
   const ctx = ctxWith(s);
-  // 유효 재정렬 + 중복 + 미지 id + 비문자열 → 정규화가 흡수, 누락 섹션 기본 순서 보충.
-  const r = uiState.setHomeLayout({ ids: ['mail', 'attention', 'mail', 'bogus', 7] }, ctx);
+  const before = uiState.getUiState(ctx).homeWidgets.map((w) => w.iid);
+  assert.ok(before.length >= 3);
+
+  // 뒤쪽 2개만 앞으로 보내고, 미지 iid·중복·비문자열을 섞어 보낸다.
+  const r = uiState.setHomeLayout({ ids: [before[2], before[1], before[2], 'bogus', 7] }, ctx);
   assert.strictEqual(r.ok, true);
-  assert.deepStrictEqual(r.homeLayout, ['mail', 'attention', 'productivity', 'activity', 'todos', 'disk', 'aiusage', 'shelf', 'shelfWide', 'scratchpad', 'commitHeatmap', 'systemStatus', 'explorer', 'mdedit', 'featureAdd']);
-  // 영속 반영 확인(write를 거친 store 상태와 일치).
-  assert.deepStrictEqual(s._get().homeLayout, r.homeLayout);
+  const after = r.homeWidgets.map((w) => w.iid);
+  assert.deepStrictEqual(after.slice(0, 2), [before[2], before[1]], '보낸 순서가 앞으로');
+  assert.deepStrictEqual(after.slice().sort(), before.slice().sort(), '위젯이 사라지거나 생기지 않는다');
+  assert.ok(!after.includes('bogus'), '이 채널로는 새 인스턴스가 만들어지지 않는다');
+  assert.deepStrictEqual(s._get().homeWidgets.map((w) => w.iid), after, '영속 반영');
 });
 
-test('setHomeLayout — 비배열/누락 args도 graceful(기본 순서)', () => {
+test('setHomeLayout — 비배열/누락 args도 graceful(배치 불변)', () => {
   const ctx = ctxWith(memStore());
-  assert.deepStrictEqual(uiState.setHomeLayout({ ids: 'nope' }, ctx).homeLayout, realStore.HOME_SECTION_IDS);
-  assert.deepStrictEqual(uiState.setHomeLayout({}, ctx).homeLayout, realStore.HOME_SECTION_IDS);
-  assert.deepStrictEqual(uiState.setHomeLayout(undefined, ctx).homeLayout, realStore.HOME_SECTION_IDS);
+  const base = uiState.getUiState(ctx).homeWidgets.map((w) => w.iid);
+  for (const args of [{ ids: 'nope' }, {}, undefined]) {
+    assert.deepStrictEqual(uiState.setHomeLayout(args, ctx).homeWidgets.map((w) => w.iid), base, '손상 입력은 기존 배치 유지');
+  }
 });
 
-test('getUiState — homeLayout 포함(toResponse 노출)', () => {
-  const ctx = ctxWith(memStore({ homeLayout: ['disk', 'mail'] }));
+test('위젯 인스턴스 — addWidget: 같은 타입을 여러 번 추가할 수 있고 iid 는 메인이 발급', () => {
+  const ctx = ctxWith(memStore());
+  const a = uiState.addWidget({ type: 'mdedit' }, ctx);
+  const b = uiState.addWidget({ type: 'mdedit' }, ctx);
+  assert.strictEqual(a.ok, true);
+  assert.strictEqual(b.ok, true);
+  assert.notStrictEqual(a.iid, b.iid, '중복 배치 — 서로 다른 인스턴스');
+  const mds = b.homeWidgets.filter((w) => w.type === 'mdedit');
+  assert.strictEqual(mds.length, 2, '마크다운 편집기 2개가 배치됨');
+  // 렌더러가 보낸 id 는 무시된다(메인만 발급).
+  const c = uiState.addWidget({ type: 'mail', iid: 'evil' }, ctx);
+  assert.notStrictEqual(c.iid, 'evil');
+  // 미지 타입은 거절.
+  assert.deepStrictEqual(uiState.addWidget({ type: '../etc' }, ctx), { ok: false, code: 'BAD_TYPE' });
+  assert.deepStrictEqual(uiState.addWidget({}, ctx), { ok: false, code: 'BAD_TYPE' });
+});
+
+test('위젯 인스턴스 — renameWidget: 배치별 표시명(빈 값이면 이름 해제)', () => {
+  const ctx = ctxWith(memStore());
+  const a = uiState.addWidget({ type: 'mdedit' }, ctx);
+  const r = uiState.renameWidget({ iid: a.iid, name: '  회의록  ' }, ctx);
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(r.homeWidgets.find((w) => w.iid === a.iid).name, '회의록', 'sanitize(트림)');
+  // 빈 이름 = 해제(타입 기본명으로 복귀).
+  const r2 = uiState.renameWidget({ iid: a.iid, name: '' }, ctx);
+  assert.strictEqual(r2.homeWidgets.find((w) => w.iid === a.iid).name, '');
+  assert.deepStrictEqual(uiState.renameWidget({ iid: 'nope', name: 'x' }, ctx), { ok: false, code: 'NOT_FOUND' });
+});
+
+test('위젯 인스턴스 — removeWidget: 그 인스턴스만 제거하고 크기 고아 키는 자동 정리', () => {
+  const ctx = ctxWith(memStore());
+  const a = uiState.addWidget({ type: 'mdedit' }, ctx);
+  const b = uiState.addWidget({ type: 'mdedit' }, ctx);
+  uiState.setHomeWidgetSizes({ sizes: { [a.iid]: { w: 1, h: 300 }, [b.iid]: { w: 3, h: 600 } } }, ctx);
+
+  const r = uiState.removeWidget({ iid: a.iid }, ctx);
+  assert.strictEqual(r.ok, true);
+  assert.ok(!r.homeWidgets.some((w) => w.iid === a.iid), '제거됨');
+  assert.ok(r.homeWidgets.some((w) => w.iid === b.iid), '같은 타입의 다른 배치는 남는다');
+  assert.ok(!(a.iid in r.homeWidgetSizes), '제거된 인스턴스의 크기는 정리(고아 키 0)');
+  assert.deepStrictEqual(r.homeWidgetSizes[b.iid], { w: 3, h: 600 }, '남은 인스턴스 크기는 보존');
+  assert.deepStrictEqual(uiState.removeWidget({ iid: a.iid }, ctx), { ok: false, code: 'NOT_FOUND' });
+});
+
+test('위젯 인스턴스 — setHomeWidgetSizes: 배치된 iid 만(없는 위젯의 크기를 심을 수 없다)', () => {
+  const ctx = ctxWith(memStore());
+  const a = uiState.addWidget({ type: 'mdedit' }, ctx);
+  // 'zz9' = 배치되지 않은 iid. (주의: 'gxxxx' 형태는 그룹 id 라 별도 허용 — 여기선 그룹이 아닌 키로 검증)
+  const r = uiState.setHomeWidgetSizes({ sizes: { [a.iid]: { w: 2, h: 300 }, zz9: { w: 2, h: 300 } } }, ctx);
+  assert.deepStrictEqual(Object.keys(r.homeWidgetSizes), [a.iid]);
+});
+
+test('getUiState — homeWidgets 포함(toResponse 노출)', () => {
+  const ctx = ctxWith(memStore({
+    schemaVersion: realStore.SCHEMA_VERSION,
+    homeWidgets: [{ iid: 'disk', type: 'disk', name: '' }, { iid: 'mail', type: 'mail', name: '업무' }],
+  }));
   const r = uiState.getUiState(ctx);
-  assert.ok(Array.isArray(r.homeLayout));
-  assert.strictEqual(r.homeLayout[0], 'disk');
-  assert.strictEqual(r.homeLayout[1], 'mail');
-  assert.strictEqual(r.homeLayout.length, realStore.HOME_SECTION_IDS.length); // 누락 보충
+  assert.ok(Array.isArray(r.homeWidgets));
+  assert.deepStrictEqual(r.homeWidgets.map((w) => w.iid), ['disk', 'mail']);
+  assert.strictEqual(r.homeWidgets[1].name, '업무', '배치별 이름 노출');
 });
 
 // ── [로드맵 Phase 5·B] setLayoutMode / setWidgetPositions (프리폼) ──
@@ -144,15 +204,15 @@ test('addTemplatePreset — 템플릿 구성으로 새 프리셋 추가·활성 
   const s = memStore();
   const ctx = ctxWith(s);
   const before = uiState.getUiState(ctx).dashboard.presets.length;
-  const toggle = realStore.TOGGLEABLE_WIDGET_IDS;
-  const hidden = toggle.filter((id) => ['mail', 'todos'].indexOf(id) < 0);
+  // [위젯 인스턴스] 템플릿은 '보일 타입 목록'이 아니라 '배치할 인스턴스 목록'을 준다.
   const r = uiState.addTemplatePreset({ name: '미니멀', template: {
-    layout: realStore.HOME_SECTION_IDS.slice(), hidden: hidden, sizes: { mail: { w: 99, h: 5 } }, layoutMode: 'freeform', groups: [],
+    widgets: [{ iid: 'mail', type: 'mail', name: '' }, { iid: 'todos', type: 'todos', name: '' }],
+    sizes: { mail: { w: 99, h: 5 } }, layoutMode: 'freeform', groups: [],
   } }, ctx);
   assert.strictEqual(r.ok, true);
   assert.strictEqual(r.dashboard.presets.length, before + 1, '새 프리셋 추가');
-  // 활성 프리셋(레거시 키)이 템플릿 내용 — 숨김·모드·크기(클램프).
-  assert.deepStrictEqual(r.hiddenWidgets.slice().sort(), hidden.slice().sort());
+  // 활성 프리셋이 템플릿 내용 — 배치·모드·크기(클램프).
+  assert.deepStrictEqual(r.homeWidgets.map((w) => w.iid), ['mail', 'todos'], '템플릿 배치만 적용');
   assert.strictEqual(r.layoutMode, 'freeform');
   assert.deepStrictEqual(r.homeWidgetSizes.mail, { w: realStore.HOME_MAX_COLS, h: realStore.HOME_H_MIN }, '크기 클램프(정규화)');
   // 상한 초과 시 LIMIT.
@@ -178,44 +238,40 @@ test('setGroups — 활성 프리셋 그룹 정규화·영속·getUiState 노출
 });
 
 // ── [로드맵 Phase 3·G] setScratchpad ──
-test('setScratchpad — 텍스트 정규화·영속·updatedAt 메인 스탬프 + getUiState 노출', () => {
+test('setScratchpad — 인스턴스별 메모: 정규화·영속·updatedAt 메인 스탬프 + getUiState 노출', () => {
   const s = memStore();
   const ctx = Object.assign(ctxWith(s), { nowMs: () => 1717000000000 });
   // 개행 보존 + 제어문자 제거.
   const raw = 'line1' + String.fromCharCode(10) + 'line2' + String.fromCharCode(7);
-  const r = uiState.setScratchpad({ text: raw }, ctx);
+  const r = uiState.setScratchpad({ iid: 'scratchpad', text: raw }, ctx);
   assert.strictEqual(r.ok, true);
-  assert.strictEqual(r.scratchpad.text, 'line1' + String.fromCharCode(10) + 'line2');
-  assert.strictEqual(r.scratchpad.updatedAt, 1717000000000, 'updatedAt 은 메인 스탬프');
+  assert.strictEqual(r.scratchpads.scratchpad.text, 'line1' + String.fromCharCode(10) + 'line2');
+  assert.strictEqual(r.scratchpads.scratchpad.updatedAt, 1717000000000, 'updatedAt 은 메인 스탬프');
+
+  // [위젯 인스턴스] 메모 위젯을 2개 놓으면 **서로 다른 메모**를 쓴다.
+  const r2 = uiState.setScratchpad({ iid: 'w1', text: '두 번째 메모' }, ctx);
+  assert.strictEqual(r2.scratchpads.scratchpad.text, 'line1' + String.fromCharCode(10) + 'line2', '첫 메모 불변');
+  assert.strictEqual(r2.scratchpads.w1.text, '두 번째 메모');
+
   // 영속 + getUiState 노출.
-  assert.deepStrictEqual(s._get().scratchpad, r.scratchpad);
-  assert.deepStrictEqual(uiState.getUiState(ctx).scratchpad, r.scratchpad);
-  // 비문자열/누락 args graceful(빈 텍스트).
-  assert.strictEqual(uiState.setScratchpad({}, ctx).scratchpad.text, '');
-  assert.strictEqual(uiState.setScratchpad(undefined, ctx).scratchpad.text, '');
+  assert.deepStrictEqual(s._get().scratchpads, r2.scratchpads);
+  assert.deepStrictEqual(uiState.getUiState(ctx).scratchpads, r2.scratchpads);
+  // iid 없음/형식 불량 → BAD_INPUT.
+  assert.deepStrictEqual(uiState.setScratchpad({ text: 'x' }, ctx), { ok: false, code: 'BAD_INPUT' });
+  assert.deepStrictEqual(uiState.setScratchpad({ iid: '../x', text: 'x' }, ctx), { ok: false, code: 'BAD_INPUT' });
 });
 
 // ── [위젯 추가/제거] setHiddenWidgets ──
 
-test('setHiddenWidgets — 토글 위젯만 정규화·영속·응답', () => {
-  const s = memStore();
-  const ctx = ctxWith(s);
-  const r = uiState.setHiddenWidgets({ ids: ['mail', 'aiusage', 'featureAdd', 'bogus', 9] }, ctx);
-  assert.strictEqual(r.ok, true);
-  assert.deepStrictEqual(r.hiddenWidgets, ['mail', 'aiusage'], 'featureAdd·미지·비문자열 제거');
-  assert.deepStrictEqual(s._get().hiddenWidgets, r.hiddenWidgets);
+test('위젯 인스턴스 — setHiddenWidgets 채널은 제거됐다(숨김 대신 인스턴스 추가/제거)', () => {
+  // '숨김'이라는 상태가 없어졌다 — 제거 = 인스턴스 삭제, 추가 = 새 인스턴스.
+  assert.strictEqual(typeof uiState.setHiddenWidgets, 'undefined');
+  for (const fn of ['addWidget', 'removeWidget', 'renameWidget']) {
+    assert.strictEqual(typeof uiState[fn], 'function', fn + ' 이 그 자리를 대신한다');
+  }
 });
 
-test('setHiddenWidgets — 비배열/누락 graceful(빈 배열=전부 표시)', () => {
-  const ctx = ctxWith(memStore());
-  assert.deepStrictEqual(uiState.setHiddenWidgets({ ids: 'nope' }, ctx).hiddenWidgets, []);
-  assert.deepStrictEqual(uiState.setHiddenWidgets({}, ctx).hiddenWidgets, []);
-});
 
-test('getUiState — hiddenWidgets 포함(toResponse 노출)', () => {
-  const r = uiState.getUiState(ctxWith(memStore({ hiddenWidgets: ['disk'] })));
-  assert.deepStrictEqual(r.hiddenWidgets, ['disk']);
-});
 
 // ── 할 일(todos) 핸들러 ──
 function todoCtx(store) {
@@ -310,27 +366,30 @@ test('Phase2 IPC — getUiState 가 dashboard(기본 프리셋 1개) 노출', ()
   assert.strictEqual(r.dashboard.activePreset, r.dashboard.presets[0].id);
 });
 
-test('Phase2 IPC — addPreset: 새 프리셋 추가 + 활성 전환 + 레거시 키 스왑(기본 배치)', () => {
-  const s = memStore({ homeLayout: ['mail', 'todos'] }); // 기존 활성 배치
+test('Phase2 IPC — addPreset: 새 프리셋 추가 + 활성 전환 + 배치 스왑(기본 배치)', () => {
+  const s = memStore({ homeWidgets: [{ iid: 'mail', type: 'mail', name: '' }, { iid: 'todos', type: 'todos', name: '' }] });
   const ctx = ctxWith(s);
   const r = uiState.addPreset({ name: '집중' }, ctx);
   assert.strictEqual(r.ok, true);
   assert.strictEqual(r.dashboard.presets.length, 2);
   assert.strictEqual(r.dashboard.activePreset, r.dashboard.presets[1].id);
-  // 새 활성 프리셋은 기본 배치(전 섹션 순서) → 레거시 homeLayout 스왑됨
-  assert.deepStrictEqual(r.homeLayout, realStore.HOME_SECTION_IDS);
+  // [위젯 인스턴스] 새 활성 프리셋은 기본 배치 → 최상위 homeWidgets 가 그것으로 스왑됨.
+  assert.deepStrictEqual(r.homeWidgets, realStore.defaultHomeWidgets());
 });
 
-test('Phase2 IPC — setActivePreset: 전환 시 레거시 키가 대상 프리셋 내용으로', () => {
-  const ctx = ctxWith(memStore({ homeLayout: ['mail', 'todos'] }));
+test('Phase2 IPC — setActivePreset: 전환 시 배치가 대상 프리셋 내용으로 스왑', () => {
+  const ctx = ctxWith(memStore({
+    homeWidgets: [{ iid: 'mail', type: 'mail', name: '업무 메일' }, { iid: 'todos', type: 'todos', name: '' }],
+  }));
   // p1(기본 배치) 추가 → 활성 p1
   const a = uiState.addPreset({ name: 'A' }, ctx);
   const firstId = a.dashboard.presets[0].id; // 'default'(배치 mail,todos)
-  // 다시 default 로 전환 → 레거시가 default 내용(mail,todos)으로 복귀
+  // 다시 default 로 전환 → 배치가 default 내용(mail,todos + 이름)으로 복귀
   const r = uiState.setActivePreset({ id: firstId }, ctx);
   assert.strictEqual(r.ok, true);
   assert.strictEqual(r.dashboard.activePreset, firstId);
-  assert.deepStrictEqual(r.homeLayout.slice(0, 2), ['mail', 'todos']);
+  assert.deepStrictEqual(r.homeWidgets.map((w) => w.iid), ['mail', 'todos']);
+  assert.strictEqual(r.homeWidgets[0].name, '업무 메일', '프리셋별 배치 이름도 스왑된다');
 });
 
 test('Phase2 IPC — setActivePreset: 없는 id → NO_PRESET', () => {

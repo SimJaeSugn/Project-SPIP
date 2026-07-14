@@ -42,16 +42,19 @@ function toResponse(state) {
   return {
     favorites: state.favorites, order: state.order, sortMode: state.sortMode, names: state.names,
     theme: state.theme, accent: state.accent || 'indigo', uiScale: state.uiScale || 'normal', // [Phase 1·J] 테마 개인화
-    todos: state.todos, langTrend: state.langTrend, homeLayout: state.homeLayout,
-    hiddenWidgets: state.hiddenWidgets, // [위젯 추가/제거] 숨긴(미적용) 위젯 집합
-    homeWidgetSizes: state.homeWidgetSizes || {}, // [홈 위젯 크기] 위젯별 폭(열 스팬)·높이(px)
+    todos: state.todos, langTrend: state.langTrend,
+    // [위젯 인스턴스] 배치 = [{iid,type,name}] — 배열 순서 = 배치 순서, 없으면 미배치(옛 '숨김').
+    //   같은 type 이 여러 번 올 수 있다(중복 배치). name 은 배치별 사용자 지정명(빈 값이면 렌더러가 타입 기본명).
+    homeWidgets: state.homeWidgets || [],
+    homeWidgetSizes: state.homeWidgetSizes || {}, // [홈 위젯 크기] 인스턴스별 폭(열 스팬)·높이(px) — 키는 iid
     briefing: { items: openItems, counters: briefing.counters },
     // [항목3] 연결된 LLM 모델 토큰 사용량 누적(표시·집계 전용 수치만). 정규화된 값 그대로 노출.
     aiUsage: state.aiUsage || uiStateStore.defaultAiUsage(),
     // [로드맵 Phase 2] 대시보드(프리셋) — 렌더러가 프리셋 탭·전환에 사용. 활성 프리셋은 레거시 키와 동기.
     dashboard: state.dashboard || uiStateStore.defaultDashboardState(),
     // [로드맵 Phase 3·G] 스크래치패드 메모(전역 콘텐츠) — 렌더러 위젯이 표시·편집.
-    scratchpad: state.scratchpad || uiStateStore.defaultScratchpad(),
+    // [위젯 인스턴스] 메모는 인스턴스별 — { iid: {text,updatedAt} }.
+    scratchpads: state.scratchpads || {},
     // [로드맵 Phase 5·B] 활성 프리셋의 레이아웃 모드·프리폼 좌표 — 렌더러가 masonry/freeform 분기·배치에 사용.
     //   layout/hidden/sizes 는 레거시 키(위)와 동기지만, layoutMode/positions/groups 는 프리셋에만 있어 별도 노출.
     layoutMode: activePresetField(state, 'layoutMode', 'masonry'),
@@ -137,48 +140,110 @@ function setOrder(args, ctx) {
 }
 
 /**
- * spip:setHomeLayout — 홈 섹션 순서 설정(R-32). 렌더러 입력은 신뢰하지 않으며
- *   메인의 normalizeHomeLayout이 유일 검증 경계: 화이트리스트 외/중복/비배열/손상 입력을 모두 흡수한다.
- *   잘못된 형태도 정규화가 graceful 처리하므로 에러코드 불필요.
- * @param {object} args { ids:string[] }
- * @returns {{ok:true,homeLayout:string[]}}
+ * [위젯 인스턴스] spip:setHomeLayout — 배치 **순서**만 바꾼다(iid 순열). 추가/제거는 addWidget/removeWidget,
+ *   이름 변경은 renameWidget 이 담당한다 — 이 채널로는 인스턴스를 만들거나 없앨 수 없다.
+ *   렌더러가 보낸 iid 중 실재하는 것만 그 순서로 앞에 놓고, 빠뜨린 것은 기존 순서대로 뒤에 보충한다
+ *   (드래그 재정렬 도중 DOM 에서 일부 셀을 못 읽어도 위젯이 사라지지 않게 — 손실 방지).
+ * @param {object} args { ids:string[] }  iid 순열
+ * @returns {{ok:true,homeWidgets:Array}}
  */
 function setHomeLayout(args, ctx) {
-  const ids = (args && typeof args === 'object') ? args.ids : undefined;
-  const homeLayout = uiStateStore.normalizeHomeLayout(ids); // 단일 신뢰 경계
+  const ids = (args && typeof args === 'object' && Array.isArray(args.ids)) ? args.ids : [];
   const { store, storeCtx } = resolveStore(ctx);
   const state = store.read(storeCtx);
-  const next = store.write(Object.assign({}, state, { homeLayout }), storeCtx);
-  return { ok: true, homeLayout: next.homeLayout };
+  const cur = Array.isArray(state.homeWidgets) ? state.homeWidgets : [];
+
+  const byIid = new Map(cur.map((w) => [w.iid, w]));
+  const ordered = [];
+  const seen = new Set();
+  for (const id of ids) {
+    const w = (typeof id === 'string') ? byIid.get(id) : null;
+    if (!w || seen.has(id)) continue; // 미지·중복 iid 는 무시(새 인스턴스를 만들지 않는다)
+    seen.add(id);
+    ordered.push(w);
+  }
+  for (const w of cur) if (!seen.has(w.iid)) ordered.push(w); // 누락분은 기존 순서로 보충(손실 0)
+
+  const next = store.write(Object.assign({}, state, { homeWidgets: ordered }), storeCtx);
+  return { ok: true, homeWidgets: next.homeWidgets };
 }
 
 /**
- * [홈 위젯 크기] spip:setHomeWidgetSizes — 위젯별 폭(열 스팬)·높이(px) 설정.
- *   렌더러 입력 불신 — normalizeHomeWidgetSizes 가 유일 검증 경계(화이트리스트·클램프). 손상 입력 흡수(에러코드 불요).
+ * [위젯 인스턴스] spip:addWidget — 타입 1개를 새 인스턴스로 배치 끝에 추가. **iid 는 메인이 발급**한다
+ *   (렌더러가 id 를 주입할 수 없다 — 기존 shelf/mdedit/preset 과 동일 규약).
+ *   같은 타입을 여러 번 추가할 수 있다(중복 배치가 이 기능의 목적).
+ * @param {object} args { type, name? }
+ * @returns {{ok:true,homeWidgets,iid} | {ok:false,code:'BAD_TYPE'|'LIMIT'}}
+ */
+function addWidget(args, ctx) {
+  const type = (args && typeof args === 'object') ? args.type : undefined;
+  if (typeof type !== 'string' || uiStateStore.TOGGLEABLE_WIDGET_IDS.indexOf(type) < 0) {
+    return { ok: false, code: 'BAD_TYPE' };
+  }
+  const name = (args && typeof args.name === 'string') ? args.name : '';
+
+  const { store, storeCtx } = resolveStore(ctx);
+  const state = store.read(storeCtx);
+  const cur = Array.isArray(state.homeWidgets) ? state.homeWidgets : [];
+  if (cur.length >= uiStateStore.MAX_WIDGETS) return { ok: false, code: 'LIMIT' };
+
+  const iid = uiStateStore.nextWidgetIid(cur);
+  const next = store.write(Object.assign({}, state, {
+    homeWidgets: cur.concat([{ iid, type, name }]),
+  }), storeCtx);
+  return Object.assign({ ok: true, iid }, toResponse(next));
+}
+
+/**
+ * [위젯 인스턴스] spip:removeWidget — 배치에서 인스턴스 1개 제거(정확 iid 일치).
+ *   그 인스턴스의 크기·좌표·그룹 소속은 normalizeState 가 자동 정리한다(배치된 iid 만 유효 — 고아 키 0).
+ * @param {object} args { iid }
+ * @returns {{ok:true,homeWidgets} | {ok:false,code:'NOT_FOUND'}}
+ */
+function removeWidget(args, ctx) {
+  const iid = (args && typeof args === 'object') ? args.iid : undefined;
+  const { store, storeCtx } = resolveStore(ctx);
+  const state = store.read(storeCtx);
+  const cur = Array.isArray(state.homeWidgets) ? state.homeWidgets : [];
+  const kept = cur.filter((w) => w.iid !== iid);
+  if (kept.length === cur.length) return { ok: false, code: 'NOT_FOUND' };
+  const next = store.write(Object.assign({}, state, { homeWidgets: kept }), storeCtx);
+  return Object.assign({ ok: true }, toResponse(next));
+}
+
+/**
+ * [위젯 인스턴스] spip:renameWidget — 배치된 위젯의 표시명 변경. 빈 이름은 '이름 해제'(타입 기본명으로 복귀).
+ *   sanitize·길이 상한은 normalizeHomeWidgets 단일 검증 경계.
+ * @param {object} args { iid, name }
+ * @returns {{ok:true,homeWidgets} | {ok:false,code:'NOT_FOUND'}}
+ */
+function renameWidget(args, ctx) {
+  const iid = (args && typeof args === 'object') ? args.iid : undefined;
+  const name = (args && typeof args === 'object' && typeof args.name === 'string') ? args.name : '';
+  const { store, storeCtx } = resolveStore(ctx);
+  const state = store.read(storeCtx);
+  const cur = Array.isArray(state.homeWidgets) ? state.homeWidgets : [];
+  if (!cur.some((w) => w.iid === iid)) return { ok: false, code: 'NOT_FOUND' };
+  const nextWidgets = cur.map((w) => (w.iid === iid) ? Object.assign({}, w, { name }) : w);
+  const next = store.write(Object.assign({}, state, { homeWidgets: nextWidgets }), storeCtx);
+  return Object.assign({ ok: true }, toResponse(next));
+}
+
+/**
+ * [홈 위젯 크기] spip:setHomeWidgetSizes — 인스턴스별 폭(열 스팬)·높이(px) 설정. 키는 iid.
+ *   렌더러 입력 불신 — normalizeHomeWidgetSizes 가 유일 검증 경계(배치된 iid 만·클램프). 손상 입력 흡수(에러코드 불요).
  * @param {object} args { sizes:Object<string,{w,h}> }
  * @returns {{ok:true, homeWidgetSizes}}
  */
 function setHomeWidgetSizes(args, ctx) {
   const sizes = (args && typeof args === 'object') ? args.sizes : undefined;
-  const homeWidgetSizes = uiStateStore.normalizeHomeWidgetSizes(sizes); // 단일 신뢰 경계
   const { store, storeCtx } = resolveStore(ctx);
   const state = store.read(storeCtx);
+  // 배치된 iid 집합으로 게이트 — 없는 위젯의 크기를 심을 수 없다(고아 키 0).
+  const placed = new Set((state.homeWidgets || []).map((w) => w.iid));
+  const homeWidgetSizes = uiStateStore.normalizeHomeWidgetSizes(sizes, placed); // 단일 신뢰 경계
   const next = store.write(Object.assign({}, state, { homeWidgetSizes }), storeCtx);
   return { ok: true, homeWidgetSizes: next.homeWidgetSizes };
-}
-
-/**
- * [위젯 추가/제거] spip:setHiddenWidgets — 숨긴(미적용) 위젯 집합 설정. 토글 가능 위젯 화이트리스트만(단일 신뢰 경계).
- * @param {object} args { ids:string[] }
- * @returns {{ok:true, hiddenWidgets}}
- */
-function setHiddenWidgets(args, ctx) {
-  const ids = (args && typeof args === 'object') ? args.ids : undefined;
-  const hiddenWidgets = uiStateStore.normalizeHiddenWidgets(ids);
-  const { store, storeCtx } = resolveStore(ctx);
-  const state = store.read(storeCtx);
-  const next = store.write(Object.assign({}, state, { hiddenWidgets }), storeCtx);
-  return { ok: true, hiddenWidgets: next.hiddenWidgets };
 }
 
 /**
@@ -231,18 +296,23 @@ function setThemePrefs(args, ctx) {
 }
 
 /**
- * [로드맵 Phase 3·G] spip:setScratchpad { text } — 스크래치패드 메모 저장.
- *   렌더러 입력 불신 — normalizeScratchpad 가 유일 검증 경계(개행 보존·제어문자 제거·길이 상한). updatedAt 은 메인 스탬프.
- * @param {object} args { text }
- * @returns {{ok:true, scratchpad:{text,updatedAt}}}
+ * [로드맵 Phase 3·G / 위젯 인스턴스] spip:setScratchpad { iid, text } — 메모 저장.
+ *   메모는 **인스턴스별**이다 — 메모 위젯을 2개 놓으면 각자 다른 메모를 쓴다.
+ *   렌더러 입력 불신 — normalizeScratchpads 가 유일 검증 경계(개행 보존·제어문자 제거·길이 상한).
+ *   updatedAt 은 메인 스탬프. iid 형식이 아니면 BAD_INPUT.
+ * @param {object} args { iid, text }
+ * @returns {{ok:true, scratchpads} | {ok:false,code:'BAD_INPUT'}}
  */
 function setScratchpad(args, ctx) {
-  const text = (args && typeof args === 'object' && typeof args.text === 'string') ? args.text : '';
+  const iid = (args && typeof args === 'object') ? args.iid : undefined;
+  if (typeof iid !== 'string' || !uiStateStore.IID_RE.test(iid)) return { ok: false, code: 'BAD_INPUT' };
+  const text = (args && typeof args.text === 'string') ? args.text : '';
   const { store, storeCtx } = resolveStore(ctx);
   const state = store.read(storeCtx);
-  const scratchpad = uiStateStore.normalizeScratchpad({ text, updatedAt: nowMs(ctx) });
-  const next = store.write(Object.assign({}, state, { scratchpad }), storeCtx);
-  return { ok: true, scratchpad: next.scratchpad };
+  const scratchpads = Object.assign({}, state.scratchpads || {});
+  scratchpads[iid] = { text, updatedAt: nowMs(ctx) };
+  const next = store.write(Object.assign({}, state, { scratchpads }), storeCtx);
+  return { ok: true, scratchpads: next.scratchpads };
 }
 
 /**
@@ -263,12 +333,12 @@ function setTheme(args, ctx) {
 //   활성 전환/추가/복제/삭제는 '레거시 키(homeLayout/hidden/sizes)를 (새) 활성 프리셋 내용으로 스왑'해
 //   normalizeState reconcile 과 일관을 유지한다. 이름 변경은 내용/활성 불변이라 스왑 불요.
 
-/** (활성) 프리셋 내용을 레거시 키에 실어 write — 스왑 후 응답은 toResponse(전체 최신). */
+/** (활성) 프리셋 내용을 최상위 키에 실어 write — 스왑 후 응답은 toResponse(전체 최신). */
 function writeWithActive(store, storeCtx, state, dashboard) {
   const active = (dashboard.presets || []).find((p) => p.id === dashboard.activePreset) || dashboard.presets[0];
   const written = store.write(Object.assign({}, state, {
     dashboard,
-    homeLayout: active.layout, hiddenWidgets: active.hidden, homeWidgetSizes: active.sizes,
+    homeWidgets: active.widgets, homeWidgetSizes: active.sizes, // [위젯 인스턴스] 배치·크기 스왑
   }), storeCtx);
   return Object.assign({ ok: true }, toResponse(written));
 }
@@ -293,7 +363,7 @@ function addPreset(args, ctx) {
 }
 
 /** [로드맵 Phase 1·L] spip:addTemplatePreset { name, template } — 템플릿 구성으로 새 프리셋 추가 + 활성 전환.
- *   template = { layout, hidden, sizes, layoutMode, groups }. 전 필드는 메인 프리셋 정규화(presetUpdate→normalize*)가
+ *   template = { widgets, sizes, layoutMode, groups }. 전 필드는 메인 프리셋 정규화(presetUpdate→normalize*)가
  *   유일 검증 경계(화이트리스트·클램프) — 렌더러 템플릿을 그대로 신뢰하지 않는다. 상한 초과 시 LIMIT. */
 function addTemplatePreset(args, ctx) {
   const name = (args && typeof args === 'object' && typeof args.name === 'string') ? args.name : '';
@@ -303,7 +373,7 @@ function addTemplatePreset(args, ctx) {
   const r = uiStateStore.presetAdd(state.dashboard, name);
   if (!r.id) return { ok: false, code: 'LIMIT' };
   const dashboard = uiStateStore.presetUpdate(r.state, r.id, {
-    layout: tpl.layout, hidden: tpl.hidden, sizes: tpl.sizes, layoutMode: tpl.layoutMode, groups: tpl.groups,
+    widgets: tpl.widgets, sizes: tpl.sizes, layoutMode: tpl.layoutMode, groups: tpl.groups,
   });
   return writeWithActive(store, storeCtx, state, dashboard);
 }
@@ -487,4 +557,6 @@ function updateLangTrend(args, ctx) {
   return { ok: true, prev: written.langTrend.prev, cur: written.langTrend.cur };
 }
 
-module.exports = { getUiState, setFavorite, setOrder, setSortMode, setHomeLayout, setHiddenWidgets, setHomeWidgetSizes, setProjectName, setTheme, setThemePrefs, setScratchpad, addTodo, toggleTodo, removeTodo, setTodoDue, updateLangTrend, setActivePreset, addPreset, duplicatePreset, renamePreset, removePreset, addTemplatePreset, setLayoutMode, setWidgetPositions, setGroups, exportDashboard, importDashboard };
+// [위젯 인스턴스] setHiddenWidgets 는 제거됐다 — '숨김'이라는 상태가 없어졌다(제거 = 인스턴스 삭제).
+//   addWidget/removeWidget/renameWidget 이 그 자리를 대신한다.
+module.exports = { getUiState, setFavorite, setOrder, setSortMode, setHomeLayout, addWidget, removeWidget, renameWidget, setHomeWidgetSizes, setProjectName, setTheme, setThemePrefs, setScratchpad, addTodo, toggleTodo, removeTodo, setTodoDue, updateLangTrend, setActivePreset, addPreset, duplicatePreset, renamePreset, removePreset, addTemplatePreset, setLayoutMode, setWidgetPositions, setGroups, exportDashboard, importDashboard };

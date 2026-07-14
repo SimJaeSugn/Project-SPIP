@@ -31,14 +31,21 @@ test('R-32 — 렌더러 HOME_SECTION_IDS 가 메인 uiStateStore 와 동일 집
 });
 
 // ── [홈 위젯 크기] applyHomeWidgetSizes / computeHomeCols / homeDefaultSpan (렌더러 순수) ──
-test('홈 위젯 크기 — applyHomeWidgetSizes: 화이트리스트·클램프(메인 동형)', () => {
+test('홈 위젯 크기 — applyHomeWidgetSizes: iid 키·클램프(배치 게이트는 메인이 단일 신뢰 경계)', () => {
+  // [위젯 인스턴스] 키는 iid — 같은 타입 위젯 두 개(mail / w1)가 각자의 크기를 갖는다.
+  //   렌더러는 형식만 방어하고, '배치된 iid 인가'는 메인(normalizeHomeWidgetSizes)이 이미 걸러 내려준다.
   const r = applyHomeWidgetSizes({
     mail: { w: 3, h: 250 },
+    w1: { w: 1, h: 300 },          // 같은 타입의 두 번째 인스턴스 — 독립 크기
     aiusage: { w: 99, h: 99999 },  // 클램프 → w:HOME_MAX_COLS, h:1600
-    featureAdd: { w: 2, h: 200 },  // 제거
-    bogus: { w: 2, h: 200 },       // 제거
+    featureAdd: { w: 2, h: 200 },  // 제거(추가 카드는 리사이즈 대상 아님)
+    'BAD!!': { w: 2, h: 200 },     // iid 형식 불량 → 제거
   });
-  assert.deepStrictEqual(r, { mail: { w: 3, h: 250 }, aiusage: { w: HOME_MAX_COLS, h: 1600 } });
+  assert.deepStrictEqual(r, {
+    mail: { w: 3, h: 250 },
+    w1: { w: 1, h: 300 },
+    aiusage: { w: HOME_MAX_COLS, h: 1600 },
+  });
   assert.deepStrictEqual(applyHomeWidgetSizes(null), {});
   assert.deepStrictEqual(applyHomeWidgetSizes([1]), {});
 });
@@ -141,8 +148,8 @@ test('로드맵 Phase 5·M — 그룹: 렌더·CRUD·접기·멤버 배정·격�
   assert.ok(/text:\s*'\+ 그룹'/.test(APP_SRC) && /text:\s*'\+ 스택'/.test(APP_SRC), '그룹·스택 추가 버튼');
   assert.ok(/editing && bridgeHas\('setGroups'\)/.test(APP_SRC), '그룹/스택은 편집 모드에서');
   // 그룹 소속 위젯은 메인 격자에서 제외.
-  assert.ok(/if \(groupedOf\[id\]\) return;/.test(APP_SRC), '그룹 위젯은 메인 격자에서 제외');
-  assert.ok(/renderHomeGroups\(sectionGroups, hidden, reclaim, editing\)/.test(APP_SRC), '섹션 그룹 밴드 렌더 호출');
+  assert.ok(/if \(groupedOf\[inst\.iid\]\) return;/.test(APP_SRC), '그룹 소속 인스턴스는 메인 격자에서 제외');
+  assert.ok(/renderHomeGroups\(sectionGroups, reclaim, editing\)/.test(APP_SRC), '섹션 그룹 밴드 렌더 호출');
   // 렌더 함수 + CRUD 핸들러.
   assert.ok(/function renderHomeGroups\(/.test(APP_SRC) && /function renderGroupAddPicker\(/.test(APP_SRC), '그룹 렌더·피커');
   assert.ok(/function onAddGroup\(/.test(APP_SRC) && /function onDeleteGroup\(/.test(APP_SRC) && /function onToggleGroupCollapse\(/.test(APP_SRC), 'CRUD·접기 핸들러');
@@ -164,14 +171,15 @@ test('로드맵 Phase 5·M — 그룹: 렌더·CRUD·접기·멤버 배정·격�
 // ── [편집 모드 전용] 일반 모드에서 위치변경·크기변경·추가·삭제 미제공 ──
 test('편집 모드 전용 — 삭제·리사이즈·추가·재정렬은 편집 모드에서만(포커스·스택 전환은 뷰라 유지)', () => {
   // buildHomeCell: 삭제(×)·리사이즈는 editing 게이트, 포커스는 항상.
-  const b = fnBody('buildHomeCell', 900);
-  assert.ok(/if \(editing\) cell\.appendChild\(widgetRemoveBtn\(id\)\)/.test(b), '삭제 버튼 편집 모드 전용');
-  assert.ok(/cell\.appendChild\(widgetFocusBtn\(id\)\)/.test(b), '포커스 버튼은 항상(뷰)');
-  assert.ok(/id !== 'featureAdd' && editing\) cell\.appendChild\(homeResizeHandle/.test(b), '리사이즈 편집 모드 전용');
+  const b = fnBody('buildHomeCell', 1400);
+  assert.ok(/cell\.appendChild\(widgetRemoveBtn\(inst\)\);/.test(b), '삭제 버튼 편집 모드 전용(인스턴스 단위)');
+  assert.ok(/cell\.appendChild\(widgetRenameBtn\(inst\)\);/.test(b), '[위젯 인스턴스] 이름 변경(✎) 버튼도 편집 모드 전용');
+  assert.ok(/cell\.appendChild\(widgetFocusBtn\(inst\)\)/.test(b), '포커스 버튼은 항상(뷰)');
+  assert.ok(/!isAdd && editing\) cell\.appendChild\(homeResizeHandle/.test(b), '리사이즈 편집 모드 전용');
   // 그룹 멤버·스택 리사이즈도 editing 게이트.
   assert.ok(/withResize && editing\) cell\.appendChild\(homeResizeHandle/.test(APP_SRC), '그룹 멤버 리사이즈 편집 모드 전용');
   // featureAdd(추가) 카드는 편집 모드에서만.
-  assert.ok(/if \(editing\) \{ var faCard = renderHomeSection\('featureAdd'/.test(APP_SRC), 'masonry featureAdd 편집 모드 전용');
+  assert.ok(/if \(editing\) \{ var faCard = renderHomeFeatureAdd\(\)/.test(APP_SRC), 'masonry featureAdd 편집 모드 전용');
   assert.ok(/if \(editing\) \{ var faFree = buildHomeCell\('featureAdd'/.test(APP_SRC), 'freeform featureAdd 편집 모드 전용');
   // 재정렬(SortableJS)은 편집 모드에서만.
   assert.ok(/if \(!store\.editMode\) return;/.test(fnBody('initHomeSortable', 500)), '순서 변경 편집 모드 전용');
@@ -182,9 +190,12 @@ test('편집 모드 전용 — 삭제·리사이즈·추가·재정렬은 편집
   assert.ok(/\.home-edit-guide\s*\{/.test(CSS), '안내 배너 CSS');
   // 안내 배너에 위젯 갤러리 열기 버튼.
   assert.ok(/cls:\s*'home-edit-guide__gallery'[\s\S]{0,160}store\.showWidgetGallery = true/.test(APP_SRC), '안내에 위젯 갤러리 버튼');
-  // 위젯 삭제(×)는 확인 모달 경유.
-  assert.ok(/onRemoveWidgetConfirm\(id\)/.test(APP_SRC) && /function onRemoveWidgetConfirm\(/.test(APP_SRC), '삭제 버튼 → 확인 모달');
-  assert.ok(/askConfirm\(\{[\s\S]{0,200}onConfirm: function \(\) \{ onRemoveWidget\(id\)/.test(APP_SRC), '확인 시 onRemoveWidget');
+  // [위젯 인스턴스] 위젯 삭제(×)는 확인 모달 경유 — 그 **인스턴스 하나만** 제거한다.
+  assert.ok(/onRemoveWidgetConfirm\(inst\)/.test(APP_SRC) && /function onRemoveWidgetConfirm\(/.test(APP_SRC), '삭제 버튼 → 확인 모달');
+  assert.ok(/onConfirm: function \(\) \{ onRemoveWidget\(inst\.iid\); \}/.test(APP_SRC), '확인 시 onRemoveWidget(iid)');
+  // 같은 종류의 다른 배치가 남는다는 걸 사용자에게 알린다(중복 배치 모델의 핵심 UX).
+  const rc = fnBody('onRemoveWidgetConfirm', 800);
+  assert.ok(/widgetsOfType\(inst\.type\)\.length - 1/.test(rc), '같은 종류 위젯 잔여 개수 안내');
 });
 
 // ── [로드맵 Phase 1·J] 테마 개인화(액센트·배율) ──
@@ -211,19 +222,21 @@ test('로드맵 Phase 1·J — 액센트 토큰화·프리셋 CSS + applyTheme d
 });
 
 // ── [로드맵 Phase 1·L] 레이아웃 템플릿 갤러리 ──
-test('로드맵 Phase 1·L — buildTemplatePreset: hidden=토글 위젯 중 visible 외, 기본 masonry', () => {
+test('로드맵 Phase 1·L — buildTemplatePreset: visible(타입) → widgets(인스턴스), 기본 masonry', () => {
+  // [위젯 인스턴스] 템플릿은 '보일 타입'이 아니라 '배치할 인스턴스'를 만든다(타입당 1개, iid = 타입 id).
   const tpl = { id: 't', name: 'T', visible: ['mail', 'todos'] };
   const p = buildTemplatePreset(tpl);
-  assert.deepStrictEqual(p.layout, HOME_SECTION_IDS, '전 섹션 기본 순서');
+  assert.deepStrictEqual(p.widgets, [
+    { iid: 'mail', type: 'mail', name: '' },
+    { iid: 'todos', type: 'todos', name: '' },
+  ], 'visible 순서대로 인스턴스 배치');
   assert.strictEqual(p.layoutMode, 'masonry');
   assert.deepStrictEqual(p.groups, []);
-  const visible = TOGGLEABLE_WIDGET_IDS.filter((id) => p.hidden.indexOf(id) < 0);
-  assert.deepStrictEqual(visible.sort(), ['mail', 'todos']);
-  // 올인원 = 전부 표시(hidden 비어야).
+  // 올인원 = 전 타입 1개씩.
   const all = buildTemplatePreset(HOME_TEMPLATES.find((t) => t.id === 'allinone'));
-  assert.strictEqual(all.hidden.length, 0);
-  // 손상 입력 graceful(빈 visible → 전부 숨김).
-  assert.strictEqual(buildTemplatePreset({}).hidden.length, TOGGLEABLE_WIDGET_IDS.length);
+  assert.strictEqual(all.widgets.length, TOGGLEABLE_WIDGET_IDS.length);
+  // 손상 입력 graceful(빈 visible → 빈 배치).
+  assert.deepStrictEqual(buildTemplatePreset({}).widgets, []);
 });
 
 test('로드맵 Phase 1·L — 템플릿 데이터·갤러리 배선', () => {
@@ -269,11 +282,12 @@ test('로드맵 Phase 5·M — 프리폼에서 그룹 블록 자유 배치(좌�
   // 그룹은 두 모드 모두 적용(masonry=밴드, freeform=자유 셀).
   assert.ok(/var groups = Array\.isArray\(store\.groups\) \? store\.groups : \[\]/.test(APP_SRC), '그룹은 모드 무관 적재');
   assert.ok(/function renderGroupFreeCell\(/.test(APP_SRC), '프리폼 그룹 자유 배치 셀 렌더');
-  assert.ok(/if \(freeform\) \{[\s\S]{0,260}renderGroupFreeCell\(g, hidden, reclaim, editing\)/.test(APP_SRC), '프리폼에서 그룹 셀을 격자에 추가');
+  assert.ok(/if \(freeform\) \{[\s\S]{0,260}renderGroupFreeCell\(g, reclaim, editing\)/.test(APP_SRC), '프리폼에서 그룹 셀을 격자에 추가');
   assert.ok(/onFreeformDragStart\(e, g\.id\)/.test(APP_SRC), '그룹 셀 드래그(그룹 id)');
   // 그룹 id 판정 + 좌표/폭 화이트리스트 확장(프리폼 그룹 배치·폭).
   assert.ok(/function isGroupId\(/.test(APP_SRC), '그룹 id 판정');
-  assert.ok(/HOME_SECTION_IDS\.indexOf\(id\) < 0 && !isGroupId\(id\)\) continue/.test(APP_SRC), 'positions 에 그룹 id 허용');
+  // [위젯 인스턴스] 좌표 키 = 배치된 iid + 그룹 id + featureAdd(추가 카드도 프리폼 자유 배치).
+  assert.ok(/if \(id !== 'featureAdd' && !isIid\(id\) && !isGroupId\(id\)\) continue;/.test(APP_SRC), 'positions 에 iid·그룹 id·featureAdd 허용');
   assert.ok(/if \(isGroupId\(id\)\) return 2;/.test(APP_SRC), '그룹 블록 기본 2열');
   // layoutHomeFreeform 은 직계 셀만(중첩 멤버 제외).
   assert.ok(/grid\.children\[c\]\.classList\.contains\('home-section'\)/.test(APP_SRC), '프리폼 배치는 직계 셀만(멤버 제외)');
@@ -282,9 +296,10 @@ test('로드맵 Phase 5·M — 프리폼에서 그룹 블록 자유 배치(좌�
 
 test('로드맵 Phase 5·M — featureAdd(+위젯) 는 항상 최하단(그룹 위에 최상단 배치 가능)', () => {
   // 메인 격자 루프에서 featureAdd 제외 → 별도 렌더.
-  assert.ok(/if \(id === 'featureAdd'\) return; \/\/ \[Phase 5·M\]/.test(APP_SRC), '메인 루프에서 featureAdd 제외');
+  // [위젯 인스턴스] featureAdd 는 인스턴스가 아니다 — 배치 목록(homeWidgets)에 들어가지 않고 별도로 렌더된다.
+  assert.ok(/buildHomeCell\('featureAdd', reclaim, editing, freeform\)/.test(APP_SRC), 'featureAdd 는 별도 렌더(항상 최하단)');
   // masonry: 그룹 밴드 다음에 featureAdd 카드(최하단).
-  assert.ok(/renderHomeGroups\(sectionGroups, hidden, reclaim, editing\)\);[\s\S]{0,220}renderHomeSection\('featureAdd'/.test(APP_SRC), 'masonry 는 그룹 밴드 뒤에 featureAdd 카드');
+  assert.ok(/renderHomeGroups\(sectionGroups, reclaim, editing\)\);[\s\S]{0,220}renderHomeFeatureAdd\(\)/.test(APP_SRC), 'masonry 는 그룹 밴드 뒤에 featureAdd 카드');
   // freeform: featureAdd 도 자유 배치 셀(그룹 다음에 추가 → 기본 최하단 시드).
   assert.ok(/buildHomeCell\('featureAdd', reclaim, editing, freeform\)/.test(APP_SRC), 'freeform featureAdd 자유 배치 셀');
   assert.ok(/function buildHomeCell\(/.test(APP_SRC), '홈 셀 빌더 추출');
@@ -333,7 +348,7 @@ test('로드맵 Phase 4·I — 포커스 위젯: 버튼·오버레이·masonry �
   const CSS = fs.readFileSync(path.join(__dirname, '..', 'public', 'styles.css'), 'utf8');
   // 셀에 포커스 버튼 부착(제거 버튼과 함께).
   assert.ok(/function widgetFocusBtn\(/.test(APP_SRC), '포커스 버튼 빌더');
-  assert.ok(/cell\.appendChild\(widgetFocusBtn\(id\)\)/.test(APP_SRC), '셀에 포커스 버튼 부착');
+  assert.ok(/cell\.appendChild\(widgetFocusBtn\(inst\)\)/.test(APP_SRC), '셀에 포커스 버튼 부착(인스턴스 단위)');
   // 열기/닫기 + 오버레이 렌더 + 마운트.
   assert.ok(/function openFocusWidget\(/.test(APP_SRC) && /function closeFocusWidget\(/.test(APP_SRC), '포커스 열기/닫기');
   assert.ok(/function renderFocusOverlay\(/.test(APP_SRC), '포커스 오버레이 렌더');
@@ -351,8 +366,8 @@ test('로드맵 Phase 4·I — 포커스 위젯: 버튼·오버레이·masonry �
 test('로드맵 Phase 4·H/I — 팔레트 액션에 위젯 포커스·프로젝트 점프(딥링크) 포함', () => {
   // 포커스 액션(표시 위젯) + 프로젝트 점프(viewModels → openDrawer).
   const b = APP_SRC.slice(APP_SRC.indexOf('function buildActions('), APP_SRC.indexOf('function buildActions(') + 4800);
-  assert.ok(/id:\s*'focus\.'\s*\+\s*id/.test(b), '표시 위젯 포커스 액션');
-  assert.ok(/openFocusWidget\(id\)/.test(b), '포커스 액션이 openFocusWidget 실행');
+  assert.ok(/id:\s*'focus\.'\s*\+\s*w\.iid/.test(b), '배치된 각 인스턴스가 포커스 액션(표시명으로 구분)');
+  assert.ok(/openFocusWidget\(w\.iid\)/.test(b), '포커스 액션이 openFocusWidget(iid) 실행');
   assert.ok(/id:\s*'project\.'\s*\+\s*vm\.id/.test(b), '프로젝트 점프 액션');
   assert.ok(/openDrawer\(vm\.id\)/.test(b), '프로젝트 점프가 상세 드로어 열기(딥링크)');
 });
@@ -362,7 +377,7 @@ test('로드맵 Phase 3·G — 시스템 상태 위젯: 렌더·표시시 지연
   const CSS = fs.readFileSync(path.join(__dirname, '..', 'public', 'styles.css'), 'utf8');
   assert.ok(HOME_SECTION_IDS.includes('systemStatus'), '렌더러 enum 에 systemStatus');
   assert.ok(/function renderHomeSystemStatus\(/.test(APP_SRC), '시스템 상태 렌더 함수');
-  assert.ok(/case 'systemStatus':\s*return renderHomeSystemStatus\(\)/.test(APP_SRC), 'renderHomeSection case');
+  assert.ok(/case 'systemStatus':\s*return renderHomeSystemStatus\(inst\)/.test(APP_SRC), 'renderHomeSection case');
   assert.ok(/systemStatus:\s*\{\s*name:/.test(APP_SRC), 'WIDGET_META.systemStatus');
   // 표시될 때만 로드 + 주기 갱신 타이머(숨김/이탈 시 정지).
   assert.ok(/function maybeLoadSystemStatus\(/.test(APP_SRC) && /homeWidgetVisible\('systemStatus'\)/.test(APP_SRC), '표시(visible)될 때만 로드');
@@ -424,7 +439,7 @@ test('로드맵 Phase 3·G — 커밋 히트맵 위젯: 렌더·지연로드·36
   assert.ok(HOME_SECTION_IDS.includes('commitHeatmap'), '렌더러 enum 에 commitHeatmap');
   assert.strictEqual(homeDefaultSpan('commitHeatmap'), 2, '기본 2열(가로 캘린더)');
   assert.ok(/function renderHomeCommitHeatmap\(/.test(APP_SRC), '히트맵 렌더 함수');
-  assert.ok(/case 'commitHeatmap':\s*return renderHomeCommitHeatmap\(\)/.test(APP_SRC), 'renderHomeSection case');
+  assert.ok(/case 'commitHeatmap':\s*return renderHomeCommitHeatmap\(inst\)/.test(APP_SRC), 'renderHomeSection case');
   assert.ok(/commitHeatmap:\s*\{\s*name:/.test(APP_SRC), 'WIDGET_META.commitHeatmap');
   // 지연 로드: 표시될 때만 + 365일 요청.
   assert.ok(/function maybeLoadCommitHeatmap\(/.test(APP_SRC) && /homeWidgetVisible\('commitHeatmap'\)/.test(APP_SRC), '표시(visible)될 때만 로드');
@@ -444,17 +459,17 @@ test('로드맵 Phase 3·G — 스크래치패드 위젯: 렌더 함수·WIDGET_
   assert.ok(HOME_SECTION_IDS.includes('scratchpad'), '렌더러 enum 에 scratchpad');
   // 렌더 함수 + 섹션 디스패치 case + 갤러리 메타.
   assert.ok(/function renderHomeScratchpad\(/.test(APP_SRC), '스크래치패드 렌더 함수');
-  assert.ok(/case 'scratchpad':\s*return renderHomeScratchpad\(\)/.test(APP_SRC), 'renderHomeSection case 배선');
+  assert.ok(/case 'scratchpad':\s*return renderHomeScratchpad\(inst\)/.test(APP_SRC), 'renderHomeSection case 배선');
   assert.ok(/scratchpad:\s*\{\s*name:/.test(APP_SRC), 'WIDGET_META.scratchpad 메타');
-  // 하이드레이션 + 방어 적재.
-  assert.ok(/store\.scratchpad\s*=\s*applyScratchpad\(/.test(APP_SRC), 'loadUiState 가 scratchpad 하이드레이션');
-  assert.ok(/function applyScratchpad\(/.test(APP_SRC), '방어 적재기(applyScratchpad)');
-  // 저장 경로: 디바운스 + blur flush + setScratchpad IPC.
-  const sp = fnBody('renderHomeScratchpad', 1600);
-  assert.ok(/addEventListener\('input'/.test(sp) && /onScratchpadInput/.test(sp), 'input → 디바운스 저장');
-  assert.ok(/addEventListener\('blur'.*flushScratchpad|flushScratchpad/.test(APP_SRC), 'blur flush');
-  assert.ok(/ipc\('setScratchpad',\s*text\)/.test(APP_SRC), 'setScratchpad IPC 영속');
-  assert.ok(/setTimeout\(commitScratchpad,\s*600\)/.test(APP_SRC), '600ms 디바운스');
+  // [위젯 인스턴스] 메모는 인스턴스별 — { iid: {text,updatedAt} }. 메모 위젯 2개면 서로 다른 메모.
+  assert.ok(/store\.scratchpads\s*=\s*applyScratchpads\(/.test(APP_SRC), 'loadUiState 가 scratchpads 하이드레이션');
+  assert.ok(/function applyScratchpads\(/.test(APP_SRC), '방어 적재기(applyScratchpads)');
+  // 저장 경로: 디바운스 + blur flush + setScratchpad IPC(iid 동반).
+  const sp = fnBody('renderHomeScratchpad', 1800);
+  assert.ok(/addEventListener\('input'/.test(sp) && /onScratchpadInput\(iid,/.test(sp), 'input → 디바운스 저장(인스턴스별)');
+  assert.ok(/flushScratchpad\(iid\)/.test(APP_SRC), 'blur flush(인스턴스별)');
+  assert.ok(/ipc\('setScratchpad',\s*iid,\s*text\)/.test(APP_SRC), 'setScratchpad IPC 영속(iid 동반)');
+  assert.ok(/setTimeout\(function \(\) \{ commitScratchpad\(iid\); \}, 600\)/.test(APP_SRC), '600ms 디바운스(인스턴스별)');
   // 반응형/코너 규약: textarea resize:none(위젯 리사이즈 핸들과 충돌 회피) + 높이 채움.
   assert.ok(/\.scratch-input\s*\{[^}]*resize:\s*none/.test(CSS), 'textarea resize:none(§3 코너 규약)');
   assert.ok(/\.scratch-input\s*\{[^}]*flex:\s*1 1 auto/.test(CSS), 'textarea 가 위젯 높이 채움');
@@ -522,29 +537,37 @@ test('[위젯 추가/제거] TOGGLEABLE_WIDGET_IDS: 렌더러·메인 동형 + f
   assert.ok(TOGGLEABLE_WIDGET_IDS.indexOf('featureAdd') < 0, 'featureAdd는 토글 불가(항상 표시)');
 });
 
-test('[위젯 추가/제거] masonry가 hidden 위젯을 건너뛰고 featureAdd는 갤러리를 연다', () => {
-  // 마소니 순회에서 숨김 위젯 필터.
-  assert.ok(/hidden\.indexOf\(id\)\s*>=\s*0\)\s*return/.test(APP_SRC), 'hidden 위젯 skip');
+test('[위젯 인스턴스] 갤러리는 누를 때마다 새 인스턴스를 추가하고 featureAdd 가 갤러리를 연다', () => {
   // featureAdd 카드가 위젯 갤러리를 연다(설정이 아니라).
   const fa = APP_SRC.indexOf('function renderHomeFeatureAdd(');
-  const faBody = APP_SRC.slice(fa, fa + 800);
+  const faBody = APP_SRC.slice(fa, fa + 900);
   assert.ok(/showWidgetGallery\s*=\s*true/.test(faBody), 'featureAdd → 갤러리 오픈');
-  // 갤러리/추가/제거 핸들러 + IPC 영속 배선.
+  // 갤러리/추가/제거 핸들러 + IPC 영속 배선. '숨김' 채널은 더 이상 없다.
   assert.ok(/function renderWidgetGallery\(/.test(APP_SRC), '갤러리 렌더 함수');
   assert.ok(/function onAddWidget\(/.test(APP_SRC) && /function onRemoveWidget\(/.test(APP_SRC), '추가/제거 핸들러');
-  assert.ok(/ipc\('setHiddenWidgets'/.test(APP_SRC), 'setHiddenWidgets IPC 영속');
+  assert.ok(/ipc\('addWidget'/.test(APP_SRC), 'addWidget IPC(새 인스턴스 — iid 는 메인이 발급)');
+  assert.ok(/ipc\('removeWidget'/.test(APP_SRC), 'removeWidget IPC(그 인스턴스만 제거)');
+  assert.ok(/ipc\('renameWidget'/.test(APP_SRC), 'renameWidget IPC(배치별 표시명)');
+  assert.ok(!/ipc\('setHiddenWidgets'/.test(APP_SRC), "'숨김' 채널은 제거됐다(제거 = 인스턴스 삭제)");
+  // 갤러리 카드는 이미 배치돼 있어도 계속 누를 수 있다(중복 배치 허용).
+  const gal = APP_SRC.slice(APP_SRC.indexOf('function renderWidgetGallery('), APP_SRC.indexOf('function onAddWidget('));
+  assert.ok(/widgetsOfType\(type\)\.length/.test(gal), '카드에 현재 배치 개수 표시');
+  assert.ok(/click: function \(\) \{ onAddWidget\(type\); \}/.test(gal), '항상 추가 가능(중복 배치)');
 });
 
-test('R-32 — renderHome 이 homeLayout 순서로 데이터-주도 배치(masonry)', () => {
-  assert.ok(/applyHomeLayout\(store\.homeLayout\)\.forEach/.test(APP_SRC),
-    'renderHome 이 applyHomeLayout(store.homeLayout) 순회로 섹션 배치');
-  assert.ok(/'data-home-section'\s*:\s*id/.test(APP_SRC), 'data-home-section 에 enum id(고정) 부여');
+test('[위젯 인스턴스] renderHome 이 homeWidgets(배치 목록) 순서로 데이터-주도 배치(masonry)', () => {
+  assert.ok(/\(store\.homeWidgets \|\| \[\]\)\.forEach\(function \(inst\)/.test(APP_SRC),
+    'renderHome 이 배치된 인스턴스를 순서대로 순회');
+  assert.ok(/'data-home-section': id/.test(APP_SRC), 'data-home-section 에 iid 부여(배치 키)');
   assert.ok(/cls:\s*'home-masonry'/.test(APP_SRC), 'home-masonry 컨테이너(CSS columns)');
+  // '숨김 필터'가 사라졌다 — 목록에 없으면 애초에 미배치.
+  assert.ok(!/hidden\.indexOf\(id\)\s*>=\s*0\)\s*return/.test(APP_SRC), '숨김 필터 없음(미배치가 곧 숨김)');
 });
 
-test('R-32 — loadUiState 가 res.homeLayout 적재(getUiState 응답 소비)', () => {
-  assert.ok(/store\.homeLayout\s*=\s*applyHomeLayout\(res[\s\S]{0,40}homeLayout/.test(APP_SRC),
-    'loadUiState 에서 res.homeLayout 을 applyHomeLayout 으로 적재');
+test('[위젯 인스턴스] loadUiState 가 res.homeWidgets 적재(구버전 응답은 레거시 폴백)', () => {
+  assert.ok(/store\.homeWidgets\s*=\s*\(ok && Array\.isArray\(res\.homeWidgets\)\)/.test(APP_SRC),
+    'loadUiState 에서 res.homeWidgets 적재');
+  assert.ok(/widgetsFromLegacy\(/.test(APP_SRC), '구버전 응답(homeLayout+hiddenWidgets)은 레거시 폴백으로 파생');
 });
 
 // ── [홈 위젯 크기] 렌더 배선(정적 소스 검증 — 이 저장소의 렌더러 배선 검증 관례) ──
@@ -715,16 +738,21 @@ test('R-32 — homeSortable: RG.widget 등록 + onEnd 마이크로태스크 패�
   // onEnd: _dragging=false 즉시 + 마이크로태스크 지연 + commitHomeLayout.
   const start = APP_SRC.indexOf('function initHomeSortable(');
   assert.ok(start >= 0, 'initHomeSortable 함수가 있어야 한다');
-  const body = APP_SRC.slice(start, start + 2200);
+  const body = APP_SRC.slice(start, start + 3200);
   assert.ok(/store\._dragging\s*=\s*true/.test(body), 'onStart 에서 _dragging=true(R-25 보류)');
   assert.ok(/store\._dragging\s*=\s*false/.test(body), 'onEnd 에서 _dragging=false 즉시');
   assert.ok(/Promise\.resolve\(\)\.then/.test(body), 'commit 은 마이크로태스크로 지연(R4)');
-  assert.ok(/data-home-section/.test(body), 'DOM 의 data-home-section enum 순서를 읽어 영속');
+  assert.ok(/data-home-section/.test(body), 'DOM 의 data-home-section(iid) 순서를 읽어 영속');
   assert.ok(/commitHomeLayout\(ids\)/.test(body), '재정렬 시 commitHomeLayout 호출');
+  // [위젯 인스턴스] 격자 직계 자식만 읽는다 — 스택 셀(그룹 id)·그룹 멤버 셀이 순서 배열에 섞이면 안 된다.
+  //   예전엔 타입 enum 화이트리스트가 우연히 걸러줬지만 iid 는 형식이 자유로워 그 방어가 없다.
+  assert.ok(/:scope > \.home-section\[data-home-section\]/.test(body), '격자 직계 셀만(:scope >)');
+  assert.ok(/!n\.classList\.contains\('home-stack'\)/.test(body), '스택 셀(그룹 id) 제외');
   // commitHomeLayout: setHomeLayout IPC → 응답 정규화 반영.
   const cs = APP_SRC.indexOf('function commitHomeLayout(');
   assert.ok(cs >= 0, 'commitHomeLayout 함수가 있어야 한다');
-  const cbody = APP_SRC.slice(cs, cs + 700);
-  assert.ok(/ipc\('setHomeLayout',\s*next\)/.test(cbody), "setHomeLayout IPC 호출(정규화된 next)");
-  assert.ok(/applyHomeLayout\(res\.homeLayout\)/.test(cbody), '응답 homeLayout 을 최종 순서로 확정');
+  const cbody = APP_SRC.slice(cs, cs + 1400);
+  // [위젯 인스턴스] 순서 채널은 iid 순열만 보낸다(추가·삭제는 별도 채널).
+  assert.ok(/ipc\('setHomeLayout', next\.map\(function \(w\) \{ return w\.iid; \}\)\)/.test(cbody), 'setHomeLayout IPC 호출(iid 순열)');
+  assert.ok(/applyHomeWidgets\(res\.homeWidgets\)/.test(cbody), '응답 homeWidgets 를 최종 배치로 확정');
 });

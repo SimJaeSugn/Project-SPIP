@@ -68,9 +68,28 @@ npm run release      # electron-builder --win --publish always (게시)
 - 넓어지면 공간을 활용하고(예: 목록형은 `.hw-cols` = `repeat(auto-fit, minmax(…,1fr))`로
   다열), 좁아지면 무너지지 않게 스택/축소한다(예: 가로 2단은 `@container` 로 세로 스택).
 - 높이 가변에도 대응한다 — 콘텐츠는 상단 정렬(빈 공간 허용), 필요 시 내부 스크롤/클립.
-- 크기는 `homeWidgetSizes`(순서·표시와 직교, 메인 `normalizeHomeWidgetSizes` 단일 신뢰
+- 크기는 `homeWidgetSizes`(배치·이름과 직교, 메인 `normalizeHomeWidgetSizes` 단일 신뢰
   경계)로 영속된다. 배치는 `layoutHomeMasonry`(CSS Grid + 폭/높이 스팬)가 계산한다.
 - 위젯 추가 시 반응형 동작에 대한 배선 테스트(정적 소스/순수 로직)를 함께 둔다.
+
+**위젯 인스턴스 모델 (v6 — 중복 배치 + 배치별 이름).** 배치 단위는 위젯 **타입**이 아니라
+**인스턴스**다: `homeWidgets = [{ iid, type, name }]`. 같은 위젯을 여러 개 놓을 수 있고,
+배치마다 이름을 붙일 수 있다. 신규·수정 위젯은 이 모델을 전제로 작성한다.
+
+- `iid`가 `homeWidgetSizes`·`positions`·`groups.members`의 키이자 DOM `data-home-section`
+  값이다 — 그래서 인스턴스마다 크기·좌표·그룹이 독립한다. **타입 id를 키로 쓰면 안 된다.**
+- `iid`는 **메인이 발급**한다(`nextWidgetIid` — 결정적). 렌더러가 id를 주입하는 표면은 없다.
+- 렌더 함수는 `renderHomeXxx(inst)`로 인스턴스를 받는다. 카드 제목은 `widgetDisplayName(inst)`
+  (사용자 지정명 우선, 없으면 `WIDGET_META[type].name`).
+- **인스턴스별 뷰 상태**는 `store.wstate[iid]`(`makeWState(type)`)에 둔다 — 편집기 2개가 서로
+  다른 문서를, 탐색기 2개가 서로 다른 폴더를, 메모 2개가 서로 다른 메모를 갖는다.
+  **공유 데이터**(문서 목록·북마크·커밋 집계 등)는 전역 슬롯에 그대로 둔다.
+- 부분 DOM 갱신은 반드시 `cellQuery(iid, sel)`로 **그 인스턴스의 셀 안에서만** 한다.
+  `document.querySelector`로 타입을 찍으면 첫 셀만 갱신되고 나머지가 멈춘 화면으로 남는다.
+- '숨김'이라는 상태는 없다 — 제거 = 인스턴스 삭제(`removeWidget`), 추가 = 새 인스턴스
+  (`addWidget`). 신규 위젯 타입은 '기본 숨김'이 아니라 **기본 미배치**다(갤러리에서 추가).
+- 레거시(v5 이하) 이행은 **타입 id를 첫 인스턴스의 iid로 승격**해 무손실이다
+  (`migrateLegacyWidgets`). `NEW_HIDDEN_SINCE`/`unionNewHidden`은 이제 이 이행 경로 전용.
 
 **크기 매트릭스 계약 — 최소 크기 + 6개 조합 무잘림(필수).** 모든 위젯은 **최소 가로·세로
 크기**를 가져야 하고, 그 최소 크기를 기준으로 아래 (가로 열 스팬, 세로 높이 배수) 6개 조합

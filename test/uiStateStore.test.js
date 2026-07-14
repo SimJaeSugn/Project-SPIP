@@ -172,9 +172,70 @@ test('normalizeHomeLayout — 완전 재정렬 입력 보존', () => {
   assert.deepStrictEqual(store.normalizeHomeLayout(reordered), reordered);
 });
 
-test('normalizeState/defaultState — homeLayout 기본 순서 포함', () => {
-  assert.deepStrictEqual(store.defaultState().homeLayout, store.HOME_SECTION_IDS);
-  assert.deepStrictEqual(store.normalizeState({}).homeLayout, store.HOME_SECTION_IDS);
+// ── [위젯 인스턴스 v6] 배치 = homeWidgets([{iid,type,name}]) — 같은 위젯 중복 배치 + 배치별 이름 ──
+test('위젯 인스턴스 — defaultState: 기본 숨김 위젯을 뺀 타입 각 1개(타입 id 를 iid 로)', () => {
+  const w = store.defaultState().homeWidgets;
+  const hidden = new Set(store.DEFAULT_HIDDEN_WIDGETS);
+  assert.deepStrictEqual(w, store.TOGGLEABLE_WIDGET_IDS.filter((t) => !hidden.has(t)).map((t) => ({ iid: t, type: t, name: '' })));
+  assert.ok(!w.some((x) => x.type === 'mdedit'), '기본 숨김 위젯은 미배치');
+});
+
+test('위젯 인스턴스 — normalizeHomeWidgets: 같은 타입 중복 허용, iid 중복·미지 타입·손상 제거', () => {
+  const r = store.normalizeHomeWidgets([
+    { iid: 'mdedit', type: 'mdedit', name: '' },
+    { iid: 'w1', type: 'mdedit', name: '  회의록  ' },  // 같은 타입 중복 배치 — 허용
+    { iid: 'w1', type: 'mail', name: 'dup' },           // iid 중복 → 제거(첫 항목 우선)
+    { iid: 'BAD!!', type: 'mail' },                     // iid 형식 불량 → 제거
+    { iid: 'w2', type: 'nope' },                        // 미지 타입 → 제거
+    { iid: 'w3', type: 'featureAdd' },                  // featureAdd 는 인스턴스가 아니다 → 제거
+    { iid: 'gabc1', type: 'mail' },                     // 그룹 id 공간 침범 → 제거
+    null, 'x',
+  ]);
+  assert.deepStrictEqual(r, [
+    { iid: 'mdedit', type: 'mdedit', name: '' },
+    { iid: 'w1', type: 'mdedit', name: '회의록' },      // 이름은 sanitize(트림)
+  ]);
+  assert.deepStrictEqual(store.normalizeHomeWidgets(null), [], 'graceful');
+  assert.deepStrictEqual(store.normalizeHomeWidgets('x'), []);
+});
+
+test('위젯 인스턴스 — 이름 상한(MAX_WIDGET_NAME) + 개수 상한(MAX_WIDGETS)', () => {
+  const long = store.normalizeHomeWidgets([{ iid: 'w1', type: 'mail', name: 'x'.repeat(200) }]);
+  assert.strictEqual(long[0].name.length, store.MAX_WIDGET_NAME);
+  const many = [];
+  for (let i = 0; i < store.MAX_WIDGETS + 10; i++) many.push({ iid: 'w' + i.toString(36), type: 'mail', name: '' });
+  assert.strictEqual(store.normalizeHomeWidgets(many).length, store.MAX_WIDGETS);
+});
+
+test('위젯 인스턴스 — nextWidgetIid: 결정적(무작위성 배제)·미사용 최소 id', () => {
+  assert.strictEqual(store.nextWidgetIid([]), 'w1');
+  assert.strictEqual(store.nextWidgetIid([{ iid: 'w1' }, { iid: 'w2' }]), 'w3');
+  assert.strictEqual(store.nextWidgetIid([{ iid: 'w2' }]), 'w1', '빈 자리를 채운다');
+  assert.strictEqual(store.nextWidgetIid([{ iid: 'mdedit' }]), 'w1', '승격된 타입 id 와 충돌하지 않는다');
+});
+
+test('위젯 인스턴스 — v5 이행: 타입 id 를 iid 로 승격하고 숨김이었던 타입은 미배치(무손실)', () => {
+  // 실제 v5 저장본의 homeLayout 은 항상 전체 순열이다(normalizeHomeLayout 이 보장). 사용자가
+  //   todos 를 맨 앞으로 올리고, mail 과 나머지 신규 위젯을 숨겨둔 상태를 재현한다.
+  const layout = ['todos'].concat(store.HOME_SECTION_IDS.filter((t) => t !== 'todos'));
+  const hidden = ['mail'].concat(store.DEFAULT_HIDDEN_WIDGETS);
+  const r = store.normalizeState({
+    schemaVersion: 5,
+    homeLayout: layout,
+    hiddenWidgets: hidden,
+    homeWidgetSizes: { todos: { w: 3, h: 400 } },
+  });
+
+  // 배치 = 레거시 순서에서 (숨김 ∪ featureAdd) 를 뺀 것. 순서 보존.
+  const expected = layout.filter((t) => t !== 'featureAdd' && hidden.indexOf(t) < 0);
+  assert.deepStrictEqual(r.homeWidgets.map((w) => w.iid), expected);
+  assert.strictEqual(r.homeWidgets[0].iid, 'todos', '사용자가 올려둔 순서 보존');
+  assert.deepStrictEqual(r.homeWidgets[0], { iid: 'todos', type: 'todos', name: '' });
+  assert.ok(!r.homeWidgets.some((w) => w.type === 'mail'), '숨김이었던 위젯은 미배치');
+
+  // 크기 키(타입 id)가 그대로 iid 키로 살아남는다 — 이행 무손실의 핵심.
+  assert.deepStrictEqual(r.homeWidgetSizes, { todos: { w: 3, h: 400 } });
+  assert.strictEqual(r.schemaVersion, store.SCHEMA_VERSION);
 });
 
 // ── [위젯 추가/제거] hiddenWidgets ──
@@ -190,18 +251,23 @@ test('normalizeHiddenWidgets — 토글 위젯 화이트리스트만·중복 제
 
 // ── [홈 위젯 크기] homeWidgetSizes ──
 
-test('normalizeHomeWidgetSizes — 화이트리스트·클램프(w[1..4]·h[120..1600])·featureAdd 제거', () => {
+test('normalizeHomeWidgetSizes — 배치된 iid 만·클램프(w[1..4]·h[120..1600])·featureAdd 제거', () => {
+  // [위젯 인스턴스] 키는 **배치된 iid**(+그룹 id) — 타입 화이트리스트가 아니다. 그래서 같은 타입
+  //   위젯 두 개(mail / w1)가 각자의 크기를 가질 수 있다. 배치에 없는 iid(gone)는 정리된다.
+  const placed = new Set(['mail', 'aiusage', 'disk', 'todos', 'w1']);
   const r = store.normalizeHomeWidgetSizes({
     mail: { w: 2, h: 300 },
+    w1: { w: 1, h: 250 },          // 같은 타입의 두 번째 인스턴스 — 독립 크기
     aiusage: { w: 9, h: 99999 },   // 상한 클램프 → w:4, h:1600
     disk: { w: 0, h: 10 },         // 하한 클램프 → w:1, h:120
     todos: { w: 2, h: null },      // 자동 높이 유지
     featureAdd: { w: 2, h: 200 },  // 제거(추가 트리거는 리사이즈 대상 아님)
-    bogus: { w: 2, h: 200 },       // 미지 id 제거
-    attention: 'nope',             // 비객체 제거
-  });
+    gone: { w: 2, h: 200 },        // 배치에 없는 iid → 제거(고아 키 0)
+    attention: 'nope',             // 비객체 제거(+ 미배치)
+  }, placed);
   assert.deepStrictEqual(r, {
     mail: { w: 2, h: 300 },
+    w1: { w: 1, h: 250 },
     aiusage: { w: 4, h: 1600 },
     disk: { w: 1, h: 120 },
     todos: { w: 2, h: null },
@@ -220,49 +286,57 @@ test('defaultState/normalizeState — homeWidgetSizes 기본 빈 객체', () => 
   assert.deepStrictEqual(store.normalizeState({}).homeWidgetSizes, {});
 });
 
-test('write/read — homeWidgetSizes 라운드트립 보존', () => {
+test('write/read — homeWidgetSizes 라운드트립 보존(배치된 iid 만)', () => {
   const file = tmpFile();
+  const widgets = [{ iid: 'mail', type: 'mail', name: '' }, { iid: 'todos', type: 'todos', name: '' }];
   const sizes = { mail: { w: 3, h: 260 }, todos: { w: 2, h: null } };
-  const written = store.write({ schemaVersion: 2, homeWidgetSizes: sizes }, { uiStatePath: file });
+  const written = store.write({ schemaVersion: store.SCHEMA_VERSION, homeWidgets: widgets, homeWidgetSizes: sizes }, { uiStatePath: file });
   assert.deepStrictEqual(written.homeWidgetSizes, sizes);
   assert.deepStrictEqual(store.read({ uiStatePath: file }).homeWidgetSizes, sizes);
 });
 
-test('defaultState/normalizeState — hiddenWidgets 시드(신규 위젯 기본 숨김) / 현재버전 입력은 무시드', () => {
-  // [SH-1 PM#3 / Phase 3·G / 탐색기 / MD 편집기] 신규 설치 기본 숨김 시드 = DEFAULT_HIDDEN_WIDGETS.
-  assert.deepStrictEqual(store.defaultState().hiddenWidgets, store.DEFAULT_HIDDEN_WIDGETS);
-  assert.deepStrictEqual(store.DEFAULT_HIDDEN_WIDGETS, ['shelf', 'shelfWide', 'scratchpad', 'commitHeatmap', 'systemStatus', 'explorer', 'mdedit']);
-  // [SH-1 P1] 현재 스키마 버전 입력(hiddenWidgets 키 없음)은 이행 union·시드 미적용 — 사용자 상태 그대로(빈).
-  assert.deepStrictEqual(store.normalizeState({ schemaVersion: store.SCHEMA_VERSION }).hiddenWidgets, []);
+// [C-M-1 게이트] write→read 라운드트립 보존 — homeWidgets 키가 normalizeState에서 조용히 버려지지 않음.
+test('write/read — homeWidgets 라운드트립 보존, 중복 배치·이름 포함 (C-M-1)', () => {
+  const file = tmpFile();
+  const custom = [
+    { iid: 'mdedit', type: 'mdedit', name: '회의록' },
+    { iid: 'w1', type: 'mdedit', name: 'TODO' },       // 같은 타입 2개
+    { iid: 'mail', type: 'mail', name: '' },
+  ];
+  const written = store.write({ schemaVersion: store.SCHEMA_VERSION, homeWidgets: custom }, { uiStatePath: file });
+  assert.deepStrictEqual(written.homeWidgets, custom, 'write 반환에 정규화된 homeWidgets 보존');
+  const back = store.read({ uiStatePath: file });
+  assert.deepStrictEqual(back.homeWidgets, custom, 'read 후에도 동일(키가 버려지지 않음)');
 });
 
-test('write/read — hiddenWidgets 라운드트립 보존 (C-M-1)', () => {
-  const file = tmpFile();
-  // [SH-1 P1] 현재 스키마 버전 명시 — 이행 union 회피(순수 라운드트립 의도 보존).
-  const written = store.write({ schemaVersion: store.SCHEMA_VERSION, hiddenWidgets: ['mail', 'disk'] }, { uiStatePath: file });
-  assert.deepStrictEqual(written.hiddenWidgets, ['mail', 'disk']);
-  const back = store.read({ uiStatePath: file });
-  assert.deepStrictEqual(back.hiddenWidgets, ['mail', 'disk'], 'read 후에도 보존(키 안 버려짐)');
-});
-
-// [C-M-1 게이트] write→read 라운드트립 보존 — homeLayout 키가 normalizeState에서 조용히 버려지지 않음.
-test('write/read — homeLayout 라운드트립 보존 (C-M-1)', () => {
-  const file = tmpFile();
-  const custom = ['mail', 'attention', 'productivity', 'activity', 'todos', 'disk', 'aiusage', 'shelf', 'shelfWide', 'scratchpad', 'commitHeatmap', 'systemStatus', 'explorer', 'mdedit', 'featureAdd'];
-  const written = store.write({ homeLayout: custom }, { uiStatePath: file });
-  assert.deepStrictEqual(written.homeLayout, custom, 'write 반환에 정규화된 homeLayout 보존');
-  const back = store.read({ uiStatePath: file });
-  assert.deepStrictEqual(back.homeLayout, custom, 'read 후에도 동일 순서(키가 버려지지 않음)');
+test('위젯 인스턴스 — 배치에서 사라진 iid 의 크기·그룹 소속은 자동 정리(고아 키 0)', () => {
+  const r = store.normalizeState({
+    schemaVersion: store.SCHEMA_VERSION,
+    homeWidgets: [{ iid: 'mail', type: 'mail', name: '' }],
+    homeWidgetSizes: { mail: { w: 2, h: 300 }, w9: { w: 1, h: 200 } }, // w9 는 미배치
+    dashboard: {
+      activePreset: 'default',
+      presets: [{
+        id: 'default', name: '기본',
+        widgets: [{ iid: 'mail', type: 'mail', name: '' }],
+        groups: [{ id: 'gaa11', name: '그룹', members: ['mail', 'w9'] }],
+      }],
+    },
+  });
+  assert.deepStrictEqual(Object.keys(r.homeWidgetSizes), ['mail'], '미배치 iid 크기 제거');
+  assert.deepStrictEqual(r.dashboard.presets[0].groups[0].members, ['mail'], '미배치 iid 그룹 소속 제거');
 });
 
 // ── [로드맵 Phase 5·M] 그룹/섹션 정규화 ──
-test('normalizeGroups — id 형식·중복·members(토글·그룹간 유일)·이름·collapsed·상한', () => {
+test('normalizeGroups — id 형식·중복·members(배치된 iid·그룹간 유일)·이름·collapsed·상한', () => {
+  // [위젯 인스턴스] members 는 **iid** — 배치된 인스턴스만. 같은 타입 위젯 둘 중 하나만 그룹에 넣을 수 있다.
+  const placed = new Set(['mail', 'disk', 'todos', 'w1']);
   const g = store.normalizeGroups([
     { id: 'gabc1', name: '  작업  ', collapsed: true, members: ['mail', 'disk', 'mail', 'bogus', 'featureAdd'] },
     { id: 'gabc2', name: '', members: ['disk', 'todos'] }, // disk 는 g1 이 선점 → 제거
     { id: 'BADID', members: [] },                            // id 형식 불량 → 제거
     { id: 'gabc1', name: 'dup' },                            // 중복 id → 제거
-  ]);
+  ], placed);
   assert.strictEqual(g.length, 2);
   assert.deepStrictEqual(g[0], { id: 'gabc1', name: '작업', collapsed: true, members: ['mail', 'disk'], mode: 'section', active: 0 });
   assert.deepStrictEqual(g[1], { id: 'gabc2', name: '그룹', collapsed: false, members: ['todos'], mode: 'section', active: 0 });
@@ -312,12 +386,28 @@ test('normalizeScratchpad — 개행/탭 보존·제어문자 제거·길이 상
   assert.deepStrictEqual(store.defaultScratchpad(), { text: '', updatedAt: null });
 });
 
-test('normalizeState/write/read — scratchpad 라운드트립 보존', () => {
+test('normalizeState/write/read — scratchpads(인스턴스별 메모) 라운드트립 보존', () => {
   const file = tmpFile();
-  // 기본 상태에 scratchpad 키 존재.
-  assert.deepStrictEqual(store.normalizeState({}).scratchpad, { text: '', updatedAt: null });
-  const written = store.write({ schemaVersion: store.SCHEMA_VERSION, scratchpad: { text: 'hello memo', updatedAt: 123 } }, { uiStatePath: file });
-  assert.deepStrictEqual(written.scratchpad, { text: 'hello memo', updatedAt: 123 });
+  // [위젯 인스턴스] 메모는 인스턴스별 — 메모 위젯 2개면 서로 다른 메모.
+  assert.deepStrictEqual(store.normalizeState({}).scratchpads, {});
+  const pads = { scratchpad: { text: 'hello memo', updatedAt: 123 }, w1: { text: '두 번째 메모', updatedAt: 456 } };
+  const written = store.write({ schemaVersion: store.SCHEMA_VERSION, scratchpads: pads }, { uiStatePath: file });
+  assert.deepStrictEqual(written.scratchpads, pads);
   const back = store.read({ uiStatePath: file });
-  assert.deepStrictEqual(back.scratchpad, { text: 'hello memo', updatedAt: 123 }, 'read 후에도 보존(키 안 버려짐)');
+  assert.deepStrictEqual(back.scratchpads, pads, 'read 후에도 보존(키 안 버려짐)');
+});
+
+test('위젯 인스턴스 — v5 단일 scratchpad → 승격된 인스턴스(iid "scratchpad")의 메모로 이행', () => {
+  const r = store.normalizeState({ schemaVersion: 5, scratchpad: { text: '옛 메모', updatedAt: 111 } });
+  assert.deepStrictEqual(r.scratchpads.scratchpad, { text: '옛 메모', updatedAt: 111 }, '메모 내용 무손실 이행');
+});
+
+test('위젯 인스턴스 — 메모는 위젯을 지워도 지워지지 않는다(콘텐츠 보존 · 배치 게이트 없음)', () => {
+  // 크기·좌표(재생성 가능한 배치 메타)와 달리 메모는 사용자 콘텐츠다 — 미배치 iid 의 메모도 남긴다.
+  const r = store.normalizeState({
+    schemaVersion: store.SCHEMA_VERSION,
+    homeWidgets: [{ iid: 'mail', type: 'mail', name: '' }], // 메모 위젯은 미배치
+    scratchpads: { w7: { text: '지우면 안 되는 메모', updatedAt: 9 } },
+  });
+  assert.strictEqual(r.scratchpads.w7.text, '지우면 안 되는 메모');
 });

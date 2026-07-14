@@ -253,10 +253,13 @@ function registerIpcHandlers(deps) {
   });
   guard('spip:setOrder', (args) => uiStateIpc.setOrder(args, ctx));
   guard('spip:setSortMode', (args) => uiStateIpc.setSortMode(args, ctx));
-  // [R-32] 홈 섹션 순서 — 섹션 enum 화이트리스트만(경로·실행 무관). 검증은 메인 normalizeHomeLayout 단일 경계.
+  // [위젯 인스턴스] 홈 배치 — 순서(iid 순열) / 추가 / 제거 / 이름 변경. 배치 단위는 '타입'이 아니라 '인스턴스'라
+  //   같은 위젯을 여러 개 놓을 수 있고 각각 다른 이름·크기·좌표를 갖는다. iid 는 **메인이 발급**한다(렌더러 주입 불가).
+  //   검증은 메인 normalizeHomeWidgets 단일 경계(타입 enum·iid 형식·상한·이름 sanitize).
   guard('spip:setHomeLayout', (args) => uiStateIpc.setHomeLayout(args, ctx));
-  // [위젯 추가/제거] 숨긴(미적용) 위젯 집합 — 토글 가능 위젯 화이트리스트만. 검증은 메인 normalizeHiddenWidgets.
-  guard('spip:setHiddenWidgets', (args) => uiStateIpc.setHiddenWidgets(args, ctx));
+  guard('spip:addWidget', (args) => uiStateIpc.addWidget(args, ctx));
+  guard('spip:removeWidget', (args) => uiStateIpc.removeWidget(args, ctx));
+  guard('spip:renameWidget', (args) => uiStateIpc.renameWidget(args, ctx));
   guard('spip:setHomeWidgetSizes', (args) => uiStateIpc.setHomeWidgetSizes(args, ctx));
   // [로드맵 Phase 2] 대시보드 프리셋(모드) — 전환/추가/복제/이름변경/삭제. 검증은 메인 프리셋 CRUD 단일 경계.
   guard('spip:setActivePreset', (args) => uiStateIpc.setActivePreset(args, ctx));
