@@ -206,7 +206,8 @@ test('인스턴스 상태 — 탐색기: 디스크가 바뀌면 같은 폴더를
 test('인스턴스 상태 — 문서를 지우면 그 문서를 열고 있던 모든 편집기가 다른 문서로 옮겨간다', () => {
   const rm = APP_SRC.slice(APP_SRC.indexOf('function mdRemoveDoc('), APP_SRC.indexOf('function mdImportDoc('));
   assert.ok(/widgetsOfType\('mdedit'\)/.test(rm), '편집기 인스턴스 순회');
-  assert.ok(/wstate\(w\.iid\)\.activeId === docId/.test(rm), '그 문서를 열고 있던 편집기만');
+  // 삭제 대상은 '이 인스턴스가 연 문서'가 아니라 '× 를 누른 칩의 문서'(targetId) — 열려 있지 않아도 지운다.
+  assert.ok(/wstate\(w\.iid\)\.activeId === targetId/.test(rm), '그 문서를 열고 있던 편집기만');
 });
 
 /* ───── 회귀: 무한 렌더 루프 (v1.37.0 빈 화면 사고) ───── */

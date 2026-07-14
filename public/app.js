@@ -5291,25 +5291,32 @@ function initBrowser() {
   }
 
   /** 삭제 — 되돌릴 수 없으므로 확인 모달을 거친다. 문서는 라이브러리 공유라 **다른 편집기에서도 사라진다**. */
-  function mdRemoveDoc(iid) {
-    var st = wstate(iid);
-    var cur = mdActiveMeta(iid);
+  /** 문서 삭제 — docId 를 주면 그 문서(칩의 × 버튼), 없으면 이 인스턴스가 연 문서. */
+  function mdRemoveDoc(iid, docId) {
+    var cur = docId
+      ? (store.mdedit.docs || []).find(function (d) { return d.id === docId; })
+      : mdActiveMeta(iid);
     if (!cur) return;
-    var docId = st.activeId;
+    var targetId = cur.id;
     askConfirm({
       title: '문서 삭제',
-      message: '‘' + cur.title + '’ 문서를 삭제할까요?\n되돌릴 수 없습니다. 보관하려면 먼저 파일로 내보내세요.',
+      message: '‘' + cur.title + '’ 문서를 삭제할까요?\n되돌릴 수 없습니다. 보관하려면 먼저 파일로 내보내세요.\n(불러온 문서라도 디스크의 원본 파일은 지워지지 않습니다.)',
       confirmText: '삭제',
       danger: true,
       onConfirm: async function () {
-        if (st._saveTimer) { clearTimeout(st._saveTimer); st._saveTimer = null; } // 삭제 대상 자동저장 취소
-        st.dirty = false;
-        var res = await mdIpc('remove', docId);
+        // 삭제 대상 문서를 열고 있는 모든 인스턴스의 자동저장을 먼저 취소(사라질 문서에 쓰지 않게).
+        widgetsOfType('mdedit').forEach(function (w) {
+          var s = wstate(w.iid);
+          if (s.activeId !== targetId) return;
+          if (s._saveTimer) { clearTimeout(s._saveTimer); s._saveTimer = null; }
+          s.dirty = false;
+        });
+        var res = await mdIpc('remove', targetId);
         if (!res || !res.ok) { toast(mdMessage((res && res.code) || 'INTERNAL'), true); return; }
         store.mdedit.docs = Array.isArray(res.docs) ? res.docs : [];
         // 이 문서를 열고 있던 **모든** 편집기 인스턴스를 다른 문서로 옮긴다(유령 본문 방지).
         var fallback = store.mdedit.docs.length > 0 ? store.mdedit.docs[0].id : null;
-        var affected = widgetsOfType('mdedit').filter(function (w) { return wstate(w.iid).activeId === docId; });
+        var affected = widgetsOfType('mdedit').filter(function (w) { return wstate(w.iid).activeId === targetId; });
         for (var i = 0; i < affected.length; i++) {
           var s2 = wstate(affected[i].iid);
           if (s2._saveTimer) { clearTimeout(s2._saveTimer); s2._saveTimer = null; }
@@ -5660,17 +5667,33 @@ function initBrowser() {
     var bar = el('div', { cls: 'md-docs spip-scroll', attrs: { role: 'tablist', 'aria-label': '문서 목록' } });
     (store.mdedit.docs || []).forEach(function (d) {
       var on = d.id === st.activeId;
-      var chip = el('button', {
+      var name = d.title || '제목 없음';
+      // 칩 자체는 div — 안에 삭제(×) 버튼을 두므로 button 중첩(무효 HTML)을 피한다. 탭 시맨틱은 role 로 유지.
+      var chip = el('div', {
         cls: 'md-doc' + (on ? ' md-doc--on' : ''),
-        attrs: { type: 'button', role: 'tab', 'aria-selected': on ? 'true' : 'false', title: d.title || '제목 없음' },
+        attrs: { role: 'tab', tabindex: '0', 'aria-selected': on ? 'true' : 'false', title: name },
         on: {
           click: function (e) { e.stopPropagation(); mdOpenDoc(iid, d.id); },
+          keydown: function (e) {
+            if (e.key !== 'Enter' && e.key !== ' ') return;
+            e.preventDefault(); e.stopPropagation(); mdOpenDoc(iid, d.id);
+          },
           // 편집 모드 재정렬 드래그(SortableJS)와 분리.
           pointerdown: function (e) { e.stopPropagation(); },
         },
       });
-      chip.appendChild(el('span', { cls: 'md-doc__name', text: d.title || '제목 없음' }));
+      chip.appendChild(el('span', { cls: 'md-doc__name', text: name }));
       chip.appendChild(el('span', { cls: 'md-doc__meta', text: mdShortTime(d.updatedAt), style: HOME_MONO }));
+      // 문서별 삭제 — 칩마다 ×. 칩 열기(click)로 새지 않게 stopPropagation.
+      chip.appendChild(el('button', {
+        cls: 'md-doc__x', text: '×',
+        attrs: { type: 'button', 'aria-label': name + ' 문서 삭제', title: '문서 삭제' },
+        on: {
+          click: function (e) { e.stopPropagation(); mdRemoveDoc(iid, d.id); },
+          keydown: function (e) { if (e.key === 'Enter' || e.key === ' ') e.stopPropagation(); },
+          pointerdown: function (e) { e.stopPropagation(); },
+        },
+      }));
       bar.appendChild(chip);
     });
     return bar;
@@ -5706,7 +5729,7 @@ function initBrowser() {
     tools.appendChild(mdToolBtn('불러오기', [{ t: 'path', d: 'M12 3v12' }, { t: 'path', d: 'M7 10l5 5 5-5' }, { t: 'path', d: 'M4 19h16' }], function () { mdImportDoc(iid); }, st.busy));
     tools.appendChild(mdToolBtn('파일로 내보내기', [{ t: 'path', d: 'M12 15V3' }, { t: 'path', d: 'M7 8l5-5 5 5' }, { t: 'path', d: 'M4 19h16' }], function () { mdExportDoc(iid); }, st.busy || !hasDoc));
     tools.appendChild(mdToolBtn('이름 변경', [{ t: 'path', d: 'M4 20h4l10-10-4-4L4 16z' }, { t: 'path', d: 'M14 6l4 4' }], function () { mdRenameDoc(iid); }, st.busy || !hasDoc));
-    tools.appendChild(mdToolBtn('삭제', [{ t: 'path', d: 'M4 7h16' }, { t: 'path', d: 'M9 7V5h6v2' }, { t: 'path', d: 'M6 7l1 12h10l1-12' }], function () { mdRemoveDoc(iid); }, st.busy || !hasDoc));
+    // 삭제는 툴바가 아니라 문서 칩마다 붙는 × 버튼이 담당한다(mdDocBar) — 지울 문서를 열지 않아도 지운다.
     head.appendChild(tools);
     card.appendChild(head);
 

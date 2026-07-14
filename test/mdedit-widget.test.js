@@ -164,6 +164,42 @@ test('MD-1 — 파괴적 동작(삭제)은 확인 모달을 거친다', () => {
   assert.ok(/askConfirm\(\{/.test(rm), '삭제는 askConfirm');
   assert.ok(/danger: true/.test(rm), '위험 액션 표시');
   assert.ok(/내보내/.test(rm), '되돌릴 수 없음 + 내보내기 안내');
+  assert.ok(/원본 파일은 지워지지 않습니다/.test(rm), '원본 .md 파일은 그대로임을 명시');
+});
+
+/* ───── 문서별 삭제(칩의 × 버튼) ───── */
+
+test('MD-1 — 삭제는 문서 칩마다 붙는 × 버튼이 담당(툴바 삭제 버튼 없음)', () => {
+  const code = mdCode();
+  assert.ok(!/mdToolBtn\('삭제'/.test(code), '툴바에서 삭제 버튼 제거');
+  assert.ok(/cls: 'md-doc__x', text: '×'/.test(code), '칩마다 × 버튼');
+  assert.ok(/mdRemoveDoc\(iid, d\.id\)/.test(code), '× 는 그 칩의 문서 id 를 지운다(열려 있지 않아도)');
+});
+
+test('MD-1 — × 클릭이 칩 열기(mdOpenDoc)로 새지 않는다(stopPropagation)', () => {
+  const code = mdCode();
+  const x = code.slice(code.indexOf("cls: 'md-doc__x'"));
+  assert.ok(/click: function \(e\) \{ e\.stopPropagation\(\); mdRemoveDoc\(iid, d\.id\); \}/.test(x));
+});
+
+test('MD-1 — 칩은 button 중첩을 피해 div(role=tab) + 키보드 열기', () => {
+  const code = mdCode();
+  const bar = code.slice(code.indexOf('function mdDocBar'), code.indexOf('function mdShortTime'));
+  assert.ok(/var chip = el\('div', \{/.test(bar), '칩은 div(안에 × button 을 담으므로)');
+  assert.ok(/role: 'tab', tabindex: '0'/.test(bar), '탭 시맨틱 + 포커스 가능');
+  assert.ok(/keydown:[\s\S]{0,200}mdOpenDoc\(iid, d\.id\)/.test(bar), 'Enter/Space 로 열기');
+});
+
+test('MD-1 — 삭제 대상 문서를 연 모든 인스턴스의 자동저장을 먼저 취소한다', () => {
+  const rm = mdCode().slice(mdCode().indexOf('function mdRemoveDoc'));
+  assert.ok(/widgetsOfType\('mdedit'\)[\s\S]{0,300}s\.activeId !== targetId[\s\S]{0,200}clearTimeout\(s\._saveTimer\)/.test(rm),
+    '사라질 문서에 자동저장이 쓰이지 않게');
+});
+
+test('MD-1 — × 버튼 CSS: 칩 호버/포커스 시 또렷, 평소 옅게(오클릭 방지)', () => {
+  assert.ok(/\.md-doc__x \{[^}]*opacity: \.55/.test(CSS), '평소 옅게');
+  assert.ok(/\.md-doc:hover \.md-doc__x[^{]*\{[^}]*opacity: 1/.test(CSS), '칩 호버 시 또렷');
+  assert.ok(/\.md-doc__x:hover \{[^}]*color: #dc2626/.test(CSS), '위험 액션 색');
 });
 
 /* ───── 크기 계약(6조합) ───── */

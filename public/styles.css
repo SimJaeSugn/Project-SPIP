@@ -607,6 +607,16 @@ input, button, select { font-family: inherit; }
 .md-doc__name { font-size: 11.5px; font-weight: 600; color: #57534e; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .md-doc--on .md-doc__name { color: var(--accent); }
 .md-doc__meta { font-size: 10px; color: #c7c2bd; flex: 0 0 auto; }
+/* 문서별 삭제(×) — 칩 우측. 평소 옅게, 칩 호버/포커스 시 또렷하게(오클릭 방지). */
+.md-doc__x {
+  appearance: none; cursor: pointer; flex: 0 0 auto; display: flex; align-items: center; justify-content: center;
+  width: 16px; height: 16px; margin-right: -3px; padding: 0;
+  border: none; border-radius: 50%; background: transparent;
+  color: #c7c2bd; font-size: 14px; line-height: 1; opacity: .55; transition: opacity .12s ease, background .12s ease, color .12s ease;
+}
+.md-doc:hover .md-doc__x, .md-doc:focus-within .md-doc__x { opacity: 1; }
+.md-doc__x:hover { background: #fef2f2; color: #dc2626; opacity: 1; }
+.md-doc__x:focus-visible { opacity: 1; }
 
 /* 본문 — 2단/단일. display·grid 는 클래스가 소유(렌더 함수의 인라인 style 에 두지 않는다) →
  *   @container 규칙이 인라인에 밀리지 않고 뷰 전환이 실제로 동작한다. */
