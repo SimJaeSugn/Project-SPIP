@@ -773,12 +773,25 @@ input, button, select { font-family: inherit; }
 .home-rail {
   position: absolute; top: 4px; right: -34px; z-index: 6;
   display: flex; flex-direction: column; gap: 6px;
-  opacity: 0; transition: opacity .12s ease;
+  /* 카드와 레일 사이의 빈 틈을 **히트 영역으로 이어 붙인다**(투명 패딩 = 다리).
+   *   이게 없으면 카드 → 레일로 마우스를 옮기는 도중 틈에서 :hover 가 끊겨 레일이 사라지고,
+   *   버튼에 닿기 전에 없어져 클릭할 수 없다. 패딩은 박스(=hit area)에 포함되므로 틈이 메워진다.
+   *
+   *   왼쪽 패딩(6px) = 레일 오프셋(34px) − 버튼 폭(28px). 그래서 레일 박스의 왼쪽 변이 카드 우변에
+   *   **정확히 맞닿는다** — 카드 안쪽을 덮지 않으므로(=0px 겹침) 위젯 툴바 가림 문제가 재발하지 않는다. */
+  padding: 6px 0 6px 6px;
+  opacity: 0;
+  /* 사라질 때만 약간 지연 — 마우스가 잠깐 틈을 스쳐도 깜빡이며 사라지지 않는다. */
+  transition: opacity .12s ease .18s;
   pointer-events: none;   /* 숨어 있을 땐 이웃 위젯의 클릭을 가로채지 않는다 */
 }
 .home-section:hover .home-rail,
-.home-rail:focus-within { opacity: 1; pointer-events: auto; }
-.home-masonry--editing .home-rail { opacity: 1; pointer-events: auto; }
+.home-rail:hover,
+.home-rail:focus-within {
+  opacity: 1; pointer-events: auto;
+  transition-delay: 0s;   /* 나타날 땐 즉시 */
+}
+.home-masonry--editing .home-rail { opacity: 1; pointer-events: auto; transition-delay: 0s; }
 
 /* 레일 안의 버튼 — 개별 절대배치를 하지 않는다(레일이 위치를 소유). */
 .home-rail .widget-focus,

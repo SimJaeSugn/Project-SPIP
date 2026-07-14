@@ -254,6 +254,15 @@ test('UI — 컨트롤 버튼은 카드 바깥 세로 레일에 모인다(위젯
   assert.ok(/\.home-section:hover \.home-rail,/.test(CSS), '호버 시 노출');
   assert.ok(/\.home-masonry--editing \.home-rail \{ opacity: 1;/.test(CSS), '편집 모드에서 상시 노출');
   assert.ok(/\.home-rail \{[^}]*pointer-events: none/.test(CSS), '숨어 있을 땐 이웃 클릭을 가로채지 않는다');
+
+  // 카드 → 레일로 마우스를 옮기는 도중 틈에서 :hover 가 끊기면 레일이 사라져 버튼에 닿을 수 없다.
+  //   투명 패딩으로 히트 영역을 카드 우변에 맞닿게 이어 붙이고, 사라질 때만 지연을 준다.
+  assert.ok(/\.home-rail \{[^}]*padding: 6px 0 6px 6px/.test(CSS), '카드와 레일 사이 틈을 히트 영역으로 연결');
+  assert.ok(/\.home-rail \{[^}]*transition: opacity \.12s ease \.18s/.test(CSS), '사라질 때 지연(깜빡임 방지)');
+  assert.ok(/\.home-rail:hover,/.test(CSS), '레일 위에 있으면 유지');
+  assert.ok(/\.home-section:hover \.home-rail,[\s\S]{0,120}transition-delay: 0s/.test(CSS), '나타날 땐 즉시');
+  // 패딩(6px) = 오프셋(34px) − 버튼 폭(28px) → 카드 안쪽 겹침 0(툴바 가림 재발 방지).
+  assert.ok(/\.home-rail \.widget-focus,[\s\S]{0,200}width: 28px/.test(CSS), '버튼 폭 28px(패딩 계산 전제)');
   // 개별 버튼은 절대배치를 갖지 않는다(레일이 위치를 소유) — 코너 겹침 재발 방지.
   assert.ok(/\.home-rail \.widget-focus,[\s\S]{0,80}\.home-rail \.widget-remove \{[^}]*position: static/.test(CSS),
     '버튼은 레일 안에서 static');
