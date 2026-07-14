@@ -804,15 +804,28 @@ function widgetsFromLegacy(homeLayout, hiddenWidgets) {
     .map((t) => ({ iid: t, type: t, name: '' }));
 }
 
+/* [위젯 인스턴스] 배치 조회의 단일 출처.
+ *
+ * ⚠️ store 는 initBrowser() **함수 스코프**에 있어서 모듈 최상위 함수들은 볼 수 없다.
+ *   예전엔 `typeof store !== 'undefined'` 가드로 조용히 빈 배열을 돌려줬는데, 그 결과
+ *   widgetInstance() 가 항상 null → 포커스(크게 보기)가 조용히 무반응이었고,
+ *   widgetTypeOf() 가 iid 를 타입으로 오인 → 중복 배치 위젯의 기본 스팬·최소 높이가 틀렸다.
+ *   initBrowser 가 bindWidgetStore(store) 로 한 번 묶어 준다. 테스트(store 없음)에선 빈 배열 폴백. */
+let __wStore = null;
+function bindWidgetStore(s) { __wStore = s; }
+function widgetList() {
+  return (__wStore && Array.isArray(__wStore.homeWidgets)) ? __wStore.homeWidgets : [];
+}
+
 /** iid → 위젯 타입. 미배치 id(그룹 id·타입 id 그대로 넘어온 경우)는 그대로 돌려준다(폴백). */
 function widgetTypeOf(id) {
-  const list = (typeof store !== 'undefined' && store && Array.isArray(store.homeWidgets)) ? store.homeWidgets : [];
+  const list = widgetList();
   for (let i = 0; i < list.length; i++) if (list[i].iid === id) return list[i].type;
   return id;
 }
 /** iid → 배치 인스턴스({iid,type,name}) 또는 null. */
 function widgetInstance(iid) {
-  const list = (typeof store !== 'undefined' && store && Array.isArray(store.homeWidgets)) ? store.homeWidgets : [];
+  const list = widgetList();
   for (let i = 0; i < list.length; i++) if (list[i].iid === iid) return list[i];
   return null;
 }
@@ -2042,6 +2055,10 @@ function initBrowser() {
       unsubscribe: null,       // onUpdateStatus 구독 해제 함수
     },
   };
+
+  // [위젯 인스턴스] 모듈 최상위 헬퍼(widgetInstance/widgetTypeOf/widgetDisplayName …)가 배치 목록을
+  //   볼 수 있게 store 를 묶는다. store 는 이 함수 스코프에 있어 밖에서 직접 참조할 수 없다.
+  bindWidgetStore(store);
 
   const app = document.getElementById('app');
   const toastEl = document.getElementById('toast');

@@ -230,6 +230,25 @@ test('회귀 — 지연 적재는 할 일이 없으면 render() 를 부르지 �
   assert.ok(/st\._seeded = true;|wstate\(pending\[i\]\.iid\)\._seeded = true;/.test(APP_SRC), '자동 열기 전에 가드 설정');
 });
 
+test('회귀 — 모듈 최상위 헬퍼가 배치 목록을 볼 수 있게 store 를 바인딩한다', () => {
+  // store 는 initBrowser() **함수 스코프**에 있어서 모듈 최상위 함수(widgetInstance 등)는 볼 수 없다.
+  //   예전엔 `typeof store !== 'undefined'` 가드로 조용히 빈 배열을 돌려줬고, 그 결과
+  //     · widgetInstance() 가 항상 null → 포커스(크게 보기) 버튼이 눌러도 무반응(예외조차 없음)
+  //     · widgetTypeOf() 가 iid 를 타입으로 오인 → 중복 배치 위젯의 기본 스팬·최소 높이가 틀림
+  //     · widgetTitleOf() 가 제목 자리에 iid 문자열을 넣음(메일·셸프 부분 갱신)
+  //   조용히 잘못된 값을 돌려주는 종류의 버그라 반드시 배선을 고정한다.
+  assert.ok(/let __wStore = null;/.test(APP_SRC), '모듈 스코프 store 참조');
+  assert.ok(/function bindWidgetStore\(s\) \{ __wStore = s; \}/.test(APP_SRC), '바인딩 함수');
+  assert.ok(/\n  bindWidgetStore\(store\);/.test(APP_SRC), 'initBrowser 가 store 를 바인딩');
+  // 헬퍼들은 widgetList() 단일 출처를 통해서만 배치를 읽는다(typeof store 가드 금지 — 조용한 실패 원인).
+  assert.ok(/function widgetList\(\)/.test(APP_SRC), '배치 조회 단일 출처');
+  assert.ok(!/typeof store !== 'undefined' && store && Array\.isArray\(store\.homeWidgets\)/.test(APP_SRC),
+    '조용히 빈 배열을 돌려주는 가드 제거');
+  // 포커스는 배치된 인스턴스만 연다(가드 자체는 유지).
+  assert.ok(/function openFocusWidget\(iid\) \{\s*if \(!widgetInstance\(iid\)\) return;/.test(APP_SRC),
+    '포커스는 배치된 인스턴스만');
+});
+
 /* ───── IPC 표면 정합 ───── */
 
 test('IPC — preload 표면 ↔ register 등록 채널 정합(신규 3채널)', () => {
