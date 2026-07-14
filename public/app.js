@@ -11521,9 +11521,20 @@ function initBrowser() {
       /** 재렌더 후 동일 셀렉터의 새 노드에 스냅샷 복원. */
       restore(rootEl, snap) {
         if (!snap) return;
-        SCROLL_SEL.forEach((sel) => {
-          if (snap.scroll[sel] != null) { const e = rootEl.querySelector(sel); if (e) e.scrollTop = snap.scroll[sel]; }
-        });
+        const applyScroll = () => {
+          SCROLL_SEL.forEach((sel) => {
+            if (snap.scroll[sel] == null) return;
+            const e = rootEl.querySelector(sel);
+            if (e && e.scrollTop !== snap.scroll[sel]) e.scrollTop = snap.scroll[sel];
+          });
+        };
+        applyScroll();
+        // 홈 마소너리는 rAF 뒤에야 행 스팬(=콘텐츠 높이)이 정해진다. 그 전에 건 scrollTop 은 아직
+        //   짧은 콘텐츠의 최대 스크롤에 걸려 0으로 잘리고, 결국 위젯을 누를 때마다 화면이 맨 위로
+        //   튀어 올랐다. 레이아웃이 앉은 뒤 다시 건다(스팬 계산 프레임 + 반영 프레임 = 2프레임).
+        if (typeof requestAnimationFrame === 'function') {
+          requestAnimationFrame(() => { applyScroll(); requestAnimationFrame(applyScroll); });
+        }
         const f = snap.focus;
         if (f) {
           const e = rootEl.querySelector(f.sel);
