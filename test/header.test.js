@@ -41,11 +41,14 @@ test('R-27/Q5 — 헤더에서 도움말 버튼 제거(openHelp 직접 진입점
   assert.ok(!/click:\s*openHelp/.test(body), '헤더에 openHelp 클릭 핸들러가 없어야 한다');
 });
 
-test('R-27 — 공통 액션(설정·궤도 맵·재스캔)이 헤더에 존재', () => {
+test('R-27 — 공통 액션(설정·궤도 맵·재스캔)이 헤더에 존재(아이콘 버튼·title 라벨)', () => {
   const body = renderHeaderBody();
-  assert.ok(/text:\s*'설정'/.test(body), '설정 버튼');
-  assert.ok(/text:\s*'궤도 맵'/.test(body), '궤도 맵 버튼');
+  // 아이콘 전용 버튼으로 전환 — 라벨은 text 가 아니라 title(툴팁)/aria-label 로 유지된다.
+  assert.ok(/title:\s*'설정'/.test(body), '설정 버튼');
+  assert.ok(/title:\s*'궤도 맵'/.test(body), '궤도 맵 버튼');
   assert.ok(/'재스캔'/.test(body), '재스캔 버튼');
+  assert.ok(/cls:\s*'btn btn--icon'/.test(body), '설정·궤도 맵은 btn--icon 아이콘 버튼');
+  assert.ok(/'btn btn--dark btn--icon'/.test(body), '재스캔은 btn--dark btn--icon 아이콘 버튼');
 });
 
 test('R-27 — home early-return 제거(공통 골격 공유)', () => {

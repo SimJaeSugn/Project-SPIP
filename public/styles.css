@@ -217,6 +217,11 @@ input, button, select { font-family: inherit; }
 .btn--ghost { background: var(--panel); }
 .btn--sm { font-size: 11.5px; padding: 4px 10px; border-radius: 7px; }
 .btn--block { width: 100%; padding: 9px 14px; font-size: 13px; border-radius: 9px; }
+/* 아이콘 전용 버튼 — 텍스트 없이 정사각(설정·궤도맵·재스캔·위젯편집). */
+.btn--icon { padding: 6px; line-height: 0; }
+.btn--icon > svg { display: block; }
+.btn--icon.is-spinning > svg { animation: spip-spin .9s linear infinite; transform-origin: 50% 50%; }
+@keyframes spip-spin { to { transform: rotate(360deg); } }
 
 .link-btn {
   appearance: none; border: none; background: none; color: var(--t4);
@@ -947,6 +952,9 @@ body.home-resizing { cursor: nwse-resize; user-select: none; }
 .home-masonry--editing .home-section { outline: 1px dashed var(--border, #e7e5e4); outline-offset: 3px; border-radius: 14px; }
 .home-editmode { appearance: none; cursor: pointer; font-size: 12px; font-weight: 600; padding: 6px 12px; border-radius: 9px; border: 1px solid var(--border, #e7e5e4); background: var(--panel, #fff); color: var(--t2, #57534e); transition: background .12s ease, border-color .12s ease, color .12s ease; }
 .home-editmode:hover { background: var(--surface-2, #f5f5f4); }
+/* 위젯 편집 토글 아이콘 버튼 — 정사각(연필/체크). */
+.home-editmode--icon { padding: 6px; line-height: 0; }
+.home-editmode--icon > svg { display: block; }
 .home-editmode.is-on { background: var(--accent); border-color: var(--accent); color: #fff; }
 /* [편집 모드 안내] 진입 시 사용법 배너 — 액센트 톤. */
 .home-edit-guide { display: flex; align-items: center; gap: 10px; margin: 4px 30px 0; padding: 10px 14px; border-radius: 10px; background: var(--accent-bg); border: 1px solid var(--accent-border); }

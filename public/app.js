@@ -2960,8 +2960,10 @@ function initBrowser() {
     // [로드맵 Phase 2] 대시보드(프리셋) 탭 — 모드별 배치 전환. 프리셋 1개 & 비편집이면 숨김(깔끔).
     //   편집 모드에서 이름변경(인라인)·복제·삭제·추가 노출. 활성 프리셋은 store.homeWidgets 등과 동기.
     var dash = store.dashboard || { activePreset: 'default', presets: [{ id: 'default', name: '기본' }] };
+    // [행 병합] 대시보드(그룹) 칩행과 편집 컨트롤을 한 행에 — 칩은 좌측, 편집 버튼은 우측(spacer 로 분리).
+    var homeBar = el('div', { cls: 'home-bar', style: 'display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:16px 30px 0;' });
     if (dash.presets.length > 1 || editing) {
-      var presetBar = el('div', { cls: 'preset-tabs', style: 'display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:16px 30px 0;' });
+      var presetBar = el('div', { cls: 'preset-tabs', style: 'display:flex;align-items:center;gap:6px;flex-wrap:wrap;' });
       dash.presets.forEach(function (p) {
         var on = p.id === dash.activePreset;
         var tab = el('button', { cls: 'preset-tab' + (on ? ' is-on' : ''), attrs: { type: 'button', 'aria-pressed': String(on), 'aria-label': '대시보드: ' + p.name }, on: { click: function () { onSwitchPreset(p.id); } } });
@@ -2995,9 +2997,10 @@ function initBrowser() {
         presetBar.appendChild(tab);
       });
       if (editing) presetBar.appendChild(el('button', { cls: 'preset-tab preset-tab--add', text: '+ 대시보드', attrs: { type: 'button', 'aria-label': '대시보드 추가' }, on: { click: function () { onAddPreset(); } } }));
-      wrap.appendChild(presetBar);
+      homeBar.appendChild(presetBar);
     }
-    var editBar = el('div', { style: 'display:flex;align-items:center;justify-content:flex-end;gap:10px;padding:8px 30px 0;' });
+    homeBar.appendChild(el('div', { cls: 'spacer' })); // 칩(좌) ↔ 편집 컨트롤(우) 분리
+    var editBar = el('div', { cls: 'home-editbar', style: 'display:flex;align-items:center;gap:8px;flex-wrap:wrap;' });
     // [로드맵 Phase 1·K] 편집 모드에서만 대시보드 내보내기/가져오기 노출(평소엔 깔끔). 백엔드 IPC 부재 시 숨김(구버전 preload graceful).
     if (editing && bridgeHas('exportDashboard')) {
       editBar.appendChild(el('button', {
@@ -3042,13 +3045,19 @@ function initBrowser() {
         on: { click: function () { onAddStack(); } },
       }));
     }
-    editBar.appendChild(el('button', {
-      cls: 'home-editmode' + (editing ? ' is-on' : ''),
-      text: editing ? '편집 완료' : '위젯 편집',
+    // [아이콘화] 위젯 편집 토글 — 평소 연필, 편집 중이면 체크(완료). 텍스트 대신 title 툴팁.
+    var editBtn = el('button', {
+      cls: 'home-editmode home-editmode--icon' + (editing ? ' is-on' : ''),
+      title: editing ? '편집 완료' : '위젯 편집',
       attrs: { type: 'button', 'aria-pressed': String(editing), 'aria-label': '위젯 편집 모드 ' + (editing ? '끄기' : '켜기') },
       on: { click: function () { toggleEditMode(); } },
-    }));
-    wrap.appendChild(editBar);
+    });
+    editBtn.appendChild(editing
+      ? svg([{ t: 'path', d: 'M20 6 9 17l-5-5' }], { size: 15, sw: 2.2 })
+      : svg([{ t: 'path', d: 'M12 20h9' }, { t: 'path', d: 'M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z' }], { size: 15, sw: 1.9 }));
+    editBar.appendChild(editBtn);
+    homeBar.appendChild(editBar);
+    wrap.appendChild(homeBar);
     // [편집 모드 안내] 진입 시 사용 방법 배너(모드별). 일반 모드는 표시 안 함(깔끔).
     if (editing) {
       var guide = el('div', { cls: 'home-edit-guide', attrs: { role: 'note' } });
@@ -8513,14 +8522,14 @@ function initBrowser() {
 
     // 설정(폴더 관리 + 옵션) 버튼
     const settingsBtn = el('button', {
-      cls: 'btn', text: '설정',
+      cls: 'btn btn--icon', title: '설정',
       attrs: { 'aria-label': '폴더 및 스캔 설정 열기' },
       on: { click: openSettings },
     });
     settingsBtn.prepend(svg([
       { t: 'circle', cx: '12', cy: '12', r: '3' },
       { t: 'path', d: 'M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z' },
-    ], { size: 13, sw: 1.8 }));
+    ], { size: 15, sw: 1.8 }));
     // 업데이트 알림 배지 — 새 버전이 있을 때 설정 아이콘에 점 표시.
     if (updateHasBadge(store.update)) {
       settingsBtn.classList.add('has-update');
@@ -8532,7 +8541,7 @@ function initBrowser() {
 
     // 궤도 맵 진입 버튼(UI 템플릿 이식) — 프로젝트를 별/궤도로 보는 실험적 뷰.
     const orbitBtn = el('button', {
-      cls: 'btn', text: '궤도 맵',
+      cls: 'btn btn--icon', title: '궤도 맵',
       attrs: { 'aria-label': '궤도 맵 열기' },
       on: { click: enterOrbit },
     });
@@ -8540,17 +8549,18 @@ function initBrowser() {
       { t: 'circle', cx: '12', cy: '12', r: '2.5' },
       { t: 'ellipse', cx: '12', cy: '12', rx: '10', ry: '4.5' },
       { t: 'ellipse', cx: '12', cy: '12', rx: '10', ry: '4.5', transform: 'rotate(60 12 12)' },
-    ], { size: 13, sw: 1.6 }));
+    ], { size: 15, sw: 1.6 }));
     actions.appendChild(orbitBtn);
 
     const rescanning = store.state.rescanning;
     const rescan = el('button', {
-      cls: 'btn btn--dark', text: rescanning ? '재스캔 중…' : '재스캔',
-      attrs: { 'aria-label': '프로젝트 다시 스캔' },
+      cls: 'btn btn--dark btn--icon' + (rescanning ? ' is-spinning' : ''),
+      title: rescanning ? '재스캔 중…' : '재스캔',
+      attrs: { 'aria-label': rescanning ? '재스캔 중' : '프로젝트 다시 스캔' },
       on: { click: onRescan },
     });
     if (rescanning) rescan.disabled = true;
-    else rescan.prepend(svg([{ t: 'path', d: 'M21 12a9 9 0 1 1-2.64-6.36' }, { t: 'path', d: 'M21 3v6h-6' }], { size: 13, sw: 2.2 }));
+    rescan.prepend(svg([{ t: 'path', d: 'M21 12a9 9 0 1 1-2.64-6.36' }, { t: 'path', d: 'M21 3v6h-6' }], { size: 15, sw: 2.2 }));
     actions.appendChild(rescan);
     header.appendChild(actions);
     return header;
