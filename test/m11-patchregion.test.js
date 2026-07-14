@@ -95,9 +95,12 @@ test('M11/백로그2-2 — onMailSummaryFetched: 무변경 skip, 변경 시 이�
 test('M11 — patchMailSection: .mail-region 교체, builderFn=renderHomeMailCard, fallback=render', () => {
   const start = APP_SRC.indexOf('function patchMailSection()');
   assert.ok(start >= 0, 'patchMailSection 함수');
-  const b = APP_SRC.slice(start, start + 600);
-  assert.ok(/querySelector\('\.mail-region'\)/.test(b), '.mail-region 대상');
-  assert.ok(/renderHomeMailCard\(\)/.test(b), 'builderFn 이 카드 본문 재빌드');
+  const b = APP_SRC.slice(start, start + 1000);
+  // [위젯 인스턴스] 메일 위젯을 여러 개 놓을 수 있어 **모든** .mail-region 을 갱신하고,
+  //   각 셀의 iid 로 표시명을 유지한다(제목 없이 재빌드하면 사용자가 붙인 이름이 되돌아간다).
+  assert.ok(/querySelectorAll\('\.mail-region'\)/.test(b), '모든 .mail-region 대상(중복 배치)');
+  assert.ok(/renderHomeMailCard\(title\)/.test(b), 'builderFn 이 카드 본문 재빌드(표시명 유지)');
+  assert.ok(/widgetTitleOf\(iid\)/.test(b), '셀의 iid 로 표시명 해석');
   assert.ok(/fallback/.test(b), 'fallback 안전망');
 });
 

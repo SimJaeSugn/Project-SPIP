@@ -766,16 +766,35 @@ input, button, select { font-family: inherit; }
 .palette__item-group { flex: 0 0 auto; font-size: 10.5px; font-weight: 600; color: #a8a29e; background: #f5f5f4; padding: 2px 7px; border-radius: 5px; }
 .palette__empty { padding: 18px; text-align: center; font-size: 13px; color: #a8a29e; }
 
-/* [로드맵 Phase 4·I] 위젯 포커스 버튼(제거 × 좌측) + 풀스크린 오버레이 */
-.widget-focus {
-  position: absolute; top: 8px; right: 8px; z-index: 3;   /* 일반 모드엔 포커스만 노출되므로 우상단 코너 */
-  width: 26px; height: 26px; padding: 0; display: flex; align-items: center; justify-content: center;
-  border: 1px solid var(--border); border-radius: 8px; background: var(--panel); cursor: pointer;
-  opacity: 0; transition: opacity .12s ease, background .12s ease; box-shadow: 0 2px 8px rgba(28, 25, 23, .12);
+/* [위젯 컨트롤 레일] 포커스·이름변경·삭제 버튼을 **카드 바깥(우측 외곽)에 세로로** 모은다.
+ *   예전엔 카드 우상단 코너에 가로로 겹쳐 놓아, 위젯 자신의 우상단 툴바(MD 편집기·탐색기·히트맵의
+ *   새로고침 등)를 덮어 클릭을 가로챘다. 레일은 카드 밖(그리드 간격/여백)에 떠 있어 콘텐츠를 가리지 않는다.
+ *   §3 코너 규약: 우하단 리사이즈 핸들과도 겹치지 않는다(레일은 상단부터 아래로 쌓인다). */
+.home-rail {
+  position: absolute; top: 4px; right: -34px; z-index: 6;
+  display: flex; flex-direction: column; gap: 6px;
+  opacity: 0; transition: opacity .12s ease;
+  pointer-events: none;   /* 숨어 있을 땐 이웃 위젯의 클릭을 가로채지 않는다 */
 }
-.home-section:hover .widget-focus, .widget-focus:focus-visible { opacity: 1; }
-.widget-focus:hover { background: var(--surface-2); }
-.home-masonry--editing .widget-focus { opacity: 1; }
+.home-section:hover .home-rail,
+.home-rail:focus-within { opacity: 1; pointer-events: auto; }
+.home-masonry--editing .home-rail { opacity: 1; pointer-events: auto; }
+
+/* 레일 안의 버튼 — 개별 절대배치를 하지 않는다(레일이 위치를 소유). */
+.home-rail .widget-focus,
+.home-rail .widget-rename,
+.home-rail .widget-remove {
+  position: static; opacity: 1; margin: 0;
+  width: 28px; height: 28px; padding: 0; display: flex; align-items: center; justify-content: center;
+  border: 1px solid var(--border); border-radius: 9px; background: var(--panel); cursor: pointer;
+  box-shadow: 0 2px 10px rgba(28, 25, 23, .14);
+  transition: background .12s ease, border-color .12s ease;
+}
+.home-rail .widget-focus:hover,
+.home-rail .widget-rename:hover { background: var(--surface-2); }
+.home-rail .widget-remove:hover { background: #fef2f2; border-color: #fecaca; }
+
+/* [로드맵 Phase 4·I] 위젯 포커스 — 풀스크린 오버레이 */
 .focusw-overlay { position: fixed; inset: 0; z-index: 55; background: rgba(28, 25, 23, .45); display: flex; align-items: center; justify-content: center; padding: 4vh 4vw; }
 .focusw { width: min(1100px, 96vw); max-height: 92vh; background: var(--panel, #fff); border: 1px solid var(--border, #e7e5e4); border-radius: 18px; box-shadow: 0 30px 80px rgba(0, 0, 0, .3); display: flex; flex-direction: column; overflow: hidden; }
 .focusw.is-enter { animation: paletteIn .14s ease; }
@@ -852,40 +871,23 @@ body.home-freedragging { user-select: none; cursor: grabbing; }
 .home-section--resizing .home-resize { opacity: 1; border-color: var(--accent); }
 body.home-resizing { cursor: nwse-resize; user-select: none; }
 /* [위젯 추가/제거] 위젯 제거(×) 버튼 — 평소 숨김, 카드 호버 시 우상단 노출. */
-.widget-remove {
-  position: absolute; top: 8px; right: 40px; z-index: 3;   /* 편집 모드 전용 — 포커스(코너) 좌측 */
-  width: 26px; height: 26px; padding: 0; display: flex; align-items: center; justify-content: center;
-  border: 1px solid var(--border); border-radius: 8px; background: var(--panel); cursor: pointer;
-  opacity: 0; transition: opacity .12s ease, background .12s ease; box-shadow: 0 2px 8px rgba(28,25,23,.12);
-}
-.home-section:hover .widget-remove, .widget-remove:focus-visible { opacity: 1; }
-.widget-remove:hover { background: var(--surface-2); }
+/* 제거(×)·이름변경(✎) 버튼은 .home-rail(카드 바깥 세로 레일)이 위치를 소유한다 — 위 레일 규칙 참조.
+ *   개별 절대배치를 두지 않는다(예전엔 카드 우상단에 겹쳐 위젯 툴바를 덮었다). */
+.widget-remove, .widget-rename { appearance: none; }
 
-/* [위젯 인스턴스] 이름 변경(✎) — 제거(×) 좌측. 같은 위젯을 여러 개 놓았을 때 서로 구분하려고 붙이는 이름.
- *   §3 코너 규약: 우상단 라인에만 둔다(우하단 리사이즈 핸들과 충돌 금지). */
-.widget-rename {
-  position: absolute; top: 8px; right: 72px; z-index: 3;   /* 편집 모드 전용 — 제거(×) 좌측 */
-  width: 26px; height: 26px; padding: 0; display: flex; align-items: center; justify-content: center;
-  border: 1px solid var(--border); border-radius: 8px; background: var(--panel); cursor: pointer;
-  opacity: 0; transition: opacity .12s ease, background .12s ease; box-shadow: 0 2px 8px rgba(28,25,23,.12);
-}
-.home-section:hover .widget-rename, .widget-rename:focus-visible { opacity: 1; }
-.widget-rename:hover { background: var(--surface-2); }
-/* 인라인 이름 입력 — 셀 상단 오버레이(위젯 내부 구조를 건드리지 않는다). */
+/* 인라인 이름 입력 — 카드 위쪽 오버레이. 레일(우측 외곽)과 겹치지 않는다. */
 .widget-rename__bar {
-  position: absolute; top: 8px; left: 10px; right: 104px; z-index: 4;
+  position: absolute; top: -6px; left: 12px; right: 12px; z-index: 8;
 }
 .widget-rename__input {
   width: 100%; box-sizing: border-box; appearance: none; outline: none;
-  border: 1px solid var(--accent-border); border-radius: 8px; background: var(--panel);
-  font-size: 12.5px; font-weight: 600; color: var(--t1); padding: 5px 9px;
-  box-shadow: 0 2px 10px rgba(28,25,23,.12);
+  border: 1px solid var(--accent); border-radius: 9px; background: var(--panel);
+  font-size: 12.5px; font-weight: 600; color: var(--t1); padding: 6px 10px;
+  box-shadow: 0 4px 16px rgba(28,25,23,.18);
 }
 
-/* [로드맵 Phase 1] 위젯 편집 모드 — 켜면 리사이즈 핸들·제거/이름 버튼·셀 윤곽을 상시 노출(호버 불필요). */
+/* [로드맵 Phase 1] 위젯 편집 모드 — 켜면 리사이즈 핸들·컨트롤 레일·셀 윤곽을 상시 노출(호버 불필요). */
 .home-masonry--editing .home-resize { opacity: .7; }
-.home-masonry--editing .widget-remove { opacity: 1; }
-.home-masonry--editing .widget-rename { opacity: 1; }
 .home-masonry--editing .home-section { outline: 1px dashed var(--border, #e7e5e4); outline-offset: 3px; border-radius: 14px; }
 .home-editmode { appearance: none; cursor: pointer; font-size: 12px; font-weight: 600; padding: 6px 12px; border-radius: 9px; border: 1px solid var(--border, #e7e5e4); background: var(--panel, #fff); color: var(--t2, #57534e); transition: background .12s ease, border-color .12s ease, color .12s ease; }
 .home-editmode:hover { background: var(--surface-2, #f5f5f4); }

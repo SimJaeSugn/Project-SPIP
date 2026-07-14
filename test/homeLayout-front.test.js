@@ -172,9 +172,11 @@ test('로드맵 Phase 5·M — 그룹: 렌더·CRUD·접기·멤버 배정·격�
 test('편집 모드 전용 — 삭제·리사이즈·추가·재정렬은 편집 모드에서만(포커스·스택 전환은 뷰라 유지)', () => {
   // buildHomeCell: 삭제(×)·리사이즈는 editing 게이트, 포커스는 항상.
   const b = fnBody('buildHomeCell', 1400);
-  assert.ok(/cell\.appendChild\(widgetRemoveBtn\(inst\)\);/.test(b), '삭제 버튼 편집 모드 전용(인스턴스 단위)');
-  assert.ok(/cell\.appendChild\(widgetRenameBtn\(inst\)\);/.test(b), '[위젯 인스턴스] 이름 변경(✎) 버튼도 편집 모드 전용');
-  assert.ok(/cell\.appendChild\(widgetFocusBtn\(inst\)\)/.test(b), '포커스 버튼은 항상(뷰)');
+  // [위젯 컨트롤 레일] 세 버튼은 카드 바깥 세로 레일(.home-rail)에 모인다 — 위젯 툴바를 덮지 않게.
+  assert.ok(/rail\.appendChild\(widgetRemoveBtn\(inst\)\);/.test(b), '삭제 버튼 편집 모드 전용(인스턴스 단위)');
+  assert.ok(/rail\.appendChild\(widgetRenameBtn\(inst\)\);/.test(b), '[위젯 인스턴스] 이름 변경(✎) 버튼도 편집 모드 전용');
+  assert.ok(/rail\.appendChild\(widgetFocusBtn\(inst\)\)/.test(b), '포커스 버튼은 항상(뷰)');
+  assert.ok(/cls: 'home-rail'/.test(b), '컨트롤 레일 컨테이너');
   assert.ok(/!isAdd && editing\) cell\.appendChild\(homeResizeHandle/.test(b), '리사이즈 편집 모드 전용');
   // 그룹 멤버·스택 리사이즈도 editing 게이트.
   assert.ok(/withResize && editing\) cell\.appendChild\(homeResizeHandle/.test(APP_SRC), '그룹 멤버 리사이즈 편집 모드 전용');
@@ -348,7 +350,7 @@ test('로드맵 Phase 4·I — 포커스 위젯: 버튼·오버레이·masonry �
   const CSS = fs.readFileSync(path.join(__dirname, '..', 'public', 'styles.css'), 'utf8');
   // 셀에 포커스 버튼 부착(제거 버튼과 함께).
   assert.ok(/function widgetFocusBtn\(/.test(APP_SRC), '포커스 버튼 빌더');
-  assert.ok(/cell\.appendChild\(widgetFocusBtn\(inst\)\)/.test(APP_SRC), '셀에 포커스 버튼 부착(인스턴스 단위)');
+  assert.ok(/rail\.appendChild\(widgetFocusBtn\(inst\)\)/.test(APP_SRC), '컨트롤 레일에 포커스 버튼 부착(인스턴스 단위)');
   // 열기/닫기 + 오버레이 렌더 + 마운트.
   assert.ok(/function openFocusWidget\(/.test(APP_SRC) && /function closeFocusWidget\(/.test(APP_SRC), '포커스 열기/닫기');
   assert.ok(/function renderFocusOverlay\(/.test(APP_SRC), '포커스 오버레이 렌더');
@@ -360,7 +362,8 @@ test('로드맵 Phase 4·I — 포커스 위젯: 버튼·오버레이·masonry �
   // ESC 우선순위: 팔레트 > 포커스 > 도움말.
   assert.ok(/store\.focusWidget && store\.focusWidget\.open\)\s*\{\s*closeFocusWidget\(\)/.test(APP_SRC), 'ESC 포커스 닫기');
   // CSS.
-  assert.ok(/\.focusw-overlay\s*\{/.test(CSS) && /\.widget-focus\s*\{/.test(CSS), '포커스 오버레이·버튼 CSS');
+  // [위젯 컨트롤 레일] 포커스 버튼은 카드 바깥 세로 레일(.home-rail) 안에 있다.
+  assert.ok(/\.focusw-overlay\s*\{/.test(CSS) && /\.home-rail \.widget-focus/.test(CSS), '포커스 오버레이·레일 버튼 CSS');
 });
 
 test('로드맵 Phase 4·H/I — 팔레트 액션에 위젯 포커스·프로젝트 점프(딥링크) 포함', () => {
@@ -706,7 +709,7 @@ test('로드맵 Phase 1 — 편집 모드: 토글 버튼 + masonry --editing 클
   assert.ok(/home-masonry'\s*\+\s*\(editing\s*\?\s*'\s*home-masonry--editing'/.test(APP_SRC), '편집 시 masonry--editing 클래스 부여');
   // CSS: 편집 모드에서 핸들·제거·셀 윤곽 상시 노출
   assert.ok(/\.home-masonry--editing\s+\.home-resize\s*\{[^}]*opacity/.test(CSS), '편집 시 리사이즈 핸들 노출');
-  assert.ok(/\.home-masonry--editing\s+\.widget-remove\s*\{[^}]*opacity:\s*1/.test(CSS), '편집 시 제거 버튼 노출');
+  assert.ok(/\.home-masonry--editing\s+\.home-rail\s*\{[^}]*opacity:\s*1/.test(CSS), '편집 시 컨트롤 레일(제거·이름변경·포커스) 노출');
   assert.ok(/\.home-editmode\.is-on\s*\{/.test(CSS), '토글 on 상태 스타일');
 });
 

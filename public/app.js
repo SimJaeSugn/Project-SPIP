@@ -831,6 +831,18 @@ function widgetTitleOf(id) {
   return (meta && meta.name) ? meta.name : id;
 }
 
+/**
+ * [위젯 인스턴스] 위젯 카드 제목 — 사용자가 붙인 이름이 있으면 그것, 없으면 그 위젯의 기본 제목.
+ *
+ * ⚠️ 모든 위젯 렌더 함수는 카드 제목에 **반드시 이 함수를 쓴다**. 제목을 문자열 리터럴로 박으면
+ *   이름을 바꿔도 화면이 그대로라 "이름 변경이 안 된다"로 보인다(v1.37.x 실제 사고).
+ * @param {object|undefined} inst 배치 인스턴스({iid,type,name}) — 포커스 오버레이 등에선 없을 수 있다
+ * @param {string} fallback 그 위젯의 기본 제목(카드에 원래 쓰던 문자열)
+ */
+function widgetCardTitle(inst, fallback) {
+  return (inst && inst.name) ? inst.name : fallback;
+}
+
 /** [로드맵 Phase 2] getUiState.dashboard 방어 적재(렌더러) — 탭 표시에 필요한 {id,name,layoutMode}만.
  *   배치 자체는 store.homeWidgets(인스턴스 목록)가 권위(활성 프리셋과 동기). 손상/부재 시 단일 기본 프리셋. */
 function applyDashboard(d) {
@@ -3052,12 +3064,16 @@ function initBrowser() {
     var cell = el('div', { cls: 'home-section', attrs: { 'data-home-section': id } });
     // [편집 모드 전용] 이름변경(✎)·삭제(×)·리사이즈는 편집 모드에서만. 포커스(크게 보기)는 뷰 동작이라 항상.
     if (!isAdd) {
+      // [위젯 컨트롤 레일] 포커스·이름변경·삭제 버튼을 **카드 바깥(우측 외곽)에 세로로** 모은다.
+      //   예전엔 카드 우상단에 겹쳐 놓아 위젯 자신의 툴바(MD 편집기·탐색기 등)를 가렸다.
+      var rail = el('div', { cls: 'home-rail', attrs: { 'aria-label': '위젯 컨트롤' } });
+      rail.appendChild(widgetFocusBtn(inst));            // 뷰 동작 — 항상
       if (editing) {
-        cell.appendChild(widgetRenameBtn(inst));
-        cell.appendChild(widgetRemoveBtn(inst));
-        if (store._renameWidgetId === inst.iid) cell.appendChild(widgetRenameInput(inst));
+        rail.appendChild(widgetRenameBtn(inst));
+        rail.appendChild(widgetRemoveBtn(inst));
       }
-      cell.appendChild(widgetFocusBtn(inst));
+      cell.appendChild(rail);
+      if (editing && store._renameWidgetId === inst.iid) cell.appendChild(widgetRenameInput(inst));
     }
     var content = el('div', { cls: 'home-section__content' });
     content.appendChild(node);
@@ -3158,7 +3174,7 @@ function initBrowser() {
     return el('span', { text: text, style: 'font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:6px;' + c });
   }
 
-  function renderHomeAttention() {
+  function renderHomeAttention(inst) {
     var items = homeAttention(store.viewModels || [], 6);
     // 섹션 전체 클릭/커서 제거 — 이동은 아래 '전체보기' 액션만 담당.
     var card = el('div', { cls: 'hw-card', style: HOME_CARD + 'padding:21px 22px;' });
@@ -3166,7 +3182,7 @@ function initBrowser() {
     var icon = el('div', { style: 'width:30px;height:30px;border-radius:8px;background:#fef3c7;display:flex;align-items:center;justify-content:center;flex:0 0 auto;' });
     icon.appendChild(svg([{ t: 'path', d: 'M12 9v4M12 17h.01' }, { t: 'path', d: 'M10.3 3.86l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3.14l-8-14a2 2 0 0 0-3.4 0z' }], { size: 16, stroke: '#b45309' }));
     var titleWrap = el('div', { style: 'flex:1 1 0%;' });
-    titleWrap.appendChild(el('div', { text: '주의가 필요한 프로젝트', style: 'font-size:15px;font-weight:600;letter-spacing:-0.01em;' }));
+    titleWrap.appendChild(el('div', { text: widgetCardTitle(inst, '주의가 필요한 프로젝트'), style: 'font-size:15px;font-weight:600;letter-spacing:-0.01em;' }));
     titleWrap.appendChild(el('div', { text: '미커밋 · 미푸시 · 방치 ' + items.length + '건', style: 'font-size:11.5px;color:#a8a29e;margin-top:1px;' }));
     var open = el('span', {
       style: 'font-size:12.5px;font-weight:600;color:var(--accent);display:inline-flex;align-items:center;gap:4px;cursor:pointer;',
@@ -3203,7 +3219,7 @@ function initBrowser() {
     return card;
   }
 
-  function renderHomeProductivity() {
+  function renderHomeProductivity(inst) {
     var card = el('div', { cls: 'hw-split hw-cardscroll', style: HOME_CARD + 'padding:21px 22px;display:flex;gap:26px;min-height:0;' }); // [반응형] 좁으면 세로 스택, 낮으면 카드 내부 스크롤
     // 좌: 주간 생산성(최근 7일 커밋)
     var leftCol = el('div', { style: 'flex:1.2 1 0%;min-width:0;' });
@@ -3211,7 +3227,7 @@ function initBrowser() {
     var days = Array.isArray(ca.days) ? ca.days.slice(-7) : [];
     var total7 = days.reduce(function (s, d) { return s + (d.count || 0); }, 0);
     var hd = el('div', { style: 'display:flex;align-items:baseline;gap:9px;margin-bottom:3px;' });
-    hd.appendChild(el('div', { text: '주간 생산성', style: 'font-size:15px;font-weight:600;flex:1 1 0%;' }));
+    hd.appendChild(el('div', { text: widgetCardTitle(inst, '주간 생산성'), style: 'font-size:15px;font-weight:600;flex:1 1 0%;' }));
     hd.appendChild(el('span', { text: total7 + ' 커밋', style: HOME_MONO + 'font-size:12.5px;font-weight:600;color:#1c1917;' }));
     leftCol.appendChild(hd);
     leftCol.appendChild(el('div', { text: store.commitActivityLoaded ? '최근 7일 커밋 빈도' : '집계하려면 새로고침…', style: 'font-size:11.5px;color:#a8a29e;margin-bottom:18px;' }));
@@ -3251,10 +3267,10 @@ function initBrowser() {
     return card;
   }
 
-  function renderHomeActivity() {
+  function renderHomeActivity(inst) {
     var events = homeRecentActivity(store.viewModels || [], 6);
     var card = el('div', { cls: 'hw-card', style: HOME_CARD + 'padding:21px 22px;' });
-    card.appendChild(el('div', { text: '최근 활동 타임라인', style: 'font-size:15px;font-weight:600;margin-bottom:16px;flex:0 0 auto;' }));
+    card.appendChild(el('div', { text: widgetCardTitle(inst, '최근 활동 타임라인'), style: 'font-size:15px;font-weight:600;margin-bottom:16px;flex:0 0 auto;' }));
     // [반응형] 위젯이 넓으면 다열 — 다열 시 세로 연결선(.hw-tl-rail)은 @container 로 숨김(다음 항목이 우측이라 무의미).
     var list = el('div', { cls: 'hw-cols hw-body', style: 'column-gap:22px;' });
     if (events.length === 0) {
@@ -3303,12 +3319,12 @@ function initBrowser() {
     return { state: state, color: color, label: label };
   }
 
-  function renderHomeTodos() {
+  function renderHomeTodos(inst) {
     var todos = Array.isArray(store.todos) ? store.todos : [];
     var open = todos.filter(function (t) { return !t.done; }).length;
     var card = el('div', { cls: 'hw-card', style: HOME_CARD + 'padding:21px 20px;' });
     var head = el('div', { style: 'display:flex;align-items:center;gap:10px;margin-bottom:15px;flex:0 0 auto;' });
-    head.appendChild(el('div', { text: '할 일', style: 'font-size:15px;font-weight:600;flex:1 1 0%;' }));
+    head.appendChild(el('div', { text: widgetCardTitle(inst, '할 일'), style: 'font-size:15px;font-weight:600;flex:1 1 0%;' }));
     var cnt = el('span', { style: HOME_MONO + 'font-size:12px;font-weight:600;color:#1c1917;' });
     cnt.appendChild(el('span', { text: String(open) }));
     cnt.appendChild(el('span', { text: '/' + todos.length, style: 'color:#a8a29e;' }));
@@ -3475,19 +3491,19 @@ function initBrowser() {
   }
 
   /** [M11] 메일 섹션 2단 구조: .mail-region(patchRegion 교체 대상) > 카드. 폴링 갱신 시 region 만 교체. */
-  function renderHomeMail() {
+  function renderHomeMail(inst) {
     var region = el('div', { cls: 'mail-region' });
-    region.appendChild(renderHomeMailCard());
+    region.appendChild(renderHomeMailCard(inst ? widgetDisplayName(inst) : '메일'));
     return region;
   }
-  /** 메일 카드 본문(patchMailSection 의 builderFn 이 재사용). 내용·동작은 기존과 동일. */
-  function renderHomeMailCard() {
+  /** 메일 카드 본문(patchMailSection 의 builderFn 이 재사용). title = 인스턴스 표시명. */
+  function renderHomeMailCard(title) {
     // [홈 위젯 높이 반응] 카드는 flex 컬럼(헤더 고정 · 목록이 남는 높이 차지). .mail-region 이 카드를 위젯 높이로 늘린다.
     var card = el('div', { style: HOME_CARD + 'padding:21px 20px;display:flex;flex-direction:column;min-height:0;' });
     var items = mailFlatItems(12); // 높이가 크면 더 많이 노출(기본은 .mail-list max-height 로 5행 남짓 캡·스크롤)
     var replies = items.filter(function (m) { return homeIsReply(m.subject); }).length;
     var head = el('div', { style: 'display:flex;align-items:center;gap:10px;margin-bottom:14px;' });
-    head.appendChild(el('div', { text: '메일', style: 'font-size:15px;font-weight:600;flex:1 1 0%;' }));
+    head.appendChild(el('div', { text: title || '메일', style: 'font-size:15px;font-weight:600;flex:1 1 0%;' }));
     if (replies > 0) head.appendChild(homeBadge(replies + ' 회신 필요', 'blue'));
     // 헤더 → 메일함(보관함) 팝업 열기(항목 클릭은 본문 팝업). 계정 설정은 팝업 안/전역 설정에서.
     head.appendChild(el('button', {
@@ -4181,10 +4197,10 @@ function initBrowser() {
     patchCommitChart();
   }
 
-  function renderHomeDisk(reclaim) {
+  function renderHomeDisk(reclaim, inst) {
     var card = el('div', { cls: 'hw-card', style: HOME_CARD + 'padding:21px 20px;' });
     var head = el('div', { style: 'display:flex;align-items:baseline;gap:9px;margin-bottom:3px;flex:0 0 auto;' });
-    head.appendChild(el('div', { text: '디스크 회수', style: 'font-size:15px;font-weight:600;flex:1 1 0%;' }));
+    head.appendChild(el('div', { text: widgetCardTitle(inst, '디스크 회수'), style: 'font-size:15px;font-weight:600;flex:1 1 0%;' }));
     head.appendChild(el('span', { text: reclaim.label, style: 'font-size:22px;font-weight:700;color:#15803d;font-variant-numeric:tabular-nums;letter-spacing:-0.02em;' }));
     card.appendChild(head);
     card.appendChild(el('div', { text: '방치 프로젝트 node_modules 정리 시', style: 'font-size:11.5px;color:#a8a29e;margin-bottom:16px;flex:0 0 auto;' }));
@@ -4291,7 +4307,7 @@ function initBrowser() {
   }
 
   /** [항목2·3] 토큰 사용량 인사이트 섹션 — 상단: Claude Code(로컬 로그), 하단: 연결된 모델(브리핑). */
-  function renderHomeAiUsage() {
+  function renderHomeAiUsage(inst) {
     // [6조합 반응형] 차트 툴팁이 미조절 상태에서 카드 밖으로 나갈 수 있어 상시 overflow:hidden(hw-card) 대신
     //   높이 지정 시에만 카드 전체가 세로 스크롤하는 hw-cardscroll 사용(productivity 와 동일 전략).
     var card = el('div', { cls: 'hw-cardscroll', style: HOME_CARD + 'padding:21px 22px;min-height:0;' });
@@ -4306,7 +4322,7 @@ function initBrowser() {
       },
     });
     refresh.appendChild(el('span', { text: store.busyClaudeUsage ? '집계 중…' : '새로고침' }));
-    var aiHead = homeCardHead(homeTitle('토큰 사용량'), refresh, 6); aiHead.style.flex = '0 0 auto';
+    var aiHead = homeCardHead(homeTitle(widgetCardTitle(inst, '토큰 사용량')), refresh, 6); aiHead.style.flex = '0 0 auto';
     card.appendChild(aiHead);
     card.appendChild(el('div', { text: 'Claude Code 로컬 로그와 연결된 AI 모델의 토큰 소비량입니다.', style: 'font-size:11.5px;color:#a8a29e;margin-bottom:16px;flex:0 0 auto;' }));
 
@@ -4371,7 +4387,7 @@ function initBrowser() {
    *   반응형: 격자는 .heatmap-scroll(overflow-x:auto)로 좁으면 내부 가로 스크롤(페이지 스크롤 안 남김 — CLAUDE.md UI 규약).
    *   L-1: 라벨·툴팁은 textContent/title(고정 팔레트·검증 날짜만). 색은 setAttribute 아닌 클래스(lvl-0..4). */
   var HEATMAP_WD = ['일', '월', '화', '수', '목', '금', '토'];
-  function renderHomeCommitHeatmap() {
+  function renderHomeCommitHeatmap(inst) {
     var card = el('div', { cls: 'hw-card', style: HOME_CARD + 'padding:18px 18px 14px;' });
     var loaded = store.commitHeatmapLoaded;
     var busy = store.busyCommitHeatmap;
@@ -4380,7 +4396,7 @@ function initBrowser() {
 
     // 헤더 — 제목 + 요약 + 새로고침.
     var head = el('div', { style: 'display:flex;align-items:center;gap:10px;margin-bottom:12px;flex:0 0 auto;' });
-    head.appendChild(el('div', { text: '커밋 히트맵', style: 'font-size:15px;font-weight:600;flex:1 1 0%;' }));
+    head.appendChild(el('div', { text: widgetCardTitle(inst, '커밋 히트맵'), style: 'font-size:15px;font-weight:600;flex:1 1 0%;' }));
     if (loaded && model.total > 0) {
       head.appendChild(el('span', { text: model.total + '커밋 · ' + model.activeDays + '일 활동', style: HOME_MONO + 'font-size:11px;color:#78716c;flex:0 0 auto;' }));
     }
@@ -4498,11 +4514,11 @@ function initBrowser() {
       });
     }
   }
-  function renderHomeSystemStatus() {
+  function renderHomeSystemStatus(inst) {
     var card = el('div', { cls: 'hw-card', style: HOME_CARD + 'padding:18px 18px 16px;' });
     var busy = store.busySystemStatus;
     var head = el('div', { style: 'display:flex;align-items:center;gap:10px;margin-bottom:14px;flex:0 0 auto;' });
-    head.appendChild(el('div', { text: '시스템 상태', style: 'font-size:15px;font-weight:600;flex:1 1 0%;' }));
+    head.appendChild(el('div', { text: widgetCardTitle(inst, '시스템 상태'), style: 'font-size:15px;font-weight:600;flex:1 1 0%;' }));
     head.appendChild(el('button', {
       cls: 'home-mail-more', text: busy ? '갱신 중…' : '새로고침',
       attrs: Object.assign({ type: 'button', 'aria-label': '시스템 상태 새로고침' }, busy ? { disabled: 'disabled' } : {}),
@@ -10651,14 +10667,19 @@ function initBrowser() {
     var node = renderHomeSection(inst.type, reclaim, inst);
     if (!node) return null;
     var cell = el('div', { cls: 'home-section home-group__member', attrs: { 'data-home-section': id } });
+    // [위젯 컨트롤 레일] 그룹 멤버도 동일 — 카드 바깥 우측에 세로로.
+    var mrail = el('div', { cls: 'home-rail', attrs: { 'aria-label': '위젯 컨트롤' } });
+    mrail.appendChild(widgetFocusBtn(inst));
     if (editing) {
-      cell.appendChild(el('button', {
+      mrail.appendChild(widgetRenameBtn(inst));
+      mrail.appendChild(el('button', {
         cls: 'widget-remove', attrs: { type: 'button', 'aria-label': '그룹에서 빼기', title: '그룹에서 빼기' },
         on: { click: function (e) { e.stopPropagation(); onRemoveFromGroup(id); }, pointerdown: function (e) { e.stopPropagation(); } },
         children: [svg([{ t: 'path', d: 'M5 12h14' }], { size: 13, stroke: '#78716c', sw: 2 })],
       }));
     }
-    cell.appendChild(widgetFocusBtn(inst));
+    cell.appendChild(mrail);
+    if (editing && store._renameWidgetId === id) cell.appendChild(widgetRenameInput(inst));
     var content = el('div', { cls: 'home-section__content' });
     content.appendChild(node);
     cell.appendChild(content);
@@ -11627,13 +11648,21 @@ function initBrowser() {
    *   위젯 없음(메일 행은 클릭 핸들러뿐, 재생성 무해). 영역 부재/오류/deferred 시 patchRegion 내부 안전 처리. */
   function patchMailSection() {
     if (typeof document === 'undefined') { render(); return; }
-    const region = document.querySelector('.mail-region');
-    RG.preserve.patchRegion(region, function () {
-      return renderHomeMailCard(); // 카드 본문만 재빌드(textContent — L-1)
-    }, {
-      widgets: [],                 // 메일 영역엔 stateful 위젯 없음
-      preserveFocus: false,        // 메일 행엔 텍스트 입력 없음 — 캡처/복원 생략(불필요 reflow 절감)
-      fallback: function () { render(); },
+    // [위젯 인스턴스] 메일 위젯을 여러 개 놓을 수 있으므로 **모든** .mail-region 을 갱신하고,
+    //   각 셀의 iid 로 표시명을 유지한다(제목 없이 재빌드하면 사용자가 붙인 이름이 기본명으로 되돌아간다).
+    const regions = document.querySelectorAll('.mail-region');
+    if (!regions.length) return;
+    Array.prototype.forEach.call(regions, function (region) {
+      const cell = region.closest ? region.closest('.home-section[data-home-section]') : null;
+      const iid = (cell && cell.dataset) ? cell.dataset.homeSection : '';
+      const title = iid ? widgetTitleOf(iid) : '메일';
+      RG.preserve.patchRegion(region, function () {
+        return renderHomeMailCard(title); // 카드 본문만 재빌드(textContent — L-1)
+      }, {
+        widgets: [],                 // 메일 영역엔 stateful 위젯 없음
+        preserveFocus: false,        // 메일 행엔 텍스트 입력 없음 — 캡처/복원 생략(불필요 reflow 절감)
+        fallback: function () { render(); },
+      });
     });
   }
 

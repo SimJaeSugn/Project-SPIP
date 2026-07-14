@@ -246,14 +246,56 @@ test('IPC — preload 표면 ↔ register 등록 채널 정합(신규 3채널)',
 
 /* ───── UI 규약 ───── */
 
-test('UI — 이름 변경(✎) 버튼은 편집 모드 전용이고 우하단 코너를 점유하지 않는다(§3)', () => {
-  assert.ok(/\.widget-rename \{[^}]*position: absolute[^}]*top: 8px[^}]*right: 72px/.test(CSS), '우상단 라인(제거 버튼 좌측)');
-  assert.ok(/\.home-masonry--editing \.widget-rename \{ opacity: 1; \}/.test(CSS), '편집 모드에서 상시 노출');
-  // 우하단 고정 컨트롤 금지(리사이즈 핸들과 충돌).
-  assert.ok(!/\.widget-rename[^}]*bottom: 0[^}]*right: 0/.test(CSS), '우하단 점유 금지');
+test('UI — 컨트롤 버튼은 카드 바깥 세로 레일에 모인다(위젯 툴바를 덮지 않는다)', () => {
+  // 예전엔 포커스·이름변경·삭제가 카드 **우상단 코너에 가로로** 겹쳐, 위젯 자신의 우상단 툴바
+  //   (MD 편집기·탐색기·히트맵의 새로고침 등)를 덮어 클릭을 가로챘다. 레일로 빼서 콘텐츠 위를 비운다.
+  assert.ok(/\.home-rail \{[^}]*position: absolute[^}]*right: -34px/.test(CSS), '카드 바깥(우측 외곽)');
+  assert.ok(/\.home-rail \{[^}]*flex-direction: column/.test(CSS), '세로 정렬');
+  assert.ok(/\.home-section:hover \.home-rail,/.test(CSS), '호버 시 노출');
+  assert.ok(/\.home-masonry--editing \.home-rail \{ opacity: 1;/.test(CSS), '편집 모드에서 상시 노출');
+  assert.ok(/\.home-rail \{[^}]*pointer-events: none/.test(CSS), '숨어 있을 땐 이웃 클릭을 가로채지 않는다');
+  // 개별 버튼은 절대배치를 갖지 않는다(레일이 위치를 소유) — 코너 겹침 재발 방지.
+  assert.ok(/\.home-rail \.widget-focus,[\s\S]{0,80}\.home-rail \.widget-remove \{[^}]*position: static/.test(CSS),
+    '버튼은 레일 안에서 static');
+  assert.ok(!/^\.widget-focus \{[^}]*position: absolute/m.test(CSS), '포커스 버튼 개별 절대배치 제거');
+  assert.ok(!/^\.widget-remove \{[^}]*position: absolute/m.test(CSS), '삭제 버튼 개별 절대배치 제거');
+
+  // 렌더러: 세 버튼이 모두 레일에 들어간다.
+  const bc = APP_SRC.slice(APP_SRC.indexOf('function buildHomeCell('), APP_SRC.indexOf('function renderHomeSection('));
+  assert.ok(/rail\.appendChild\(widgetFocusBtn\(inst\)\)/.test(bc), '포커스 → 레일');
+  assert.ok(/rail\.appendChild\(widgetRenameBtn\(inst\)\)/.test(bc), '이름변경 → 레일');
+  assert.ok(/rail\.appendChild\(widgetRemoveBtn\(inst\)\)/.test(bc), '삭제 → 레일');
+
   // 인라인 입력은 SortableJS 드래그와 분리.
   const wi = APP_SRC.slice(APP_SRC.indexOf('function widgetRenameInput('), APP_SRC.indexOf('function commitWidgetRename('));
   assert.ok(/pointerdown: function \(e\) \{ e\.stopPropagation\(\); \}/.test(wi), '드래그와 분리');
+});
+
+test('이름 변경 — 모든 위젯 카드가 표시명을 쓴다(제목 하드코딩 금지)', () => {
+  // 제목을 문자열 리터럴로 박으면 이름을 바꿔도 화면이 그대로라 "이름 변경이 안 된다"로 보인다(실제 사고).
+  assert.ok(/function widgetCardTitle\(inst, fallback\)/.test(APP_SRC), '표시명 헬퍼');
+  const titled = [
+    ['renderHomeAttention', '주의가 필요한 프로젝트'],
+    ['renderHomeProductivity', '주간 생산성'],
+    ['renderHomeActivity', '최근 활동 타임라인'],
+    ['renderHomeTodos', '할 일'],
+    ['renderHomeDisk', '디스크 회수'],
+    ['renderHomeAiUsage', '토큰 사용량'],
+    ['renderHomeCommitHeatmap', '커밋 히트맵'],
+    ['renderHomeSystemStatus', '시스템 상태'],
+  ];
+  for (const [fn, fallback] of titled) {
+    assert.ok(APP_SRC.includes("widgetCardTitle(inst, '" + fallback + "')"), fn + ' 제목이 표시명을 쓴다');
+  }
+  // 인스턴스를 받도록 시그니처가 열려 있어야 한다.
+  for (const fn of ['renderHomeAttention', 'renderHomeTodos', 'renderHomeSystemStatus', 'renderHomeMail']) {
+    assert.ok(new RegExp('function ' + fn + '\\(([\\w, ]*\\b)?inst\\b').test(APP_SRC), fn + ' 이 inst 를 받는다');
+  }
+  // 메일·셸프는 부분 갱신 경로에서도 표시명을 유지한다(제목 없이 재빌드하면 이름이 되돌아간다).
+  const pm = APP_SRC.slice(APP_SRC.indexOf('function patchMailSection('), APP_SRC.indexOf('function patchMailSection(') + 900);
+  assert.ok(/widgetTitleOf\(iid\)/.test(pm), '메일 부분 갱신이 표시명 유지');
+  const ps = APP_SRC.slice(APP_SRC.indexOf('function patchShelfSection('), APP_SRC.indexOf('function patchShelfSection(') + 900);
+  assert.ok(/widgetTitleOf\(iid\)/.test(ps), '셸프 부분 갱신이 표시명 유지');
 });
 
 test('UI — 6조합 계약 유지: 기본 스팬·최소 높이는 **타입**의 성질(iid → type 해석)', () => {
