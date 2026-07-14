@@ -196,6 +196,50 @@ test('MD-1 — 삭제 대상 문서를 연 모든 인스턴스의 자동저장�
     '사라질 문서에 자동저장이 쓰이지 않게');
 });
 
+/* ───── 문서 칩 바 — 넘칠 때의 상호작용(스크롤바 대신 페이드·화살표) ───── */
+
+test('MD-1 — 칩 바: 스크롤바를 숨기고 가장자리 페이드로 넘침을 알린다', () => {
+  assert.ok(/\.md-docs\.no-sb \{[^}]*scrollbar-width: none/.test(CSS), '네이티브 스크롤바 숨김');
+  assert.ok(/\.md-docs\.no-sb::-webkit-scrollbar \{[^}]*height: 0/.test(CSS), 'webkit 스크롤바 숨김');
+  assert.ok(/\.md-docbar\[data-of-l="1"\]::before, \.md-docbar\[data-of-r="1"\]::after \{[^}]*opacity: 1/.test(CSS),
+    '넘치는 쪽 가장자리만 페이드');
+  assert.ok(/cls: 'md-docs no-sb'/.test(mdCode()), '트랙에 no-sb 적용');
+});
+
+test('MD-1 — 칩 바: 좌우 화살표는 넘치는 쪽에만, 바 호버 시 뜬다', () => {
+  assert.ok(/\.md-docbar:hover\[data-of-l="1"\] \.md-docbar__nav--prev[\s\S]{0,120}opacity: 1/.test(CSS));
+  assert.ok(/\.md-docbar__nav \{[^}]*opacity: 0;[^}]*pointer-events: none/.test(CSS), '평소엔 숨고 클릭도 안 먹는다');
+  const code = mdCode();
+  assert.ok(/function mdDocNav\(iid, dir\)/.test(code), '화살표 버튼');
+  assert.ok(/function mdScrollChips\(track, dir\)/.test(code), '한 화면의 70%씩 이동');
+  assert.ok(/cellQuery\(iid, '\.md-docs'\)/.test(code), '그 인스턴스의 트랙만 스크롤(document 전역 조회 금지)');
+});
+
+test('MD-1 — 칩 바: 휠(세로→가로)·드래그 스크롤 + 드래그 뒤 click 억제(칩 오열림 방지)', () => {
+  const w = mdCode().slice(mdCode().indexOf('function wireMdDocBar'));
+  assert.ok(/deltaY[\s\S]{0,120}track\.scrollLeft \+= e\.deltaY[\s\S]{0,40}e\.preventDefault\(\)/.test(w), '휠 세로 → 가로');
+  assert.ok(/pointermove[\s\S]{0,400}track\.scrollLeft = startScroll - dx/.test(w), '드래그 스크롤');
+  assert.ok(/click[\s\S]{0,80}moved > 6[\s\S]{0,80}preventDefault\(\)[\s\S]{0,40}stopPropagation\(\)/.test(w),
+    '6px 넘게 끌면 뒤따르는 click 억제');
+});
+
+test('MD-1 — 칩 바: 스크롤 위치는 인스턴스별로 이어지고, 활성 칩이 밖이면 맞춰 준다', () => {
+  const w = mdCode().slice(mdCode().indexOf('function wireMdDocBar'));
+  assert.ok(/st\._chipScroll = track\.scrollLeft/.test(w), '인스턴스 상태(wstate)에 위치 보관');
+  assert.ok(/if \(typeof st\._chipScroll === 'number'\) track\.scrollLeft = st\._chipScroll/.test(w), '재렌더 후 복원');
+  assert.ok(/querySelector\('\.md-doc--on'\)[\s\S]{0,260}track\.scrollLeft = Math\.max\(0,/.test(w), '활성 칩이 화면 밖이면 맞춘다');
+});
+
+test('MD-1 — 칩 바: 폭이 바뀌면(위젯 리사이즈) 넘침 상태를 다시 계산한다', () => {
+  const w = mdCode().slice(mdCode().indexOf('function wireMdDocBar'));
+  assert.ok(/ResizeObserver[\s\S]{0,140}syncEdges\(\)/.test(w), '위젯 크기 조절·마소너리 재배치 대응');
+});
+
+test('MD-1 — 칩 바 배선은 RG.widget 라이프사이클을 탄다(핸들러 1회·누수 0)', () => {
+  assert.ok(/id: 'mdDocBar'/.test(APP_SRC), 'RG.widget 정의');
+  assert.ok(/wrap\.__mdBar/.test(APP_SRC), '노드당 1회 배선 가드');
+});
+
 test('MD-1 — × 버튼 CSS: 칩 호버/포커스 시 또렷, 평소 옅게(오클릭 방지)', () => {
   assert.ok(/\.md-doc__x \{[^}]*opacity: \.55/.test(CSS), '평소 옅게');
   assert.ok(/\.md-doc:hover \.md-doc__x[^{]*\{[^}]*opacity: 1/.test(CSS), '칩 호버 시 또렷');

@@ -5661,10 +5661,15 @@ function initBrowser() {
     return seg;
   }
 
-  /** 문서 목록 바 — 가로 스크롤 칩(문서 목록은 전역 공유, '열린 문서'는 인스턴스별). */
+  /** 문서 목록 바 — 가로 스크롤 칩(문서 목록은 전역 공유, '열린 문서'는 인스턴스별).
+   *   칩이 많아 넘칠 때: 스크롤바 대신 가장자리 페이드 + 좌우 화살표(넘칠 때만)로 처리한다.
+   *   트랙은 휠(세로→가로)·드래그로도 스크롤되고, 위치는 인스턴스별(_chipScroll)로 이어진다.
+   *   실제 상호작용 배선은 wireMdDocBar(RG.widget 'mdedit')가 렌더 후 붙인다. */
   function mdDocBar(iid) {
     var st = wstate(iid);
-    var bar = el('div', { cls: 'md-docs spip-scroll', attrs: { role: 'tablist', 'aria-label': '문서 목록' } });
+    var wrap = el('div', { cls: 'md-docbar', attrs: { 'data-md-docbar': iid } });
+    wrap.appendChild(mdDocNav(iid, -1));
+    var bar = el('div', { cls: 'md-docs no-sb', attrs: { role: 'tablist', 'aria-label': '문서 목록' } });
     (store.mdedit.docs || []).forEach(function (d) {
       var on = d.id === st.activeId;
       var name = d.title || '제목 없음';
@@ -5696,7 +5701,102 @@ function initBrowser() {
       }));
       bar.appendChild(chip);
     });
-    return bar;
+    wrap.appendChild(bar);
+    wrap.appendChild(mdDocNav(iid, 1));
+    return wrap;
+  }
+
+  /** 칩 바 좌/우 이동 버튼 — 넘칠 때만 보인다(넘침 여부는 wireMdDocBar 가 data-속성으로 표시). */
+  function mdDocNav(iid, dir) {
+    var prev = dir < 0;
+    return el('button', {
+      cls: 'md-docbar__nav md-docbar__nav--' + (prev ? 'prev' : 'next'),
+      text: prev ? '‹' : '›',
+      attrs: { type: 'button', tabindex: '-1', 'aria-hidden': 'true', title: prev ? '이전 문서' : '다음 문서' },
+      on: {
+        click: function (e) {
+          e.stopPropagation();
+          var track = cellQuery(iid, '.md-docs');
+          if (track) mdScrollChips(track, dir);
+        },
+        pointerdown: function (e) { e.stopPropagation(); },
+      },
+    });
+  }
+
+  /** 한 화면의 70%씩 부드럽게 이동(끝단은 브라우저가 클램프). */
+  function mdScrollChips(track, dir) {
+    var step = Math.max(120, Math.round(track.clientWidth * 0.7));
+    if (typeof track.scrollBy === 'function') track.scrollBy({ left: dir * step, behavior: 'smooth' });
+    else track.scrollLeft += dir * step;
+  }
+
+  /** 칩 바 상호작용 배선 — 넘침 표시(페이드·화살표) + 휠(세로→가로) + 드래그 스크롤 + 위치 유지.
+   *   노드는 render 마다 새로 만들어지므로 __mdBar 가드로 1회만 붙는다(리스너는 노드와 함께 GC). */
+  function wireMdDocBar(wrap) {
+    if (!wrap || wrap.__mdBar) return;
+    wrap.__mdBar = true;
+    var iid = wrap.getAttribute('data-md-docbar');
+    var track = wrap.querySelector('.md-docs');
+    if (!iid || !track) return;
+    var st = wstate(iid);
+
+    // 넘침 상태 → data-속성(CSS 가 페이드·화살표 가시성을 소유). 1px 여유로 소수점 반올림 오차 흡수.
+    var syncEdges = function () {
+      var max = track.scrollWidth - track.clientWidth;
+      wrap.setAttribute('data-of-l', track.scrollLeft > 1 ? '1' : '0');
+      wrap.setAttribute('data-of-r', track.scrollLeft < max - 1 ? '1' : '0');
+    };
+
+    track.addEventListener('scroll', function () {
+      st._chipScroll = track.scrollLeft; // 인스턴스별 위치 — 재렌더로 잃지 않게
+      syncEdges();
+    }, { passive: true });
+
+    // 휠 세로 → 가로(트랙패드 가로 스와이프는 그대로 통과).
+    track.addEventListener('wheel', function (e) {
+      if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
+      track.scrollLeft += e.deltaY;
+      e.preventDefault();
+    }, { passive: false });
+
+    // 드래그 스크롤 — 셸프 행과 동일 규약(6px 넘게 끌면 뒤따르는 click 억제 → 칩 오열림 방지).
+    var down = false, startX = 0, startScroll = 0, moved = 0, pid = null;
+    track.addEventListener('pointerdown', function (e) {
+      if (e.button && e.button !== 0) return;
+      down = true; moved = 0; startX = e.clientX; startScroll = track.scrollLeft; pid = e.pointerId;
+      track.style.scrollBehavior = 'auto';
+    });
+    track.addEventListener('pointermove', function (e) {
+      if (!down) return;
+      var dx = e.clientX - startX;
+      if (Math.abs(dx) > 3 && pid != null) { try { track.setPointerCapture(pid); } catch (_) { /* ignore */ } }
+      if (Math.abs(dx) > moved) moved = Math.abs(dx);
+      if (moved > 3) wrap.classList.add('md-docbar--dragging');
+      track.scrollLeft = startScroll - dx;
+    });
+    var end = function () { down = false; wrap.classList.remove('md-docbar--dragging'); track.style.scrollBehavior = ''; };
+    track.addEventListener('pointerup', end);
+    track.addEventListener('pointercancel', end);
+    track.addEventListener('pointerleave', function () { if (down) end(); });
+    track.addEventListener('click', function (e) { if (moved > 6) { e.preventDefault(); e.stopPropagation(); } }, true);
+
+    // 폭이 바뀌면(위젯 리사이즈·마소너리 재배치) 넘침 상태 재계산.
+    if (typeof ResizeObserver === 'function') {
+      var ro = new ResizeObserver(function () { syncEdges(); });
+      ro.observe(track);
+    }
+
+    // 위치 복원 → 활성 칩이 화면 밖이면 그 칩으로 맞춘다(방금 연 문서가 안 보이면 소용없다).
+    if (typeof st._chipScroll === 'number') track.scrollLeft = st._chipScroll;
+    var on = track.querySelector('.md-doc--on');
+    if (on) {
+      var l = on.offsetLeft, r = l + on.offsetWidth;
+      if (l < track.scrollLeft || r > track.scrollLeft + track.clientWidth) {
+        track.scrollLeft = Math.max(0, l - (track.clientWidth - on.offsetWidth) / 2);
+      }
+    }
+    syncEdges();
   }
 
   /** 수정 시각 축약 — 오늘이면 시:분, 아니면 월/일. */
@@ -11724,6 +11824,20 @@ function initBrowser() {
         for (let j = 0; j < rows.length; j++) focusShelfActive(rows[j], store.shelf.active);
         store.shelf._focusPending = false;
       }
+      return null;
+    },
+    destroy: () => { /* 리스너는 교체된 노드와 함께 GC — 별도 정리 불필요 */ },
+  });
+  // [MD 편집기] 문서 칩 바 — 넘침 표시(페이드·화살표)·휠/드래그 가로 스크롤·위치 유지 배선.
+  //   편집기 인스턴스마다 바가 하나씩이므로 스코프 내 .md-docbar 전부 배선(__mdBar 가드로 1회).
+  RG.widget.define({
+    id: 'mdDocBar',
+    init: (root) => {
+      if (typeof document === 'undefined') return null;
+      const scope = root || document;
+      if (typeof scope.querySelectorAll !== 'function') return null;
+      const bars = scope.querySelectorAll('.md-docbar');
+      for (let i = 0; i < bars.length; i++) wireMdDocBar(bars[i]);
       return null;
     },
     destroy: () => { /* 리스너는 교체된 노드와 함께 GC — 별도 정리 불필요 */ },

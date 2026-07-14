@@ -596,8 +596,41 @@ input, button, select { font-family: inherit; }
 .md-seg__btn:hover { background: #f5f5f4; }
 .md-seg__btn--on { background: var(--accent-bg); color: var(--accent); }
 
-/* 문서 바 — 가로 스크롤 칩(세로로 쌓지 않는다 — 높이를 편집 영역에 양보). */
-.md-docs { display: flex; gap: 6px; overflow-x: auto; overflow-y: hidden; flex: 0 0 auto; padding: 8px 0 4px; }
+/* 문서 바 — 가로 스크롤 칩(세로로 쌓지 않는다 — 높이를 편집 영역에 양보).
+ *   칩이 많아 넘칠 때 스크롤바를 드러내는 대신, 가장자리 페이드로 "더 있음"을 알리고
+ *   좌우 화살표(넘치는 쪽에만)로 옮긴다. 넘침 여부는 wireMdDocBar 가 data-of-l/r 로 표시. */
+.md-docbar { position: relative; flex: 0 0 auto; min-width: 0; }
+.md-docs { display: flex; gap: 6px; overflow-x: auto; overflow-y: hidden; flex: 0 0 auto; padding: 8px 0 4px; scroll-behavior: smooth; overscroll-behavior-x: contain; }
+/* 스크롤바 숨김(가로 스크롤은 휠·드래그·화살표로) — 접근성은 role=tablist + 키보드 이동이 담당. */
+.md-docs.no-sb { scrollbar-width: none; -ms-overflow-style: none; }
+.md-docs.no-sb::-webkit-scrollbar { width: 0; height: 0; }
+/* 가장자리 페이드 — 넘치는 쪽만. 마스크라 칩 색을 가리지 않는다(카드 배경색과 무관). */
+.md-docbar::before, .md-docbar::after {
+  content: ''; position: absolute; top: 0; bottom: 0; width: 44px; z-index: 1;
+  opacity: 0; transition: opacity .18s ease; pointer-events: none;
+}
+.md-docbar::before { left: 0; background: linear-gradient(90deg, var(--panel, #fff) 30%, rgba(255,255,255,0)); }
+.md-docbar::after { right: 0; background: linear-gradient(270deg, var(--panel, #fff) 30%, rgba(255,255,255,0)); }
+.md-docbar[data-of-l="1"]::before, .md-docbar[data-of-r="1"]::after { opacity: 1; }
+/* 좌우 이동 화살표 — 넘치는 쪽에만, 바에 마우스를 올렸을 때 떠오른다(평소엔 칩만 보이게). */
+.md-docbar__nav {
+  appearance: none; position: absolute; top: 50%; z-index: 2; transform: translateY(-50%) scale(.9);
+  width: 22px; height: 22px; display: flex; align-items: center; justify-content: center;
+  border: 1px solid var(--border, #e7e5e4); border-radius: 50%; background: #fff; cursor: pointer;
+  color: #57534e; font-size: 13px; line-height: 1; padding: 0;
+  box-shadow: 0 2px 8px rgba(28,25,23,.12);
+  opacity: 0; pointer-events: none; transition: opacity .18s ease, transform .18s ease, background .12s ease;
+}
+.md-docbar__nav--prev { left: 2px; }
+.md-docbar__nav--next { right: 2px; }
+.md-docbar:hover[data-of-l="1"] .md-docbar__nav--prev,
+.md-docbar:hover[data-of-r="1"] .md-docbar__nav--next {
+  opacity: 1; pointer-events: auto; transform: translateY(-50%) scale(1);
+}
+.md-docbar__nav:hover { background: #fafaf9; color: #1c1917; }
+/* 드래그 중 — 커서·부드러운 스크롤 억제(손끝에 붙어 따라오게). */
+.md-docbar--dragging .md-docs { cursor: grabbing; scroll-behavior: auto; }
+.md-docbar--dragging .md-doc { cursor: grabbing; }
 .md-doc {
   appearance: none; cursor: pointer; flex: 0 0 auto; display: flex; align-items: center; gap: 6px;
   border: 1px solid #e7e5e4; background: #fff; border-radius: 999px; padding: 3px 10px; max-width: 190px;
