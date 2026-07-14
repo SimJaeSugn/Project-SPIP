@@ -2030,13 +2030,9 @@ function initBrowser() {
       code: null,       // 루트 조회 실패 코드(고정 토큰)
     },
     // [MD 편집기 위젯] 마크다운 편집기 — 데이터는 spip.md.* IPC. 문서 id·시각은 main 이 발급/스탬프한다.
-    //   [위젯 인스턴스] 문서 '목록'은 하나의 라이브러리라 전역 공유. 어떤 문서를 열었는지·본문·뷰 모드는
-    //   인스턴스별(wstate) — 그래서 편집기 2개가 서로 다른 문서를 나란히 연다.
-    mdedit: {
-      docs: [],          // 목록 메타 [{id,title,createdAt,updatedAt,size}] — 최근 수정순(전역 공유)
-      loaded: false,     // 최초 list() 완료
-      loading: false,
-    },
+    //   [문서함 = 위젯 인스턴스] 문서 '목록'까지 인스턴스별이다 — 편집기마다 **자기 문서함**을 갖고,
+    //   A 편집기에서 만든 문서는 B 편집기 칩 바에 보이지 않는다(store.wstate[iid].docs).
+    //   전역 슬롯은 없다 — 모든 md IPC 는 첫 인자로 문서함(iid)을 받는다.
     // [SH-2] 즐겨찾기 셸프 위젯 — 렌더러 상태. 데이터는 spip.shelf.list()로 적재, 변경 push(onChanged) 시 재조회.
     //   [위젯 인스턴스] 북마크는 하나의 셸프라 전역 공유. 펼친 항목·컴포저 입력은 인스턴스별(wstate).
     shelf: {
@@ -2125,14 +2121,21 @@ function initBrowser() {
 
   /* ---- [위젯 인스턴스] 인스턴스별 UI 상태 ------------------------------------------------
    * 같은 타입 위젯을 여러 개 배치할 수 있으므로, "어떤 문서를 열었나 / 어떤 폴더를 보고 있나" 같은
-   * **뷰 상태**는 인스턴스(iid)마다 따로 가진다. 반면 "문서 목록·북마크·커밋 집계" 같은 **공유
-   * 데이터**는 전역 슬롯(store.mdedit.docs 등)에 그대로 둔다 — 같은 걸 두 번 불러올 이유가 없다.
+   * **뷰 상태**는 인스턴스(iid)마다 따로 가진다. "북마크·커밋 집계"처럼 하나의 라이브러리를 여러
+   * 창으로 보는 **공유 데이터**는 전역 슬롯에 둔다 — 같은 걸 두 번 불러올 이유가 없다.
+   *
+   * 예외: **마크다운 편집기의 문서 목록(st.docs)은 인스턴스별**이다. 편집기는 '하나의 라이브러리를
+   *   보는 창'이 아니라 각자의 **문서함**(main: mdDocStore.boxes[iid])을 가진다 — A 편집기의 문서는
+   *   B 편집기 목록에 보이지 않는다.
    */
   function makeWState(type) {
     // _seeded — '최초 자동 열기'를 이미 한 인스턴스 표식. 지연 적재(loadMdEdit/loadExplorer)가 매 render
     //   마다 불리므로, 이 가드가 없으면 자동 열기 → render → 자동 열기 … 무한 루프가 된다.
     if (type === 'mdedit') {
       return {
+        docs: [],         // 이 편집기의 문서함 목록 메타 — 인스턴스별(다른 편집기와 섞이지 않는다)
+        loaded: false,    // 이 문서함의 최초 list() 완료
+        loading: false,
         activeId: null,   // 이 편집기가 연 문서 id
         body: '',         // 편집 중 본문
         view: 'split',    // 'edit' | 'preview' | 'split'
@@ -2142,6 +2145,7 @@ function initBrowser() {
         _seeded: false,
         _saveTimer: null,
         _savedAt: null,
+        _chipScroll: null, // 문서 칩 바 가로 스크롤 위치
       };
     }
     if (type === 'explorer') {
@@ -5162,10 +5166,11 @@ function initBrowser() {
 
   /** 중첩 네임스페이스(spip.md) 어댑터 — explorer/shelf 패턴 동형. 미배포(웹/테스트) 환경 graceful 폴백. */
   function mdBridge() { return (spip && spip.md && typeof spip.md === 'object') ? spip.md : null; }
-  async function mdIpc(method) {
+  /** md IPC — 첫 인자는 항상 문서함(iid). 편집기마다 자기 문서함만 읽고 쓴다(메인이 격리를 강제). */
+  async function mdIpc(iid, method) {
     var b = mdBridge();
     if (!b || typeof b[method] !== 'function') return bridgeMissing();
-    var rest = Array.prototype.slice.call(arguments, 1);
+    var rest = [iid].concat(Array.prototype.slice.call(arguments, 2));
     try {
       return await b[method].apply(b, rest);
     } catch (err) {
@@ -5177,46 +5182,40 @@ function initBrowser() {
   function mdParser() { return (typeof SpipMarkdown !== 'undefined') ? SpipMarkdown : null; }
 
   /* ───── 적재·저장 ─────
-   * [위젯 인스턴스] 문서 '목록'(store.mdedit.docs)은 하나의 라이브러리라 전역 공유하고,
-   * '어떤 문서를 열었나'(activeId/body/view/dirty)는 인스턴스별(wstate)이다 —
-   * 그래서 편집기 2개가 서로 다른 문서를 나란히 연다. 모든 액션 함수는 iid 를 받는다.
+   * [문서함 = 위젯 인스턴스] 문서 '목록'(st.docs)도, '어떤 문서를 열었나'(activeId/body/view/dirty)도
+   * 전부 인스턴스별(wstate)이다 — 편집기마다 자기 문서함을 갖는다. 모든 액션 함수와 IPC 는 iid 를 받는다.
    */
 
-  /** 문서 목록 1회 적재(전역) + 배치된 각 편집기가 아직 문서를 안 열었으면 최근 문서를 하나 연다.
+  /** 각 편집기 인스턴스의 문서함을 1회 적재하고, 아직 문서를 안 열었으면 최근 문서를 하나 연다.
    *
    *  ⚠️ 이 함수는 **매 render() 마다** maybeLoadMdEdit 을 통해 불린다 — 할 일이 없으면 반드시
    *     render() 를 부르지 않고 조용히 빠져나와야 한다. 안 그러면
    *     render → maybeLoadMdEdit → loadMdEdit → render → … 무한 루프로 렌더러가 멈춘다(빈 화면). */
   async function loadMdEdit() {
-    var md = store.mdedit;
     if (!mdBridge()) return;
 
     var didWork = false;
+    var editors = widgetsOfType('mdedit');
 
-    if (!md.loaded && !md.loading) {
-      md.loading = true;
-      var res = await mdIpc('list');
-      md.loading = false;
-      md.loaded = true;
-      didWork = true;
-      if (!res || !res.ok) {
-        widgetsOfType('mdedit').forEach(function (w) { wstate(w.iid).code = (res && res.code) || 'INTERNAL'; });
-        render();
-        return;
+    for (var i = 0; i < editors.length; i++) {
+      var iid = editors[i].iid;
+      var st = wstate(iid);
+
+      if (!st.loaded && !st.loading) {
+        st.loading = true;
+        var res = await mdIpc(iid, 'list');   // 이 편집기의 문서함만
+        st.loading = false;
+        st.loaded = true;
+        didWork = true;
+        if (!res || !res.ok) { st.code = (res && res.code) || 'INTERNAL'; continue; }
+        st.code = null;
+        st.docs = Array.isArray(res.docs) ? res.docs : [];
       }
-      md.docs = Array.isArray(res.docs) ? res.docs : [];
-    }
 
-    // 아직 문서를 안 연 편집기 인스턴스에만 기본 문서를 열어준다(각자 독립). 이미 다 열려 있으면 no-op.
-    var pending = widgetsOfType('mdedit').filter(function (w) {
-      var st = wstate(w.iid);
-      return !st.activeId && !st.code && !st._seeded;
-    });
-    if (md.docs.length > 0) {
-      for (var i = 0; i < pending.length; i++) {
-        var st = wstate(pending[i].iid);
+      // 아직 문서를 안 연 편집기에만 자기 문서함의 최근 문서를 열어준다(각자 독립).
+      if (!st.activeId && !st.code && !st._seeded && st.docs.length > 0) {
         st._seeded = true; // 재진입 가드 — 이 인스턴스는 한 번만 자동 열기
-        await mdOpenDoc(pending[i].iid, md.docs[0].id, { silent: true });
+        await mdOpenDoc(iid, st.docs[0].id, { silent: true });
         didWork = true;
       }
     }
@@ -5229,7 +5228,7 @@ function initBrowser() {
     var st = wstate(iid);
     if (st.activeId === id && !(opts && opts.force)) { if (!(opts && opts.silent)) render(); return; }
     await mdFlushSave(iid); // 열기 전에 이 편집기가 편집 중이던 문서를 확정 저장(변경 유실 방지)
-    var res = await mdIpc('get', id);
+    var res = await mdIpc(iid, 'get', id);
     if (!res || !res.ok) {
       st.code = (res && res.code) || 'INTERNAL';
       if (!(opts && opts.silent)) render();
@@ -5255,11 +5254,11 @@ function initBrowser() {
         if (!title) return;
         var st = wstate(iid);
         st.busy = true; render();
-        var res = await mdIpc('create', title, '# ' + title + '\n\n');
+        var res = await mdIpc(iid, 'create', title, '# ' + title + '\n\n');
         st.busy = false;
         if (!res || !res.ok) { st.code = (res && res.code) || 'INTERNAL'; toast(mdMessage(st.code), true); render(); return; }
         st.code = null;
-        store.mdedit.docs = Array.isArray(res.docs) ? res.docs : store.mdedit.docs; // 목록은 전역 공유
+        st.docs = Array.isArray(res.docs) ? res.docs : st.docs; // 이 편집기의 문서함
         st.activeId = res.doc.id;
         st.body = res.doc.body;
         st.dirty = false;
@@ -5282,19 +5281,20 @@ function initBrowser() {
       onConfirm: async function (name) {
         var title = String(name == null ? '' : name).trim();
         if (!title) return;
-        var res = await mdIpc('update', st.activeId, title, null);
+        var res = await mdIpc(iid, 'update', st.activeId, title, null);
         if (!res || !res.ok) { toast(mdMessage((res && res.code) || 'INTERNAL'), true); return; }
-        store.mdedit.docs = Array.isArray(res.docs) ? res.docs : store.mdedit.docs;
+        st.docs = Array.isArray(res.docs) ? res.docs : st.docs;
         render();
       },
     });
   }
 
-  /** 삭제 — 되돌릴 수 없으므로 확인 모달을 거친다. 문서는 라이브러리 공유라 **다른 편집기에서도 사라진다**. */
-  /** 문서 삭제 — docId 를 주면 그 문서(칩의 × 버튼), 없으면 이 인스턴스가 연 문서. */
+  /** 문서 삭제 — docId 를 주면 그 문서(칩의 × 버튼), 없으면 이 편집기가 연 문서.
+   *   [문서함 = 인스턴스] 문서는 이 편집기의 문서함에만 있으므로 다른 편집기는 영향받지 않는다. */
   function mdRemoveDoc(iid, docId) {
+    var st = wstate(iid);
     var cur = docId
-      ? (store.mdedit.docs || []).find(function (d) { return d.id === docId; })
+      ? (st.docs || []).find(function (d) { return d.id === docId; })
       : mdActiveMeta(iid);
     if (!cur) return;
     var targetId = cur.id;
@@ -5304,24 +5304,19 @@ function initBrowser() {
       confirmText: '삭제',
       danger: true,
       onConfirm: async function () {
-        // 삭제 대상 문서를 열고 있는 모든 인스턴스의 자동저장을 먼저 취소(사라질 문서에 쓰지 않게).
-        widgetsOfType('mdedit').forEach(function (w) {
-          var s = wstate(w.iid);
-          if (s.activeId !== targetId) return;
-          if (s._saveTimer) { clearTimeout(s._saveTimer); s._saveTimer = null; }
-          s.dirty = false;
-        });
-        var res = await mdIpc('remove', targetId);
+        // 삭제 대상을 열고 있었다면 자동저장을 먼저 취소(사라질 문서에 쓰지 않게).
+        if (st.activeId === targetId) {
+          if (st._saveTimer) { clearTimeout(st._saveTimer); st._saveTimer = null; }
+          st.dirty = false;
+        }
+        var res = await mdIpc(iid, 'remove', targetId);
         if (!res || !res.ok) { toast(mdMessage((res && res.code) || 'INTERNAL'), true); return; }
-        store.mdedit.docs = Array.isArray(res.docs) ? res.docs : [];
-        // 이 문서를 열고 있던 **모든** 편집기 인스턴스를 다른 문서로 옮긴다(유령 본문 방지).
-        var fallback = store.mdedit.docs.length > 0 ? store.mdedit.docs[0].id : null;
-        var affected = widgetsOfType('mdedit').filter(function (w) { return wstate(w.iid).activeId === targetId; });
-        for (var i = 0; i < affected.length; i++) {
-          var s2 = wstate(affected[i].iid);
-          if (s2._saveTimer) { clearTimeout(s2._saveTimer); s2._saveTimer = null; }
-          s2.activeId = null; s2.body = ''; s2.dirty = false; s2._savedAt = null;
-          if (fallback) await mdOpenDoc(affected[i].iid, fallback, { silent: true, force: true });
+        st.docs = Array.isArray(res.docs) ? res.docs : [];
+        // 연 문서를 지웠으면 이 편집기를 자기 문서함의 다른 문서로 옮긴다(유령 본문 방지).
+        if (st.activeId === targetId) {
+          var fallback = st.docs.length > 0 ? st.docs[0].id : null;
+          st.activeId = null; st.body = ''; st.dirty = false; st._savedAt = null;
+          if (fallback) await mdOpenDoc(iid, fallback, { silent: true, force: true });
         }
         toast('문서를 삭제했습니다.');
         render();
@@ -5333,7 +5328,7 @@ function initBrowser() {
   async function mdImportDoc(iid) {
     var st = wstate(iid);
     st.busy = true; render();
-    var res = await mdIpc('importFile');
+    var res = await mdIpc(iid, 'importFile');
     st.busy = false;
     if (!res || !res.ok) {
       var code = (res && res.code) || 'INTERNAL';
@@ -5342,7 +5337,7 @@ function initBrowser() {
       return;
     }
     st.code = null;
-    store.mdedit.docs = Array.isArray(res.docs) ? res.docs : store.mdedit.docs;
+    st.docs = Array.isArray(res.docs) ? res.docs : st.docs; // 불러온 문서는 이 편집기의 문서함으로
     st.activeId = res.doc.id;
     st.body = res.doc.body;
     st.dirty = false;
@@ -5357,7 +5352,7 @@ function initBrowser() {
     if (!st.activeId) return;
     await mdFlushSave(iid);
     st.busy = true; render();
-    var res = await mdIpc('exportFile', st.activeId);
+    var res = await mdIpc(iid, 'exportFile', st.activeId);
     st.busy = false;
     if (!res || !res.ok) {
       var code = (res && res.code) || 'INTERNAL';
@@ -5386,7 +5381,7 @@ function initBrowser() {
     var st = wstate(iid);
     if (!st.activeId || !st.dirty) return;
     var body = st.body;
-    var res = await mdIpc('update', st.activeId, null, body);
+    var res = await mdIpc(iid, 'update', st.activeId, null, body);
     if (!res || !res.ok) {
       st.code = (res && res.code) || 'INTERNAL';
       mdSetStatus(iid, mdMessage(st.code));
@@ -5395,7 +5390,7 @@ function initBrowser() {
     // 저장 중 사용자가 더 입력했으면 dirty 를 유지한다(다음 디바운스가 이어서 저장).
     if (st.body === body) st.dirty = false;
     st.code = null;
-    store.mdedit.docs = Array.isArray(res.docs) ? res.docs : store.mdedit.docs; // 목록은 전역 공유
+    st.docs = Array.isArray(res.docs) ? res.docs : st.docs; // 이 편집기의 문서함
     st._savedAt = Date.now();
     mdSetStatus(iid, '저장됨');
     mdSyncActiveTitle(iid);
@@ -5415,7 +5410,7 @@ function initBrowser() {
 
   function mdActiveMeta(iid) {
     var st = wstate(iid);
-    var docs = store.mdedit.docs || [];
+    var docs = st.docs || [];
     for (var i = 0; i < docs.length; i++) if (docs[i].id === st.activeId) return docs[i];
     return null;
   }
@@ -5670,7 +5665,7 @@ function initBrowser() {
     var wrap = el('div', { cls: 'md-docbar', attrs: { 'data-md-docbar': iid } });
     wrap.appendChild(mdDocNav(iid, -1));
     var bar = el('div', { cls: 'md-docs no-sb', attrs: { role: 'tablist', 'aria-label': '문서 목록' } });
-    (store.mdedit.docs || []).forEach(function (d) {
+    (st.docs || []).forEach(function (d) {
       var on = d.id === st.activeId;
       var name = d.title || '제목 없음';
       // 칩 자체는 div — 안에 삭제(×) 버튼을 두므로 button 중첩(무효 HTML)을 피한다. 탭 시맨틱은 role 로 유지.
@@ -5811,8 +5806,7 @@ function initBrowser() {
 
   function renderHomeMdEdit(inst) {
     var iid = inst.iid;
-    var st = wstate(iid);
-    var md = store.mdedit;           // 전역 공유: 문서 목록·로딩 상태
+    var st = wstate(iid);             // 문서함(목록·적재 상태)·연 문서 모두 이 인스턴스의 것
     var hasDoc = !!st.activeId;
     var card = el('div', {
       cls: 'md-card hw-card',
@@ -5833,15 +5827,15 @@ function initBrowser() {
     head.appendChild(tools);
     card.appendChild(head);
 
-    if ((md.docs || []).length > 0) card.appendChild(mdDocBar(iid));
+    if ((st.docs || []).length > 0) card.appendChild(mdDocBar(iid));
 
     var main = el('div', { cls: 'md-main hw-body' });
 
     if (!mdBridge()) {
       main.appendChild(el('div', { cls: 'md-empty', text: 'Electron 앱에서만 사용할 수 있습니다.' }));
-    } else if (!md.loaded && md.loading) {
+    } else if (!st.loaded && st.loading) {
       main.appendChild(el('div', { cls: 'md-empty', text: '불러오는 중…' }));
-    } else if ((md.docs || []).length === 0) {
+    } else if ((st.docs || []).length === 0) {
       var empty = el('div', { cls: 'md-empty' });
       empty.appendChild(el('div', { text: '아직 문서가 없습니다.' }));
       var cta = el('div', { cls: 'md-empty__row' });

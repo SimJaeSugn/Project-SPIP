@@ -93,7 +93,8 @@ test('MD-1 — 숨김 위젯이면 IPC 0(불필요한 디스크 읽기 회피)',
 test('MD-1 — preload 표면(spip.md.*) ↔ 렌더러 mdIpc 호출 정합', () => {
   const exposed = preloadMdKeys();
   const called = new Set();
-  const re = /mdIpc\('([A-Za-z0-9_$]+)'/g;
+  // [문서함] 호출 형태는 mdIpc(iid, '메서드', …) — 첫 인자는 문서함(편집기 인스턴스)이다.
+  const re = /mdIpc\([A-Za-z0-9_$.]+, '([A-Za-z0-9_$]+)'/g;
   let m;
   while ((m = re.exec(APP_SRC)) !== null) called.add(m[1]);
   assert.ok(called.size > 0, '렌더러가 mdIpc 를 사용해야 한다');
@@ -115,8 +116,9 @@ test('MD-1 — preload 채널명 ↔ register.js 등록 채널 정합(드리프�
 test('MD-H-1 — 렌더러가 경로를 주입할 표면이 없다(import/export 는 경로 인자 없음)', () => {
   const m = /\bmd:\s*\{([\s\S]*?)\n  \},/.exec(PRELOAD_SRC);
   const block = m[1];
-  assert.ok(/importFile:\s*\(\)\s*=>/.test(block), 'importFile 은 인자 0');
-  assert.ok(/exportFile:\s*\(id\)\s*=>/.test(block), 'exportFile 은 문서 id 만');
+  // [문서함] 인자는 box(편집기 iid)와 문서 id 뿐 — 경로는 어느 채널에도 없다.
+  assert.ok(/importFile:\s*\(box\)\s*=>/.test(block), 'importFile 은 문서함만(경로 인자 없음)');
+  assert.ok(/exportFile:\s*\(box, id\)\s*=>/.test(block), 'exportFile 은 문서함·문서 id 만');
   assert.ok(!/path/.test(block), 'md 네임스페이스에 path 인자를 넘기는 채널이 없어야 한다');
   // 경로를 받는 범용 read/write 채널을 새로 열지 않았는지 — register 에도 없어야 한다.
   assert.ok(!/spip:md:(read|write|readFile|writeFile)/.test(REGISTER_SRC), '임의 경로 read/write 채널 금지');
@@ -190,10 +192,18 @@ test('MD-1 — 칩은 button 중첩을 피해 div(role=tab) + 키보드 열기',
   assert.ok(/keydown:[\s\S]{0,200}mdOpenDoc\(iid, d\.id\)/.test(bar), 'Enter/Space 로 열기');
 });
 
-test('MD-1 — 삭제 대상 문서를 연 모든 인스턴스의 자동저장을 먼저 취소한다', () => {
+test('MD-1 — 삭제 시 그 문서를 열고 있었으면 자동저장을 먼저 취소한다(사라질 문서에 쓰지 않게)', () => {
   const rm = mdCode().slice(mdCode().indexOf('function mdRemoveDoc'));
-  assert.ok(/widgetsOfType\('mdedit'\)[\s\S]{0,300}s\.activeId !== targetId[\s\S]{0,200}clearTimeout\(s\._saveTimer\)/.test(rm),
-    '사라질 문서에 자동저장이 쓰이지 않게');
+  assert.ok(/st\.activeId === targetId[\s\S]{0,160}clearTimeout\(st\._saveTimer\)/.test(rm));
+  // [문서함] 문서는 이 편집기의 문서함에만 있다 — 다른 편집기를 훑을 이유가 없다.
+  assert.ok(/mdIpc\(iid, 'remove', targetId\)/.test(rm), '삭제도 이 문서함 스코프');
+});
+
+test('MD-BOX — 문서 목록도 인스턴스별(st.docs): 전역 store.mdedit 슬롯은 없다', () => {
+  const code = mdCode();
+  assert.ok(!/store\.mdedit/.test(code), '전역 문서 슬롯 제거(편집기마다 자기 문서함)');
+  assert.ok(/docs: \[\],\s*\/\/ 이 편집기의 문서함/.test(APP_SRC), 'wstate 에 문서함');
+  assert.ok(/mdIpc\(iid, 'list'\)/.test(code), 'list 도 문서함 스코프');
 });
 
 /* ───── 문서 칩 바 — 넘칠 때의 상호작용(스크롤바 대신 페이드·화살표) ───── */
@@ -335,12 +345,12 @@ test('MD-1 — 문서 전환·내보내기 전에 미저장 변경을 확정 저
   assert.ok(/blur: function \(\) \{ mdFlushSave\(iid\); \}/.test(code), '포커스 이탈 시 flush');
 });
 
-test('위젯 인스턴스 — 편집기 2개가 서로 다른 문서를 연다(부분 갱신은 그 셀 안에서만)', () => {
+test('위젯 인스턴스 — 편집기 2개가 서로 다른 문서함을 갖는다(부분 갱신은 그 셀 안에서만)', () => {
   const code = mdCode();
-  // 열린 문서·본문·뷰 모드는 인스턴스별(wstate). 전역 store.mdedit 은 '문서 목록'만 공유한다.
+  // [문서함] 문서 목록·열린 문서·본문·뷰 모드가 전부 인스턴스별(wstate)이다.
   assert.ok(/var st = wstate\(iid\)/.test(code), '인스턴스별 상태(wstate)를 쓴다');
-  assert.ok(!/store\.mdedit\.activeId/.test(code), '열린 문서는 전역 슬롯이 아니다');
-  assert.ok(/store\.mdedit\.docs/.test(code), '문서 목록은 전역 공유(하나의 라이브러리)');
+  assert.ok(!/store\.mdedit/.test(code), '전역 슬롯 없음 — 문서함도 인스턴스별');
+  assert.ok(/st\.docs/.test(code), '문서 목록은 이 편집기의 문서함');
   // document 전역 조회 금지 — 편집기가 여럿이면 첫 셀만 고쳐 나머지가 멈춘 화면으로 남는다.
   const patchFns = code.slice(code.indexOf('function mdUpdatePreview'), code.indexOf('function mdInlineNodes'));
   assert.ok(!/document\.querySelector/.test(patchFns), '부분 갱신에 document 전역 조회 금지');

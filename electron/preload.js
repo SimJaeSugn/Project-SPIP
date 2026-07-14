@@ -272,21 +272,25 @@ contextBridge.exposeInMainWorld('spip', {
   //   문서 CRUD 는 앱 데이터 폴더 안에서만 일어나고 id 는 main 이 발급한다.
   //   파일 접근은 importFile/exportFile 뿐이며 **경로 인자가 없다** — 경로는 오직 네이티브 dialog 가
   //   만든다. 렌더러가 임의 경로를 읽거나 쓰게 하는 표면은 존재하지 않는다.
+  //   [문서함 = 위젯 인스턴스] 모든 호출의 첫 인자는 box(편집기 위젯 인스턴스 id)다 — 편집기마다
+  //   문서함이 갈린다. 형식 검증·격리(다른 문서함 문서 접근 차단)는 메인이 한다(단일 신뢰 경계).
   md: {
-    list: () => ipcRenderer.invoke('spip:md:list'),
-    get: (id) => ipcRenderer.invoke('spip:md:get', { id: String(id) }),
-    create: (title, body) => ipcRenderer.invoke('spip:md:create', {
+    list: (box) => ipcRenderer.invoke('spip:md:list', { box: String(box) }),
+    get: (box, id) => ipcRenderer.invoke('spip:md:get', { box: String(box), id: String(id) }),
+    create: (box, title, body) => ipcRenderer.invoke('spip:md:create', {
+      box: String(box),
       title: title == null ? '' : String(title),
       body: body == null ? '' : String(body),
     }),
-    update: (id, title, body) => ipcRenderer.invoke('spip:md:update', {
+    update: (box, id, title, body) => ipcRenderer.invoke('spip:md:update', {
+      box: String(box),
       id: String(id),
       title: title == null ? undefined : String(title),
       body: body == null ? undefined : String(body),
     }),
-    remove: (id) => ipcRenderer.invoke('spip:md:remove', { id: String(id) }),
-    importFile: () => ipcRenderer.invoke('spip:md:import'),
-    exportFile: (id) => ipcRenderer.invoke('spip:md:export', { id: String(id) }),
+    remove: (box, id) => ipcRenderer.invoke('spip:md:remove', { box: String(box), id: String(id) }),
+    importFile: (box) => ipcRenderer.invoke('spip:md:import', { box: String(box) }),
+    exportFile: (box, id) => ipcRenderer.invoke('spip:md:export', { box: String(box), id: String(id) }),
   },
 
   // 이벤트 구독(on/send) — 콜백만 받고 ipcRenderer 원본은 노출하지 않음(보안).

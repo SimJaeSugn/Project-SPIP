@@ -28,6 +28,7 @@
 const fs = require('fs');
 const path = require('path');
 const mdDocStore = require('../../lib/common/mdDocStore');
+const uiStateStore = require('../../lib/common/uiStateStore');
 
 // 불러오기 허용 확장자 — 텍스트 마크다운 계열만.
 const IMPORT_EXTS = ['md', 'markdown', 'mdown', 'mkd', 'txt'];
@@ -55,6 +56,47 @@ function storeCtx(ctx) {
 function argId(args) {
   if (!args || typeof args !== 'object' || Array.isArray(args)) return null;
   return typeof args.id === 'string' ? args.id : null;
+}
+
+/** args 에서 문서함 키(= 편집기 위젯 인스턴스 id) — 형식 불량이면 null(호출부가 BAD_INPUT). */
+function argBox(args) {
+  if (!args || typeof args !== 'object' || Array.isArray(args)) return null;
+  const box = args.box;
+  return (typeof box === 'string' && mdDocStore.BOX_RE.test(box)) ? box : null;
+}
+
+/** 첫 마크다운 편집기 인스턴스의 iid(배치 순서) — 레거시 문서를 흡수할 문서함. 없으면 null. */
+function firstEditorBox(ctx) {
+  const _ui = (ctx && ctx.deps && ctx.deps.uiState) || uiStateStore;
+  let widgets = [];
+  try {
+    const ui = _ui.read({ logger: ctx && ctx.logger, uiStatePath: ctx && ctx.uiStatePath, deps: ctx && ctx.deps });
+    widgets = Array.isArray(ui.homeWidgets) ? ui.homeWidgets : [];
+  } catch (_) { return null; }
+  const first = widgets.find((w) => w && w.type === 'mdedit');
+  return (first && typeof first.iid === 'string') ? first.iid : null;
+}
+
+/**
+ * [v1 → v2 이행] 전역 문서함 하나였던 시절의 문서(state.legacy)를 **첫 편집기 인스턴스**의
+ *   문서함으로 흡수한다. 다른 인스턴스가 먼저 물어봐도 흡수하지 않는다(문서가 엉뚱한 편집기로
+ *   가지 않게). 흡수 대상 인스턴스가 아직 배치되지 않았으면 legacy 는 그대로 보존된다(무손실).
+ * @returns {object} 흡수 후(또는 그대로의) 상태
+ */
+function adoptLegacy(state, box, ctx) {
+  const legacy = Array.isArray(state.legacy) ? state.legacy : [];
+  if (legacy.length === 0) return state;
+  if (box !== firstEditorBox(ctx)) return state;
+
+  const merged = legacy.concat(mdDocStore.docsOf(state, box)).slice(0, mdDocStore.MAX_DOCS);
+  const next = mdDocStore.withDocs(state, box, merged);
+  next.legacy = [];
+  return mdDocStore.write(next, storeCtx(ctx));
+}
+
+/** 문서함 스코프 상태 읽기 + 레거시 이행. 모든 CRUD 의 단일 진입. */
+function readBox(box, ctx) {
+  return adoptLegacy(mdDocStore.read(storeCtx(ctx)), box, ctx);
 }
 
 /** 목록 응답용 메타(본문 제외) — 본문은 get 으로만. 목록 응답이 수 MB 가 되는 걸 막는다. */
@@ -94,18 +136,21 @@ function safeFileName(title) {
 
 /* ───── CRUD ───── */
 
-/** spip:md:list — 문서 목록(메타만). */
-function list(_args, ctx) {
-  const state = mdDocStore.read(storeCtx(ctx));
-  return { ok: true, docs: sortDocs(state.docs).map(toMeta), max: mdDocStore.MAX_DOCS };
+/** spip:md:list — 그 문서함(위젯 인스턴스)의 문서 목록(메타만). */
+function list(args, ctx) {
+  const box = argBox(args);
+  if (!box) return { ok: false, code: 'BAD_INPUT' };
+  const state = readBox(box, ctx);
+  return { ok: true, docs: sortDocs(mdDocStore.docsOf(state, box)).map(toMeta), max: mdDocStore.MAX_DOCS };
 }
 
-/** spip:md:get — 문서 1건(본문 포함). */
+/** spip:md:get — 문서 1건(본문 포함). 다른 문서함의 문서는 보이지 않는다(인스턴스 격리). */
 function get(args, ctx) {
+  const box = argBox(args);
   const id = argId(args);
-  if (!id || !mdDocStore.ID_RE.test(id)) return { ok: false, code: 'BAD_INPUT' };
-  const state = mdDocStore.read(storeCtx(ctx));
-  const doc = state.docs.find((d) => d.id === id);
+  if (!box || !id || !mdDocStore.ID_RE.test(id)) return { ok: false, code: 'BAD_INPUT' };
+  const state = readBox(box, ctx);
+  const doc = mdDocStore.docsOf(state, box).find((d) => d.id === id);
   if (!doc) return { ok: false, code: 'NOT_FOUND' };
   return { ok: true, doc };
 }
@@ -115,13 +160,17 @@ function get(args, ctx) {
  * @param {object} args { title?, body? }
  */
 function create(args, ctx) {
+  const box = argBox(args);
+  if (!box) return { ok: false, code: 'BAD_INPUT' };
+
   const d = deps(ctx);
   const sctx = storeCtx(ctx);
-  const state = mdDocStore.read(sctx);
-  if (state.docs.length >= mdDocStore.MAX_DOCS) return { ok: false, code: 'LIMIT_DOCS' };
+  const state = readBox(box, ctx);
+  const docs = mdDocStore.docsOf(state, box);
+  if (docs.length >= mdDocStore.MAX_DOCS) return { ok: false, code: 'LIMIT_DOCS' };
 
-  const rawTitle = (args && typeof args === 'object' && typeof args.title === 'string') ? args.title : '';
-  const rawBody = (args && typeof args === 'object' && typeof args.body === 'string') ? args.body : '';
+  const rawTitle = (typeof args.title === 'string') ? args.title : '';
+  const rawBody = (typeof args.body === 'string') ? args.body : '';
   // 조용한 절단 금지 — 본문 상한 초과는 거절한다.
   if (rawBody.length > mdDocStore.MAX_BODY) return { ok: false, code: 'LIMIT_SIZE' };
 
@@ -133,10 +182,10 @@ function create(args, ctx) {
     createdAt: now,
     updatedAt: now,
   };
-  const next = mdDocStore.write({ docs: state.docs.concat([doc]) }, sctx);
-  const saved = next.docs.find((x) => x.id === doc.id);
+  const next = mdDocStore.write(mdDocStore.withDocs(state, box, docs.concat([doc])), sctx);
+  const saved = mdDocStore.docsOf(next, box).find((x) => x.id === doc.id);
   if (!saved) return { ok: false, code: 'WRITE_FAILED' };
-  return { ok: true, doc: saved, docs: sortDocs(next.docs).map(toMeta) };
+  return { ok: true, doc: saved, docs: sortDocs(mdDocStore.docsOf(next, box)).map(toMeta) };
 }
 
 /**
@@ -144,45 +193,49 @@ function create(args, ctx) {
  * @param {object} args { id, title?, body? } — 주어진 필드만 갱신
  */
 function update(args, ctx) {
+  const box = argBox(args);
   const id = argId(args);
-  if (!id || !mdDocStore.ID_RE.test(id)) return { ok: false, code: 'BAD_INPUT' };
+  if (!box || !id || !mdDocStore.ID_RE.test(id)) return { ok: false, code: 'BAD_INPUT' };
 
   const d = deps(ctx);
   const sctx = storeCtx(ctx);
-  const state = mdDocStore.read(sctx);
-  const idx = state.docs.findIndex((x) => x.id === id);
-  if (idx < 0) return { ok: false, code: 'NOT_FOUND' };
+  const state = readBox(box, ctx);
+  const cur0 = mdDocStore.docsOf(state, box);
+  const idx = cur0.findIndex((x) => x.id === id);
+  if (idx < 0) return { ok: false, code: 'NOT_FOUND' }; // 다른 문서함의 문서는 못 고친다(격리)
 
-  const cur = state.docs[idx];
-  const hasBody = args && typeof args.body === 'string';
-  const hasTitle = args && typeof args.title === 'string';
+  const cur = cur0[idx];
+  const hasBody = typeof args.body === 'string';
+  const hasTitle = typeof args.title === 'string';
   if (hasBody && args.body.length > mdDocStore.MAX_BODY) return { ok: false, code: 'LIMIT_SIZE' };
 
   const body = hasBody ? args.body : cur.body;
   // 제목을 명시하지 않았거나 비웠으면 본문에서 다시 파생(첫 제목/첫 줄) — 제목 없는 문서를 막는다.
   const title = hasTitle ? deriveTitle(args.title, body) : (cur.title || deriveTitle('', body));
 
-  const docs = state.docs.slice();
+  const docs = cur0.slice();
   docs[idx] = { id: cur.id, title, body, createdAt: cur.createdAt, updatedAt: d.now() };
 
-  const next = mdDocStore.write({ docs }, sctx);
-  const saved = next.docs.find((x) => x.id === id);
+  const next = mdDocStore.write(mdDocStore.withDocs(state, box, docs), sctx);
+  const saved = mdDocStore.docsOf(next, box).find((x) => x.id === id);
   if (!saved) return { ok: false, code: 'WRITE_FAILED' };
-  return { ok: true, doc: saved, docs: sortDocs(next.docs).map(toMeta) };
+  return { ok: true, doc: saved, docs: sortDocs(mdDocStore.docsOf(next, box)).map(toMeta) };
 }
 
-/** spip:md:remove — 삭제(정확 id 일치 1건). */
+/** spip:md:remove — 삭제(그 문서함의 정확 id 일치 1건). */
 function remove(args, ctx) {
+  const box = argBox(args);
   const id = argId(args);
-  if (!id || !mdDocStore.ID_RE.test(id)) return { ok: false, code: 'BAD_INPUT' };
+  if (!box || !id || !mdDocStore.ID_RE.test(id)) return { ok: false, code: 'BAD_INPUT' };
 
   const sctx = storeCtx(ctx);
-  const state = mdDocStore.read(sctx);
-  const docs = state.docs.filter((x) => x.id !== id);
-  if (docs.length === state.docs.length) return { ok: false, code: 'NOT_FOUND' };
+  const state = readBox(box, ctx);
+  const cur = mdDocStore.docsOf(state, box);
+  const docs = cur.filter((x) => x.id !== id);
+  if (docs.length === cur.length) return { ok: false, code: 'NOT_FOUND' };
 
-  const next = mdDocStore.write({ docs }, sctx);
-  return { ok: true, docs: sortDocs(next.docs).map(toMeta) };
+  const next = mdDocStore.write(mdDocStore.withDocs(state, box, docs), sctx);
+  return { ok: true, docs: sortDocs(mdDocStore.docsOf(next, box)).map(toMeta) };
 }
 
 /* ───── 불러오기 / 내보내기 (경로는 dialog 만이 만든다 — MD-H-1) ───── */
@@ -191,14 +244,16 @@ function remove(args, ctx) {
  * spip:md:import — dialog(openFile) 로 마크다운 파일 1개를 읽어 새 문서로 적재.
  *   렌더러는 경로를 주입할 수 없다. dialog 결과도 재검증한다(정규 파일·크기 상한).
  */
-async function importFile(_args, ctx) {
+async function importFile(args, ctx) {
+  const box = argBox(args);
+  if (!box) return { ok: false, code: 'BAD_INPUT' };
+
   const dialog = ctx && ctx.dialog;
   if (!dialog || typeof dialog.showOpenDialog !== 'function') return { ok: false, code: 'CANCELLED' };
 
   const d = deps(ctx);
-  const sctx = storeCtx(ctx);
-  const state = mdDocStore.read(sctx);
-  if (state.docs.length >= mdDocStore.MAX_DOCS) return { ok: false, code: 'LIMIT_DOCS' };
+  const state = readBox(box, ctx);
+  if (mdDocStore.docsOf(state, box).length >= mdDocStore.MAX_DOCS) return { ok: false, code: 'LIMIT_DOCS' };
 
   const res = await dialog.showOpenDialog(ctx.win, {
     title: '마크다운 파일 불러오기',
@@ -227,7 +282,7 @@ async function importFile(_args, ctx) {
   if (body.length > mdDocStore.MAX_BODY) return { ok: false, code: 'LIMIT_SIZE' };
 
   const fileTitle = path.basename(picked).replace(/\.[^.]+$/, '');
-  return create({ title: deriveTitle('', body) || fileTitle, body }, ctx);
+  return create({ box, title: deriveTitle('', body) || fileTitle, body }, ctx);
 }
 
 /**
@@ -236,15 +291,16 @@ async function importFile(_args, ctx) {
  *   않는다 — 렌더러엔 파일명만 돌려준다(L-3).
  */
 async function exportFile(args, ctx) {
+  const box = argBox(args);
   const id = argId(args);
-  if (!id || !mdDocStore.ID_RE.test(id)) return { ok: false, code: 'BAD_INPUT' };
+  if (!box || !id || !mdDocStore.ID_RE.test(id)) return { ok: false, code: 'BAD_INPUT' };
 
   const dialog = ctx && ctx.dialog;
   if (!dialog || typeof dialog.showSaveDialog !== 'function') return { ok: false, code: 'CANCELLED' };
 
   const d = deps(ctx);
-  const state = mdDocStore.read(storeCtx(ctx));
-  const doc = state.docs.find((x) => x.id === id);
+  const state = readBox(box, ctx);
+  const doc = mdDocStore.docsOf(state, box).find((x) => x.id === id);
   if (!doc) return { ok: false, code: 'NOT_FOUND' };
 
   const res = await dialog.showSaveDialog(ctx.win, {
@@ -272,6 +328,8 @@ module.exports = {
   remove,
   importFile,
   exportFile,
+  adoptLegacy,
+  firstEditorBox,
   deriveTitle,
   safeFileName,
   sortDocs,

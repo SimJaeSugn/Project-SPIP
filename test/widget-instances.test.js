@@ -182,9 +182,11 @@ test('인스턴스 상태 — 뷰 상태는 iid 로 가르고, 공유 데이터�
   assert.ok(/function makeWState\(type\)/.test(APP_SRC), '타입별 인스턴스 상태 팩토리');
   assert.ok(/function wstate\(iid\)/.test(APP_SRC), 'iid → 인스턴스 상태');
   assert.ok(/function pruneWState\(\)/.test(APP_SRC), '배치에서 사라진 인스턴스 상태 정리(누수 방지)');
-  // 공유 데이터는 전역 슬롯에 그대로 — 같은 걸 두 번 불러올 이유가 없다.
-  assert.ok(/docs: \[\],\s*\/\/ 목록 메타[\s\S]{0,80}전역 공유/.test(APP_SRC), '문서 목록은 전역 공유');
+  // 하나의 라이브러리를 여러 창으로 보는 공유 데이터는 전역 슬롯에 그대로.
   assert.ok(/roots: \[\],\s*\/\/ 등록된 열람 루트\(실경로\) — 전역 공유/.test(APP_SRC), '탐색기 루트는 전역 공유');
+  // 예외 — 마크다운 편집기는 '창'이 아니라 각자의 **문서함**을 가진다(목록까지 인스턴스별).
+  assert.ok(/docs: \[\],\s*\/\/ 이 편집기의 문서함/.test(APP_SRC), '문서 목록은 인스턴스별');
+  assert.ok(!/store\.mdedit/.test(APP_SRC.replace(/\/\*[\s\S]*?\*\//g, '')), '전역 mdedit 슬롯 없음');
 });
 
 test('인스턴스 상태 — 부분 갱신은 그 인스턴스의 셀 안에서만(document 전역 조회 금지)', () => {
@@ -203,11 +205,12 @@ test('인스턴스 상태 — 탐색기: 디스크가 바뀌면 같은 폴더를
   assert.ok(/widgetsOfType\('explorer'\)/.test(ra) && /st\.cwd === dirPath/.test(ra), '그 폴더를 보는 인스턴스만');
 });
 
-test('인스턴스 상태 — 문서를 지우면 그 문서를 열고 있던 모든 편집기가 다른 문서로 옮겨간다', () => {
+test('인스턴스 상태 — 문서를 지우면 그 편집기만 영향받는다(문서함이 인스턴스별이므로)', () => {
   const rm = APP_SRC.slice(APP_SRC.indexOf('function mdRemoveDoc('), APP_SRC.indexOf('function mdImportDoc('));
-  assert.ok(/widgetsOfType\('mdedit'\)/.test(rm), '편집기 인스턴스 순회');
-  // 삭제 대상은 '이 인스턴스가 연 문서'가 아니라 '× 를 누른 칩의 문서'(targetId) — 열려 있지 않아도 지운다.
-  assert.ok(/wstate\(w\.iid\)\.activeId === targetId/.test(rm), '그 문서를 열고 있던 편집기만');
+  // 삭제 대상은 '× 를 누른 칩의 문서'(targetId) — 열려 있지 않아도 지운다.
+  assert.ok(/mdIpc\(iid, 'remove', targetId\)/.test(rm), '이 편집기의 문서함에서 지운다');
+  // 연 문서를 지웠으면 같은 문서함의 다른 문서로 옮긴다(유령 본문 방지).
+  assert.ok(/st\.activeId === targetId[\s\S]{0,400}mdOpenDoc\(iid, fallback/.test(rm), '연 문서였으면 대체 문서로');
 });
 
 /* ───── 회귀: 무한 렌더 루프 (v1.37.0 빈 화면 사고) ───── */
