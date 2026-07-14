@@ -1828,6 +1828,42 @@ function uiStateView(res) {
   return { favorites, order, sortMode, names, theme };
 }
 
+/**
+ * 궤도 맵 노드 픽(순수) — 캔버스 좌표(mx,my)가 가리키는 노드 id. 없으면 null.
+ *
+ * 원 버그(노드를 클릭해도 상세가 안 열림)의 원인 둘을 함께 흡수한다.
+ *   1) 표적이 너무 작다 — 점의 최소 반지름은 6px인데 판정이 '그린 원 +5px'뿐이라, 눈으로는 점 위인데
+ *      가장자리를 스쳐 히트가 통째로 빗나갔다. → 최소 픽 반경(ORB_PICK_MIN) 보장, 겹치면 최근접.
+ *   2) 사람이 조준하는 건 점이 아니라 이름 라벨이다 — 라벨은 점 아래 중앙에 그려지고 폭이 수십 px라,
+ *      라벨 위를 가리키면 실제 점은 좌상단(대략 11시 방향)으로 한참 떨어져 있다. → 라벨 박스
+ *      (_lx,_ly,_lw,_lh — orbitFrame이 그리며 기록)도 같은 노드의 표적으로 친다.
+ * 점(원) 우선, 없으면 라벨. 좌표계는 캔버스 로컬 CSS px(그리기와 동일 공간).
+ */
+const ORB_PICK_MIN = 14;
+function orbPick(nodes, mx, my, minPick) {
+  const lim = (typeof minPick === 'number' && minPick > 0) ? minPick : ORB_PICK_MIN;
+  const list = Array.isArray(nodes) ? nodes : [];
+  let best = null, bestD2 = Infinity;
+  list.forEach((n) => {
+    if (!n || typeof n._x !== 'number' || typeof n._y !== 'number') return;
+    const dx = mx - n._x, dy = my - n._y, d2 = dx * dx + dy * dy;
+    const pr = Math.max((typeof n._r === 'number' ? n._r : 0) + 5, lim);
+    if (d2 <= pr * pr && d2 < bestD2) { best = n.id; bestD2 = d2; }
+  });
+  if (best) return best;
+  // 라벨 박스 — 점을 못 맞혔을 때의 2순위 표적(가장 가까운 라벨 중심).
+  list.forEach((n) => {
+    if (!n || typeof n._lx !== 'number' || typeof n._lw !== 'number' || !(n._lw > 0)) return;
+    const pad = 3;
+    if (mx < n._lx - pad || mx > n._lx + n._lw + pad) return;
+    if (my < n._ly - pad || my > n._ly + n._lh + pad) return;
+    const cxx = n._lx + n._lw / 2, cyy = n._ly + n._lh / 2;
+    const d2 = (mx - cxx) * (mx - cxx) + (my - cyy) * (my - cyy);
+    if (d2 < bestD2) { best = n.id; bestD2 = d2; }
+  });
+  return best;
+}
+
 /* =====================================================================
  * 브라우저 전용 (DOM / fetch / 이벤트)
  * ===================================================================== */
@@ -7672,7 +7708,7 @@ function initBrowser() {
     zoom: 1, panX: 0, panY: 0, hoverId: null, focusId: null,
     geo: null, geoKey: '', angT: 0, layoutMix: 0,
     stars: null, starsW: 0, starsH: 0, ot0: 0, introT0: 0, lastNow: 0,
-    dragging: false, moved: false, lx: 0, ly: 0, dsx: 0, dsy: 0,
+    dragging: false, moved: false, lx: 0, ly: 0, dsx: 0, dsy: 0, pressId: null,
     tz: null, tpx: null, tpy: null, model: null, reclaimMB: 0, teardown: null,
     speedLabelEl: null, scrubLabelEl: null, menu: null,
   };
@@ -7786,8 +7822,7 @@ function initBrowser() {
 
   function orbHitTest(mx, my) {
     const m = orb.model; if (!m) return null;
-    for (let i = m.nodes.length - 1; i >= 0; i--) { const n = m.nodes[i]; if (n._x == null) continue; const dx = mx - n._x, dy = my - n._y; if (dx * dx + dy * dy <= (n._r + 5) * (n._r + 5)) return n.id; }
-    return null;
+    return orbPick(m.nodes, mx, my);
   }
   function orbZoomAt(mx, my, nz) {
     const cv = orb.canvasEl; if (!cv) return;
@@ -7826,7 +7861,14 @@ function initBrowser() {
       const m = pos(e); orb.hoverId = orbHitTest(m.x, m.y); canvas.style.cursor = orb.hoverId ? 'pointer' : 'grab';
     };
     const onLeave = () => { orb.hoverId = null; canvas.style.cursor = 'default'; };
-    const onDown = (e) => { if (e.button !== 0) return; orb.tz = orb.tpx = orb.tpy = null; orb.focusId = null; orb.dragging = true; orb.moved = false; orb.lx = orb.dsx = e.clientX; orb.ly = orb.dsy = e.clientY; };
+    const onDown = (e) => {
+      if (e.button !== 0) return;
+      orb.tz = orb.tpx = orb.tpy = null; orb.focusId = null; orb.dragging = true; orb.moved = false;
+      orb.lx = orb.dsx = e.clientX; orb.ly = orb.dsy = e.clientY;
+      // 누른 순간의 노드를 래치 — 버튼을 누르고 떼는 사이에도 노드는 궤도를 돌아 커서 밑을 빠져나간다.
+      //   click 시점 재판정만 믿으면 그 표류만큼 클릭이 삼켜진다(상세 드로어 미열림).
+      const m = pos(e); orb.pressId = orbHitTest(m.x, m.y);
+    };
     const onUp = () => { orb.dragging = false; };
     // 우클릭 → 노드 위면 컨텍스트 메뉴(디렉터리 제외). 빈 곳이면 메뉴 닫기.
     const onCtx = (e) => {
@@ -7839,8 +7881,9 @@ function initBrowser() {
       render();
     };
     const onClick = (e) => {
+      const pressId = orb.pressId; orb.pressId = null;
       if (orb.moved) return;
-      const m = pos(e); const id = orbHitTest(m.x, m.y);
+      const m = pos(e); const id = orbHitTest(m.x, m.y) || pressId;
       if (id) { orbFocusNode(id); openDrawer(id); }
       else if (orb.focusId || store.state.selectedId) { orbClearFocus(); if (store.state.selectedId) closeDrawer(); }
     };
@@ -7979,9 +8022,15 @@ function initBrowser() {
       ctx.beginPath(); ctx.arc(x, y, br, 0, Math.PI * 2); ctx.fill();
       ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(255,255,255,' + (n.stale ? 0.12 : 0.34) + ')'; ctx.stroke();
       ctx.globalAlpha = (dim ? 0.16 : (hov ? 1 : (n.stale ? 0.32 : 0.55))) * ease;
-      ctx.font = (hov ? '600 ' : '') + Math.max(8, Math.min(9 * z, 17)).toFixed(1) + 'px ' + MONO; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+      const lfs = Math.max(8, Math.min(9 * z, 17));
+      ctx.font = (hov ? '600 ' : '') + lfs.toFixed(1) + 'px ' + MONO; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
       ctx.fillStyle = (triage && n.reclaim && !dim) ? '#fbbf24' : (hov ? '#ffffff' : '#e7e5e4');
-      ctx.fillText((triage && n.reclaim) ? n.name + '  ▸ ' + n.nmLabel : n.name, x, y + br + 5);
+      const label = (triage && n.reclaim) ? n.name + '  ▸ ' + n.nmLabel : n.name;
+      const lTop = y + br + 5;
+      ctx.fillText(label, x, lTop);
+      // 라벨 박스를 픽 표적으로 기록(orbPick 2순위) — 사람은 점보다 이름을 겨냥한다.
+      const lw = ctx.measureText(label).width;
+      n._lx = x - lw / 2; n._ly = lTop; n._lw = lw; n._lh = lfs + 2;
       ctx.globalAlpha = 1;
     });
 
@@ -11855,6 +11904,9 @@ function initBrowser() {
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     toViewModel,
+    // 궤도 맵 노드 픽(순수)
+    orbPick,
+    ORB_PICK_MIN,
     // 홈(브리핑) 순수 뷰모델
     homeGreeting,
     isAttentionVm,
