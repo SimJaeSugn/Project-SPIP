@@ -1980,6 +1980,16 @@ function initBrowser() {
     //   [위젯 인스턴스] 북마크는 하나의 셸프라 전역 공유. 펼친 항목·컴포저 입력은 인스턴스별(wstate).
     shelf: {
       bookmarks: [],              // ShelfBookmarkView[] (main 이 표시 메타 완비) — 전역 공유
+      // [위젯 인스턴스] 셸프는 '하나의 북마크 라이브러리를 보는 창'이라 뷰 상태를 인스턴스 간 공유한다
+      //   (문서·폴더처럼 서로 다른 대상을 가리키는 게 아니다). 표시명만 인스턴스별로 다르다.
+      active: null,               // 펼친(활성) 항목 id
+      cType: 'url',               // 컴포저 유형 토글(url|folder|file)
+      cUrl: '',                   // 컴포저 입력(컨트롤드)
+      cState: 'idle',             // 컴포저 상태(idle|loading|error)
+      cErr: null,                 // 마지막 add 에러 메시지
+      editing: null,              // 인라인 책 제목 편집 중인 항목 id
+      _editValue: null,           // 편집 입력값 버퍼(재렌더 보존)
+      _focusPending: false,       // 활성 변경 후 마운트 시 자동 스크롤 1회 트리거
       loaded: false,              // list() 1회 적재 표식
       busy: false,                // list/add in-flight
       autoRefresh: true,          // [SH-4] 자동 재크롤(6시간) 토글 — list 응답 autoRefresh 로 초기 적재(기본 ON)
@@ -2054,6 +2064,8 @@ function initBrowser() {
    * 데이터**는 전역 슬롯(store.mdedit.docs 등)에 그대로 둔다 — 같은 걸 두 번 불러올 이유가 없다.
    */
   function makeWState(type) {
+    // _seeded — '최초 자동 열기'를 이미 한 인스턴스 표식. 지연 적재(loadMdEdit/loadExplorer)가 매 render
+    //   마다 불리므로, 이 가드가 없으면 자동 열기 → render → 자동 열기 … 무한 루프가 된다.
     if (type === 'mdedit') {
       return {
         activeId: null,   // 이 편집기가 연 문서 id
@@ -2062,6 +2074,7 @@ function initBrowser() {
         busy: false,      // create/import/export in-flight
         dirty: false,     // 미저장 변경
         code: null,       // 실패 코드(고정 토큰)
+        _seeded: false,
         _saveTimer: null,
         _savedAt: null,
       };
@@ -2077,6 +2090,7 @@ function initBrowser() {
         code: null,
         selected: null,
         menu: null,
+        _seeded: false,
       };
     }
     if (type === 'shelf' || type === 'shelfWide') {
@@ -4642,27 +4656,47 @@ function initBrowser() {
    * '지금 어느 폴더를 보고 있나'(cwd/entries/selected/menu)는 인스턴스별(wstate)이다 —
    * 그래서 탐색기 2개가 서로 다른 폴더를 나란히 연다. 액션 함수는 모두 iid 를 받는다. */
 
-  /** 루트 목록 최초 적재(전역) → 아직 아무 폴더도 안 연 탐색기 인스턴스에 첫 루트를 열어 준다. */
+  /** 루트 목록 최초 적재(전역) → 아직 아무 폴더도 안 연 탐색기 인스턴스에 첫 루트를 열어 준다.
+   *
+   *  ⚠️ loadMdEdit 과 동일 — **매 render() 마다** 불리므로, 할 일이 없으면 render() 를 부르지 않고
+   *     조용히 빠져나와야 한다(안 그러면 무한 렌더 루프로 화면이 비어버린다). */
   async function loadExplorer() {
     var fx = store.explorer;
     if (!explorerBridge()) return;
+
+    var didWork = false;
+
     if (!fx.loaded && !fx.loading) {
       fx.loading = true;
       var res = await explorerIpc('getRoots');
       fx.loading = false;
       fx.loaded = true;
       fx.roots = (res && res.ok && Array.isArray(res.roots)) ? res.roots : [];
+      didWork = true;
     }
+
     if (fx.roots.length === 0) {
-      widgetsOfType('explorer').forEach(function (w) { wstate(w.iid).code = 'NO_ROOTS'; });
-      if (store.state.view === 'home') render();
+      // 루트가 없으면 각 탐색기에 안내 코드만 심는다(이미 심었으면 no-op — 재렌더 없음).
+      widgetsOfType('explorer').forEach(function (w) {
+        var st = wstate(w.iid);
+        if (st.code !== 'NO_ROOTS') { st.code = 'NO_ROOTS'; didWork = true; }
+      });
+      if (didWork && store.state.view === 'home') render();
       return;
     }
-    var pending = widgetsOfType('explorer').filter(function (w) { return !wstate(w.iid).cwd; });
+
+    // 아직 폴더를 안 연 탐색기에만 첫 루트를 열어준다(각자 독립). 이미 다 열려 있으면 no-op.
+    var pending = widgetsOfType('explorer').filter(function (w) {
+      var st = wstate(w.iid);
+      return !st.cwd && !st._seeded;
+    });
     for (var i = 0; i < pending.length; i++) {
+      wstate(pending[i].iid)._seeded = true; // 재진입 가드 — 이 인스턴스는 한 번만 자동 열기
       await explorerNavigate(pending[i].iid, fx.roots[0], { silent: true });
+      didWork = true;
     }
-    if (store.state.view === 'home') render();
+
+    if (didWork && store.state.view === 'home') render();
   }
 
   /** 디렉터리 이동 — main list()가 돌려준 실경로만 넘긴다(렌더러 경로 조립 금지). */
@@ -5079,15 +5113,23 @@ function initBrowser() {
    * 그래서 편집기 2개가 서로 다른 문서를 나란히 연다. 모든 액션 함수는 iid 를 받는다.
    */
 
-  /** 문서 목록 1회 적재(전역) + 배치된 각 편집기가 아직 문서를 안 열었으면 최근 문서를 하나 연다. */
+  /** 문서 목록 1회 적재(전역) + 배치된 각 편집기가 아직 문서를 안 열었으면 최근 문서를 하나 연다.
+   *
+   *  ⚠️ 이 함수는 **매 render() 마다** maybeLoadMdEdit 을 통해 불린다 — 할 일이 없으면 반드시
+   *     render() 를 부르지 않고 조용히 빠져나와야 한다. 안 그러면
+   *     render → maybeLoadMdEdit → loadMdEdit → render → … 무한 루프로 렌더러가 멈춘다(빈 화면). */
   async function loadMdEdit() {
     var md = store.mdedit;
     if (!mdBridge()) return;
+
+    var didWork = false;
+
     if (!md.loaded && !md.loading) {
       md.loading = true;
       var res = await mdIpc('list');
       md.loading = false;
       md.loaded = true;
+      didWork = true;
       if (!res || !res.ok) {
         widgetsOfType('mdedit').forEach(function (w) { wstate(w.iid).code = (res && res.code) || 'INTERNAL'; });
         render();
@@ -5095,16 +5137,22 @@ function initBrowser() {
       }
       md.docs = Array.isArray(res.docs) ? res.docs : [];
     }
-    // 아직 문서를 안 연 편집기 인스턴스에 기본 문서를 열어준다(각자 독립).
+
+    // 아직 문서를 안 연 편집기 인스턴스에만 기본 문서를 열어준다(각자 독립). 이미 다 열려 있으면 no-op.
     var pending = widgetsOfType('mdedit').filter(function (w) {
       var st = wstate(w.iid);
-      return !st.activeId && !st.code;
+      return !st.activeId && !st.code && !st._seeded;
     });
-    if (pending.length === 0 || md.docs.length === 0) { render(); return; }
-    for (var i = 0; i < pending.length; i++) {
-      await mdOpenDoc(pending[i].iid, md.docs[0].id, { silent: true });
+    if (md.docs.length > 0) {
+      for (var i = 0; i < pending.length; i++) {
+        var st = wstate(pending[i].iid);
+        st._seeded = true; // 재진입 가드 — 이 인스턴스는 한 번만 자동 열기
+        await mdOpenDoc(pending[i].iid, md.docs[0].id, { silent: true });
+        didWork = true;
+      }
     }
-    render();
+
+    if (didWork) render(); // 실제로 뭔가 바뀐 경우에만 재렌더(무한 루프 방지)
   }
 
   /** 문서 열기 — 본문은 이때만 받아온다(목록 응답엔 본문이 없다). */

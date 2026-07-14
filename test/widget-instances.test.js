@@ -209,6 +209,27 @@ test('인스턴스 상태 — 문서를 지우면 그 문서를 열고 있던 �
   assert.ok(/wstate\(w\.iid\)\.activeId === docId/.test(rm), '그 문서를 열고 있던 편집기만');
 });
 
+/* ───── 회귀: 무한 렌더 루프 (v1.37.0 빈 화면 사고) ───── */
+
+test('회귀 — 지연 적재는 할 일이 없으면 render() 를 부르지 않는다(무한 렌더 루프 방지)', () => {
+  // maybeLoadMdEdit / maybeLoadExplorer 는 **매 render() 마다** 불린다. 지연 적재 함수가 할 일이
+  //   없는데도 render() 를 부르면 render → load → render → … 로 렌더러 스레드가 멈추고 화면이
+  //   빈 채로 남는다(예외도 안 뜨므로 진단이 어렵다). 실제로 v1.37.0 에서 이 사고가 났다.
+  for (const fn of ['loadMdEdit', 'loadExplorer']) {
+    const start = APP_SRC.indexOf('async function ' + fn + '(');
+    assert.ok(start >= 0, fn + ' 정의');
+    const body = APP_SRC.slice(start, start + 2200);
+    assert.ok(/var didWork = false;/.test(body), fn + ' 는 실제 작업 여부를 추적한다');
+    assert.ok(/if \(didWork/.test(body), fn + ' 는 실제로 뭔가 바뀐 경우에만 재렌더한다');
+    // 무조건 render() 로 끝나는 경로가 없어야 한다.
+    assert.ok(!/\n    render\(\);\n  \}\s*$/.test(body.slice(0, body.indexOf('\n  }\n') + 5)),
+      fn + ' 끝에 무조건 render() 금지');
+  }
+  // 인스턴스별 '최초 자동 열기' 재진입 가드.
+  assert.ok(/_seeded: false/.test(APP_SRC), '자동 열기 1회 가드(_seeded)');
+  assert.ok(/st\._seeded = true;|wstate\(pending\[i\]\.iid\)\._seeded = true;/.test(APP_SRC), '자동 열기 전에 가드 설정');
+});
+
 /* ───── IPC 표면 정합 ───── */
 
 test('IPC — preload 표면 ↔ register 등록 채널 정합(신규 3채널)', () => {

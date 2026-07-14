@@ -445,6 +445,12 @@ function onReady() {
     if (win && !win.isDestroyed()) win.show();
   });
 
+  // 렌더러 콘솔의 error/warning 을 메인 로그로 끌어온다. 렌더러에서 예외가 터지면 화면이 빈 채로 남는데,
+  //   그 원인이 stdout 에 전혀 안 나와 원격 진단이 불가능했다(v1.37.0 빈 화면 사고). 로그로 남긴다.
+  win.webContents.on('console-message', (_e, level, message, line, sourceId) => {
+    if (level >= 2) logger.error('renderer console: ' + message + ' (' + sourceId + ':' + line + ')');
+  });
+
   // [R-21] close-to-tray 생명주기(§9.2/ADR-M6-4).
   //   평소 X(close): 종료가 아니라 트레이로 숨김(스캔은 백그라운드 지속). 최초 1회 트레이 풍선 안내(MQ-4).
   //   완전 종료(isQuitting=true)에서만 Q4(스캔 중 확인) 적용 — ★dispose는 Q4 통과 후 doFinalQuit에서만(P2-2).
