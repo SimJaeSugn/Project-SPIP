@@ -27,6 +27,8 @@
 
   <!-- 카드 드래그 재정렬(placeholder 라이브 프리뷰) — SortableJS 로컬 번들('self', CSP 적합). app.js 보다 먼저 로드. -->
   <script src="./vendor/Sortable.min.js" defer></script>
+  <!-- [MD 편집기 위젯] GFM 파서(자체 구현·의존성 0). 소스 → AST 까지만 하고 DOM 조립은 app.js 가 한다(L-1). -->
+  <script src="./markdown.js" defer></script>
   <script src="./app.js" defer></script>
 </body>
 </html>

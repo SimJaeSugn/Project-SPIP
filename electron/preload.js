@@ -258,6 +258,27 @@ contextBridge.exposeInMainWorld('spip', {
     trash: (p) => ipcRenderer.invoke('spip:explorer:trash', { path: String(p) }),
   },
 
+  // [MD 편집기 위젯 MD-H-1] 마크다운 편집기 — 중첩 네임스페이스(explorer/shelf 패턴). 채널명 하드코딩(MUST).
+  //   문서 CRUD 는 앱 데이터 폴더 안에서만 일어나고 id 는 main 이 발급한다.
+  //   파일 접근은 importFile/exportFile 뿐이며 **경로 인자가 없다** — 경로는 오직 네이티브 dialog 가
+  //   만든다. 렌더러가 임의 경로를 읽거나 쓰게 하는 표면은 존재하지 않는다.
+  md: {
+    list: () => ipcRenderer.invoke('spip:md:list'),
+    get: (id) => ipcRenderer.invoke('spip:md:get', { id: String(id) }),
+    create: (title, body) => ipcRenderer.invoke('spip:md:create', {
+      title: title == null ? '' : String(title),
+      body: body == null ? '' : String(body),
+    }),
+    update: (id, title, body) => ipcRenderer.invoke('spip:md:update', {
+      id: String(id),
+      title: title == null ? undefined : String(title),
+      body: body == null ? undefined : String(body),
+    }),
+    remove: (id) => ipcRenderer.invoke('spip:md:remove', { id: String(id) }),
+    importFile: () => ipcRenderer.invoke('spip:md:import'),
+    exportFile: (id) => ipcRenderer.invoke('spip:md:export', { id: String(id) }),
+  },
+
   // 이벤트 구독(on/send) — 콜백만 받고 ipcRenderer 원본은 노출하지 않음(보안).
   onScanProgress: (cb) => {
     if (typeof cb !== 'function') return () => {};

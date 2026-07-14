@@ -571,6 +571,141 @@ input, button, select { font-family: inherit; }
   .fx-crumbs { display: none; }  /* 극단적으로 좁으면 루트 칩만 남기고 경로 바 생략 */
 }
 
+/* ===== [MD 편집기 위젯] 마크다운 편집기 =====================================================
+ * 카드는 .hw-card(세로 flex) — 헤더·문서바·푸터는 고정, 본문(.md-main = .hw-body)만 남는 높이를
+ * 차지하고 넘치면 내부 스크롤로 흡수한다(6조합 무잘림 계약).
+ * 폭 반응은 전부 @container hw(위젯 자신의 폭) — 뷰포트 @media 를 쓰지 않는다.
+ * 우하단 코너를 점유하는 상시 컨트롤 없음(.home-resize 핸들과 충돌 방지) — 액션은 상단 툴바.
+ */
+.md-head { display: flex; align-items: center; gap: 10px; flex: 0 0 auto; }
+.md-title { font-size: 13px; font-weight: 700; color: #44403c; flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.md-tools { display: flex; align-items: center; gap: 4px; flex: 0 0 auto; }
+.md-btn {
+  appearance: none; border: 1px solid #e7e5e4; background: #fff; border-radius: 7px; cursor: pointer;
+  padding: 4px 6px; display: flex; align-items: center; justify-content: center;
+}
+.md-btn:hover:not(:disabled) { background: #f5f5f4; }
+.md-btn:disabled { cursor: default; }
+
+/* 보기 방식 세그먼트(편집 / 2단 / 미리보기) */
+.md-seg { display: flex; border: 1px solid #e7e5e4; border-radius: 7px; overflow: hidden; margin-right: 4px; flex: 0 0 auto; }
+.md-seg__btn {
+  appearance: none; border: none; background: #fff; cursor: pointer; white-space: nowrap;
+  font-size: 10.5px; font-weight: 600; color: #a8a29e; padding: 4px 7px;
+}
+.md-seg__btn:hover { background: #f5f5f4; }
+.md-seg__btn--on { background: var(--accent-bg); color: var(--accent); }
+
+/* 문서 바 — 가로 스크롤 칩(세로로 쌓지 않는다 — 높이를 편집 영역에 양보). */
+.md-docs { display: flex; gap: 6px; overflow-x: auto; overflow-y: hidden; flex: 0 0 auto; padding: 8px 0 4px; }
+.md-doc {
+  appearance: none; cursor: pointer; flex: 0 0 auto; display: flex; align-items: center; gap: 6px;
+  border: 1px solid #e7e5e4; background: #fff; border-radius: 999px; padding: 3px 10px; max-width: 190px;
+}
+.md-doc:hover { background: #fafaf9; }
+.md-doc--on { border-color: var(--accent-border); background: var(--accent-bg); }
+.md-doc__name { font-size: 11.5px; font-weight: 600; color: #57534e; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.md-doc--on .md-doc__name { color: var(--accent); }
+.md-doc__meta { font-size: 10px; color: #c7c2bd; flex: 0 0 auto; }
+
+/* 본문 — 2단/단일. display·grid 는 클래스가 소유(렌더 함수의 인라인 style 에 두지 않는다) →
+ *   @container 규칙이 인라인에 밀리지 않고 뷰 전환이 실제로 동작한다. */
+.md-main { display: grid; grid-template-columns: 1fr; gap: 12px; min-height: 0; margin-top: 8px; }
+.md-card[data-view="split"] .md-main { grid-template-columns: 1fr 1fr; }
+.md-card[data-view="edit"] .md-pane--preview { display: none; }
+.md-card[data-view="preview"] .md-pane--edit { display: none; }
+.md-pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+
+.md-editor {
+  flex: 1 1 auto; min-height: 120px; width: 100%; resize: none; outline: none; overflow: auto; tab-size: 2;
+  border: 1px solid #e7e5e4; border-radius: 10px; padding: 10px 12px; background: #fcfcfc;
+  font-family: 'Geist Mono', var(--mono); font-size: 12px; line-height: 1.65; color: #1c1917;
+}
+.md-editor:focus { border-color: var(--accent-border); background: #fff; }
+.md-preview { flex: 1 1 auto; min-height: 120px; overflow-y: auto; overflow-x: hidden; padding-right: 4px; }
+/* 사용자가 높이를 지정하면 기본 최소높이 캡을 풀어 실제 높이에 반응(잘림 대신 내부 스크롤). */
+.home-section__content--sized .md-editor,
+.home-section__content--sized .md-preview { min-height: 0; }
+
+.md-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex: 0 0 auto; padding-top: 8px; }
+.md-status { font-size: 10.5px; color: #a8a29e; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.md-count { font-size: 10px; color: #c7c2bd; flex: 0 0 auto; }
+
+.md-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 20px 12px; text-align: center; font-size: 12px; color: #a8a29e; }
+.md-empty__row { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+.md-empty__cta { appearance: none; border: none; border-radius: 8px; cursor: pointer; font-size: 12px; font-weight: 700; color: #fff; padding: 7px 14px; background: var(--accent); }
+.md-empty__cta--ghost { background: #fff; border: 1px solid #e7e5e4; color: #57534e; }
+.md-empty__hint { font-size: 10.5px; color: #c7c2bd; line-height: 1.5; max-width: 280px; }
+
+/* ── 미리보기 타이포(GFM) — 넓은 콘텐츠(코드·표·이미지·긴 URL)는 자기 안에서 스크롤/줄바꿈해
+ *    카드 밖으로 새지 않는다(무잘림 계약). 렌더는 전부 textContent 로 조립된 DOM 이다(L-1). ── */
+.md-rendered { font-size: 12.5px; line-height: 1.7; color: #1c1917; word-break: break-word; overflow-wrap: anywhere; }
+.md-rendered > *:first-child { margin-top: 0; }
+.md-h { font-weight: 700; color: #1c1917; line-height: 1.35; margin: 16px 0 8px; }
+.md-h1 { font-size: 18px; padding-bottom: 5px; border-bottom: 1px solid #e7e5e4; }
+.md-h2 { font-size: 16px; padding-bottom: 4px; border-bottom: 1px solid #f0efed; }
+.md-h3 { font-size: 14px; }
+.md-h4 { font-size: 13px; }
+.md-h5 { font-size: 12.5px; }
+.md-h6 { font-size: 12px; color: #78716c; }
+.md-p { margin: 0 0 10px; }
+.md-link { color: var(--accent); text-decoration: none; cursor: pointer; }
+.md-link:hover { text-decoration: underline; }
+.md-code { font-family: 'Geist Mono', var(--mono); font-size: 11.5px; background: #f5f5f4; border: 1px solid #ececea; border-radius: 5px; padding: 1px 5px; }
+.md-pre { position: relative; background: #fafaf9; border: 1px solid #e7e5e4; border-radius: 10px; padding: 10px 12px; margin: 0 0 12px; overflow-x: auto; }
+.md-pre__code { font-family: 'Geist Mono', var(--mono); font-size: 11.5px; line-height: 1.6; color: #292524; white-space: pre; }
+.md-pre__lang { position: absolute; top: 6px; right: 10px; font-size: 9.5px; color: #c7c2bd; text-transform: uppercase; letter-spacing: .04em; }
+.md-quote { margin: 0 0 12px; padding: 6px 0 6px 12px; border-left: 3px solid #e7e5e4; color: #78716c; }
+.md-quote > *:last-child { margin-bottom: 0; }
+
+/* GitHub Alerts — > [!NOTE] 등. 인용의 시각 변형. */
+.md-alert { border-left-width: 3px; border-radius: 0 8px 8px 0; padding: 8px 12px; color: #57534e; }
+.md-alert__label { font-size: 10.5px; font-weight: 700; letter-spacing: .04em; margin-bottom: 4px; }
+.md-alert--note { border-left-color: #3b82f6; background: #eff6ff; }
+.md-alert--note .md-alert__label { color: #1d4ed8; }
+.md-alert--tip { border-left-color: #10b981; background: #ecfdf5; }
+.md-alert--tip .md-alert__label { color: #047857; }
+.md-alert--important { border-left-color: #8b5cf6; background: #f5f3ff; }
+.md-alert--important .md-alert__label { color: #6d28d9; }
+.md-alert--warning { border-left-color: #f59e0b; background: #fffbeb; }
+.md-alert--warning .md-alert__label { color: #b45309; }
+.md-alert--caution { border-left-color: #ef4444; background: #fef2f2; }
+.md-alert--caution .md-alert__label { color: #b91c1c; }
+
+.md-list { margin: 0 0 12px; padding-left: 22px; }
+.md-list--tight .md-p { margin-bottom: 0; }
+.md-li { margin: 3px 0; }
+.md-li--task { list-style: none; margin-left: -18px; display: flex; align-items: flex-start; gap: 7px; }
+.md-task { margin-top: 3px; flex: 0 0 auto; }
+.md-li__body { min-width: 0; flex: 1 1 auto; }
+
+/* 표 — 넓으면 카드를 밀지 않고 자기 안에서 가로 스크롤. */
+.md-tablewrap { overflow-x: auto; margin: 0 0 12px; }
+.md-table { border-collapse: collapse; font-size: 12px; min-width: 100%; }
+.md-table th, .md-table td { border: 1px solid #e7e5e4; padding: 5px 10px; text-align: left; }
+.md-table th { background: #fafaf9; font-weight: 700; white-space: nowrap; }
+
+.md-hr { border: none; border-top: 1px solid #e7e5e4; margin: 16px 0; }
+.md-img { max-width: 100%; height: auto; border-radius: 8px; }
+.md-fnref { font-size: 9px; }
+.md-fnlist { font-size: 11.5px; color: #78716c; padding-left: 20px; margin: 0; }
+.md-fn { margin: 3px 0; }
+.md-fn > *:last-child { margin-bottom: 0; }
+
+/* 위젯이 좁아지면 2단을 접는다 — 세로가 넉넉하면 상하 스택으로 두 패널을 모두 살린다(1×2·1×3·1×4). */
+@container hw (max-width: 560px) {
+  .md-card[data-view="split"] .md-main { grid-template-columns: 1fr; grid-template-rows: minmax(110px, 1fr) minmax(110px, 1fr); }
+  .md-doc { max-width: 130px; }
+  /* 세로도 최소(1행)면 상하 스택은 두 패널 모두 뭉갠다 — 편집만 두고 미리보기는 세그먼트로 전환해 본다. */
+  .home-section[data-hrow="1"] .md-card[data-view="split"] .md-main { grid-template-rows: 1fr; }
+  .home-section[data-hrow="1"] .md-card[data-view="split"] .md-pane--preview { display: none; }
+}
+@container hw (max-width: 380px) {
+  .md-title { display: none; }            /* 제목을 접어 툴바에 공간을 양보(1열 최소 폭) */
+  .md-doc__meta { display: none; }
+  .md-seg__btn--split { display: none; }  /* 2단이 성립하지 않는 폭 — 토글에서 감춘다 */
+}
+
 /* [로드맵 Phase 3·G] 통합 커밋 히트맵 — GitHub 스타일 주간 캘린더. 좁으면 .heatmap-scroll 내부 가로 스크롤. */
 .heatmap-scroll { overflow-x: auto; overflow-y: hidden; padding-bottom: 4px; }
 .heatmap-inner { display: inline-flex; flex-direction: column; gap: 4px; }

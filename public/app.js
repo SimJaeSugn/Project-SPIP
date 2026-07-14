@@ -701,7 +701,8 @@ function shouldPollCommit(view, visible) {
 // [SH-2] 즐겨찾기 셸프 위젯 2변형('shelf'=일반 컬럼, 'shelfWide'=전체폭 스팬)을 featureAdd 앞에 추가.
 //   둘은 동일 셸프 데이터·로직 공유(폭만 다름)·둘 다 기본 숨김(메인 uiStateStore가 첫 실행 시 hiddenWidgets 시드).
 // [탐색기 위젯] 폴더 탐색기(explorer) 추가 — 메인 uiStateStore.HOME_SECTION_IDS 와 동형(드리프트 테스트).
-const HOME_SECTION_IDS = ['attention', 'productivity', 'activity', 'todos', 'mail', 'disk', 'aiusage', 'shelf', 'shelfWide', 'scratchpad', 'commitHeatmap', 'systemStatus', 'explorer', 'featureAdd'];
+// [MD 편집기 위젯] 마크다운 편집기(mdedit) 추가 — 메인 uiStateStore.HOME_SECTION_IDS 와 동형(드리프트 테스트).
+const HOME_SECTION_IDS = ['attention', 'productivity', 'activity', 'todos', 'mail', 'disk', 'aiusage', 'shelf', 'shelfWide', 'scratchpad', 'commitHeatmap', 'systemStatus', 'explorer', 'mdedit', 'featureAdd'];
 
 // [위젯 추가/제거] 토글 가능한 콘텐츠 위젯 메타(갤러리·제거 UI용). 'featureAdd'는 추가 트리거라 제외(항상 표시).
 //   메인 uiStateStore.TOGGLEABLE_WIDGET_IDS 와 동형(드리프트 0 — homeLayout-front 테스트가 교차검증).
@@ -723,6 +724,7 @@ const WIDGET_META = {
   commitHeatmap: { name: '통합 커밋 히트맵', desc: '전 프로젝트 커밋을 1년 캘린더로 한눈에' },
   systemStatus: { name: '시스템 상태', desc: '개발 머신 CPU·메모리·디스크 사용량' },
   explorer: { name: '폴더 탐색기', desc: '지정한 폴더의 파일·디렉터리를 탐색하고 열기' },
+  mdedit: { name: '마크다운 편집기', desc: '문서를 쓰고 미리보고 .md 파일로 주고받기' },
 };
 
 /* [로드맵 Phase 1·L] 레이아웃 템플릿 — 갤러리에서 골라 '새 프리셋'으로 적용. visible 외 토글 위젯은 숨김.
@@ -838,6 +840,7 @@ function homeDefaultSpan(id) {
   if (id === 'shelfWide') return HOME_MAX_COLS;
   if (id === 'commitHeatmap') return 2;
   if (id === 'explorer') return 2; // [탐색기 위젯] 이름+크기+수정일 3열이 편하게 들어가는 기본 폭
+  if (id === 'mdedit') return 2;   // [MD 편집기] 편집+미리보기 2단이 펴지는 기본 폭
   if (isGroupId(id)) return 2; // [Phase 5·M] 프리폼 그룹 블록 기본 2열
   return 1;
 }
@@ -850,6 +853,8 @@ const HOME_WIDGET_MIN_H = {
   attention: 190, productivity: 240, activity: 190, todos: 190,
   disk: 170, aiusage: 210, commitHeatmap: 200, systemStatus: 150,
   explorer: 190, shelf: 300, shelfWide: 300,
+  // [MD 편집기] 툴바 + 문서 바 + 에디터 최소 높이. 이보다 낮추면 편집 영역이 사라지므로 하한.
+  mdedit: 240,
 };
 /** 위젯 id → 최소 높이(px). 위젯별 값이 전역 하한보다 크면 그 값을, 아니면 HOME_H_MIN. */
 function homeWidgetMinH(id) {
@@ -1879,6 +1884,22 @@ function initBrowser() {
       selected: null,   // 선택된 항목 이름(키보드/컨텍스트 메뉴 대상)
       menu: null,       // 열린 항목 메뉴 { name, x, y }
     },
+    // [MD 편집기 위젯] 마크다운 편집기 — 데이터는 spip.md.* IPC. 문서 id·시각은 main 이 발급/스탬프한다.
+    //   본문(body)은 열린 문서 1건만 메모리에 둔다(목록 응답은 메타만 — 수 MB 회송 방지).
+    mdedit: {
+      docs: [],          // 목록 메타 [{id,title,createdAt,updatedAt,size}] — 최근 수정순
+      activeId: null,    // 열린 문서 id
+      body: '',          // 열린 문서 본문(편집 중 원본)
+      view: 'split',     // 'edit' | 'preview' | 'split' — 좁은 폭에선 CSS 가 split 을 단일 뷰로 접는다
+      listOpen: false,   // 문서 목록 시트 열림(좁은 폭에서 목록을 오버레이로)
+      loaded: false,     // 최초 list() 완료
+      loading: false,
+      busy: false,       // create/import/export 등 in-flight
+      dirty: false,      // 미저장 변경 있음
+      code: null,        // 실패 코드(고정 토큰)
+      _saveTimer: null,  // 입력 디바운스 타이머
+      _savedAt: null,    // 마지막 저장 시각(ms) — '저장됨' 표시용
+    },
     // [SH-2] 즐겨찾기 셸프 위젯 — 렌더러 상태. 데이터는 spip.shelf.list()로 적재, 변경 push(onChanged) 시 재조회.
     shelf: {
       bookmarks: [],              // ShelfBookmarkView[] (main 이 표시 메타 완비)
@@ -2649,6 +2670,7 @@ function initBrowser() {
     maybeLoadClaudeUsage();
     maybeLoadShelf();
     maybeLoadExplorer();
+    maybeLoadMdEdit();
     var vms = store.viewModels || [];
     var g = homeGreeting(store.now);
     var kpis = homeKpis(vms);
@@ -2903,6 +2925,7 @@ function initBrowser() {
       case 'commitHeatmap': return renderHomeCommitHeatmap();
       case 'systemStatus': return renderHomeSystemStatus();
       case 'explorer':     return renderHomeExplorer();
+      case 'mdedit':       return renderHomeMdEdit();
       case 'featureAdd':   return renderHomeFeatureAdd();
       default:             return null;
     }
@@ -3881,6 +3904,13 @@ function initBrowser() {
     loadExplorer();
   }
 
+  /** [MD 편집기 위젯] 표시 중일 때만 문서 목록·마지막 문서 1회 적재(숨김이면 IPC 0). */
+  function maybeLoadMdEdit() {
+    if (!mdBridge()) return;
+    if (!homeWidgetVisible('mdedit')) return;
+    loadMdEdit();
+  }
+
   /** [로드맵 Phase 3·G] 시스템 상태 — 표시 중일 때만 초기 로드 + 주기(경량) 자동 갱신. 숨김/이탈 시 타이머 정지. */
   function maybeLoadSystemStatus() {
     if (!bridgeHas('getSystemStatus')) return;
@@ -4798,6 +4828,626 @@ function initBrowser() {
     card.appendChild(t);
     return card;
   }
+
+  /* ===== [MD 편집기 위젯] 마크다운 편집기 =====================================================
+   *
+   * 문서 CRUD + .md 파일 불러오기/내보내기 + GFM 미리보기.
+   *
+   * 보안(MD-SEC / L-1):
+   *   · 미리보기는 **innerHTML 을 쓰지 않는다** — markdown.js 가 소스를 AST(순수 데이터)로 파싱하고,
+   *     여기서 el()/createElement + textContent 로 DOM 을 조립한다. 문서에 <script> 가 있어도
+   *     텍스트로만 보인다(파서가 원시 HTML 을 렌더하지 않음).
+   *   · 링크·이미지 URL 은 파서의 safeUrl 화이트리스트를 이미 통과한 값이다(javascript: 등은 링크가
+   *     되지 않고 텍스트로 떨어진다). 링크 클릭은 openExternal(main 이 재검증)로만 연다.
+   *   · 파일 경로는 렌더러가 만들지 않는다 — 불러오기/내보내기는 인자 없는 dialog 채널뿐(MD-H-1).
+   *
+   * 반응형(6조합 계약):
+   *   · 카드는 .hw-card(세로 flex), 본문은 .hw-body — 높이를 지정해 줄이면 내부 스크롤로 흡수.
+   *   · 폭은 @container hw 로 반응한다 — 넓으면 편집+미리보기 2단, 좁으면 단일 패널(세로가 넉넉하면
+   *     상하 스택). 판정 기준은 뷰포트가 아니라 위젯 자신의 폭·높이([data-hrow]).
+   *   · 우하단 코너를 점유하는 상시 컨트롤 없음 — 액션은 상단 툴바에 둔다(.home-resize 와 충돌 방지).
+   */
+
+  // 실패 코드 → 고정 문구(L-3 — 내부 경로·errno 를 UI 로 흘리지 않는다).
+  var MD_CODES = {
+    NOT_FOUND: '문서를 찾을 수 없습니다. 목록을 새로고침해 주세요.',
+    BAD_INPUT: '잘못된 요청입니다.',
+    LIMIT_DOCS: '문서 수가 상한에 도달했습니다. 사용하지 않는 문서를 지워 주세요.',
+    LIMIT_SIZE: '문서가 너무 큽니다.',
+    NOT_FILE: '파일이 아닙니다.',
+    READ_FAILED: '파일을 읽지 못했습니다.',
+    WRITE_FAILED: '저장하지 못했습니다.',
+    CANCELLED: '',
+    FORBIDDEN: '권한이 없습니다.',
+    INTERNAL: '작업에 실패했습니다.',
+  };
+  function mdMessage(code) { return (code && MD_CODES[code] != null) ? MD_CODES[code] : '작업에 실패했습니다.'; }
+
+  /** 중첩 네임스페이스(spip.md) 어댑터 — explorer/shelf 패턴 동형. 미배포(웹/테스트) 환경 graceful 폴백. */
+  function mdBridge() { return (spip && spip.md && typeof spip.md === 'object') ? spip.md : null; }
+  async function mdIpc(method) {
+    var b = mdBridge();
+    if (!b || typeof b[method] !== 'function') return bridgeMissing();
+    var rest = Array.prototype.slice.call(arguments, 1);
+    try {
+      return await b[method].apply(b, rest);
+    } catch (err) {
+      return { ok: false, code: 'INTERNAL' }; // L-3: 스택·절대경로 비노출
+    }
+  }
+
+  /** 파서(markdown.js 전역). 미로드(테스트/웹) 환경에서도 app.js 가 죽지 않게 지연 참조한다. */
+  function mdParser() { return (typeof SpipMarkdown !== 'undefined') ? SpipMarkdown : null; }
+
+  /* ───── 적재·저장 ───── */
+
+  /** 문서 목록 1회 적재 + 가장 최근 문서 열기. */
+  async function loadMdEdit() {
+    var md = store.mdedit;
+    if (!mdBridge() || md.loaded || md.loading) return;
+    md.loading = true;
+    var res = await mdIpc('list');
+    md.loading = false;
+    md.loaded = true;
+    if (!res || !res.ok) { md.code = (res && res.code) || 'INTERNAL'; render(); return; }
+    md.code = null;
+    md.docs = Array.isArray(res.docs) ? res.docs : [];
+    if (md.docs.length > 0) { await mdOpenDoc(md.docs[0].id, { silent: true }); }
+    render();
+  }
+
+  /** 문서 열기 — 본문은 이때만 받아온다(목록 응답엔 본문이 없다). */
+  async function mdOpenDoc(id, opts) {
+    var md = store.mdedit;
+    if (md.activeId === id && !(opts && opts.force)) { md.listOpen = false; if (!(opts && opts.silent)) render(); return; }
+    await mdFlushSave(); // 열기 전에 편집 중이던 문서를 확정 저장(변경 유실 방지)
+    var res = await mdIpc('get', id);
+    if (!res || !res.ok) {
+      md.code = (res && res.code) || 'INTERNAL';
+      if (!(opts && opts.silent)) render();
+      return;
+    }
+    md.code = null;
+    md.activeId = res.doc.id;
+    md.body = res.doc.body;
+    md.dirty = false;
+    md.listOpen = false;
+    md._savedAt = null;
+    if (!(opts && opts.silent)) render();
+  }
+
+  /** 새 문서 — 제목만 물어보고 본문은 제목 h1 로 시작한다(빈 화면 대신 시작점 제공). */
+  function mdNewDoc() {
+    askPrompt({
+      title: '새 문서',
+      message: '문서 제목을 입력하세요.',
+      placeholder: '예: 회의록 2026-07-14',
+      confirmText: '만들기',
+      onConfirm: async function (name) {
+        var title = String(name == null ? '' : name).trim();
+        if (!title) return;
+        var md = store.mdedit;
+        md.busy = true; render();
+        var res = await mdIpc('create', title, '# ' + title + '\n\n');
+        md.busy = false;
+        if (!res || !res.ok) { md.code = (res && res.code) || 'INTERNAL'; toast(mdMessage(md.code), true); render(); return; }
+        md.code = null;
+        md.docs = Array.isArray(res.docs) ? res.docs : md.docs;
+        md.activeId = res.doc.id;
+        md.body = res.doc.body;
+        md.dirty = false;
+        md._savedAt = null;
+        render();
+      },
+    });
+  }
+
+  /** 문서 이름 변경 — 제목만 갱신(본문 불변). */
+  function mdRenameDoc() {
+    var md = store.mdedit;
+    var cur = mdActiveMeta();
+    if (!cur) return;
+    askPrompt({
+      title: '이름 변경',
+      message: '새 문서 제목을 입력하세요.',
+      value: cur.title,
+      confirmText: '변경',
+      onConfirm: async function (name) {
+        var title = String(name == null ? '' : name).trim();
+        if (!title) return;
+        var res = await mdIpc('update', md.activeId, title, null);
+        if (!res || !res.ok) { toast(mdMessage((res && res.code) || 'INTERNAL'), true); return; }
+        md.docs = Array.isArray(res.docs) ? res.docs : md.docs;
+        render();
+      },
+    });
+  }
+
+  /** 삭제 — 되돌릴 수 없으므로 확인 모달을 거친다. */
+  function mdRemoveDoc() {
+    var md = store.mdedit;
+    var cur = mdActiveMeta();
+    if (!cur) return;
+    askConfirm({
+      title: '문서 삭제',
+      message: '‘' + cur.title + '’ 문서를 삭제할까요?\n되돌릴 수 없습니다. 보관하려면 먼저 파일로 내보내세요.',
+      confirmText: '삭제',
+      danger: true,
+      onConfirm: async function () {
+        if (md._saveTimer) { clearTimeout(md._saveTimer); md._saveTimer = null; } // 삭제 대상 자동저장 취소
+        md.dirty = false;
+        var res = await mdIpc('remove', md.activeId);
+        if (!res || !res.ok) { toast(mdMessage((res && res.code) || 'INTERNAL'), true); return; }
+        md.docs = Array.isArray(res.docs) ? res.docs : [];
+        md.activeId = md.docs.length > 0 ? md.docs[0].id : null;
+        md.body = '';
+        md._savedAt = null;
+        if (md.activeId) await mdOpenDoc(md.activeId, { silent: true, force: true });
+        toast('문서를 삭제했습니다.');
+        render();
+      },
+    });
+  }
+
+  /** 불러오기 — 경로 인자 없음. 네이티브 dialog 가 고른 파일만 main 이 읽는다(MD-H-1). */
+  async function mdImportDoc() {
+    var md = store.mdedit;
+    md.busy = true; render();
+    var res = await mdIpc('importFile');
+    md.busy = false;
+    if (!res || !res.ok) {
+      var code = (res && res.code) || 'INTERNAL';
+      if (code !== 'CANCELLED') toast(mdMessage(code), true);
+      render();
+      return;
+    }
+    md.code = null;
+    md.docs = Array.isArray(res.docs) ? res.docs : md.docs;
+    md.activeId = res.doc.id;
+    md.body = res.doc.body;
+    md.dirty = false;
+    md._savedAt = null;
+    toast('문서를 불러왔습니다.');
+    render();
+  }
+
+  /** 내보내기 — 저장 위치는 dialog 가 정한다. 미저장 변경은 먼저 확정 저장한다. */
+  async function mdExportDoc() {
+    var md = store.mdedit;
+    if (!md.activeId) return;
+    await mdFlushSave();
+    md.busy = true; render();
+    var res = await mdIpc('exportFile', md.activeId);
+    md.busy = false;
+    if (!res || !res.ok) {
+      var code = (res && res.code) || 'INTERNAL';
+      if (code !== 'CANCELLED') toast(mdMessage(code), true);
+      render();
+      return;
+    }
+    toast(res.name ? (res.name + ' 으로 내보냈습니다.') : '파일로 내보냈습니다.');
+    render();
+  }
+
+  /** 편집 입력 — 디바운스 자동 저장. 전체 render() 를 부르지 않는다(textarea 캐럿 유실 방지). */
+  function mdOnInput(value) {
+    var md = store.mdedit;
+    if (!md.activeId) return;
+    md.body = value;
+    md.dirty = true;
+    mdUpdatePreview();
+    mdSetStatus('편집 중…');
+    if (md._saveTimer) clearTimeout(md._saveTimer);
+    md._saveTimer = setTimeout(function () { md._saveTimer = null; mdSaveNow(); }, 600);
+  }
+
+  /** 실제 저장(IPC). 성공 시 목록 메타만 갱신하고 DOM 은 부분 갱신한다(캐럿 보존). */
+  async function mdSaveNow() {
+    var md = store.mdedit;
+    if (!md.activeId || !md.dirty) return;
+    var body = md.body;
+    var res = await mdIpc('update', md.activeId, null, body);
+    if (!res || !res.ok) {
+      md.code = (res && res.code) || 'INTERNAL';
+      mdSetStatus(mdMessage(md.code));
+      return;
+    }
+    // 저장 중 사용자가 더 입력했으면 dirty 를 유지한다(다음 디바운스가 이어서 저장).
+    if (md.body === body) md.dirty = false;
+    md.code = null;
+    md.docs = Array.isArray(res.docs) ? res.docs : md.docs;
+    md._savedAt = Date.now();
+    mdSetStatus('저장됨');
+    mdSyncActiveTitle();
+  }
+
+  /** 대기 중인 디바운스 저장을 즉시 확정(문서 전환·내보내기 전에 호출). */
+  async function mdFlushSave() {
+    var md = store.mdedit;
+    if (md._saveTimer) { clearTimeout(md._saveTimer); md._saveTimer = null; }
+    if (md.dirty) await mdSaveNow();
+  }
+
+  /* ───── 부분 DOM 갱신(전체 render 없이 — 캐럿 보존) ───── */
+
+  function mdActiveMeta() {
+    var md = store.mdedit;
+    for (var i = 0; i < md.docs.length; i++) if (md.docs[i].id === md.activeId) return md.docs[i];
+    return null;
+  }
+
+  /** 미리보기 패널 내용만 다시 그린다. */
+  function mdUpdatePreview() {
+    if (typeof document === 'undefined') return;
+    var host = document.querySelector('.md-preview');
+    if (!host) return;
+    while (host.firstChild) host.removeChild(host.firstChild);
+    host.appendChild(mdRenderPreview(store.mdedit.body));
+    scheduleHomeMasonryLayout(); // 미리보기 높이가 바뀌면 masonry 재측정
+  }
+
+  /** 상태 문구(저장됨/편집 중)만 갱신. */
+  function mdSetStatus(text) {
+    if (typeof document === 'undefined') return;
+    var node = document.querySelector('.md-status');
+    if (node) node.textContent = text;
+  }
+
+  /** 자동 저장으로 제목이 파생·변경됐을 때 활성 문서 칩 라벨만 갱신. */
+  function mdSyncActiveTitle() {
+    if (typeof document === 'undefined') return;
+    var cur = mdActiveMeta();
+    var node = document.querySelector('.md-doc--on .md-doc__name');
+    if (cur && node) node.textContent = cur.title || '제목 없음';
+  }
+
+  /* ───── 마크다운 AST → DOM (innerHTML 0 — L-1) ───── */
+
+  /** 인라인 노드 배열 → DOM 노드 배열. 모든 텍스트는 textContent 로만 들어간다. */
+  function mdInlineNodes(inlines) {
+    var out = [];
+    (inlines || []).forEach(function (n) {
+      if (!n || typeof n !== 'object') return;
+      switch (n.type) {
+        case 'text':
+          out.push(document.createTextNode(n.value));
+          break;
+        case 'code':
+          out.push(el('code', { cls: 'md-code', text: n.value }));
+          break;
+        case 'strong':
+          out.push(el('strong', { children: mdInlineNodes(n.children) }));
+          break;
+        case 'em':
+          out.push(el('em', { children: mdInlineNodes(n.children) }));
+          break;
+        case 'del':
+          out.push(el('del', { children: mdInlineNodes(n.children) }));
+          break;
+        case 'break':
+          out.push(el('br'));
+          break;
+        case 'image':
+          // src 는 파서 safeUrl 통과값(http/https/file/상대/래스터 data URI). CSP(img-src 'self' data:)
+          //   때문에 원격 이미지는 로드되지 않을 수 있다 — 그 경우 alt 가 그대로 보인다.
+          out.push(el('img', { cls: 'md-img', attrs: { src: n.src, alt: n.alt || '', title: n.title || '' } }));
+          break;
+        case 'link':
+          out.push(el('a', {
+            cls: 'md-link',
+            attrs: { href: n.href, title: n.title || '', rel: 'noreferrer noopener' },
+            children: mdInlineNodes(n.children),
+            on: {
+              click: function (e) {
+                e.preventDefault();
+                mdOpenLink(n.href);
+              },
+            },
+          }));
+          break;
+        case 'fnref':
+          out.push(el('sup', {
+            cls: 'md-fnref',
+            children: [el('a', { cls: 'md-link', text: String(n.index), attrs: { href: '#fn-' + n.index } })],
+          }));
+          break;
+        default:
+          break;
+      }
+    });
+    return out;
+  }
+
+  /** 링크 열기 — 외부 URL 은 main 이 재검증하는 openExternal 로만 연다(렌더러 네비게이션 금지). */
+  function mdOpenLink(href) {
+    var h = String(href || '');
+    if (/^https?:/i.test(h) || /^mailto:/i.test(h)) {
+      if (bridgeHas('openExternal')) ipc('openExternal', h);
+      return;
+    }
+    // 상대경로·앵커는 열 대상이 없다(문서 내부 이동은 미지원) — 조용히 무시.
+  }
+
+  /** 블록 노드 배열 → DOM 노드 배열. */
+  function mdBlockNodes(blocks) {
+    var out = [];
+    (blocks || []).forEach(function (b) {
+      if (!b || typeof b !== 'object') return;
+      switch (b.type) {
+        case 'heading':
+          out.push(el('h' + Math.min(6, Math.max(1, b.level)), {
+            cls: 'md-h md-h' + b.level,
+            children: mdInlineNodes(b.inline),
+          }));
+          break;
+        case 'paragraph':
+          out.push(el('p', { cls: 'md-p', children: mdInlineNodes(b.inline) }));
+          break;
+        case 'code': {
+          var pre = el('pre', { cls: 'md-pre spip-scroll' });
+          pre.appendChild(el('code', { cls: 'md-pre__code', text: b.text })); // textContent — 하이라이트 없음(L-1)
+          if (b.lang) pre.appendChild(el('span', { cls: 'md-pre__lang', text: b.lang }));
+          out.push(pre);
+          break;
+        }
+        case 'blockquote': {
+          var q = el('blockquote', {
+            cls: 'md-quote' + (b.alert ? ' md-alert md-alert--' + b.alert.toLowerCase() : ''),
+            children: mdBlockNodes(b.children),
+          });
+          if (b.alert) q.insertBefore(el('div', { cls: 'md-alert__label', text: b.alert }), q.firstChild);
+          out.push(q);
+          break;
+        }
+        case 'list': {
+          var list = el(b.ordered ? 'ol' : 'ul', { cls: 'md-list' + (b.tight ? ' md-list--tight' : '') });
+          if (b.ordered && b.start !== 1) list.setAttribute('start', String(b.start));
+          (b.items || []).forEach(function (item) {
+            var li = el('li', { cls: 'md-li' + (item.task === null ? '' : ' md-li--task') });
+            if (item.task !== null) {
+              // 태스크 리스트 — 표시 전용(체크는 본문의 [ ]/[x] 가 단일 진실).
+              li.appendChild(el('input', {
+                cls: 'md-task',
+                attrs: Object.assign({ type: 'checkbox', disabled: 'disabled', 'aria-label': item.task ? '완료' : '미완료' },
+                  item.task ? { checked: 'checked' } : {}),
+              }));
+            }
+            var wrap = el('div', { cls: 'md-li__body', children: mdBlockNodes(item.children) });
+            li.appendChild(wrap);
+            list.appendChild(li);
+          });
+          out.push(list);
+          break;
+        }
+        case 'table': {
+          // 넓은 표는 카드를 밀어내지 않고 자기 안에서 가로 스크롤한다(무잘림 계약).
+          var scroll = el('div', { cls: 'md-tablewrap spip-scroll' });
+          var table = el('table', { cls: 'md-table' });
+          var thead = el('thead');
+          var hr = el('tr');
+          (b.header || []).forEach(function (cell, i) {
+            hr.appendChild(el('th', {
+              children: mdInlineNodes(cell),
+              style: b.align[i] ? ('text-align:' + b.align[i] + ';') : '',
+            }));
+          });
+          thead.appendChild(hr);
+          table.appendChild(thead);
+          var tbody = el('tbody');
+          (b.rows || []).forEach(function (row) {
+            var tr = el('tr');
+            row.forEach(function (cell, i) {
+              tr.appendChild(el('td', {
+                children: mdInlineNodes(cell),
+                style: b.align[i] ? ('text-align:' + b.align[i] + ';') : '',
+              }));
+            });
+            tbody.appendChild(tr);
+          });
+          table.appendChild(tbody);
+          scroll.appendChild(table);
+          out.push(scroll);
+          break;
+        }
+        case 'hr':
+          out.push(el('hr', { cls: 'md-hr' }));
+          break;
+        default:
+          break;
+      }
+    });
+    return out;
+  }
+
+  /** 마크다운 소스 → 미리보기 DOM(단일 루트). 파서 부재 시 원문을 그대로 텍스트로 보여준다. */
+  function mdRenderPreview(src) {
+    var root = el('div', { cls: 'md-rendered' });
+    var parser = mdParser();
+    if (!parser) {
+      root.appendChild(el('pre', { cls: 'md-pre', text: String(src || '') }));
+      return root;
+    }
+    var text = String(src || '');
+    if (!text.trim()) {
+      root.appendChild(el('div', { cls: 'md-empty', text: '왼쪽에 마크다운을 입력하면 여기에 미리보기가 나타납니다.' }));
+      return root;
+    }
+    var doc = parser.parse(text);
+    mdBlockNodes(doc.blocks).forEach(function (n) { root.appendChild(n); });
+
+    if (doc.footnotes && doc.footnotes.length > 0) {
+      root.appendChild(el('hr', { cls: 'md-hr' }));
+      var ol = el('ol', { cls: 'md-fnlist' });
+      doc.footnotes.forEach(function (f) {
+        var li = el('li', { cls: 'md-fn', attrs: { id: 'fn-' + f.index } });
+        mdBlockNodes(f.children).forEach(function (n) { li.appendChild(n); });
+        ol.appendChild(li);
+      });
+      root.appendChild(ol);
+    }
+    return root;
+  }
+
+  /* ───── 렌더 ───── */
+
+  /** 툴바 버튼(아이콘) — 우하단 코너를 점유하지 않는다(§3 코너 규약). */
+  function mdToolBtn(label, iconPaths, onClick, disabled) {
+    return el('button', {
+      cls: 'md-btn',
+      attrs: Object.assign({ type: 'button', 'aria-label': label, title: label }, disabled ? { disabled: 'disabled' } : {}),
+      on: { click: function (e) { e.stopPropagation(); if (!disabled) onClick(); } },
+      children: [svg(iconPaths, { size: 14, stroke: disabled ? '#d6d3d1' : '#78716c', sw: 1.8 })],
+    });
+  }
+
+  /** 뷰 전환(편집/미리보기/2단) — 세그먼트 토글. 2단은 좁은 폭에서 CSS 가 자동으로 접는다. */
+  function mdViewToggle() {
+    var md = store.mdedit;
+    var seg = el('div', { cls: 'md-seg', attrs: { role: 'group', 'aria-label': '보기 방식' } });
+    [
+      { id: 'edit', label: '편집' },
+      { id: 'split', label: '2단' },
+      { id: 'preview', label: '미리보기' },
+    ].forEach(function (v) {
+      var on = md.view === v.id;
+      seg.appendChild(el('button', {
+        cls: 'md-seg__btn' + (on ? ' md-seg__btn--on' : '') + (v.id === 'split' ? ' md-seg__btn--split' : ''),
+        text: v.label,
+        attrs: { type: 'button', 'aria-pressed': on ? 'true' : 'false' },
+        on: { click: function (e) { e.stopPropagation(); md.view = v.id; render(); } },
+      }));
+    });
+    return seg;
+  }
+
+  /** 문서 목록 바 — 가로 스크롤 칩. 좁아지면 CSS 가 메타(크기·수정일)를 접는다. */
+  function mdDocBar() {
+    var md = store.mdedit;
+    var bar = el('div', { cls: 'md-docs spip-scroll', attrs: { role: 'tablist', 'aria-label': '문서 목록' } });
+    md.docs.forEach(function (d) {
+      var on = d.id === md.activeId;
+      var chip = el('button', {
+        cls: 'md-doc' + (on ? ' md-doc--on' : ''),
+        attrs: { type: 'button', role: 'tab', 'aria-selected': on ? 'true' : 'false', title: d.title || '제목 없음' },
+        on: {
+          click: function (e) { e.stopPropagation(); mdOpenDoc(d.id); },
+          // 편집 모드 재정렬 드래그(SortableJS)와 분리.
+          pointerdown: function (e) { e.stopPropagation(); },
+        },
+      });
+      chip.appendChild(el('span', { cls: 'md-doc__name', text: d.title || '제목 없음' }));
+      chip.appendChild(el('span', { cls: 'md-doc__meta', text: mdShortTime(d.updatedAt), style: HOME_MONO }));
+      bar.appendChild(chip);
+    });
+    return bar;
+  }
+
+  /** 수정 시각 축약 — 오늘이면 시:분, 아니면 월/일. */
+  function mdShortTime(ts) {
+    if (typeof ts !== 'number' || !(ts > 0)) return '';
+    var d = new Date(ts);
+    var now = new Date();
+    var sameDay = d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+    var p2 = function (n) { return (n < 10 ? '0' : '') + n; };
+    return sameDay ? (p2(d.getHours()) + ':' + p2(d.getMinutes())) : ((d.getMonth() + 1) + '/' + d.getDate());
+  }
+
+  function renderHomeMdEdit() {
+    var md = store.mdedit;
+    var hasDoc = !!md.activeId;
+    var card = el('div', {
+      cls: 'md-card hw-card',
+      style: HOME_CARD + 'padding:16px 16px 12px;',
+      attrs: { 'data-view': md.view },
+    });
+
+    // 헤더 — 제목 + 툴바. (우하단 코너 미점유)
+    var head = el('div', { cls: 'md-head' });
+    head.appendChild(el('div', { cls: 'md-title', text: '마크다운 편집기' }));
+    var tools = el('div', { cls: 'md-tools' });
+    tools.appendChild(mdViewToggle());
+    tools.appendChild(mdToolBtn('새 문서', [{ t: 'path', d: 'M12 5v14M5 12h14' }], mdNewDoc, md.busy));
+    tools.appendChild(mdToolBtn('불러오기', [{ t: 'path', d: 'M12 3v12' }, { t: 'path', d: 'M7 10l5 5 5-5' }, { t: 'path', d: 'M4 19h16' }], mdImportDoc, md.busy));
+    tools.appendChild(mdToolBtn('파일로 내보내기', [{ t: 'path', d: 'M12 15V3' }, { t: 'path', d: 'M7 8l5-5 5 5' }, { t: 'path', d: 'M4 19h16' }], mdExportDoc, md.busy || !hasDoc));
+    tools.appendChild(mdToolBtn('이름 변경', [{ t: 'path', d: 'M4 20h4l10-10-4-4L4 16z' }, { t: 'path', d: 'M14 6l4 4' }], mdRenameDoc, md.busy || !hasDoc));
+    tools.appendChild(mdToolBtn('삭제', [{ t: 'path', d: 'M4 7h16' }, { t: 'path', d: 'M9 7V5h6v2' }, { t: 'path', d: 'M6 7l1 12h10l1-12' }], mdRemoveDoc, md.busy || !hasDoc));
+    head.appendChild(tools);
+    card.appendChild(head);
+
+    if (md.docs.length > 0) card.appendChild(mdDocBar());
+
+    var main = el('div', { cls: 'md-main hw-body' });
+
+    if (!mdBridge()) {
+      main.appendChild(el('div', { cls: 'md-empty', text: 'Electron 앱에서만 사용할 수 있습니다.' }));
+    } else if (!md.loaded && md.loading) {
+      main.appendChild(el('div', { cls: 'md-empty', text: '불러오는 중…' }));
+    } else if (md.docs.length === 0) {
+      var empty = el('div', { cls: 'md-empty' });
+      empty.appendChild(el('div', { text: '아직 문서가 없습니다.' }));
+      var cta = el('div', { cls: 'md-empty__row' });
+      cta.appendChild(el('button', { cls: 'md-empty__cta', text: '새 문서', attrs: { type: 'button' }, on: { click: mdNewDoc } }));
+      cta.appendChild(el('button', { cls: 'md-empty__cta md-empty__cta--ghost', text: '.md 불러오기', attrs: { type: 'button' }, on: { click: mdImportDoc } }));
+      empty.appendChild(cta);
+      empty.appendChild(el('div', { cls: 'md-empty__hint', text: '문서는 앱 데이터 폴더에 저장되며, 언제든 .md 파일로 내보낼 수 있습니다.' }));
+      main.appendChild(empty);
+    } else {
+      // 편집 패널 — textarea. 입력 시 전체 render() 를 하지 않는다(캐럿 보존).
+      var editPane = el('div', { cls: 'md-pane md-pane--edit' });
+      var ta = el('textarea', {
+        cls: 'md-editor spip-scroll',
+        attrs: {
+          spellcheck: 'false',
+          'aria-label': '마크다운 편집',
+          placeholder: '# 제목\n\n**굵게**, *기울임*, `코드`, - 목록, | 표 |, ```코드블록```',
+        },
+        on: {
+          input: function (e) { mdOnInput(e.target.value); },
+          blur: function () { mdFlushSave(); },
+          keydown: function (e) {
+            // Tab 은 위젯 간 이동이 아니라 들여쓰기로 — 편집기 안에서만.
+            if (e.key === 'Tab') {
+              e.preventDefault();
+              var t = e.target;
+              var s = t.selectionStart, en = t.selectionEnd;
+              t.value = t.value.slice(0, s) + '  ' + t.value.slice(en);
+              t.selectionStart = t.selectionEnd = s + 2;
+              mdOnInput(t.value);
+            }
+            e.stopPropagation(); // 홈 단축키와 충돌 방지
+          },
+          pointerdown: function (e) { e.stopPropagation(); }, // SortableJS 재정렬과 분리
+        },
+      });
+      ta.value = md.body; // value 는 속성이 아니라 프로퍼티로(el attrs 는 setAttribute 라 개행이 깨진다)
+      editPane.appendChild(ta);
+      main.appendChild(editPane);
+
+      // 미리보기 패널
+      var prevPane = el('div', { cls: 'md-pane md-pane--preview' });
+      var preview = el('div', { cls: 'md-preview spip-scroll', attrs: { 'aria-label': '미리보기' } });
+      preview.appendChild(mdRenderPreview(md.body));
+      prevPane.appendChild(preview);
+      main.appendChild(prevPane);
+    }
+
+    card.appendChild(main);
+
+    // 푸터 — 저장 상태 + 실패 코드(고정 문구). 조용한 실패 금지.
+    var foot = el('div', { cls: 'md-foot' });
+    foot.appendChild(el('div', {
+      cls: 'md-status',
+      text: md.code ? mdMessage(md.code) : (md.dirty ? '편집 중…' : (md._savedAt ? '저장됨' : (hasDoc ? '자동 저장' : ''))),
+    }));
+    if (hasDoc) {
+      foot.appendChild(el('div', { cls: 'md-count', text: md.body.length.toLocaleString() + '자', style: HOME_MONO }));
+    }
+    card.appendChild(foot);
+
+    return card;
+  }
+
+  /* ===== [MD 편집기 위젯] 끝 ================================================================= */
 
   /** [위젯 추가/제거] 위젯 카드 우상단 제거(×) 버튼 — 호버 시 노출(.home-section:hover .widget-remove). */
   function widgetRemoveBtn(id) {

@@ -20,6 +20,7 @@ const actionsIpc = require('./actions');
 const scanIpc = require('./scan');
 const foldersIpc = require('./folders');
 const explorerIpc = require('./explorer');
+const markdownIpc = require('./markdown');
 const clipboardIpc = require('./clipboard');
 const toolsIpc = require('./tools');
 const mailAccountsIpc = require('./mailAccounts');
@@ -168,6 +169,21 @@ function registerIpcHandlers(deps) {
   guard('spip:explorer:mkdir', (args) => explorerIpc.mkdir(args, explorerCtx()));
   guard('spip:explorer:rename', (args) => explorerIpc.rename(args, explorerCtx()));
   guard('spip:explorer:trash', (args) => explorerIpc.trash(args, explorerCtx()));
+
+  // [MD 편집기 위젯 MD-H-1] 마크다운 편집기 — 문서 CRUD 는 앱 데이터 폴더(mdDocStore) 안에서만 일어난다.
+  //   파일 불러오기/내보내기는 **dialog 가 만든 경로로만** 수행한다 — 렌더러가 경로 문자열을 주입하는
+  //   read/write 채널은 두지 않는다(explorer.pickRoot 와 동일 결정). dialog 결과도 재검증(정규 파일·크기).
+  const markdownCtx = () => Object.assign({}, ctx, {
+    dialog,
+    win: (typeof getWin === 'function') ? getWin() : undefined,
+  });
+  guard('spip:md:list', (args) => markdownIpc.list(args, markdownCtx()));
+  guard('spip:md:get', (args) => markdownIpc.get(args, markdownCtx()));
+  guard('spip:md:create', (args) => markdownIpc.create(args, markdownCtx()));
+  guard('spip:md:update', (args) => markdownIpc.update(args, markdownCtx()));
+  guard('spip:md:remove', (args) => markdownIpc.remove(args, markdownCtx()));
+  guard('spip:md:import', (args) => markdownIpc.importFile(args, markdownCtx()));
+  guard('spip:md:export', (args) => markdownIpc.exportFile(args, markdownCtx()));
 
   // [M6 R-17] 클립보드 — main clipboard 주입.
   guard('spip:copyText', (args) => clipboardIpc.copyText(args, { clipboard }));
