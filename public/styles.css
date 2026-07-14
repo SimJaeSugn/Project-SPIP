@@ -422,6 +422,14 @@ input, button, select { font-family: inherit; }
  *   둥근 카드 밖으로 새는 것을 막는 백스톱. */
 .hw-card { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
 .hw-body { min-height: 0; }
+/* [브리핑 분리] 요약 지표 위젯 — KPI 타일 그리드. 위젯 폭에 auto-fit 반응(좁으면 2×2, 넓으면 4열).
+ *   뷰포트가 아니라 위젯 자신의 폭이 기준(.home-section__content = container). 어떤 조합에서도 무잘림. */
+.summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(84px, 1fr)); gap: 12px 16px; align-content: start; }
+.summary-tile { min-width: 0; }
+.summary-tile__val { font-size: 27px; font-weight: 700; letter-spacing: -0.02em; line-height: 1; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.summary-tile__label { font-size: 11.5px; color: #78716c; margin-top: 7px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* [브리핑 분리] 오늘의 브리핑 위젯 — 좁은 폭에서도 인사말이 넘치지 않게 줄바꿈 허용. */
+.briefing-widget__greet { overflow-wrap: anywhere; }
 .home-section__content--sized .hw-body { flex: 1 1 auto; overflow-y: auto; overflow-x: hidden; }
 /* 카드 전체가 스크롤 흡수하는 변형(2단 통계처럼 헤더/본문 분리가 어려운 위젯용). */
 .home-section__content--sized .hw-cardscroll { overflow-y: auto; overflow-x: hidden; }

@@ -140,9 +140,10 @@ test('R-41 — resolveBriefingItem 이 resolveItem(key, action) 호출', () => {
   assert.ok(/spip\.briefing\.resolveItem\(key,\s*action\)/.test(b), 'resolveItem(key, action)');
   assert.ok(/done|dismiss/.test(APP_SRC), "done/dismiss action");
 });
-test('R-35 — 브리핑 영역은 patchRegion(.briefing-region) 으로 갱신', () => {
-  assert.ok(/querySelector\('\.briefing-region'\)/.test(APP_SRC), '.briefing-region 대상');
-  assert.ok(/cls:\s*'briefing-region'/.test(APP_SRC), 'renderHome 이 .briefing-region 2단 래퍼');
+test('R-35 — 브리핑 영역은 patchRegion(.briefing-region) 으로 갱신(브리핑 분리: 모든 인스턴스)', () => {
+  // [브리핑 분리] 브리핑이 위젯이 되며 여러 인스턴스가 공유 데이터를 보여줄 수 있어 querySelectorAll 로 전부 교체.
+  assert.ok(/querySelectorAll\('\.briefing-region'\)/.test(APP_SRC), '모든 .briefing-region 대상');
+  assert.ok(/cls:\s*'briefing-region hw-body'/.test(APP_SRC), 'briefing 위젯이 .briefing-region 래퍼');
 });
 test('R-39 — 설정 integration 카테고리에 briefing 섹션 추가', () => {
   assert.ok(/sections:\s*\['tools',\s*'mail',\s*'briefing'\]/.test(APP_SRC), 'integration 에 briefing');

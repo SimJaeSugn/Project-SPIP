@@ -16,11 +16,12 @@ const STORE_SRC = fs.readFileSync(path.join(__dirname, '..', 'lib', 'common', 'u
 
 // ── HOME_SECTION_IDS 계약 동형 ────────────────────────────────────────────
 // [SH-2] 셸프 2변형 + [Phase 3·G] 스크래치패드·커밋 히트맵·시스템 상태 + [탐색기] 폴더 탐색기('explorer')
-//   + [MD 편집기] 마크다운 편집기('mdedit')를 featureAdd 앞에 → 15섹션 enum.
-const N_SECTIONS = 15;
-test('R-32 — HOME_SECTION_IDS: 15섹션 enum(배열 순서 = 기본 순서)', () => {
+//   + [MD 편집기] 마크다운 편집기('mdedit') + [브리핑 분리] 오늘의 브리핑('briefing')·요약 지표('summary')를
+//   맨 앞에 → 17섹션 enum.
+const N_SECTIONS = 17;
+test('R-32 — HOME_SECTION_IDS: 17섹션 enum(배열 순서 = 기본 순서)', () => {
   assert.deepStrictEqual(HOME_SECTION_IDS,
-    ['attention', 'productivity', 'activity', 'todos', 'mail', 'disk', 'aiusage', 'shelf', 'shelfWide', 'scratchpad', 'commitHeatmap', 'systemStatus', 'explorer', 'mdedit', 'featureAdd']);
+    ['briefing', 'summary', 'attention', 'productivity', 'activity', 'todos', 'mail', 'disk', 'aiusage', 'shelf', 'shelfWide', 'scratchpad', 'commitHeatmap', 'systemStatus', 'explorer', 'mdedit', 'featureAdd']);
 });
 
 test('R-32 — 렌더러 HOME_SECTION_IDS 가 메인 uiStateStore 와 동일 집합·순서', () => {
@@ -395,6 +396,35 @@ test('로드맵 Phase 3·G — 시스템 상태 위젯: 렌더·표시시 지연
   assert.ok(!/buildSystemStatusBody[\s\S]{0,1500}innerHTML/.test(APP_SRC), '본문 빌더 innerHTML 미사용(L-1)');
 });
 
+// ── [브리핑 분리] 오늘의 브리핑·요약 지표 위젯 — 히어로에서 위젯으로 분리, enum·메타·디스패치·CSS 배선 ──
+test('브리핑 분리 — briefing/summary: enum·WIDGET_META·renderHomeSection 디스패치·기본 미배치·상단 히어로 제거', () => {
+  const CSS = fs.readFileSync(path.join(__dirname, '..', 'public', 'styles.css'), 'utf8');
+  // enum(렌더러·메인 동형은 별도 드리프트 테스트) — 맨 앞 두 자리.
+  assert.ok(HOME_SECTION_IDS.includes('briefing') && HOME_SECTION_IDS.includes('summary'), '렌더러 enum 에 briefing·summary');
+  assert.strictEqual(HOME_SECTION_IDS[0], 'briefing');
+  assert.strictEqual(HOME_SECTION_IDS[1], 'summary');
+  // WIDGET_META(갤러리·표시명).
+  assert.ok(/briefing:\s*\{\s*name:\s*'오늘의 브리핑'/.test(APP_SRC), 'WIDGET_META.briefing');
+  assert.ok(/summary:\s*\{\s*name:\s*'요약 지표'/.test(APP_SRC), 'WIDGET_META.summary');
+  // 렌더 함수 + 디스패치.
+  assert.ok(/function renderHomeBriefing\(inst\)/.test(APP_SRC), 'renderHomeBriefing');
+  assert.ok(/function renderHomeSummary\(reclaim, inst\)/.test(APP_SRC), 'renderHomeSummary(reclaim,inst)');
+  assert.ok(/case 'briefing':\s*return renderHomeBriefing\(inst\)/.test(APP_SRC), 'briefing 디스패치');
+  assert.ok(/case 'summary':\s*return renderHomeSummary\(reclaim, inst\)/.test(APP_SRC), 'summary 디스패치');
+  // 상단 고정 히어로 제거 — renderHome 이 더는 hero 카드를 만들지 않는다.
+  const rh = APP_SRC.slice(APP_SRC.indexOf('function renderHome()'), APP_SRC.indexOf('function buildHomeCell('));
+  assert.ok(!/히어로\(오늘의 브리핑 \+ KPI/.test(rh), '상단 고정 히어로 블록 제거');
+  // 신규 위젯은 기본 미배치(메인 시드) — DEFAULT_HIDDEN_WIDGETS 에 포함.
+  const S = require('../lib/common/uiStateStore');
+  assert.ok(S.DEFAULT_HIDDEN_WIDGETS.includes('briefing') && S.DEFAULT_HIDDEN_WIDGETS.includes('summary'), '기본 미배치(갤러리 추가)');
+  assert.ok(!S.defaultHomeWidgets().some((w) => w.type === 'briefing' || w.type === 'summary'), '기본 배치에 없음');
+  // 6조합 무잘림 — 요약 그리드는 위젯 폭 auto-fit(뷰포트 미디어쿼리 아님).
+  assert.ok(/\.summary-grid\s*\{[^}]*repeat\(auto-fit/.test(CSS), '요약 그리드 auto-fit(컨테이너 반응)');
+  // L-1: 두 위젯 렌더 innerHTML 미사용.
+  assert.ok(!/renderHomeBriefing[\s\S]{0,900}innerHTML/.test(APP_SRC), 'briefing 렌더 innerHTML 미사용(L-1)');
+  assert.ok(!/renderHomeSummary[\s\S]{0,900}innerHTML/.test(APP_SRC), 'summary 렌더 innerHTML 미사용(L-1)');
+});
+
 // ── [로드맵 Phase 3·G] 통합 커밋 히트맵 — 순수 모델 + 렌더 배선 ──
 test('로드맵 Phase 3·G — heatmapLevel: 커밋 수 → 색 강도 레벨 0..4(고정 임계·단조)', () => {
   assert.strictEqual(heatmapLevel(0), 0);
@@ -497,7 +527,7 @@ test('로드맵 Phase 3·C — 메일 위젯 밀도 소비: 요약 노드·시�
 
 // ── applyHomeLayout (순서 정규화, 메인 normalizeHomeLayout 과 동일 규칙) ──
 test('R-32 — applyHomeLayout: 유효 순열은 그대로 유지', () => {
-  const input = ['mail', 'attention', 'disk', 'todos', 'shelf', 'activity', 'productivity', 'aiusage', 'shelfWide', 'scratchpad', 'commitHeatmap', 'systemStatus', 'explorer', 'mdedit', 'featureAdd'];
+  const input = ['briefing', 'summary', 'mail', 'attention', 'disk', 'todos', 'shelf', 'activity', 'productivity', 'aiusage', 'shelfWide', 'scratchpad', 'commitHeatmap', 'systemStatus', 'explorer', 'mdedit', 'featureAdd'];
   assert.deepStrictEqual(applyHomeLayout(input), input);
 });
 
@@ -506,7 +536,7 @@ test('R-32 — applyHomeLayout: 부분 순서는 나머지를 기본 순서로 �
   assert.strictEqual(out.length, N_SECTIONS);
   assert.deepStrictEqual(out.slice(0, 2), ['mail', 'todos']);
   // 나머지는 기본 순서 유지(중복 없이).
-  assert.deepStrictEqual(out, ['mail', 'todos', 'attention', 'productivity', 'activity', 'disk', 'aiusage', 'shelf', 'shelfWide', 'scratchpad', 'commitHeatmap', 'systemStatus', 'explorer', 'mdedit', 'featureAdd']);
+  assert.deepStrictEqual(out, ['mail', 'todos', 'briefing', 'summary', 'attention', 'productivity', 'activity', 'disk', 'aiusage', 'shelf', 'shelfWide', 'scratchpad', 'commitHeatmap', 'systemStatus', 'explorer', 'mdedit', 'featureAdd']);
 });
 
 test('R-32 — applyHomeLayout: 화이트리스트 외·중복·비문자열 제거', () => {

@@ -702,7 +702,8 @@ function shouldPollCommit(view, visible) {
 //   둘은 동일 셸프 데이터·로직 공유(폭만 다름)·둘 다 기본 숨김(메인 uiStateStore가 첫 실행 시 hiddenWidgets 시드).
 // [탐색기 위젯] 폴더 탐색기(explorer) 추가 — 메인 uiStateStore.HOME_SECTION_IDS 와 동형(드리프트 테스트).
 // [MD 편집기 위젯] 마크다운 편집기(mdedit) 추가 — 메인 uiStateStore.HOME_SECTION_IDS 와 동형(드리프트 테스트).
-const HOME_SECTION_IDS = ['attention', 'productivity', 'activity', 'todos', 'mail', 'disk', 'aiusage', 'shelf', 'shelfWide', 'scratchpad', 'commitHeatmap', 'systemStatus', 'explorer', 'mdedit', 'featureAdd'];
+// [브리핑 분리] 상단 고정 히어로를 위젯으로 — 'briefing'·'summary' 를 맨 앞에(메인 uiStateStore 와 동형).
+const HOME_SECTION_IDS = ['briefing', 'summary', 'attention', 'productivity', 'activity', 'todos', 'mail', 'disk', 'aiusage', 'shelf', 'shelfWide', 'scratchpad', 'commitHeatmap', 'systemStatus', 'explorer', 'mdedit', 'featureAdd'];
 
 // [위젯 추가/제거] 토글 가능한 콘텐츠 위젯 메타(갤러리·제거 UI용). 'featureAdd'는 추가 트리거라 제외(항상 표시).
 //   메인 uiStateStore.TOGGLEABLE_WIDGET_IDS 와 동형(드리프트 0 — homeLayout-front 테스트가 교차검증).
@@ -711,6 +712,8 @@ const TOGGLEABLE_WIDGET_IDS = HOME_SECTION_IDS.filter((id) => id !== 'featureAdd
 const GROUP_ID_RE_FRONT = /^g[0-9a-z]{4,32}$/;
 function isGroupId(id) { return typeof id === 'string' && GROUP_ID_RE_FRONT.test(id); }
 const WIDGET_META = {
+  briefing: { name: '오늘의 브리핑', desc: '인사말과 AI 브리핑 — 오늘 챙길 것을 한 줄로' },
+  summary: { name: '요약 지표', desc: '주의 필요·안 읽은 메일·남은 할 일·회수 가능 한눈에' },
   attention: { name: '주의가 필요한 프로젝트', desc: '미커밋·미푸시·방치 프로젝트를 한눈에' },
   productivity: { name: '주간 생산성', desc: '커밋 빈도 차트와 언어·스택 추세' },
   activity: { name: '최근 활동 타임라인', desc: '최근 수정된 프로젝트 흐름' },
@@ -946,6 +949,8 @@ const HOME_H_MAX = 1600;      // 상한(px)
 function homeDefaultSpan(id) {
   const t = widgetTypeOf(id);
   if (t === 'shelfWide') return HOME_MAX_COLS;
+  if (t === 'briefing') return 2;  // [브리핑 분리] 인사말+브리핑 문장이 편히 읽히는 기본 폭
+  if (t === 'summary') return 2;   // [브리핑 분리] KPI 4개가 한 줄로 펴지는 기본 폭
   if (t === 'commitHeatmap') return 2;
   if (t === 'explorer') return 2; // [탐색기 위젯] 이름+크기+수정일 3열이 편하게 들어가는 기본 폭
   if (t === 'mdedit') return 2;   // [MD 편집기] 편집+미리보기 2단이 펴지는 기본 폭
@@ -958,6 +963,7 @@ function homeDefaultSpan(id) {
  *   컨테이너 쿼리/hw-cols 로 공간을 활용하고, 최소보다 더 줄일 수 없게 이 하한이 막는다.
  *   여기 미지정 위젯은 전역 하한 HOME_H_MIN(120) 사용(예: mail·scratchpad 는 이미 콤팩트에서 안전). */
 const HOME_WIDGET_MIN_H = {
+  briefing: 160, summary: 150,
   attention: 190, productivity: 240, activity: 190, todos: 190,
   disk: 170, aiusage: 210, commitHeatmap: 200, systemStatus: 150,
   explorer: 190, shelf: 300, shelfWide: 300,
@@ -2845,12 +2851,17 @@ function initBrowser() {
     return row;
   }
 
-  /** [R-35] 브리핑 영역만 부분 갱신(patchRegion). 영역 부재/오류/deferred 시 내부 안전 처리. */
+  /** [R-35] 브리핑 영역만 부분 갱신(patchRegion). 영역 부재/오류/deferred 시 내부 안전 처리.
+   *   [브리핑 분리] 브리핑은 위젯이 됐고 여러 인스턴스가 같은 공유 데이터를 보여줄 수 있다 —
+   *   배치된 **모든** .briefing-region 을 각각 교체한다. 하나도 없으면(미배치) no-op. */
   function patchBriefing() {
     if (typeof document === 'undefined') { render(); return; }
-    var region = document.querySelector('.briefing-region');
-    RG.preserve.patchRegion(region, function () { return renderBriefingCard(); }, {
-      widgets: [], preserveFocus: false, fallback: function () { render(); },
+    var regions = document.querySelectorAll('.briefing-region');
+    if (!regions.length) return; // 브리핑 위젯 미배치 — 갱신할 영역 없음
+    regions.forEach(function (region) {
+      RG.preserve.patchRegion(region, function () { return renderBriefingCard(); }, {
+        widgets: [], preserveFocus: false, fallback: function () { render(); },
+      });
     });
   }
 
@@ -2898,10 +2909,8 @@ function initBrowser() {
     maybeLoadExplorer();
     maybeLoadMdEdit();
     var vms = store.viewModels || [];
-    var g = homeGreeting(store.now);
-    var kpis = homeKpis(vms);
-    var todosOpen = (store.todos || []).filter(function (t) { return !t.done; }).length;
-    var unread = mailUnreadTotal();
+    // [브리핑 분리] 인사말·KPI 는 이제 각 위젯(renderHomeBriefing/Summary)이 계산한다.
+    //   reclaim(디스크 회수)만 여기서 1회 계산해 disk·summary 위젯에 함께 넘긴다.
     var reclaim = diskReclaim(vms);
 
     var root = el('div', { cls: 'dash home' });
@@ -2923,32 +2932,8 @@ function initBrowser() {
       wrap.appendChild(bn);
     }
 
-    // ── 히어로(오늘의 브리핑 + KPI 4) ──
-    var heroPad = el('div', { style: 'padding:26px 30px 6px;' });
-    var hero = el('div', { style: HOME_CARD + 'padding:26px 28px;display:flex;align-items:center;gap:30px;' });
-    var heroL = el('div', { style: 'flex:1 1 0%;min-width:0;' });
-    heroL.appendChild(el('div', { text: '오늘의 브리핑', style: HOME_MONO + 'font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:var(--accent);' }));
-    heroL.appendChild(el('h1', { text: g.greeting, style: 'margin:9px 0 7px;font-size:29px;font-weight:700;letter-spacing:-0.022em;line-height:1.12;' }));
-    // [M13 R-35/R-40] 정적 브리핑 문장을 브리핑 영역(2단: .briefing-region > 카드)으로 승격.
-    //   enabled 면 AI 스트리밍/항목, 아니면 기존 정적 문장 폴백. delta 시 이 영역만 patchRegion 교체.
-    var briefingRegion = el('div', { cls: 'briefing-region' });
-    briefingRegion.appendChild(renderBriefingCard());
-    heroL.appendChild(briefingRegion);
-    hero.appendChild(heroL);
-    var heroR = el('div', { style: 'display:flex;gap:0;flex:0 0 auto;' });
-    var kpi = function (val, label, color) {
-      var c = el('div', { style: 'padding:0 22px;border-left:1px solid #f0efed;' });
-      c.appendChild(el('div', { text: String(val), style: 'font-size:30px;font-weight:700;letter-spacing:-0.02em;color:' + color + ';font-variant-numeric:tabular-nums;line-height:1;' }));
-      c.appendChild(el('div', { text: label, style: 'font-size:11.5px;color:#78716c;margin-top:7px;' }));
-      return c;
-    };
-    heroR.appendChild(kpi(kpis.attention, '주의 필요', '#b45309'));
-    heroR.appendChild(kpi(unread, '안 읽은 메일', '#1d4ed8'));
-    heroR.appendChild(kpi(todosOpen, '남은 할 일', '#4338ca'));
-    heroR.appendChild(kpi(reclaim.label, '회수 가능', '#15803d'));
-    hero.appendChild(heroR);
-    heroPad.appendChild(hero);
-    wrap.appendChild(heroPad);
+    // [브리핑 분리] 상단 고정 히어로 제거 — '오늘의 브리핑'·'요약 지표'는 이제 격자 위젯이다
+    //   (renderHomeBriefing / renderHomeSummary). 인사말·KPI·브리핑 문장은 각 위젯이 소유한다.
 
     // ── [R-32] CSS Grid 워터폴(masonry) 섹션 — homeLayout 순서로 배치 + 드래그 재정렬 + 리사이즈 ──
     //   각 섹션은 .home-section(data-home-section=enum id) 래퍼로 감싸 SortableJS 가 이동 단위로 잡는다.
@@ -3158,6 +3143,8 @@ function initBrowser() {
    *   reclaim 은 디스크 섹션 입력(renderHome 에서 1회 계산해 전달). 미지 타입은 null(graceful). */
   function renderHomeSection(type, reclaim, inst) {
     switch (type) {
+      case 'briefing':     return renderHomeBriefing(inst);
+      case 'summary':      return renderHomeSummary(reclaim, inst);
       case 'attention':    return renderHomeAttention(inst);
       case 'productivity': return renderHomeProductivity(inst);
       case 'activity':     return renderHomeActivity(inst);
@@ -3238,6 +3225,48 @@ function initBrowser() {
   function homeBadge(text, kind) {
     var c = { amber: 'background:#fef3c7;color:#b45309;border:1px solid #fde68a;', blue: 'background:#dbeafe;color:#1d4ed8;border:1px solid #bfdbfe;', cyan: 'background:#cffafe;color:#0e7490;border:1px solid #a5f3fc;' }[kind] || '';
     return el('span', { text: text, style: 'font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:6px;' + c });
+  }
+
+  /* [브리핑 분리] 오늘의 브리핑 위젯 — 인사말 + AI 브리핑 카드(공유 데이터 store.briefing).
+   *   브리핑 데이터는 라이브러리 성격(여러 인스턴스가 같은 내용) — 전역 슬롯을 읽고, 부분 갱신은
+   *   patchBriefing 이 **모든** .briefing-region 을 훑어 교체한다. 텍스트는 전부 textContent(L-1).
+   *   [6조합] 카드는 hw-card(세로 flex)·본문은 hw-body(높이 지정 시 내부 스크롤) — 좁으면 줄바꿈, 넘치면 클립 대신 스크롤. */
+  function renderHomeBriefing(inst) {
+    var g = homeGreeting(store.now);
+    var card = el('div', { cls: 'hw-card briefing-widget', style: HOME_CARD + 'padding:21px 22px;' });
+    // 사용자 지정명은 히어로 라벨(오늘의 브리핑)에 반영, 큰 줄은 항상 시간대 인사말.
+    card.appendChild(el('div', { text: widgetCardTitle(inst, '오늘의 브리핑'), style: HOME_MONO + 'font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:var(--accent);flex:0 0 auto;' }));
+    card.appendChild(el('div', { cls: 'briefing-widget__greet', text: g.greeting, style: 'margin:9px 0 8px;font-size:23px;font-weight:700;letter-spacing:-0.02em;line-height:1.14;flex:0 0 auto;' }));
+    var region = el('div', { cls: 'briefing-region hw-body' });
+    region.appendChild(renderBriefingCard());
+    card.appendChild(region);
+    return card;
+  }
+
+  /* [브리핑 분리] 요약 지표 위젯 — KPI 4개(주의 필요·안 읽은 메일·남은 할 일·회수 가능).
+   *   [6조합] .summary-grid = repeat(auto-fit, minmax) — 좁으면 2×2, 넓으면 4열(위젯 폭에 반응, 뷰포트 무관).
+   *   값은 공유 상태(viewModels·todos·mailSummary)에서 계산 — reclaim 은 renderHome 이 1회 계산해 넘긴다. */
+  function renderHomeSummary(reclaim, inst) {
+    var vms = store.viewModels || [];
+    var kpis = homeKpis(vms);
+    var todosOpen = (store.todos || []).filter(function (t) { return !t.done; }).length;
+    var unread = mailUnreadTotal();
+    var rec = reclaim || diskReclaim(vms);
+    var card = el('div', { cls: 'hw-card', style: HOME_CARD + 'padding:21px 22px;' });
+    card.appendChild(el('div', { text: widgetCardTitle(inst, '요약 지표'), style: 'font-size:15px;font-weight:600;letter-spacing:-0.01em;margin-bottom:14px;flex:0 0 auto;' }));
+    var grid = el('div', { cls: 'summary-grid hw-body' });
+    var tile = function (val, label, color) {
+      var c = el('div', { cls: 'summary-tile' });
+      c.appendChild(el('div', { cls: 'summary-tile__val', text: String(val), style: 'color:' + color + ';' }));
+      c.appendChild(el('div', { cls: 'summary-tile__label', text: label }));
+      return c;
+    };
+    grid.appendChild(tile(kpis.attention, '주의 필요', '#b45309'));
+    grid.appendChild(tile(unread, '안 읽은 메일', '#1d4ed8'));
+    grid.appendChild(tile(todosOpen, '남은 할 일', '#4338ca'));
+    grid.appendChild(tile(rec.label, '회수 가능', '#15803d'));
+    card.appendChild(grid);
+    return card;
   }
 
   function renderHomeAttention(inst) {
