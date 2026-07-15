@@ -728,7 +728,7 @@ const WIDGET_META = {
   systemStatus: { name: '시스템 상태', desc: '개발 머신 CPU·메모리·디스크 사용량' },
   explorer: { name: '폴더 탐색기', desc: '지정한 폴더의 파일·디렉터리를 탐색하고 열기' },
   mdedit: { name: '마크다운 편집기', desc: '문서를 쓰고 미리보고 .md 파일로 주고받기' },
-  agent: { name: 'AI 에이전트', desc: '자연어로 요청하면 도구를 써서 처리 — 할 일·메일 제어(추가·완료·삭제·읽기·동기화)' },
+  agent: { name: 'AI 에이전트', desc: '자연어로 요청하면 도구로 여러 위젯을 제어 — 할 일·메일·프로젝트·즐겨찾기·메모·시스템 현황 등' },
 };
 
 /* [로드맵 Phase 1·L] 레이아웃 템플릿 — 갤러리에서 골라 '새 프리셋'으로 적용. visible 외 토글 위젯은 숨김.
@@ -2196,6 +2196,8 @@ function initBrowser() {
         turns: [],        // [멀티턴] 대화 기록 — [{ user, final, steps, code }]
         code: null,       // 마지막 실행 실패 코드(고정 토큰)
         context: null,    // [컨텍스트 사용현황] { tokens, limit, trimmed, source, completionTokens }
+        _scroll: 0,       // 트랜스크립트 스크롤 위치(재렌더로 잃지 않게 인스턴스별 보존)
+        _restoring: false, // 프로그램적 복원 중 표식(리스너가 값 덮어쓰지 않게)
       };
     }
     return {};
@@ -6101,13 +6103,17 @@ function initBrowser() {
     }
     card.appendChild(head);
 
-    var body = el('div', { cls: 'agent-body hw-body spip-scroll' });
+    var body = el('div', {
+      cls: 'agent-body hw-body spip-scroll',
+      // 스크롤 위치를 인스턴스별로 저장(복원 중엔 저장 안 함 — 클램프값이 저장값을 덮어써 복원이 깨지는 것 방지).
+      on: { scroll: function (e) { if (!st._restoring) st._scroll = e.target.scrollTop; } },
+    });
     if (!agentBridge()) {
       body.appendChild(el('div', { cls: 'agent-empty', text: 'Electron 앱에서만 사용할 수 있습니다.' }));
     } else if ((st.turns || []).length === 0 && !st.running) {
       var e = el('div', { cls: 'agent-empty' });
       e.appendChild(el('div', { text: '무엇을 도와드릴까요?' }));
-      e.appendChild(el('div', { cls: 'agent-empty__hint', text: '요청을 입력하면 도구(할 일 추가·완료·삭제, 메일 확인·읽기·동기화·삭제)를 써서 처리하고 그 과정을 보여줍니다. 대화는 이어집니다(멀티턴).' }));
+      e.appendChild(el('div', { cls: 'agent-empty__hint', text: '할 일·메일뿐 아니라 프로젝트 현황·즐겨찾기·메모·시스템 상태·문서 등 여러 위젯을 도구로 다룹니다. 예: “안 읽은 메일 알려줘”, “방치된 프로젝트 목록”, “메모에 회의록 적어줘”. 대화는 이어집니다(멀티턴).' }));
       body.appendChild(e);
     } else {
       // [멀티턴] 지금까지의 대화 — 각 턴: 사용자 말풍선 + 트레이스 + 최종/오류.
@@ -6189,6 +6195,26 @@ function initBrowser() {
     if (Array.isArray(res.todos)) store.todos = res.todos; // 도구가 바꾼 할 일 즉시 반영(할 일 위젯 동기화)
     if (!res.ok) st.input = msg; // 실패 시 입력 복원(재시도 편의)
     render();
+    // [UI 액티브 이벤트] 에이전트가 요청한 열기 동작(메일함/메일)을 렌더러가 실행 — 렌더 뒤에(팝업이 위로).
+    agentApplyUiActions(res.uiActions);
+  }
+
+  /** [UI 액티브 이벤트] 메인 에이전트가 돌려준 열기 동작을 렌더러 UI 로 실행(메일함/메일 뷰어). */
+  function agentApplyUiActions(actions) {
+    if (!Array.isArray(actions)) return;
+    actions.forEach(function (a) {
+      if (!a || typeof a !== 'object') return;
+      if (a.type === 'open_mailbox') {
+        if (typeof a.accountId === 'string' && a.accountId) store.mailbox.selAccount = a.accountId;
+        if (typeof a.mailbox === 'string' && a.mailbox) store.mailbox.selMailbox = a.mailbox;
+        if (typeof openMailbox === 'function') openMailbox();
+      } else if (a.type === 'open_mail') {
+        var uid = Number(a.uid);
+        if (typeof a.accountId === 'string' && a.accountId && Number.isInteger(uid) && uid > 0 && typeof openMailMessage === 'function') {
+          openMailMessage(a.accountId, uid, { subject: a.subject, from: a.from, date: a.date, mailbox: a.mailbox });
+        }
+      }
+    });
   }
 
   /** [멀티턴] 새 대화 — 이 인스턴스의 대화·컨텍스트 사용량을 초기화. */
@@ -12153,6 +12179,34 @@ function initBrowser() {
       return null;
     },
     destroy: () => { /* 인라인 height 는 교체 노드와 함께 GC */ },
+  });
+  // [Agent] 트랜스크립트 스크롤 위치를 인스턴스별로 복원 — render() 로 노드가 교체돼도 위치 유지.
+  //   마소너리는 rAF 뒤에야 셀 높이(=스크롤 범위)가 정해지므로 레이아웃이 앉은 뒤 2프레임에 걸쳐 건다
+  //   (mdDocBar 의 _chipScroll 과 같은 인스턴스별 보존, preserve.restore 의 2-rAF 타이밍과 동일).
+  RG.widget.define({
+    id: 'agentScroll',
+    init: (root) => {
+      if (typeof document === 'undefined') return null;
+      const scope = root || document;
+      if (typeof scope.querySelectorAll !== 'function') return null;
+      const bodies = scope.querySelectorAll('.home-section .agent-body, .home-group__grid .agent-body');
+      const targets = [];
+      for (let i = 0; i < bodies.length; i++) {
+        const body = bodies[i];
+        const cell = (typeof body.closest === 'function') ? body.closest('.home-section') : null;
+        const iid = cell && cell.dataset ? cell.dataset.homeSection : null;
+        const st = iid ? store.wstate[iid] : null;
+        if (st && typeof st._scroll === 'number' && st._scroll > 0) targets.push({ body, st });
+      }
+      if (!targets.length) return null;
+      const apply = () => targets.forEach((t) => { t.st._restoring = true; t.body.scrollTop = t.st._scroll; });
+      apply();
+      if (typeof requestAnimationFrame === 'function') {
+        requestAnimationFrame(() => { apply(); requestAnimationFrame(() => { apply(); targets.forEach((t) => { t.st._restoring = false; }); }); });
+      } else { targets.forEach((t) => { t.st._restoring = false; }); }
+      return null;
+    },
+    destroy: () => { /* 리스너·표식은 교체 노드/상태와 함께 정리 */ },
   });
 
   /** [M10-P4] 커밋 차트 영역만 부분 갱신 — builderFn 은 빈 호스트만(차트는 commitChart 위젯 소유).

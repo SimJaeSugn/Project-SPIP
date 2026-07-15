@@ -17,6 +17,13 @@
 const uiStateIpc = require('./uiState');
 const mailAccountsIpc = require('./mailAccounts');
 const mailArchiveIpc = require('./mailArchive');
+const dataIpc = require('./data');
+const insightsIpc = require('./insights');
+const shelfIpc = require('./shelf');
+const markdownIpc = require('./markdown');
+const explorerIpc = require('./explorer');
+const briefingIpc = require('./briefing');
+const uiStateStore = require('../../lib/common/uiStateStore');
 const { runAgent, estimateTokens } = require('../../lib/ai/agent');
 
 const MAX_MESSAGE_LEN = 2000;
@@ -47,6 +54,40 @@ const AGENT_SYSTEM = [
   '- get_mail_archive: 로컬 보관함(계정·메일함별 수집 메일 목록)을 반환한다. args {}.',
   '- sync_mail: 서버에서 메일 색인을 다시 수집해 보관함을 갱신한다. args {}. 느릴 수 있다.',
   '- delete_mail: 메일을 삭제한다(서버 휴지통으로 이동). args = {"accountId":"...","mailbox":"...","uid":123}.',
+  '- open_mailbox: 화면에 메일함(보관함) 팝업을 연다. args {} 또는 특정 계정·메일함을 지정 {"accountId":"...","mailbox":"..."}.',
+  '- open_mail: 화면에 메일 1통의 본문 뷰어를 연다. args = {"accountId":"...","uid":123,"mailbox":"..."}. read_mail 은 내용을 읽어 요약할 때, open_mail 은 사용자에게 화면으로 보여줄 때 쓴다.',
+  '',
+  '사용 가능한 도구 — 프로젝트/현황(읽기):',
+  '- list_projects: 스캔된 프로젝트 목록(git 상태·방치 여부·최근 수정). args {}.',
+  '- get_project_stats: 프로젝트 집계(총수·방치 수·언어별·용량). args {}.',
+  '- get_commit_activity: 최근 커밋 활동. args {}.',
+  '- get_system_status: 개발 머신 CPU·메모리·디스크. args {}.',
+  '- get_token_usage: Claude Code·연결 모델 토큰 사용량. args {}.',
+  '',
+  '사용 가능한 도구 — 즐겨찾기(셸프):',
+  '- list_bookmarks: 즐겨찾기 목록. args {}.',
+  '- add_bookmark: 즐겨찾기 추가. args = {"type":"url|folder|file","url":"주소 또는 경로"}.',
+  '- remove_bookmark: 즐겨찾기 삭제. args = {"id":"..."}.',
+  '',
+  '사용 가능한 도구 — 메모:',
+  '- list_memos: 메모 목록(iid·미리보기). args {}.',
+  '- get_memo: 메모 전체 내용 읽기. args = {"iid":"..."(선택, 없으면 첫 메모)}.',
+  '- set_memo: 메모를 통째로 덮어쓰기. args = {"text":"...","iid":"..."(선택)}.',
+  '- append_memo: 메모 끝에 줄 추가(기존 보존). args = {"text":"...","iid":"..."(선택)}.',
+  '- clear_memo: 메모 비우기. args = {"iid":"..."(선택)}.',
+  '',
+  '사용 가능한 도구 — 마크다운 문서(첫 편집기):',
+  '- list_documents: 문서 목록. args {}.',
+  '- read_document: 문서 본문 읽기. args = {"id":"..."}.',
+  '- create_document: 문서 새로 만들기. args = {"title":"...","body":"...(선택)"}.',
+  '- update_document: 문서 수정. args = {"id":"...","title":"...(선택)","body":"...(선택)"}.',
+  '- delete_document: 문서 삭제. args = {"id":"..."}.',
+  '- correct_document: 문서의 마크다운 문법을 AI 로 보정(내용은 바꾸지 않음). args = {"id":"..."}.',
+  '',
+  '사용 가능한 도구 — 탐색기/브리핑:',
+  '- list_explorer_roots: 탐색기 열람 루트 목록. args {}.',
+  '- list_folder: 폴더 내용 나열(등록 루트 안에서만). args = {"path":"..."}.',
+  '- refresh_briefing: AI 브리핑 재생성. args {}.',
   '',
   '규칙:',
   '- 특정 항목(할 일·메일)을 지정하려면, 먼저 목록 도구(list_todos / get_mail_summary / get_mail_archive)로 id·uid 를 확인한 뒤 정확히 지정하는 것이 안전하다.',
@@ -108,8 +149,36 @@ function parseDue(v) {
   return (typeof t === 'number' && Number.isFinite(t) && t > 0) ? t : null;
 }
 
-/* ── 메일 도구용 관찰 요약(컨텍스트 절약: 큰 응답을 LLM 친화적 소형 뷰로) ── */
+/* ── 관찰 요약(컨텍스트 절약: 큰 응답을 LLM 친화적 소형 뷰로) ── */
 function clampStr(v, n) { const s = String(v == null ? '' : v); return s.length > n ? s.slice(0, n) + '…' : s; }
+/** 배치된 위젯 인스턴스 목록(homeWidgets) — 인스턴스별 위젯(메모·편집기)의 iid 해석용. */
+function homeWidgets(ctx) {
+  try {
+    const ui = uiStateStore.read({ logger: ctx && ctx.logger, uiStatePath: ctx && ctx.uiStatePath, deps: ctx && ctx.deps });
+    return Array.isArray(ui.homeWidgets) ? ui.homeWidgets : [];
+  } catch (_) { return []; }
+}
+/** 첫 번째 해당 타입 위젯 인스턴스의 iid(없으면 null). */
+function firstWidgetIid(ctx, type) {
+  const w = homeWidgets(ctx).find((x) => x && x.type === type);
+  return (w && typeof w.iid === 'string') ? w.iid : null;
+}
+/** 프로젝트 1건 → 소형 뷰(스캔 store 원본 필드 방어적 매핑). */
+function projectBrief(p) {
+  if (!p || typeof p !== 'object') return null;
+  const git = p.git || {};
+  const fr = p.freshness || {};
+  return {
+    name: p.name || null,
+    path: clampStr(p.path, 200) || null,
+    language: (p.language && p.language.primary) || null,
+    dirty: git.dirty === true || (Number(git.dirtyCount) > 0) || null,
+    ahead: Number.isFinite(git.ahead) ? git.ahead : null,
+    behind: Number.isFinite(git.behind) ? git.behind : null,
+    isStale: fr.isStale === true || null,
+    lastModified: p.lastModified || p.mtime || (fr && fr.lastModified) || null,
+  };
+}
 
 /** get_mail_summary 응답 → 계정별 unseen + 항목(계정당 최대 10). 자격증명·본문 없음. */
 function summarizeMailSummary(r) {
@@ -144,8 +213,10 @@ function summarizeArchive(r) {
   };
 }
 
-/** 할 일 제어 도구 집합(기존 uiState 핸들러에 배선). 관찰 결과는 작고 안전한 요약만 반환. */
-function buildTools(ctx) {
+/** 도구 집합(할 일·메일 데이터 + 렌더러 UI 열기). uiActions 는 렌더러가 실행할 UI 액션 수집 배열(메인은
+ *   렌더러 UI 를 직접 못 여므로, open_* 도구는 액션을 쌓고 응답으로 돌려준다). 관찰은 작은 요약만. */
+function buildTools(ctx, uiActions) {
+  uiActions = Array.isArray(uiActions) ? uiActions : [];
   return {
     list_todos: {
       desc: '현재 할 일 목록',
@@ -233,6 +304,267 @@ function buildTools(ctx) {
         return (r && r.ok) ? { ok: true, deleted: { uid: Number(a.uid), mailbox: a.mailbox } } : { ok: false, error: (r && r.code) || 'mail_error' };
       },
     },
+
+    /* ── 메일 위젯 UI 액티브 이벤트(렌더러가 실행) ── */
+    open_mailbox: {
+      desc: '메일함 팝업 열기(UI)',
+      run: async (a) => {
+        a = a || {};
+        const act = { type: 'open_mailbox' };
+        if (typeof a.accountId === 'string' && a.accountId) act.accountId = a.accountId;
+        if (typeof a.mailbox === 'string' && a.mailbox) act.mailbox = a.mailbox;
+        uiActions.push(act);
+        return { ok: true, opened: 'mailbox', accountId: act.accountId || null, mailbox: act.mailbox || null };
+      },
+    },
+    open_mail: {
+      desc: '메일 본문 뷰어 열기(UI)',
+      run: async (a) => {
+        a = a || {};
+        const uid = Number(a.uid);
+        if (!a.accountId || !(uid > 0)) return { ok: false, error: 'need_account_uid' };
+        uiActions.push({
+          type: 'open_mail', accountId: String(a.accountId), uid,
+          mailbox: (typeof a.mailbox === 'string' && a.mailbox) ? a.mailbox : undefined,
+          subject: (a.subject != null) ? clampStr(a.subject, 200) : undefined,
+          from: (a.from != null) ? clampStr(a.from, 120) : undefined,
+          date: (a.date != null) ? clampStr(a.date, 64) : undefined,
+        });
+        return { ok: true, opened: 'mail', accountId: String(a.accountId), uid };
+      },
+    },
+
+    /* ── 프로젝트(주의 필요·최근 활동·요약·디스크 회수 위젯) ── */
+    list_projects: {
+      desc: '스캔된 프로젝트 목록(git 상태·방치 여부·최근 수정)',
+      run: async () => {
+        try {
+          const r = dataIpc.getProjects(ctx);
+          const projects = (r && Array.isArray(r.projects)) ? r.projects : [];
+          return { ok: true, count: projects.length, projects: projects.slice(0, 40).map(projectBrief).filter(Boolean) };
+        } catch (_) { return { ok: false, error: 'scan_unavailable' }; }
+      },
+    },
+    get_project_stats: {
+      desc: '프로젝트 집계(총수·방치 수·언어별·용량)',
+      run: async () => {
+        try { const s = dataIpc.getStats(ctx); return { ok: true, total: s.total, staleCount: s.staleCount, byLanguage: s.byLanguage, totalBytes: s.totalBytes }; }
+        catch (_) { return { ok: false, error: 'scan_unavailable' }; }
+      },
+    },
+    /* ── 주간 생산성·커밋 히트맵 위젯 ── */
+    get_commit_activity: {
+      desc: '최근 커밋 활동(빈도)',
+      run: async () => {
+        try { const r = await insightsIpc.getCommitActivity(ctx, {}); return r && r.ok !== false ? { ok: true, activity: r } : { ok: false, error: (r && r.code) || 'unavailable' }; }
+        catch (_) { return { ok: false, error: 'unavailable' }; }
+      },
+    },
+    /* ── 시스템 상태 위젯 ── */
+    get_system_status: {
+      desc: '개발 머신 CPU·메모리·디스크',
+      run: async () => {
+        try { const r = await insightsIpc.getSystemStatus(ctx); return r && r.ok !== false ? { ok: true, status: r } : { ok: false, error: 'unavailable' }; }
+        catch (_) { return { ok: false, error: 'unavailable' }; }
+      },
+    },
+    /* ── 토큰 사용량 위젯 ── */
+    get_token_usage: {
+      desc: 'Claude Code·연결 모델 토큰 사용량',
+      run: async () => {
+        try { const r = insightsIpc.getClaudeUsage(ctx); return r && r.ok !== false ? { ok: true, usage: r } : { ok: false, error: 'unavailable' }; }
+        catch (_) { return { ok: false, error: 'unavailable' }; }
+      },
+    },
+    /* ── 즐겨찾기 셸프 위젯 ── */
+    list_bookmarks: {
+      desc: '즐겨찾기(사이트·폴더·파일) 목록',
+      run: async () => {
+        try { const r = shelfIpc.list(undefined, ctx); return { ok: true, items: (r && Array.isArray(r.items)) ? r.items : [] }; }
+        catch (_) { return { ok: false, error: 'unavailable' }; }
+      },
+    },
+    add_bookmark: {
+      desc: '즐겨찾기 추가',
+      run: async (a) => {
+        a = a || {};
+        // shelf.add 는 {type, ref} 를 받는다 — LLM 이 준 url/path 를 ref 로 매핑.
+        const ref = (typeof a.ref === 'string' && a.ref) ? a.ref : ((typeof a.url === 'string' && a.url) ? a.url : (typeof a.path === 'string' ? a.path : ''));
+        if (!ref) return { ok: false, error: 'need_url_or_path' };
+        try { const r = await shelfIpc.add({ type: a.type, ref }, ctx); return (r && r.ok !== false) ? { ok: true, added: ref } : { ok: false, error: (r && r.code) || 'failed' }; }
+        catch (_) { return { ok: false, error: 'failed' }; }
+      },
+    },
+    remove_bookmark: {
+      desc: '즐겨찾기 삭제. args = {"id":"..."}',
+      run: async (a) => {
+        a = a || {};
+        if (!a.id) return { ok: false, error: 'need_id' };
+        try { const r = shelfIpc.remove({ id: a.id }, ctx); return (r && r.ok !== false) ? { ok: true, id: a.id } : { ok: false, error: (r && r.code) || 'failed' }; }
+        catch (_) { return { ok: false, error: 'failed' }; }
+      },
+    },
+    /* ── 메모(스크래치패드) 위젯 — 인스턴스별 ── */
+    list_memos: {
+      desc: '메모 목록(iid·미리보기)',
+      run: async () => {
+        try {
+          const ui = uiStateIpc.getUiState(ctx);
+          const sp = (ui && ui.scratchpads && typeof ui.scratchpads === 'object') ? ui.scratchpads : {};
+          return { ok: true, memos: Object.keys(sp).map((iid) => ({ iid, preview: clampStr((sp[iid] && sp[iid].text) || '', 120) })) };
+        } catch (_) { return { ok: false, error: 'unavailable' }; }
+      },
+    },
+    get_memo: {
+      desc: '메모 전체 내용 읽기. args = {"iid":"..."(선택, 없으면 첫 메모)}',
+      run: async (a) => {
+        a = a || {};
+        const iid = (typeof a.iid === 'string' && a.iid) ? a.iid : firstWidgetIid(ctx, 'scratchpad');
+        if (!iid) return { ok: false, error: 'no_memo_widget' };
+        try {
+          const sp = (uiStateIpc.getUiState(ctx).scratchpads || {})[iid];
+          return { ok: true, iid, text: clampStr((sp && sp.text) || '', 1800) };
+        } catch (_) { return { ok: false, error: 'failed' }; }
+      },
+    },
+    set_memo: {
+      desc: '메모 내용을 통째로 설정(덮어쓰기). args = {"text":"...", "iid":"..."(선택, 없으면 첫 메모)}',
+      run: async (a) => {
+        a = a || {};
+        if (typeof a.text !== 'string') return { ok: false, error: 'need_text' };
+        const iid = (typeof a.iid === 'string' && a.iid) ? a.iid : firstWidgetIid(ctx, 'scratchpad');
+        if (!iid) return { ok: false, error: 'no_memo_widget' };
+        try { const r = uiStateIpc.setScratchpad({ iid, text: a.text }, ctx); return (r && r.ok !== false) ? { ok: true, iid } : { ok: false, error: (r && r.code) || 'failed' }; }
+        catch (_) { return { ok: false, error: 'failed' }; }
+      },
+    },
+    append_memo: {
+      desc: '메모 끝에 줄 추가(기존 내용 보존). args = {"text":"...", "iid":"..."(선택)}',
+      run: async (a) => {
+        a = a || {};
+        if (typeof a.text !== 'string' || !a.text) return { ok: false, error: 'need_text' };
+        const iid = (typeof a.iid === 'string' && a.iid) ? a.iid : firstWidgetIid(ctx, 'scratchpad');
+        if (!iid) return { ok: false, error: 'no_memo_widget' };
+        try {
+          const cur = (((uiStateIpc.getUiState(ctx).scratchpads || {})[iid]) || {}).text || '';
+          const next = cur ? (cur.replace(/\s+$/, '') + '\n' + a.text) : a.text;
+          const r = uiStateIpc.setScratchpad({ iid, text: next }, ctx);
+          return (r && r.ok !== false) ? { ok: true, iid } : { ok: false, error: (r && r.code) || 'failed' };
+        } catch (_) { return { ok: false, error: 'failed' }; }
+      },
+    },
+    clear_memo: {
+      desc: '메모 비우기. args = {"iid":"..."(선택, 없으면 첫 메모)}',
+      run: async (a) => {
+        a = a || {};
+        const iid = (typeof a.iid === 'string' && a.iid) ? a.iid : firstWidgetIid(ctx, 'scratchpad');
+        if (!iid) return { ok: false, error: 'no_memo_widget' };
+        try { const r = uiStateIpc.setScratchpad({ iid, text: '' }, ctx); return (r && r.ok !== false) ? { ok: true, iid } : { ok: false, error: (r && r.code) || 'failed' }; }
+        catch (_) { return { ok: false, error: 'failed' }; }
+      },
+    },
+    /* ── 마크다운 편집기 위젯 — 인스턴스별(첫 편집기) ── */
+    list_documents: {
+      desc: '마크다운 문서 목록(첫 편집기)',
+      run: async () => {
+        const box = firstWidgetIid(ctx, 'mdedit');
+        if (!box) return { ok: false, error: 'no_editor_widget' };
+        try { const r = markdownIpc.list({ box }, ctx); return (r && r.ok !== false) ? { ok: true, docs: (r.docs || []).map((d) => ({ id: d.id, title: d.title, size: d.size })) } : { ok: false, error: (r && r.code) || 'failed' }; }
+        catch (_) { return { ok: false, error: 'failed' }; }
+      },
+    },
+    read_document: {
+      desc: '마크다운 문서 본문 읽기. args = {"id":"..."}',
+      run: async (a) => {
+        a = a || {};
+        const box = firstWidgetIid(ctx, 'mdedit');
+        if (!box) return { ok: false, error: 'no_editor_widget' };
+        if (!a.id) return { ok: false, error: 'need_id' };
+        try { const r = markdownIpc.get({ box, id: a.id }, ctx); return (r && r.ok && r.doc) ? { ok: true, title: r.doc.title, body: clampStr(r.doc.body, 1500) } : { ok: false, error: (r && r.code) || 'not_found' }; }
+        catch (_) { return { ok: false, error: 'failed' }; }
+      },
+    },
+    create_document: {
+      desc: '마크다운 문서 새로 만들기(첫 편집기). args = {"title":"...", "body":"...(선택)"}',
+      run: async (a) => {
+        a = a || {};
+        const box = firstWidgetIid(ctx, 'mdedit');
+        if (!box) return { ok: false, error: 'no_editor_widget' };
+        try { const r = markdownIpc.create({ box, title: a.title, body: (typeof a.body === 'string') ? a.body : '' }, ctx); return (r && r.ok && r.doc) ? { ok: true, id: r.doc.id, title: r.doc.title } : { ok: false, error: (r && r.code) || 'failed' }; }
+        catch (_) { return { ok: false, error: 'failed' }; }
+      },
+    },
+    update_document: {
+      desc: '마크다운 문서 수정. args = {"id":"...", "title":"...(선택)", "body":"...(선택)"}',
+      run: async (a) => {
+        a = a || {};
+        const box = firstWidgetIid(ctx, 'mdedit');
+        if (!box) return { ok: false, error: 'no_editor_widget' };
+        if (!a.id) return { ok: false, error: 'need_id' };
+        const patch = { box, id: a.id };
+        if (typeof a.title === 'string') patch.title = a.title;
+        if (typeof a.body === 'string') patch.body = a.body;
+        if (patch.title === undefined && patch.body === undefined) return { ok: false, error: 'need_title_or_body' };
+        try { const r = markdownIpc.update(patch, ctx); return (r && r.ok) ? { ok: true, id: a.id } : { ok: false, error: (r && r.code) || 'failed' }; }
+        catch (_) { return { ok: false, error: 'failed' }; }
+      },
+    },
+    delete_document: {
+      desc: '마크다운 문서 삭제. args = {"id":"..."}',
+      run: async (a) => {
+        a = a || {};
+        const box = firstWidgetIid(ctx, 'mdedit');
+        if (!box) return { ok: false, error: 'no_editor_widget' };
+        if (!a.id) return { ok: false, error: 'need_id' };
+        try { const r = markdownIpc.remove({ box, id: a.id }, ctx); return (r && r.ok) ? { ok: true, id: a.id } : { ok: false, error: (r && r.code) || 'not_found' }; }
+        catch (_) { return { ok: false, error: 'failed' }; }
+      },
+    },
+    correct_document: {
+      desc: '문서의 마크다운 문법을 AI 로 보정(내용 첨삭 없이). args = {"id":"..."}',
+      run: async (a) => {
+        a = a || {};
+        const box = firstWidgetIid(ctx, 'mdedit');
+        if (!box) return { ok: false, error: 'no_editor_widget' };
+        if (!a.id) return { ok: false, error: 'need_id' };
+        try {
+          const g = markdownIpc.get({ box, id: a.id }, ctx);
+          if (!g || !g.ok || !g.doc) return { ok: false, error: (g && g.code) || 'not_found' };
+          const c = await markdownIpc.correct({ text: g.doc.body }, ctx);
+          if (!c || !c.ok) return { ok: false, error: (c && c.code) || 'correct_failed' };
+          const u = markdownIpc.update({ box, id: a.id, body: c.text }, ctx);
+          return (u && u.ok) ? { ok: true, id: a.id, corrected: true } : { ok: false, error: (u && u.code) || 'failed' };
+        } catch (_) { return { ok: false, error: 'failed' }; }
+      },
+    },
+    /* ── 폴더 탐색기 위젯 — 등록 루트 내 읽기 전용 ── */
+    list_explorer_roots: {
+      desc: '탐색기 열람 루트 목록',
+      run: async () => {
+        try { const r = explorerIpc.getRoots(undefined, ctx); return { ok: true, roots: (r && Array.isArray(r.roots)) ? r.roots : [] }; }
+        catch (_) { return { ok: false, error: 'unavailable' }; }
+      },
+    },
+    list_folder: {
+      desc: '폴더 내용 나열(등록 루트 안에서만). args = {"path":"..."}',
+      run: async (a) => {
+        a = a || {};
+        if (!a.path) return { ok: false, error: 'need_path' };
+        try {
+          const r = explorerIpc.list({ path: String(a.path) }, ctx);
+          if (!r || r.ok === false) return { ok: false, error: (r && r.code) || 'denied' };
+          return { ok: true, path: r.path, entries: (Array.isArray(r.entries) ? r.entries : []).slice(0, 60).map((e) => ({ name: e.name, dir: !!e.isDir })) };
+        } catch (_) { return { ok: false, error: 'failed' }; }
+      },
+    },
+    /* ── 오늘의 브리핑 위젯 ── */
+    refresh_briefing: {
+      desc: 'AI 브리핑 재생성 트리거',
+      run: async () => {
+        try { const r = briefingIpc.trigger({ reason: 'manual' }, ctx); return (r && r.ok !== false) ? { ok: true } : { ok: false, error: (r && r.code) || 'disabled' }; }
+        catch (_) { return { ok: false, error: 'failed' }; }
+      },
+    },
   };
 }
 
@@ -262,7 +594,9 @@ async function run(args, ctx) {
   const rawHistory = normalizeHistory(args && args.history);
   const trimmed = trimHistory(rawHistory, CONTEXT_LIMIT_TOKENS);
 
-  const res = await runAgent({ llm, tools: buildTools(ctx), system: AGENT_SYSTEM, message, history: trimmed.history, maxSteps: 6 });
+  // [UI 액티브 이벤트] open_* 도구가 쌓는 렌더러 실행용 액션(메일함/메일 열기 등).
+  const uiActions = [];
+  const res = await runAgent({ llm, tools: buildTools(ctx, uiActions), system: AGENT_SYSTEM, message, history: trimmed.history, maxSteps: 6 });
 
   // [컨텍스트 사용현황] 모델이 promptTokens 를 보고하면 그 값(정확), 아니면 프롬프트 char 수로 추정.
   const modelPrompt = res.usage && Number.isFinite(res.usage.promptTokens) ? res.usage.promptTokens : null;
@@ -273,6 +607,7 @@ async function run(args, ctx) {
     final: res.final || '',
     steps: Array.isArray(res.steps) ? res.steps : [],
     todos: currentTodos(ctx),       // 실행 후 최신 할 일(렌더러가 즉시 반영)
+    uiActions: uiActions,           // [UI 액티브 이벤트] 렌더러가 실행할 열기 동작(메일함/메일)
     // [컨텍스트 사용현황과 제한기준] 렌더러가 미터로 표시.
     context: {
       tokens: contextTokens,

@@ -313,3 +313,185 @@ test('AG-3 — IPC run: 에이전트가 get_mail_summary 도구로 메일을 확
   assert.strictEqual(res.ok, true);
   assert.ok(res.steps.some((s) => s.tool === 'get_mail_summary' && /회의 안내/.test(s.observation)), '메일 도구 실행·관찰');
 });
+
+/* ───── [메일 UI 액티브 이벤트] AG-4 — open_mailbox / open_mail ───── */
+
+test('AG-4 — open_mailbox: uiAction 수집(계정·메일함 선택 옵션)', async () => {
+  const ua = [];
+  const tools = agentIpc.buildTools(ctxWithMail(), ua);
+  const r = await tools.open_mailbox.run({ accountId: 'm1', mailbox: 'INBOX' });
+  assert.strictEqual(r.ok, true);
+  assert.deepStrictEqual(ua[0], { type: 'open_mailbox', accountId: 'm1', mailbox: 'INBOX' });
+  await tools.open_mailbox.run({}); // 인자 없이도 열기
+  assert.deepStrictEqual(ua[1], { type: 'open_mailbox' });
+});
+
+test('AG-4 — open_mail: uiAction 수집 + 인자 검증(accountId·uid 필수)', async () => {
+  const ua = [];
+  const tools = agentIpc.buildTools(ctxWithMail(), ua);
+  const r = await tools.open_mail.run({ accountId: 'm1', uid: 10, mailbox: 'INBOX', subject: '회의 안내' });
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(ua[0].type, 'open_mail');
+  assert.strictEqual(ua[0].accountId, 'm1');
+  assert.strictEqual(ua[0].uid, 10);
+  const bad = await tools.open_mail.run({ uid: 10 });
+  assert.strictEqual(bad.error, 'need_account_uid');
+  assert.strictEqual(ua.length, 1, '검증 실패 시 UI 액션 미수집');
+});
+
+test('AG-4 — IPC run: 에이전트가 open_mailbox 하면 uiActions 로 반환', async () => {
+  const ctx = ctxWithMail();
+  const scripted = [
+    '{"thought":"메일함 열기","tool":"open_mailbox","args":{}}',
+    '{"final":"메일함을 열었어요."}',
+  ];
+  let n = 0;
+  ctx.llmClient = { streamBriefing: async () => ({ ok: true, text: scripted[n++] }) };
+  const res = await agentIpc.run({ message: '메일함 열어줘' }, ctx);
+  assert.strictEqual(res.ok, true);
+  assert.ok(Array.isArray(res.uiActions) && res.uiActions.some((x) => x.type === 'open_mailbox'), 'uiActions 에 open_mailbox');
+  // 프롬프트에 UI 도구 설명.
+  assert.ok(/open_mailbox/.test(agentIpc.AGENT_SYSTEM) && /open_mail\b/.test(agentIpc.AGENT_SYSTEM), '프롬프트에 UI 열기 도구');
+});
+
+test('AG-4 — 렌더러: agentApplyUiActions 가 openMailbox/openMailMessage 실행 + agentRun 배선', () => {
+  const ROOT = path.join(__dirname, '..');
+  const APP = fs.readFileSync(path.join(ROOT, 'public', 'app.js'), 'utf8');
+  assert.ok(/function agentApplyUiActions\(actions\)/.test(APP), 'UI 액션 실행기 정의');
+  assert.ok(/agentApplyUiActions\(res\.uiActions\)/.test(APP), 'agentRun 이 uiActions 실행');
+  assert.ok(/'open_mailbox'[\s\S]{0,400}openMailbox\(\)/.test(APP), 'open_mailbox → openMailbox()');
+  assert.ok(/'open_mail'[\s\S]{0,500}openMailMessage\(a\.accountId/.test(APP), 'open_mail → openMailMessage()');
+});
+
+/* ───── [전 위젯 제어 도구] AG-5 ───── */
+
+function ctxAllWidgets() {
+  const ctx = ctxWithTodos();
+  ctx.store = { schemaVersion: 1, generatedAt: null, hasSnapshot: true, stats: { totalBytes: 1000 },
+    getProjects: () => [
+      { name: 'proj-a', path: '/x/proj-a', language: { primary: 'JavaScript' }, git: { dirty: true, ahead: 2, behind: 0 }, freshness: { isStale: false }, lastModified: '2026-07-15' },
+      { name: 'proj-b', path: '/x/proj-b', language: { primary: 'Python' }, git: { dirty: false }, freshness: { isStale: true }, lastModified: '2026-01-01' },
+    ] };
+  return ctx;
+}
+
+test('AG-5 — 전 위젯 도구가 buildTools 에 배선(28개+)', () => {
+  const tools = agentIpc.buildTools(ctxAllWidgets(), []);
+  const need = ['list_projects', 'get_project_stats', 'get_commit_activity', 'get_system_status', 'get_token_usage',
+    'list_bookmarks', 'add_bookmark', 'remove_bookmark', 'list_memos', 'set_memo',
+    'list_documents', 'read_document', 'list_explorer_roots', 'list_folder', 'refresh_briefing'];
+  for (const n of need) assert.strictEqual(typeof tools[n].run, 'function', '도구 배선: ' + n);
+  assert.ok(Object.keys(tools).length >= 28, '총 28개 이상 도구');
+  // 프롬프트가 새 위젯 도구를 설명.
+  for (const n of ['list_projects', 'get_system_status', 'list_bookmarks', 'set_memo', 'refresh_briefing']) {
+    assert.ok(new RegExp(n).test(agentIpc.AGENT_SYSTEM), '프롬프트에 ' + n);
+  }
+});
+
+test('AG-5 — list_projects/get_project_stats: 스캔 store 를 소형 뷰로', async () => {
+  const tools = agentIpc.buildTools(ctxAllWidgets(), []);
+  const p = await tools.list_projects.run({});
+  assert.strictEqual(p.ok, true);
+  assert.strictEqual(p.count, 2);
+  assert.strictEqual(p.projects[0].name, 'proj-a');
+  assert.strictEqual(p.projects[0].dirty, true);
+  assert.strictEqual(p.projects[1].isStale, true);
+  const s = await tools.get_project_stats.run({});
+  assert.strictEqual(s.total, 2);
+  assert.strictEqual(s.staleCount, 1);
+});
+
+test('AG-5 — 인자 검증(추측 방지): set_memo/remove_bookmark/read_document/list_folder', async () => {
+  const tools = agentIpc.buildTools(ctxAllWidgets(), []);
+  assert.strictEqual((await tools.set_memo.run({})).error, 'need_text');
+  assert.strictEqual((await tools.remove_bookmark.run({})).error, 'need_id');
+  assert.strictEqual((await tools.list_folder.run({})).error, 'need_path');
+  // 배치된 편집기/메모 위젯이 없으면 명확한 코드로 거부.
+  assert.strictEqual((await tools.list_documents.run({})).error, 'no_editor_widget');
+  assert.strictEqual((await tools.set_memo.run({ text: 'hi' })).error, 'no_memo_widget');
+});
+
+test('AG-5 — IPC run: 에이전트가 list_projects 도구로 현황을 조회', async () => {
+  const ctx = ctxAllWidgets();
+  const scripted = [
+    '{"tool":"list_projects","args":{}}',
+    '{"final":"프로젝트 2개 중 1개가 방치 상태예요."}',
+  ];
+  let n = 0;
+  ctx.llmClient = { streamBriefing: async () => ({ ok: true, text: scripted[n++] }) };
+  const res = await agentIpc.run({ message: '방치된 프로젝트 알려줘' }, ctx);
+  assert.strictEqual(res.ok, true);
+  assert.ok(res.steps.some((s) => s.tool === 'list_projects' && /proj-b/.test(s.observation)), 'list_projects 실행·관찰');
+});
+
+/* ───── [마크다운·메모 추가 기능] AG-6 ───── */
+
+function ctxWithWidgets() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'spip-agent-w-'));
+  const uiPath = path.join(dir, 'ui.json');
+  const mdPath = path.join(dir, 'md.json');
+  // 편집기·메모 인스턴스를 배치한 상태를 시드(firstWidgetIid 가 해석).
+  fs.writeFileSync(uiPath, JSON.stringify({
+    schemaVersion: 6,
+    homeWidgets: [{ iid: 'md1', type: 'mdedit', name: '' }, { iid: 'memo1', type: 'scratchpad', name: '' }],
+    scratchpads: {},
+  }), 'utf8');
+  let idn = 0;
+  return { uiStatePath: uiPath, mdDocsPath: mdPath, genTodoId: () => 't' + (++idn), nowMs: () => 1700000000000, config: { briefing: { baseURL: 'x', model: 'm' } } };
+}
+
+test('AG-6 메모 — set/get/append/clear 왕복', async () => {
+  const tools = agentIpc.buildTools(ctxWithWidgets(), []);
+  assert.strictEqual((await tools.set_memo.run({ text: '첫 줄' })).ok, true);
+  assert.strictEqual((await tools.get_memo.run({})).text, '첫 줄');
+  assert.strictEqual((await tools.append_memo.run({ text: '둘째 줄' })).ok, true);
+  assert.strictEqual((await tools.get_memo.run({})).text, '첫 줄\n둘째 줄', '기존 보존하고 줄 추가');
+  assert.strictEqual((await tools.clear_memo.run({})).ok, true);
+  assert.strictEqual((await tools.get_memo.run({})).text, '', '비움');
+});
+
+test('AG-6 마크다운 — create/list/read/update/delete 왕복', async () => {
+  const tools = agentIpc.buildTools(ctxWithWidgets(), []);
+  const c = await tools.create_document.run({ title: '회의록', body: '# 회의록\n\n내용' });
+  assert.strictEqual(c.ok, true, JSON.stringify(c));
+  const id = c.id;
+  const l = await tools.list_documents.run({});
+  assert.ok(l.docs.some((d) => d.id === id), '목록에 새 문서');
+  assert.match((await tools.read_document.run({ id })).body, /내용/);
+  assert.strictEqual((await tools.update_document.run({ id, body: '# 회의록\n\n수정됨' })).ok, true);
+  assert.match((await tools.read_document.run({ id })).body, /수정됨/);
+  assert.strictEqual((await tools.delete_document.run({ id })).ok, true);
+  assert.strictEqual((await tools.read_document.run({ id })).error, 'NOT_FOUND', '삭제 후엔 없음');
+});
+
+test('AG-6 마크다운 — correct_document 가 문법 보정 후 저장', async () => {
+  const ctx = ctxWithWidgets();
+  ctx.llmClient = { streamBriefing: async () => ({ ok: true, text: '# 제목\n\n- 항목' }) }; // 보정된 마크다운
+  const tools = agentIpc.buildTools(ctx, []);
+  const c = await tools.create_document.run({ title: 't', body: '#제목\n\n-항목' });
+  const r = await tools.correct_document.run({ id: c.id });
+  assert.strictEqual(r.ok, true, JSON.stringify(r));
+  assert.strictEqual((await tools.read_document.run({ id: c.id })).body, '# 제목\n\n- 항목', '보정 결과 저장');
+});
+
+test('AG-6 — 프롬프트에 신규 메모·문서 도구 설명', () => {
+  for (const n of ['get_memo', 'append_memo', 'clear_memo', 'create_document', 'update_document', 'delete_document', 'correct_document']) {
+    assert.ok(new RegExp(n).test(agentIpc.AGENT_SYSTEM), '프롬프트: ' + n);
+  }
+});
+
+/* ───── [스크롤 위치 보존] AG-7 ───── */
+
+test('AG-7 — 트랜스크립트 스크롤 위치 인스턴스별 보존 배선', () => {
+  const ROOT = path.join(__dirname, '..');
+  const APP = fs.readFileSync(path.join(ROOT, 'public', 'app.js'), 'utf8');
+  // wstate 에 스크롤 위치 필드.
+  assert.ok(/_scroll:\s*0[\s\S]{0,80}트랜스크립트 스크롤/.test(APP) || /_scroll:\s*0,/.test(APP), 'wstate._scroll');
+  // agent-body 스크롤 리스너가 위치 저장(복원 중엔 스킵).
+  assert.ok(/on:\s*\{\s*scroll:[\s\S]{0,120}st\._scroll\s*=\s*e\.target\.scrollTop/.test(APP), '스크롤 저장 리스너');
+  assert.ok(/!st\._restoring/.test(APP), '복원 중 저장 스킵 가드');
+  // RG.widget 이 render 후 위치를 2-rAF 로 복원.
+  assert.ok(/id:\s*'agentScroll'/.test(APP), 'agentScroll 위젯');
+  assert.ok(/\.agent-body[\s\S]{0,600}scrollTop\s*=\s*t\.st\._scroll/.test(APP), 'agent-body 스크롤 복원');
+  assert.ok(/requestAnimationFrame\([\s\S]{0,120}requestAnimationFrame/.test(APP), '레이아웃 앉은 뒤 2-rAF 복원');
+});
