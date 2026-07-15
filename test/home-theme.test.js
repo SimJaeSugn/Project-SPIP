@@ -62,6 +62,19 @@ test('HT-2 — 메모(scratchpad): 기본·포커스 배경이 모두 테마 변
   assert.ok(/\.scratch-input:focus\s*\{[^}]*background:\s*var\(--/.test(CSS), '포커스 배경도 테마 변수');
 });
 
+test('HT-3 — 할 일 위젯 입력창이 테마 배경을 쓴다(다크 흰색 방지) + color-scheme', () => {
+  // 입력에 background 를 명시하지 않으면 다크에서 UA 기본(흰색)으로 남는다.
+  assert.ok(/할 일 입력 후 Enter[\s\S]{0,240}background:var\(--panel\)/.test(APP), '할 일 텍스트 입력 배경');
+  assert.ok((APP.match(/datetime-local[\s\S]{0,240}background:var\(--panel\)/g) || []).length >= 1, '마감(datetime) 입력 배경');
+  assert.ok(/:root\[data-theme="dark"\]\s*\{[^}]*color-scheme:\s*dark/.test(CSS), '다크 color-scheme(네이티브 컨트롤·스크롤바)');
+});
+
+test('TODO-DUE-1 — 마감 미입력 시 오늘 날짜를 기본 마감으로', () => {
+  assert.ok(/function todayDefaultDue\(\)/.test(APP), '오늘 기본 마감 헬퍼');
+  assert.ok(/setHours\(23, 59/.test(APP), '오늘 끝(23:59) 기준');
+  assert.ok(/if \(dueAt == null\) dueAt = todayDefaultDue\(\)/.test(APP), 'onAddTodo 에서 미입력 시 기본 적용');
+});
+
 test('HT-2 — 즐겨찾기(shelf): 렌더 영역에 테마 미적용 중립 색조·반전칩 잔재 없음', () => {
   const a = APP.indexOf('function renderHomeShelf(');
   const b = APP.indexOf('function renderDashboard()');

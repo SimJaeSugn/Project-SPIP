@@ -3493,7 +3493,7 @@ function initBrowser() {
     if (store.todoAdding) {
       var addWrap = el('div', { style: 'border-top:1px solid var(--border-soft);margin-top:10px;padding-top:12px;display:flex;flex-direction:column;gap:8px;' });
       var addRow = el('div', { style: 'display:flex;gap:8px;' });
-      var input = el('input', { attrs: { type: 'text', placeholder: '할 일 입력 후 Enter', 'aria-label': '할 일 추가', autocomplete: 'off' }, style: 'flex:1;min-width:0;border:1px solid var(--border);border-radius:8px;padding:7px 10px;font-size:12.5px;color:var(--t1);outline:none;' });
+      var input = el('input', { attrs: { type: 'text', placeholder: '할 일 입력 후 Enter', 'aria-label': '할 일 추가', autocomplete: 'off' }, style: 'flex:1;min-width:0;border:1px solid var(--border);border-radius:8px;padding:7px 10px;font-size:12.5px;color:var(--t1);background:var(--panel);outline:none;' });
       input.value = store.todoInput;
       input.addEventListener('input', function (e) { store.todoInput = e.target.value || ''; });
       input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); onAddTodo(); } if (e.key === 'Escape') { store.todoAdding = false; store.todoInput = ''; store.todoDueInput = ''; render(); } });
@@ -3504,7 +3504,7 @@ function initBrowser() {
       // [백로그2-4] 선택 마감 일시(datetime-local). 비우면 마감 없음.
       var dueRow = el('div', { style: 'display:flex;align-items:center;gap:8px;' });
       dueRow.appendChild(el('span', { text: '마감(선택)', style: 'font-size:11px;color:var(--t4);flex:0 0 auto;' }));
-      var dueInput = el('input', { attrs: { type: 'datetime-local', 'aria-label': '마감 일시' }, style: 'flex:1;min-width:0;border:1px solid var(--border);border-radius:8px;padding:6px 9px;font-size:12px;color:var(--t2);outline:none;' });
+      var dueInput = el('input', { attrs: { type: 'datetime-local', 'aria-label': '마감 일시' }, style: 'flex:1;min-width:0;border:1px solid var(--border);border-radius:8px;padding:6px 9px;font-size:12px;color:var(--t2);background:var(--panel);outline:none;' });
       dueInput.value = store.todoDueInput || '';
       dueInput.addEventListener('input', function (e) { store.todoDueInput = e.target.value || ''; });
       if (store.busyTodos) dueInput.disabled = true;
@@ -3535,6 +3535,12 @@ function initBrowser() {
     var t = Date.parse(v); // datetime-local은 로컬 시간으로 해석
     return (typeof t === 'number' && isFinite(t)) ? t : null;
   }
+  /** [기본 마감] 마감 미입력 시 기본값 — 오늘(로컬) 끝(23:59) ms. store.now 있으면 그 날짜 기준. */
+  function todayDefaultDue() {
+    var d = (store.now instanceof Date) ? new Date(store.now.getTime()) : new Date();
+    d.setHours(23, 59, 0, 0);
+    return d.getTime();
+  }
   /** ms → datetime-local 입력값('YYYY-MM-DDTHH:mm', 로컬). 없으면 ''. */
   function toDueInput(ms) {
     if (typeof ms !== 'number' || !isFinite(ms) || ms <= 0) return '';
@@ -3546,7 +3552,9 @@ function initBrowser() {
     var v = (store.todoInput || '').trim();
     if (!v) { toast('할 일 내용을 입력하세요.', true); return; }
     if (store.busyTodos || !bridgeHas('addTodo')) return;
+    // [기본 마감] 마감 일자를 입력하지 않았으면 오늘 날짜를 기본으로 넣는다.
     var dueAt = parseDueInput(store.todoDueInput);
+    if (dueAt == null) dueAt = todayDefaultDue();
     store.busyTodos = true; render();
     var res = await ipc('addTodo', v, dueAt);
     store.busyTodos = false;
@@ -3567,7 +3575,7 @@ function initBrowser() {
     var wrap = el('div', { style: 'border-top:1px solid var(--border-soft);margin-top:8px;padding-top:10px;display:flex;flex-direction:column;gap:8px;' });
     wrap.appendChild(el('div', { text: '“' + t.text + '” 마감 일시', style: 'font-size:11.5px;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;' }));
     var row = el('div', { style: 'display:flex;gap:8px;align-items:center;' });
-    var inp = el('input', { attrs: { type: 'datetime-local', 'aria-label': '마감 일시 변경' }, style: 'flex:1;min-width:0;border:1px solid var(--border);border-radius:8px;padding:6px 9px;font-size:12px;color:var(--t2);outline:none;' });
+    var inp = el('input', { attrs: { type: 'datetime-local', 'aria-label': '마감 일시 변경' }, style: 'flex:1;min-width:0;border:1px solid var(--border);border-radius:8px;padding:6px 9px;font-size:12px;color:var(--t2);background:var(--panel);outline:none;' });
     inp.value = store.todoDueEditInput || '';
     inp.addEventListener('input', function (e) { store.todoDueEditInput = e.target.value || ''; });
     row.appendChild(inp);

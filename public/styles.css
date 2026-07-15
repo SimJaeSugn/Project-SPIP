@@ -35,6 +35,7 @@
 }
 
 :root {
+  color-scheme: light;      /* 네이티브 컨트롤(datetime 피커·스크롤바 등)을 라이트로 */
   --bg: #f6f6f5;
   --panel: #fff;
   --border: #e7e5e4;
@@ -71,6 +72,7 @@
 /* =========================== 다크 테마 =========================== */
 /* 변수만 재정의하면 var()를 쓰는 대부분 요소가 자동 대응. 반전 요소(아래)만 별도 보정. */
 :root[data-theme="dark"] {
+  color-scheme: dark;       /* 네이티브 컨트롤(datetime 피커·스크롤바 등)을 다크로 */
   --bg: #0c0a09;
   --panel: #1c1917;
   --surface-2: #232020;
