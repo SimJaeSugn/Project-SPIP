@@ -470,12 +470,12 @@ input, button, select { font-family: inherit; }
  *   §3 코너 규약: textarea 네이티브 리사이즈(resize:none) → 위젯 우하단 리사이즈 핸들과 충돌 회피. */
 .scratch-input {
   flex: 1 1 auto; min-height: 140px; width: 100%; box-sizing: border-box;
-  resize: none; border: 1px solid var(--border); border-radius: 10px; background: #fcfcfb;
+  resize: none; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2);
   padding: 11px 13px; font: inherit; font-size: 13px; line-height: 1.6; color:var(--t1);
   outline: none; transition: border-color .12s ease, background .12s ease;
 }
 .scratch-input::placeholder { color: var(--t4); }
-.scratch-input:focus { border-color: var(--accent-border); background:var(--panel); }
+.scratch-input:focus { border-color: var(--accent-border); background: var(--panel); }
 /* 높이 조절 위젯(.--sized)에서는 textarea 가 카드를 채우고 넘치면 내부 스크롤. */
 .home-section__content--sized .scratch-input { min-height: 0; }
 
@@ -790,6 +790,15 @@ input, button, select { font-family: inherit; }
 .agent-args { font-family: var(--mono); font-size: 11px; color: var(--t4); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
 .agent-obs { font-size: 11.5px; color: var(--t4); font-family: var(--mono); line-height: 1.45; word-break: break-word; }
 .agent-final { font-size: 13px; color: var(--t1); line-height: 1.55; background: var(--surface-2); border: 1px solid var(--border-soft); border-radius: 10px; padding: 10px 12px; white-space: pre-wrap; }
+/* [멀티턴] 사용자 말풍선(오른쪽 정렬) + 새 대화 리셋 + 컨텍스트 미터. */
+.agent-user { align-self: flex-end; max-width: 88%; font-size: 12.5px; line-height: 1.5; color: var(--accent-text); background: var(--accent-bg); border: 1px solid var(--accent-border); border-radius: 12px 12px 4px 12px; padding: 7px 11px; white-space: pre-wrap; word-break: break-word; }
+.agent-reset { flex: 0 0 auto; appearance: none; border: 1px solid var(--border); background: var(--panel); color: var(--t3); border-radius: 8px; padding: 4px 10px; font-size: 11.5px; font-weight: 600; cursor: pointer; }
+.agent-reset:hover { background: var(--surface-2); }
+.agent-meter { flex: 0 0 auto; margin-top: 8px; display: flex; flex-direction: column; gap: 4px; }
+.agent-meter__bar { height: 5px; border-radius: 3px; background: var(--surface-3); overflow: hidden; }
+.agent-meter__fill { height: 100%; background: var(--accent); border-radius: 3px; transition: width .2s ease; }
+.agent-meter__bar.is-high .agent-meter__fill { background: var(--danger, #dc2626); }
+.agent-meter__label { font-size: 10.5px; color: var(--t4); font-variant-numeric: tabular-nums; }
 .agent-running { font-size: 12px; color: var(--accent); animation: md-ai-pulse 1s ease-in-out infinite; }
 .agent-error { font-size: 12.5px; color: var(--danger, #b91c1c); }
 .agent-input { display: flex; gap: 8px; align-items: flex-end; flex: 0 0 auto; margin-top: 10px; }
@@ -1076,7 +1085,7 @@ body.home-resizing { cursor: nwse-resize; user-select: none; }
 .shelf-panel:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .shelf-rm:hover { background: #fee2e2 !important; border-color: #fecaca !important; color: #dc2626 !important; }
 .shelf-edit:hover { background: var(--accent-bg) !important; border-color: var(--accent-border) !important; color: var(--accent) !important; }
-.shelf-open:hover { background: #000 !important; }
+.shelf-open:hover { opacity: .85; }
 /* [SH-4] 자동 재크롤 토글 스위치 — 기본 OFF 회색, ON indigo. 접근성: role=switch + aria-checked. */
 .shelf-switch {
   appearance: none; position: relative; width: 34px; height: 19px; flex: none; padding: 0;
@@ -1096,7 +1105,7 @@ body.home-resizing { cursor: nwse-resize; user-select: none; }
 .shelf-growin { animation: shelfGrowIn .3s ease both; }
 .shelf-slideup { animation: shelfSlideUp .2s ease both; }
 .shelf-spin { animation: spipSpin .7s linear infinite; }
-.shelf-sk { background: linear-gradient(90deg, #eeedeb 0%, #f6f5f3 40%, #eeedeb 80%); background-size: 720px 100%; animation: shelfShimmer 1.2s linear infinite; border-radius: 6px; }
+.shelf-sk { background: linear-gradient(90deg, var(--surface-3) 0%, var(--surface-2) 40%, var(--surface-3) 80%); background-size: 720px 100%; animation: shelfShimmer 1.2s linear infinite; border-radius: 6px; }
 /* [홈 위젯 반응형] 셸프 위젯 — 넓은 영역=책장(가로 셸프), 좁은 영역=경량 세로 리스트.
  *   display 를 클래스가 소유(렌더 인라인 미지정)해야 @container 로 뷰를 전환할 수 있다. */
 .shelf-view--full { display: flex; }

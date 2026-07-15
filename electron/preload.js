@@ -295,9 +295,16 @@ contextBridge.exposeInMainWorld('spip', {
     correct: (text) => ipcRenderer.invoke('spip:md:correct', { text: text == null ? '' : String(text) }),
   },
 
-  // [AG-1] Agent 위젯 — 자연어 요청을 ReAct 루프로 처리(POC: 할 일 제어). 응답: { ok, final, steps, todos }.
+  // [AG-1] Agent 위젯 — 자연어 요청을 ReAct 루프로 처리(POC: 할 일 제어). 멀티턴: 이전 대화(history) 전달.
+  //   응답: { ok, final, steps, todos, context:{tokens,limit,trimmed,source} }.
   agent: {
-    run: (message) => ipcRenderer.invoke('spip:agent:run', { message: message == null ? '' : String(message) }),
+    run: (message, history) => ipcRenderer.invoke('spip:agent:run', {
+      message: message == null ? '' : String(message),
+      history: Array.isArray(history) ? history.slice(-40).map((t) => ({
+        role: (t && t.role === 'assistant') ? 'assistant' : 'user',
+        content: (t && t.content != null) ? String(t.content) : '',
+      })) : [],
+    }),
   },
 
   // 이벤트 구독(on/send) — 콜백만 받고 ipcRenderer 원본은 노출하지 않음(보안).

@@ -53,3 +53,24 @@ test('HT-1 — 다크에서 묻히는 반전 칩(preset-tab.is-on)에 다크 오
   assert.ok(/:root\[data-theme="dark"\]\s*\.preset-tab\.is-on\s*\{[^}]*background:\s*var\(--t1\)/.test(CSS),
     '활성 대시보드 탭 다크 반전');
 });
+
+test('HT-2 — 메모(scratchpad): 기본·포커스 배경이 모두 테마 변수(포커스 아웃 시 흰색 방지)', () => {
+  const m = /\.scratch-input\s*\{([^}]*)\}/.exec(CSS);
+  assert.ok(m, '.scratch-input 규칙');
+  assert.ok(/background:\s*var\(--/.test(m[1]), '기본 배경 테마 변수(#fcfcfb 같은 고정색 금지)');
+  assert.ok(!/#f[0-9a-fA-F]{5}/.test(m[1]), '기본 배경에 고정 흰색조 없음');
+  assert.ok(/\.scratch-input:focus\s*\{[^}]*background:\s*var\(--/.test(CSS), '포커스 배경도 테마 변수');
+});
+
+test('HT-2 — 즐겨찾기(shelf): 렌더 영역에 테마 미적용 중립 색조·반전칩 잔재 없음', () => {
+  const a = APP.indexOf('function renderHomeShelf(');
+  const b = APP.indexOf('function renderDashboard()');
+  assert.ok(a >= 0 && b > a, '셸프 렌더 영역');
+  const seg = APP.slice(a, b);
+  for (const shade of ['#f2f1ef', '#fafaf9', '#c0bdb8', '#f3f2f0', '#e2e0dd', '#f7f7f6', '#fcfcfb']) {
+    assert.ok(seg.indexOf(shade) < 0, '테마 미적용 색조 잔재: ' + shade);
+  }
+  // 반전 칩은 다크에서 묻히므로 var(--t1)/var(--bg) 반전으로 — 인라인 background:#1c1917 금지.
+  assert.ok(!/background:\s*#1c1917/.test(seg), '반전 칩 배경은 var(--t1) 반전(고정 #1c1917 금지)');
+  assert.ok(/background:var\(--t1\);color:var\(--bg\)/.test(seg), '반전 칩이 테마 반전(밝은 칩+어두운 글자)');
+});

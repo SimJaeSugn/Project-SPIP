@@ -142,7 +142,7 @@ test('AG-1 — 3계층 배선(preload agent.run · register 채널 · enum·메�
   const REGISTER = fs.readFileSync(path.join(ROOT, 'electron', 'ipc', 'register.js'), 'utf8');
   const STORE = fs.readFileSync(path.join(ROOT, 'lib', 'common', 'uiStateStore.js'), 'utf8');
 
-  assert.ok(/agent:\s*\{[\s\S]*?run:\s*\(message\)/.test(PRELOAD), 'preload agent.run 노출');
+  assert.ok(/agent:\s*\{[\s\S]*?run:\s*\(message,\s*history\)/.test(PRELOAD), 'preload agent.run(message, history) 노출');
   assert.ok(/spip:agent:run/.test(PRELOAD) && /guard\('spip:agent:run'/.test(REGISTER), 'register 채널 배선');
 
   const { HOME_SECTION_IDS } = require('../public/app.js');
@@ -160,4 +160,67 @@ test('AG-1 — 3계층 배선(preload agent.run · register 채널 · enum·메�
   assert.ok(S.DEFAULT_HIDDEN_WIDGETS.includes('agent') && !S.defaultHomeWidgets().some((w) => w.type === 'agent'), '기본 미배치');
   // L-1: 렌더 innerHTML 미사용.
   assert.ok(!/renderHomeAgent[\s\S]{0,1500}innerHTML/.test(APP), 'agent 렌더 innerHTML 미사용(L-1)');
+});
+
+/* ───── [멀티턴 + 컨텍스트 사용현황] ───── */
+
+test('AG-2 runAgent — history(이전 대화)가 프롬프트에 포함되고 usage/promptChars 반환', async () => {
+  const seen = [];
+  const llm = async (_s, user) => { seen.push(user); return { ok: true, text: '{"final":"네"}', usage: { promptTokens: 123, completionTokens: 7, totalTokens: 130 } }; };
+  const history = [{ role: 'user', content: '우유 추가해줘' }, { role: 'assistant', content: '우유를 추가했어요.' }];
+  const r = await agent.runAgent({ llm, tools: {}, system: 'S', message: '그거 완료', history, maxSteps: 3 });
+  assert.strictEqual(r.ok, true);
+  assert.ok(/\[이전 대화\]/.test(seen[0]) && /우유 추가해줘/.test(seen[0]) && /우유를 추가했어요/.test(seen[0]), '이전 대화가 컨텍스트에 포함');
+  assert.deepStrictEqual(r.usage, { promptTokens: 123, completionTokens: 7, totalTokens: 130 }, 'usage 반환');
+  assert.ok(r.promptChars > 0, '프롬프트 char 수 반환(추정 폴백용)');
+});
+
+test('AG-2 estimateTokens — 문자수/토큰 추정(숫자·문자열)', () => {
+  assert.strictEqual(agent.estimateTokens(35), 10);
+  assert.strictEqual(agent.estimateTokens('1234567'), 2);
+});
+
+test('AG-2 IPC — normalizeHistory/trimHistory: 방어 정규화 + 예산 초과 시 오래된 턴 생략', () => {
+  const h = agentIpc.normalizeHistory([
+    { role: 'user', content: 'a' }, { role: 'bad', content: 'x' }, null,
+    { role: 'assistant', content: 'b' }, { role: 'user', content: '   ' },
+  ]);
+  assert.deepStrictEqual(h, [{ role: 'user', content: 'a' }, { role: 'assistant', content: 'b' }], '역할·빈내용 필터');
+  // 예산 20토큰: 큰 오래된 턴은 생략되고 최근 턴 유지.
+  const big = { role: 'user', content: 'x'.repeat(200) };     // ~57토큰
+  const small = { role: 'assistant', content: '짧게' };
+  const t = agentIpc.trimHistory([big, small], 20);
+  assert.strictEqual(t.trimmed, true, '예산 초과 → 생략 표시');
+  assert.ok(t.history.length < 2 && t.history[t.history.length - 1] === small, '최근 턴 우선 유지');
+});
+
+test('AG-2 IPC run — 멀티턴: history 전달 + context 사용현황/제한 반환', async () => {
+  const ctx = ctxWithTodos();
+  let seenUser = '';
+  ctx.llmClient = { streamBriefing: async (a) => { seenUser = a.user; return { ok: true, text: '{"final":"완료"}', usage: { promptTokens: 250, completionTokens: 10 } }; } };
+  const history = [{ role: 'user', content: '장보기 추가' }, { role: 'assistant', content: '추가했어요.' }];
+  const res = await agentIpc.run({ message: '완료해줘', history }, ctx);
+  assert.strictEqual(res.ok, true);
+  assert.ok(/장보기 추가/.test(seenUser), '이전 대화가 컨텍스트로 전달');
+  assert.ok(res.context && res.context.tokens === 250, '모델 promptTokens 를 컨텍스트 사용량으로');
+  assert.strictEqual(res.context.limit, agentIpc.CONTEXT_LIMIT_TOKENS, '제한 기준 반환');
+  assert.strictEqual(res.context.source, 'model', 'usage 있으면 정확값');
+});
+
+test('AG-2 IPC run — usage 미보고 시 char 추정으로 context.tokens 계산', async () => {
+  const ctx = ctxWithTodos();
+  ctx.llmClient = { streamBriefing: async () => ({ ok: true, text: '{"final":"ok"}' }) }; // usage 없음
+  const res = await agentIpc.run({ message: '할일 목록 보여줘' }, ctx);
+  assert.strictEqual(res.ok, true);
+  assert.ok(res.context.tokens > 0 && res.context.source === 'estimate', '추정 토큰(>0)');
+});
+
+test('AG-2 — 렌더러 멀티턴·미터 배선(turns·history·reset·meter)', () => {
+  const ROOT = path.join(__dirname, '..');
+  const APP = fs.readFileSync(path.join(ROOT, 'public', 'app.js'), 'utf8');
+  assert.ok(/turns:\s*\[\]/.test(APP), 'wstate.turns(멀티턴 대화)');
+  assert.ok(/function agentHistory\(st\)/.test(APP) && /b\.run\(msg,\s*history\)/.test(APP), '이전 대화를 history 로 전달');
+  assert.ok(/function agentReset\(iid\)/.test(APP), '새 대화 리셋');
+  assert.ok(/function renderAgentMeter\(/.test(APP) && /agent-meter__fill/.test(APP), '컨텍스트 미터 렌더');
+  assert.ok(/컨텍스트 .*토큰/.test(APP) && /제한|limit/.test(APP), '사용량/제한 표시');
 });

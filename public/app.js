@@ -2192,10 +2192,10 @@ function initBrowser() {
     if (type === 'agent') {
       return {
         input: '',        // 이 에이전트 입력창(인스턴스별)
-        running: false,   // 실행 중(툴바·입력 비활성)
-        steps: [],        // 마지막 실행의 ReAct 트레이스(thought/tool/observation/final)
-        final: '',        // 마지막 최종 답변
-        code: null,       // 실패 코드(고정 토큰)
+        running: false,   // 실행 중(입력·버튼 비활성)
+        turns: [],        // [멀티턴] 대화 기록 — [{ user, final, steps, code }]
+        code: null,       // 마지막 실행 실패 코드(고정 토큰)
+        context: null,    // [컨텍스트 사용현황] { tokens, limit, trimmed, source, completionTokens }
       };
     }
     return {};
@@ -6065,6 +6065,23 @@ function initBrowser() {
     });
   }
 
+  /** 컨텍스트 사용현황 미터 — 사용 토큰 / 제한(예산) + 초과 시 생략 안내. */
+  function renderAgentMeter(ctx) {
+    var wrap = el('div', { cls: 'agent-meter', attrs: { role: 'status', 'aria-label': '컨텍스트 사용량' } });
+    var used = Math.max(0, Math.round(ctx.tokens || 0));
+    var limit = Math.max(1, Math.round(ctx.limit || 1));
+    var pct = Math.min(100, Math.round((used / limit) * 100));
+    var bar = el('div', { cls: 'agent-meter__bar' + (pct >= 90 ? ' is-high' : '') });
+    bar.appendChild(el('div', { cls: 'agent-meter__fill', style: 'width:' + pct + '%;' }));
+    wrap.appendChild(bar);
+    var fmt = function (n) { return n.toLocaleString(); };
+    var label = '컨텍스트 ' + fmt(used) + ' / ' + fmt(limit) + ' 토큰 (' + pct + '%)'
+      + (ctx.source === 'estimate' ? ' · 추정' : ' · 모델')
+      + (ctx.trimmed ? ' · 이전 대화 일부 생략' : '');
+    wrap.appendChild(el('div', { cls: 'agent-meter__label', text: label }));
+    return wrap;
+  }
+
   function renderHomeAgent(inst) {
     var iid = inst.iid;
     var st = wstate(iid);
@@ -6075,25 +6092,40 @@ function initBrowser() {
     titleWrap.appendChild(el('div', { cls: 'agent-title', text: widgetCardTitle(inst, 'AI 에이전트') }));
     titleWrap.appendChild(el('div', { cls: 'agent-sub', text: '할 일을 자연어로 — 예: “우유 사기 추가”, “장보기 완료”' }));
     head.appendChild(titleWrap);
+    // [멀티턴] 대화가 있으면 '새 대화' 리셋.
+    if ((st.turns || []).length > 0 && !st.running) {
+      head.appendChild(el('button', {
+        cls: 'agent-reset', text: '새 대화', attrs: { type: 'button', 'aria-label': '대화 초기화' },
+        on: { click: function () { agentReset(iid); } },
+      }));
+    }
     card.appendChild(head);
 
     var body = el('div', { cls: 'agent-body hw-body spip-scroll' });
     if (!agentBridge()) {
       body.appendChild(el('div', { cls: 'agent-empty', text: 'Electron 앱에서만 사용할 수 있습니다.' }));
-    } else if (st.running) {
-      renderAgentSteps(body, st.steps);
-      body.appendChild(el('div', { cls: 'agent-running', text: '생각하는 중…' }));
-    } else if (st.steps.length === 0 && !st.final && !st.code) {
+    } else if ((st.turns || []).length === 0 && !st.running) {
       var e = el('div', { cls: 'agent-empty' });
       e.appendChild(el('div', { text: '무엇을 도와드릴까요?' }));
-      e.appendChild(el('div', { cls: 'agent-empty__hint', text: '요청을 입력하면 도구(할 일 추가·완료·삭제)를 써서 처리하고 그 과정을 보여줍니다.' }));
+      e.appendChild(el('div', { cls: 'agent-empty__hint', text: '요청을 입력하면 도구(할 일 추가·완료·삭제)를 써서 처리하고 그 과정을 보여줍니다. 대화는 이어집니다(멀티턴).' }));
       body.appendChild(e);
     } else {
-      renderAgentSteps(body, st.steps);
-      if (st.final) body.appendChild(el('div', { cls: 'agent-final', text: st.final }));
-      if (st.code) body.appendChild(el('div', { cls: 'agent-error', text: agentMessage(st.code) }));
+      // [멀티턴] 지금까지의 대화 — 각 턴: 사용자 말풍선 + 트레이스 + 최종/오류.
+      (st.turns || []).forEach(function (turn) {
+        body.appendChild(el('div', { cls: 'agent-user', text: turn.user }));
+        renderAgentSteps(body, turn.steps);
+        if (turn.final) body.appendChild(el('div', { cls: 'agent-final', text: turn.final }));
+        if (turn.code) body.appendChild(el('div', { cls: 'agent-error', text: agentMessage(turn.code) }));
+      });
+      if (st.running) {
+        if (st._pendingUser) body.appendChild(el('div', { cls: 'agent-user', text: st._pendingUser }));
+        body.appendChild(el('div', { cls: 'agent-running', text: '생각하는 중…' }));
+      }
     }
     card.appendChild(body);
+
+    // [컨텍스트 사용현황과 제한기준] 마지막 실행 기준 표시.
+    if (st.context) card.appendChild(renderAgentMeter(st.context));
 
     var form = el('div', { cls: 'agent-input' });
     var ta = el('textarea', {
@@ -6119,7 +6151,17 @@ function initBrowser() {
     return card;
   }
 
-  /** 에이전트 실행 — 요청을 메인 ReAct 루프에 넘기고 트레이스·최종답·할 일 변경을 반영한다. */
+  /** [멀티턴] 대화 기록 → history(role/content) — 이전 사용자 요청과 에이전트 최종답만 컨텍스트로. */
+  function agentHistory(st) {
+    var h = [];
+    (st.turns || []).forEach(function (t) {
+      if (t.user) h.push({ role: 'user', content: t.user });
+      if (t.final) h.push({ role: 'assistant', content: t.final });
+    });
+    return h;
+  }
+
+  /** 에이전트 실행 — 이전 대화(history)와 함께 넘기고, 결과를 새 턴으로 이어붙이며 컨텍스트 사용량을 갱신한다. */
   async function agentRun(iid) {
     var st = wstate(iid);
     if (st.running) return;
@@ -6127,16 +6169,33 @@ function initBrowser() {
     if (!b) { toast('이 버전에서는 에이전트를 쓸 수 없습니다.', true); return; }
     var msg = (st.input || '').trim();
     if (!msg) { toast('요청 내용을 입력하세요.', true); return; }
-    st.running = true; st.code = null; st.steps = []; st.final = ''; render();
+    var history = agentHistory(st);
+    st.running = true; st.code = null; st._pendingUser = msg; st.input = ''; render();
     var res;
-    try { res = await b.run(msg); } catch (_) { res = null; }
-    st.running = false;
-    if (!res) { st.code = 'INTERNAL'; render(); return; }
-    st.steps = Array.isArray(res.steps) ? res.steps : [];
-    st.final = (typeof res.final === 'string') ? res.final : '';
-    st.code = res.ok ? null : (res.code || 'INTERNAL');
+    try { res = await b.run(msg, history); } catch (_) { res = null; }
+    st.running = false; st._pendingUser = null;
+    if (!res) {
+      st.turns = (st.turns || []).concat([{ user: msg, final: '', steps: [], code: 'INTERNAL' }]);
+      render(); return;
+    }
+    // 이번 턴을 대화에 추가(트레이스·최종답·실패코드 포함).
+    st.turns = (st.turns || []).concat([{
+      user: msg,
+      final: (typeof res.final === 'string') ? res.final : '',
+      steps: Array.isArray(res.steps) ? res.steps : [],
+      code: res.ok ? null : (res.code || 'INTERNAL'),
+    }]);
+    st.context = (res.context && typeof res.context === 'object') ? res.context : st.context;
     if (Array.isArray(res.todos)) store.todos = res.todos; // 도구가 바꾼 할 일 즉시 반영(할 일 위젯 동기화)
-    if (res.ok) st.input = '';
+    if (!res.ok) st.input = msg; // 실패 시 입력 복원(재시도 편의)
+    render();
+  }
+
+  /** [멀티턴] 새 대화 — 이 인스턴스의 대화·컨텍스트 사용량을 초기화. */
+  function agentReset(iid) {
+    var st = wstate(iid);
+    if (st.running) return;
+    st.turns = []; st.context = null; st.code = null; st._pendingUser = null;
     render();
   }
 
@@ -6622,14 +6681,14 @@ function initBrowser() {
     return card;
   }
   function shelfHeader(count, title) {
-    var head = el('div', { style: 'display:flex;align-items:center;gap:12px;padding:18px 20px 16px;border-bottom:1px solid #f2f1ef;flex:0 0 auto;' });
+    var head = el('div', { style: 'display:flex;align-items:center;gap:12px;padding:18px 20px 16px;border-bottom:1px solid var(--border-soft);flex:0 0 auto;' });
     var ico = el('div', { style: 'width:34px;height:34px;border-radius:10px;background:var(--accent-bg);display:flex;align-items:center;justify-content:center;flex:none;' });
     ico.appendChild(svg([{ t: 'path', d: 'M4 19.5V5a2 2 0 0 1 2-2h11a1 1 0 0 1 1 1v15' }, { t: 'path', d: 'M6 17h12' }, { t: 'path', d: 'M9 3v14' }], { size: 18, stroke: '#4f46e5', sw: 1.7 }));
     head.appendChild(ico);
     var mid = el('div', { style: 'flex:1;min-width:0;' });
     var titleRow = el('div', { style: 'display:flex;align-items:center;gap:8px;' });
     titleRow.appendChild(el('span', { text: title || '즐겨찾기 셸프', style: 'font-size:15.5px;font-weight:600;letter-spacing:-.015em;' }));
-    titleRow.appendChild(el('span', { text: String(count), style: HOME_MONO + 'font-size:11px;font-weight:600;color:var(--t3);background:#f3f2f0;border:1px solid var(--border);padding:1px 7px;border-radius:6px;' }));
+    titleRow.appendChild(el('span', { text: String(count), style: HOME_MONO + 'font-size:11px;font-weight:600;color:var(--t3);background:var(--surface-3);border:1px solid var(--border);padding:1px 7px;border-radius:6px;' }));
     mid.appendChild(titleRow);
     mid.appendChild(el('div', { cls: 'shelf-sub', text: '사이트·폴더·파일을 한 셸프에서 즐겨찾기', style: 'font-size:11.5px;color:var(--t4);margin-top:2px;' }));
     head.appendChild(mid);
@@ -6638,18 +6697,18 @@ function initBrowser() {
   function shelfComposer(vm) {
     var wrap = el('div', { cls: 'shelf-composer', style: 'padding:16px 20px 4px;flex:0 0 auto;' });
     var typeRow = el('div', { cls: 'shelf-ctype', style: 'display:flex;align-items:center;gap:6px;margin-bottom:9px;' });
-    typeRow.appendChild(el('span', { cls: 'shelf-ctype__lbl', text: '유형', style: 'font-size:9.5px;font-weight:600;letter-spacing:.04em;color:#c0bdb8;margin-right:2px;' }));
+    typeRow.appendChild(el('span', { cls: 'shelf-ctype__lbl', text: '유형', style: 'font-size:9.5px;font-weight:600;letter-spacing:.04em;color:var(--t4);margin-right:2px;' }));
     vm.types.forEach(function (t) {
       typeRow.appendChild(el('button', {
         text: t.label,
         attrs: { type: 'button', 'aria-pressed': String(t.active), 'aria-label': '유형 ' + t.label },
         style: 'appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;padding:5px 11px;border-radius:8px;transition:all .12s;'
-          + (t.active ? 'background:#1c1917;color:#fff;border:1px solid #1c1917;' : 'background:var(--panel);color:var(--t3);border:1px solid var(--border);'),
+          + (t.active ? 'background:var(--t1);color:var(--bg);border:1px solid var(--t1);' : 'background:var(--panel);color:var(--t3);border:1px solid var(--border);'),
         on: { click: function () { shelfSetType(t.t); } },
       }));
     });
     wrap.appendChild(typeRow);
-    var inputBox = el('div', { cls: 'shelf-cbox', style: 'display:flex;align-items:center;gap:10px;background:#fafaf9;border:1.5px solid ' + vm.inputBorder + ';border-radius:12px;padding:0 12px 0 14px;height:46px;transition:border-color .15s;' });
+    var inputBox = el('div', { cls: 'shelf-cbox', style: 'display:flex;align-items:center;gap:10px;background:var(--surface-2);border:1.5px solid ' + vm.inputBorder + ';border-radius:12px;padding:0 12px 0 14px;height:46px;transition:border-color .15s;' });
     inputBox.appendChild(svg([{ t: 'path', d: 'M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1' }, { t: 'path', d: 'M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1' }], { size: 17, stroke: 'var(--t4)', sw: 2 }));
     var input = el('input', {
       cls: 'shelf-input',
@@ -6660,7 +6719,7 @@ function initBrowser() {
     input.value = store.shelf.cUrl; // 컨트롤드(캐럿은 patchRegion preserve 로 보존)
     inputBox.appendChild(input);
     if (vm.cLoading) inputBox.appendChild(el('div', { cls: 'shelf-spin', style: 'width:16px;height:16px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;flex:none;' }));
-    else if (vm.cIdle) inputBox.appendChild(el('span', { text: '⌘V', style: HOME_MONO + 'font-size:10px;color:#c9c6c2;letter-spacing:.04em;flex:none;' }));
+    else if (vm.cIdle) inputBox.appendChild(el('span', { text: '⌘V', style: HOME_MONO + 'font-size:10px;color:var(--t4);letter-spacing:.04em;flex:none;' }));
     wrap.appendChild(inputBox);
     if (vm.cLoading) {
       var ll = el('div', { style: 'display:flex;align-items:center;gap:7px;margin:9px 2px 2px;' + HOME_MONO + 'font-size:11px;color:var(--t4);' });
@@ -6826,7 +6885,7 @@ function initBrowser() {
       editBtn.appendChild(svg([{ t: 'path', d: 'M12 20h9' }, { t: 'path', d: 'M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z' }], { size: 13, stroke: 'currentColor', sw: 2 }));
       topRow.appendChild(editBtn);
     }
-    topRow.appendChild(el('span', { text: p.cat, style: 'font-size:10px;font-weight:600;padding:2px 8px;border-radius:6px;background:#f7f7f6;color:var(--t3);border:1px solid #ececea;flex:none;white-space:nowrap;' }));
+    topRow.appendChild(el('span', { text: p.cat, style: 'font-size:10px;font-weight:600;padding:2px 8px;border-radius:6px;background:var(--surface-2);color:var(--t3);border:1px solid #ececea;flex:none;white-space:nowrap;' }));
     body.appendChild(topRow);
     body.appendChild(el('p', { text: p.desc, style: 'margin:9px 0 0;font-size:12px;color:var(--t2);line-height:1.55;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;' }));
     body.appendChild(el('div', { style: 'flex:1;' }));
@@ -6844,7 +6903,7 @@ function initBrowser() {
     foot.appendChild(rm);
     var ob = el('button', {
       cls: 'shelf-open', attrs: { type: 'button', 'aria-label': p.name + ' ' + p.openLabel },
-      style: 'appearance:none;border:1px solid #1c1917;background:#1c1917;color:#fff;font-size:12px;font-weight:600;height:32px;padding:0 13px;border-radius:9px;cursor:pointer;flex:none;display:inline-flex;align-items:center;gap:6px;',
+      style: 'appearance:none;border:1px solid var(--t1);background:var(--t1);color:var(--bg);font-size:12px;font-weight:600;height:32px;padding:0 13px;border-radius:9px;cursor:pointer;flex:none;display:inline-flex;align-items:center;gap:6px;',
       on: { click: function (e) { e.stopPropagation(); shelfOpen(p.id); } },
     });
     ob.appendChild(el('span', { text: p.openLabel }));
@@ -6855,7 +6914,7 @@ function initBrowser() {
     return exp;
   }
   function shelfLoadingSpine() {
-    var sp = el('div', { cls: 'shelf-growin', style: 'width:58px;flex:none;border-radius:13px;background:#f1f0ee;border:1.5px dashed var(--border);display:flex;flex-direction:column;align-items:center;padding:13px 0;' });
+    var sp = el('div', { cls: 'shelf-growin', style: 'width:58px;flex:none;border-radius:13px;background:var(--surface-3);border:1.5px dashed var(--border);display:flex;flex-direction:column;align-items:center;padding:13px 0;' });
     sp.appendChild(el('div', { cls: 'shelf-sk', style: 'width:30px;height:30px;border-radius:9px;flex:none;' }));
     var mid = el('div', { style: 'flex:1;display:flex;align-items:center;' });
     mid.appendChild(el('div', { cls: 'shelf-sk', style: 'width:11px;height:96px;border-radius:6px;' }));
@@ -6863,14 +6922,14 @@ function initBrowser() {
     return sp;
   }
   function shelfEmpty() {
-    var box = el('div', { style: 'text-align:center;padding:30px 16px;border:1.5px dashed #e2e0dd;border-radius:14px;background:#fafaf9;' });
+    var box = el('div', { style: 'text-align:center;padding:30px 16px;border:1.5px dashed var(--border);border-radius:14px;background:var(--surface-2);' });
     box.appendChild(el('div', { text: '셸프가 비어 있어요', style: 'font-size:13px;font-weight:600;color:var(--t2);' }));
     box.appendChild(el('div', { text: 'URL·폴더·파일 경로를 붙여넣어 첫 즐겨찾기를 꽂아보세요', style: 'font-size:11.5px;color:var(--t4);margin-top:3px;' }));
     return box;
   }
   function shelfFooter() {
     var av = shelfAutoRefreshView(store.shelf.autoRefresh);
-    var f = el('div', { cls: 'shelf-foot', style: 'align-items:center;gap:10px;padding:12px 20px 14px;border-top:1px solid #f2f1ef;background:#fafaf9;flex:0 0 auto;' });
+    var f = el('div', { cls: 'shelf-foot', style: 'align-items:center;gap:10px;padding:12px 20px 14px;border-top:1px solid var(--border-soft);background:var(--surface-2);flex:0 0 auto;' });
     // 좌: 자동 재크롤 안내(상태에 따라 문구 변경) — 시계 아이콘.
     var hint = el('div', { cls: 'shelf-foot-hint', style: 'flex:1;min-width:0;font-size:11px;color:var(--t4);' });
     hint.appendChild(svg([{ t: 'circle', cx: '12', cy: '12', r: '9' }, { t: 'path', d: 'M12 8v4l3 2' }], { size: 13, stroke: 'currentColor', sw: 2 }));

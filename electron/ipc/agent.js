@@ -15,9 +15,14 @@
  */
 
 const uiStateIpc = require('./uiState');
-const { runAgent } = require('../../lib/ai/agent');
+const { runAgent, estimateTokens } = require('../../lib/ai/agent');
 
 const MAX_MESSAGE_LEN = 2000;
+// [멀티턴] 대화 컨텍스트 예산(토큰). 이 한도를 넘으면 오래된 턴부터 생략해 컨텍스트를 유지한다.
+//   모델의 실제 컨텍스트 창은 config 에 없으므로, 로컬 모델에서 안전한 보수적 기본값을 제한 기준으로 쓴다.
+const CONTEXT_LIMIT_TOKENS = 6000;
+const MAX_HISTORY_TURNS = 20;      // 방어적 상한(정규화 시)
+const MAX_HISTORY_CONTENT = 2000;  // 턴당 내용 길이 상한
 
 // ReAct 시스템 프롬프트 — 도구 설명 + JSON 프로토콜. ```가 들어가지 않게 배열+join.
 const AGENT_SYSTEM = [
@@ -57,6 +62,32 @@ function findTodo(ctx, args) {
     return todos.find((t) => t.text === q) || todos.find((t) => t.text.indexOf(q) >= 0) || null;
   }
   return null;
+}
+
+/** [멀티턴] 렌더러가 보낸 이전 대화 방어 정규화 — {role:'user'|'assistant', content}. */
+function normalizeHistory(input) {
+  if (!Array.isArray(input)) return [];
+  const out = [];
+  for (const t of input) {
+    if (!t || typeof t !== 'object') continue;
+    const role = (t.role === 'user' || t.role === 'assistant') ? t.role : null;
+    const content = (typeof t.content === 'string') ? t.content : '';
+    if (role && content.trim()) out.push({ role, content: content.slice(0, MAX_HISTORY_CONTENT) });
+  }
+  return out.slice(-MAX_HISTORY_TURNS);
+}
+
+/** [멀티턴] 컨텍스트 예산 안으로 최근 턴 우선 유지. 초과분(오래된 턴)은 생략. */
+function trimHistory(history, limitTokens) {
+  let total = 0;
+  const kept = [];
+  for (let i = history.length - 1; i >= 0; i--) {
+    const tk = estimateTokens(history[i].content) + 4; // 역할 라벨 여유
+    if (total + tk > limitTokens && kept.length > 0) break;
+    total += tk;
+    kept.unshift(history[i]);
+  }
+  return { history: kept, trimmed: kept.length < history.length, historyTokens: total };
 }
 
 /** 'YYYY-MM-DD HH:mm'(또는 ISO) → ms epoch. 실패 시 null. */
@@ -132,14 +163,30 @@ async function run(args, ctx) {
     catch (_) { return { ok: false, code: 'INTERNAL' }; }
   };
 
-  const res = await runAgent({ llm, tools: buildTools(ctx), system: AGENT_SYSTEM, message, maxSteps: 6 });
+  // [멀티턴] 이전 대화를 예산 안으로 다듬어 컨텍스트로 전달.
+  const rawHistory = normalizeHistory(args && args.history);
+  const trimmed = trimHistory(rawHistory, CONTEXT_LIMIT_TOKENS);
+
+  const res = await runAgent({ llm, tools: buildTools(ctx), system: AGENT_SYSTEM, message, history: trimmed.history, maxSteps: 6 });
+
+  // [컨텍스트 사용현황] 모델이 promptTokens 를 보고하면 그 값(정확), 아니면 프롬프트 char 수로 추정.
+  const modelPrompt = res.usage && Number.isFinite(res.usage.promptTokens) ? res.usage.promptTokens : null;
+  const contextTokens = (modelPrompt != null) ? modelPrompt : estimateTokens(res.promptChars || 0);
   return {
     ok: !!(res.ok && res.final),   // 최종 답까지 도달해야 성공(도구는 실행됐어도 요약 미도달이면 code 로 안내)
     code: res.code || (res.final ? undefined : 'NO_FINAL'),
     final: res.final || '',
     steps: Array.isArray(res.steps) ? res.steps : [],
     todos: currentTodos(ctx),       // 실행 후 최신 할 일(렌더러가 즉시 반영)
+    // [컨텍스트 사용현황과 제한기준] 렌더러가 미터로 표시.
+    context: {
+      tokens: contextTokens,
+      limit: CONTEXT_LIMIT_TOKENS,
+      trimmed: trimmed.trimmed,           // 예산 초과로 오래된 턴을 생략했는가
+      source: (modelPrompt != null) ? 'model' : 'estimate',
+      completionTokens: (res.usage && Number.isFinite(res.usage.completionTokens)) ? res.usage.completionTokens : null,
+    },
   };
 }
 
-module.exports = { run, buildTools, findTodo, parseDue, AGENT_SYSTEM, MAX_MESSAGE_LEN };
+module.exports = { run, buildTools, findTodo, parseDue, normalizeHistory, trimHistory, AGENT_SYSTEM, MAX_MESSAGE_LEN, CONTEXT_LIMIT_TOKENS };
