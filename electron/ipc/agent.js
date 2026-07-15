@@ -24,12 +24,16 @@ const markdownIpc = require('./markdown');
 const explorerIpc = require('./explorer');
 const briefingIpc = require('./briefing');
 const uiStateStore = require('../../lib/common/uiStateStore');
-const { runAgent, estimateTokens } = require('../../lib/ai/agent');
+const { runHybrid, estimateTokens } = require('../../lib/ai/agent');
 
 const MAX_MESSAGE_LEN = 2000;
-// [멀티턴] 대화 컨텍스트 예산(토큰). 이 한도를 넘으면 오래된 턴부터 생략해 컨텍스트를 유지한다.
-//   모델의 실제 컨텍스트 창은 config 에 없으므로, 로컬 모델에서 안전한 보수적 기본값을 제한 기준으로 쓴다.
-const CONTEXT_LIMIT_TOKENS = 6000;
+// [컨텍스트 사용현황과 제한기준] 연결 모델의 컨텍스트 창(최대) = 32768 토큰. 미터는 사용량/이 값(=창 최대치)을
+//   표시한다(사용량은 모델 promptTokens 또는 문자수 추정). 창을 config 로 조정 노출하기 전까지 이 상수를 쓴다.
+const CONTEXT_WINDOW_TOKENS = 32768;
+// [멀티턴] 대화 history 예산 = 창에서 시스템 프롬프트·도구 관찰·출력 여유(RESERVE)를 뺀 몫.
+//   이 예산을 넘으면 오래된 턴부터 생략해 전체 컨텍스트가 창을 넘지 않게 한다.
+const CONTEXT_RESERVE_TOKENS = 8192;
+const CONTEXT_HISTORY_BUDGET = CONTEXT_WINDOW_TOKENS - CONTEXT_RESERVE_TOKENS; // = 24576
 const MAX_HISTORY_TURNS = 20;      // 방어적 상한(정규화 시)
 const MAX_HISTORY_CONTENT = 2000;  // 턴당 내용 길이 상한
 
@@ -94,6 +98,23 @@ const AGENT_SYSTEM = [
   '- read_mail 은 서버 읽음 처리, delete_mail 은 서버 휴지통 이동으로 **되돌리기 어렵다** — 사용자가 명확히 요청한 경우에만, 어느 메일인지 애매하면 먼저 목록으로 확인한 뒤 수행하라. 추측으로 삭제하지 마라.',
   '- 요청과 무관한 작업은 하지 마라. 필요한 작업만 최소 단계로 수행한다.',
   '- 작업을 마쳤으면 final 로 무엇을 했는지 간결히 한국어로 요약한다.',
+].join('\n');
+
+// [Plan-and-Solve] 플래너 시스템 프롬프트(도구 이름 목록은 run 에서 덧붙인다).
+const PLANNER_SYSTEM = [
+  '너는 사용자 요청을 해결할 실행 계획을 세우는 플래너다.',
+  '아래 도구들로 수행 가능한 하위 작업 목록(계획)을 만든다. 각 단계는 한 문장으로 간결히, 도구 한 번으로 수행 가능한 단위로.',
+  '이전 시도의 피드백(critique)이 주어지면 그 문제를 해결하도록 계획을 수정한다.',
+  '출력은 {"plan":["...","..."]} JSON 하나만(설명·코드펜스 없이).',
+].join('\n');
+
+// [Reflection] 리플렉터 시스템 프롬프트.
+const REFLECTOR_SYSTEM = [
+  '너는 에이전트의 실행 결과를 검증하는 엄격한 검증자다.',
+  '요청·계획·실행 트레이스·최종 답변을 보고 요청이 실제로 충족됐는지 판단한다.',
+  '도구 관찰에 실패(ok:false)나 누락이 있거나, 최종 답변이 관찰과 어긋나면(환각) is_valid=false 로 하고, 무엇을 어떻게 고쳐야 하는지 critique 에 구체적으로 적는다.',
+  '요청이 확실히 충족됐으면 is_valid=true(사소한 표현 차이로 무효 처리하지 마라).',
+  '출력은 {"is_valid":true|false,"critique":"..."} JSON 하나만.',
 ].join('\n');
 
 /** 현재 할 일 목록(메인 상태). */
@@ -590,13 +611,19 @@ async function run(args, ctx) {
     catch (_) { return { ok: false, code: 'INTERNAL' }; }
   };
 
-  // [멀티턴] 이전 대화를 예산 안으로 다듬어 컨텍스트로 전달.
+  // [멀티턴] 이전 대화를 history 예산 안으로 다듬어 컨텍스트로 전달(창 - 여유).
   const rawHistory = normalizeHistory(args && args.history);
-  const trimmed = trimHistory(rawHistory, CONTEXT_LIMIT_TOKENS);
+  const trimmed = trimHistory(rawHistory, CONTEXT_HISTORY_BUDGET);
 
   // [UI 액티브 이벤트] open_* 도구가 쌓는 렌더러 실행용 액션(메일함/메일 열기 등).
   const uiActions = [];
-  const res = await runAgent({ llm, tools: buildTools(ctx, uiActions), system: AGENT_SYSTEM, message, history: trimmed.history, maxSteps: 6 });
+  const tools = buildTools(ctx, uiActions);
+  // [Plan-and-Solve + ReAct + Reflection] 계획 → 실행 → 검증 → (무효면) 재계획.
+  const plannerSystem = PLANNER_SYSTEM + '\n사용 가능한 도구: ' + Object.keys(tools).join(', ');
+  const res = await runHybrid({
+    llm, tools, system: AGENT_SYSTEM, plannerSystem, reflectorSystem: REFLECTOR_SYSTEM,
+    message, history: trimmed.history, maxSteps: 6, maxReplans: 30,
+  });
 
   // [컨텍스트 사용현황] 모델이 promptTokens 를 보고하면 그 값(정확), 아니면 프롬프트 char 수로 추정.
   const modelPrompt = res.usage && Number.isFinite(res.usage.promptTokens) ? res.usage.promptTokens : null;
@@ -608,15 +635,16 @@ async function run(args, ctx) {
     steps: Array.isArray(res.steps) ? res.steps : [],
     todos: currentTodos(ctx),       // 실행 후 최신 할 일(렌더러가 즉시 반영)
     uiActions: uiActions,           // [UI 액티브 이벤트] 렌더러가 실행할 열기 동작(메일함/메일)
-    // [컨텍스트 사용현황과 제한기준] 렌더러가 미터로 표시.
+    // [컨텍스트 사용현황과 제한기준] 렌더러가 미터로 표시 — 제한 = 모델 컨텍스트 창 최대치.
     context: {
       tokens: contextTokens,
-      limit: CONTEXT_LIMIT_TOKENS,
-      trimmed: trimmed.trimmed,           // 예산 초과로 오래된 턴을 생략했는가
+      limit: CONTEXT_WINDOW_TOKENS,        // 창 최대치(32768) — 사용량/이 값 = 창 사용률
+      budget: CONTEXT_HISTORY_BUDGET,      // 대화 history 정리 예산(참고)
+      trimmed: trimmed.trimmed,            // 예산 초과로 오래된 턴을 생략했는가
       source: (modelPrompt != null) ? 'model' : 'estimate',
       completionTokens: (res.usage && Number.isFinite(res.usage.completionTokens)) ? res.usage.completionTokens : null,
     },
   };
 }
 
-module.exports = { run, buildTools, findTodo, parseDue, normalizeHistory, trimHistory, AGENT_SYSTEM, MAX_MESSAGE_LEN, CONTEXT_LIMIT_TOKENS };
+module.exports = { run, buildTools, findTodo, parseDue, normalizeHistory, trimHistory, AGENT_SYSTEM, MAX_MESSAGE_LEN, CONTEXT_WINDOW_TOKENS, CONTEXT_HISTORY_BUDGET };

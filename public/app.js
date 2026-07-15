@@ -6049,9 +6049,32 @@ function initBrowser() {
   function agentArgsBrief(args) { try { var s = JSON.stringify(args || {}); return (s === '{}') ? '' : s.slice(0, 120); } catch (_) { return ''; } }
   function agentObsBrief(obs) { var s = String(obs == null ? '' : obs); return s.length > 200 ? s.slice(0, 200) + '…' : s; }
 
-  /** ReAct 트레이스(스텝들)를 호스트에 렌더 — thought/action/observation. 최종(final)은 호출측이 별도로 표시. */
+  /** 트레이스(스텝들)를 호스트에 렌더 — 계획/thought·action·observation/검증. 최종(final)은 호출측이 별도 표시. */
   function renderAgentSteps(host, steps) {
     (steps || []).forEach(function (st) {
+      // [Plan-and-Solve] 계획 단계
+      if (st.phase === 'plan') {
+        var pl = el('div', { cls: 'agent-plan' });
+        pl.appendChild(el('div', { cls: 'agent-plan__head', text: st.replan ? '재계획' : '계획' }));
+        if (st.replan && st.critique) pl.appendChild(el('div', { cls: 'agent-plan__critique', text: '↳ ' + st.critique }));
+        if (st.plan && st.plan.length) {
+          var ol = el('ol', { cls: 'agent-plan__list' });
+          st.plan.forEach(function (s) { ol.appendChild(el('li', { text: String(s) })); });
+          pl.appendChild(ol);
+        } else {
+          pl.appendChild(el('div', { cls: 'agent-plan__empty', text: '(계획 없이 진행)' }));
+        }
+        host.appendChild(pl);
+        return;
+      }
+      // [Reflection] 검증 단계
+      if (st.phase === 'reflect') {
+        var rf = el('div', { cls: 'agent-reflect' + (st.is_valid ? ' is-ok' : ' is-bad') });
+        rf.appendChild(el('span', { cls: 'agent-reflect__badge', text: st.is_valid ? '✓ 검증 통과' : '✗ 검증 실패 — 재계획' }));
+        if (!st.is_valid && st.critique) rf.appendChild(el('span', { cls: 'agent-reflect__critique', text: st.critique }));
+        host.appendChild(rf);
+        return;
+      }
       if (st.final) return;
       var row = el('div', { cls: 'agent-step' });
       if (st.thought) row.appendChild(el('div', { cls: 'agent-thought', text: st.thought }));

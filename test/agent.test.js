@@ -85,9 +85,12 @@ function ctxWithTodos() {
 
 test('AG-1 IPC run — add_todo 도구가 실제로 할 일을 추가하고 todos 를 반환', async () => {
   const ctx = ctxWithTodos();
+  // [하이브리드] 계획 → 실행(도구) → 최종 → 검증 순으로 LLM 이 응답한다.
   const scripted = [
+    '{"plan":["할 일을 추가한다"]}',
     '{"thought":"추가","tool":"add_todo","args":{"text":"우유 사기"}}',
     '{"thought":"끝","final":"‘우유 사기’를 추가했어요."}',
+    '{"is_valid":true,"critique":""}',
   ];
   let n = 0;
   ctx.llmClient = { streamBriefing: async () => ({ ok: true, text: scripted[n++] }) };
@@ -106,8 +109,10 @@ test('AG-1 IPC run — complete/delete 는 text 부분일치로 대상 지정', 
   ui.addTodo({ text: '장보기' }, ctx);
   ui.addTodo({ text: '운동하기' }, ctx);
   const scripted = [
+    '{"plan":["장보기를 완료한다"]}',
     '{"tool":"complete_todo","args":{"text":"장보기"}}',
     '{"final":"장보기를 완료했어요."}',
+    '{"is_valid":true,"critique":""}',
   ];
   let n = 0;
   ctx.llmClient = { streamBriefing: async () => ({ ok: true, text: scripted[n++] }) };
@@ -196,14 +201,16 @@ test('AG-2 IPC — normalizeHistory/trimHistory: 방어 정규화 + 예산 초�
 
 test('AG-2 IPC run — 멀티턴: history 전달 + context 사용현황/제한 반환', async () => {
   const ctx = ctxWithTodos();
-  let seenUser = '';
-  ctx.llmClient = { streamBriefing: async (a) => { seenUser = a.user; return { ok: true, text: '{"final":"완료"}', usage: { promptTokens: 250, completionTokens: 10 } }; } };
+  const seenUsers = [];
+  ctx.llmClient = { streamBriefing: async (a) => { seenUsers.push(a.user); return { ok: true, text: '{"final":"완료"}', usage: { promptTokens: 250, completionTokens: 10 } }; } };
   const history = [{ role: 'user', content: '장보기 추가' }, { role: 'assistant', content: '추가했어요.' }];
   const res = await agentIpc.run({ message: '완료해줘', history }, ctx);
   assert.strictEqual(res.ok, true);
-  assert.ok(/장보기 추가/.test(seenUser), '이전 대화가 컨텍스트로 전달');
+  assert.ok(seenUsers.some((u) => /장보기 추가/.test(u)), '이전 대화가 컨텍스트로 전달(계획·실행 프롬프트)');
   assert.ok(res.context && res.context.tokens === 250, '모델 promptTokens 를 컨텍스트 사용량으로');
-  assert.strictEqual(res.context.limit, agentIpc.CONTEXT_LIMIT_TOKENS, '제한 기준 반환');
+  assert.strictEqual(res.context.limit, agentIpc.CONTEXT_WINDOW_TOKENS, '제한 = 모델 컨텍스트 창(32768)');
+  assert.strictEqual(agentIpc.CONTEXT_WINDOW_TOKENS, 32768, '컨텍스트 창 최대치');
+  assert.ok(agentIpc.CONTEXT_HISTORY_BUDGET < agentIpc.CONTEXT_WINDOW_TOKENS, 'history 예산 < 창(여유 확보)');
   assert.strictEqual(res.context.source, 'model', 'usage 있으면 정확값');
 });
 
@@ -304,8 +311,10 @@ test('AG-3 — delete_mail: accountId·mailbox·uid 없으면 거부(추측 삭�
 test('AG-3 — IPC run: 에이전트가 get_mail_summary 도구로 메일을 확인', async () => {
   const ctx = ctxWithMail();
   const scripted = [
+    '{"plan":["안 읽은 메일을 확인한다"]}',
     '{"thought":"안 읽은 메일 확인","tool":"get_mail_summary","args":{}}',
     '{"final":"안 읽은 메일 2통이 있어요: 회의 안내, 영수증."}',
+    '{"is_valid":true,"critique":""}',
   ];
   let n = 0;
   ctx.llmClient = { streamBriefing: async () => ({ ok: true, text: scripted[n++] }) };
@@ -342,8 +351,10 @@ test('AG-4 — open_mail: uiAction 수집 + 인자 검증(accountId·uid 필수)
 test('AG-4 — IPC run: 에이전트가 open_mailbox 하면 uiActions 로 반환', async () => {
   const ctx = ctxWithMail();
   const scripted = [
+    '{"plan":["메일함을 연다"]}',
     '{"thought":"메일함 열기","tool":"open_mailbox","args":{}}',
     '{"final":"메일함을 열었어요."}',
+    '{"is_valid":true,"critique":""}',
   ];
   let n = 0;
   ctx.llmClient = { streamBriefing: async () => ({ ok: true, text: scripted[n++] }) };
@@ -414,8 +425,10 @@ test('AG-5 — 인자 검증(추측 방지): set_memo/remove_bookmark/read_docum
 test('AG-5 — IPC run: 에이전트가 list_projects 도구로 현황을 조회', async () => {
   const ctx = ctxAllWidgets();
   const scripted = [
+    '{"plan":["프로젝트 목록을 확인한다"]}',
     '{"tool":"list_projects","args":{}}',
     '{"final":"프로젝트 2개 중 1개가 방치 상태예요."}',
+    '{"is_valid":true,"critique":""}',
   ];
   let n = 0;
   ctx.llmClient = { streamBriefing: async () => ({ ok: true, text: scripted[n++] }) };
@@ -494,4 +507,87 @@ test('AG-7 — 트랜스크립트 스크롤 위치 인스턴스별 보존 배선
   assert.ok(/id:\s*'agentScroll'/.test(APP), 'agentScroll 위젯');
   assert.ok(/\.agent-body[\s\S]{0,600}scrollTop\s*=\s*t\.st\._scroll/.test(APP), 'agent-body 스크롤 복원');
   assert.ok(/requestAnimationFrame\([\s\S]{0,120}requestAnimationFrame/.test(APP), '레이아웃 앉은 뒤 2-rAF 복원');
+});
+
+/* ───── [Planner + Reflector 하이브리드] AG-8 ───── */
+
+test('AG-8 runHybrid — 계획→실행→검증(통과) 흐름·트레이스 단계', async () => {
+  const script = [
+    '{"plan":["할 일 목록 확인"]}',
+    '{"tool":"list_todos","args":{}}',
+    '{"final":"할 일이 없어요."}',
+    '{"is_valid":true,"critique":""}',
+  ];
+  let i = 0;
+  const llm = async () => ({ ok: true, text: script[i++] });
+  const tools = { list_todos: { run: async () => ({ ok: true, todos: [] }) } };
+  const r = await agent.runHybrid({ llm, tools, system: 'S', plannerSystem: 'P', reflectorSystem: 'R', message: '할일?', maxSteps: 4, maxReplans: 1 });
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(r.final, '할 일이 없어요.');
+  assert.strictEqual(r.replans, 0, '검증 통과 → 재계획 없음');
+  const phases = r.steps.map((s) => s.phase || (s.tool ? 'tool' : (s.final ? 'final' : '?')));
+  assert.deepStrictEqual(phases, ['plan', 'tool', 'final', 'reflect'], '트레이스 단계 순서');
+  assert.strictEqual(r.steps.find((s) => s.phase === 'reflect').is_valid, true);
+});
+
+test('AG-8 runHybrid — 검증 실패 시 재계획 후 재실행(최종은 2차 시도)', async () => {
+  const script = [
+    '{"plan":["대충"]}', '{"final":"대충 함"}', '{"is_valid":false,"critique":"도구 미사용"}',
+    '{"plan":["도구로 확인"]}', '{"tool":"list_todos","args":{}}', '{"final":"제대로 확인"}', '{"is_valid":true,"critique":""}',
+  ];
+  let i = 0;
+  const llm = async () => ({ ok: true, text: script[i++] });
+  const tools = { list_todos: { run: async () => ({ ok: true, todos: [] }) } };
+  const r = await agent.runHybrid({ llm, tools, system: 'S', plannerSystem: 'P', reflectorSystem: 'R', message: 'x', maxSteps: 4, maxReplans: 1 });
+  assert.strictEqual(r.final, '제대로 확인', '2차 시도 결과 채택');
+  assert.strictEqual(r.replans, 1, '1회 재계획');
+  assert.ok(r.steps.filter((s) => s.phase === 'plan').length === 2, '계획 2회(초기+재계획)');
+  assert.ok(r.steps.some((s) => s.phase === 'plan' && s.replan && /도구 미사용/.test(s.critique)), '재계획에 피드백 반영');
+});
+
+test('AG-8 runHybrid — maxReplans 도달 시 무한루프 없이 종료', async () => {
+  // 항상 무효 판정 → maxReplans=1 이면 계획 2회로 멈춘다.
+  const llm = async (_s, u) => ({ ok: true, text: /is_valid/.test('') ? '' : (/\[계획\]|검증/.test(u) ? '{"is_valid":false,"critique":"부족"}' : '{"plan":["p"]}') });
+  // 더 단순하게: 스크립트로 항상 무효.
+  const script = [
+    '{"plan":["p1"]}', '{"final":"a1"}', '{"is_valid":false,"critique":"부족"}',
+    '{"plan":["p2"]}', '{"final":"a2"}', '{"is_valid":false,"critique":"부족"}',
+  ];
+  let i = 0;
+  const llm2 = async () => ({ ok: true, text: script[i++] || '{"final":"end"}' });
+  const r = await agent.runHybrid({ llm: llm2, tools: {}, system: 'S', plannerSystem: 'P', reflectorSystem: 'R', message: 'x', maxSteps: 3, maxReplans: 1 });
+  assert.strictEqual(r.replans, 1, 'maxReplans=1 에서 멈춤');
+  assert.strictEqual(r.steps.filter((s) => s.phase === 'plan').length, 2, '계획 최대 2회');
+});
+
+test('AG-8 planStep/reflectStep — 유닛', async () => {
+  const p = await agent.planStep(async () => ({ ok: true, text: '{"plan":["a","b"]}' }), { system: 'P', message: 'x' });
+  assert.deepStrictEqual(p.plan, ['a', 'b']);
+  assert.strictEqual(p.ok, true);
+  const rf = await agent.reflectStep(async () => ({ ok: true, text: '{"is_valid":false,"critique":"c"}' }), { system: 'R', message: 'x', plan: [], final: 'f', steps: [] });
+  assert.strictEqual(rf.is_valid, false);
+  assert.strictEqual(rf.critique, 'c');
+  // 검증 파싱 실패 → 안전하게 통과(무한루프 방지)
+  const rf2 = await agent.reflectStep(async () => ({ ok: true, text: '검증 못함' }), { system: 'R', message: 'x' });
+  assert.strictEqual(rf2.is_valid, true);
+});
+
+test('AG-8 IPC run — 응답 steps 에 plan·reflect 단계 포함', async () => {
+  const ctx = ctxWithTodos();
+  const script = ['{"plan":["할 일 확인"]}', '{"tool":"list_todos","args":{}}', '{"final":"없어요"}', '{"is_valid":true,"critique":""}'];
+  let i = 0;
+  ctx.llmClient = { streamBriefing: async () => ({ ok: true, text: script[i++] }) };
+  const res = await agentIpc.run({ message: '할일?' }, ctx);
+  assert.strictEqual(res.ok, true);
+  assert.ok(res.steps.some((s) => s.phase === 'plan'), 'plan 단계');
+  assert.ok(res.steps.some((s) => s.phase === 'reflect' && s.is_valid === true), 'reflect 단계');
+});
+
+test('AG-8 — 렌더러가 plan·reflect 단계를 표시', () => {
+  const ROOT = path.join(__dirname, '..');
+  const APP = fs.readFileSync(path.join(ROOT, 'public', 'app.js'), 'utf8');
+  const CSS = fs.readFileSync(path.join(ROOT, 'public', 'styles.css'), 'utf8');
+  assert.ok(/st\.phase === 'plan'/.test(APP) && /agent-plan__list/.test(APP), '계획 단계 렌더');
+  assert.ok(/st\.phase === 'reflect'/.test(APP) && /검증 통과|검증 실패/.test(APP), '검증 단계 렌더');
+  assert.ok(/\.agent-plan\s*\{/.test(CSS) && /\.agent-reflect/.test(CSS), '계획·검증 CSS');
 });
