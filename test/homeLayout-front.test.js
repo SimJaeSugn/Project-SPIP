@@ -616,7 +616,7 @@ test('홈 위젯 크기 — layoutMasonryGrid 가 열 수·폭/높이 스팬을 
   // [Phase 5·M] 실제 배치 로직은 layoutMasonryGrid 로 추출(메인 격자 + 그룹 내부 격자 공용).
   const start = APP_SRC.indexOf('function layoutMasonryGrid(');
   assert.ok(start >= 0, 'layoutMasonryGrid 함수 존재');
-  const body = APP_SRC.slice(start, start + 2800);
+  const body = APP_SRC.slice(start, start + 3200);
   assert.ok(/setProperty\('--home-cols'/.test(body), '반응형 열 수(--home-cols) 주입');
   assert.ok(/gridColumnEnd\s*=\s*'span '/.test(body), '폭 = grid-column span 적용');
   assert.ok(/gridRowEnd\s*=\s*'span '/.test(body), '높이 = grid-row span 적용');

@@ -405,3 +405,34 @@ test('MD-AI-1 — egress 는 메인 단독: context 가 공유 llmClient 를 ctx
   const CTX_SRC = fs.readFileSync(path.join(ROOT, 'electron', 'context.js'), 'utf8');
   assert.ok(/ctx\.llmClient\s*=\s*llmClient/.test(CTX_SRC), 'ctx.llmClient 노출(마크다운 보정이 재사용)');
 });
+
+/* ───── [MD-EXP-1] 펼치기(본문 전체 높이 토글) ───── */
+
+test('MD-EXP-1 — 펼치기 토글: 버튼·상태·클래스·오토사이즈 배선', () => {
+  const section = mdSection();
+  // 툴바 토글 버튼 + 토글 함수.
+  assert.ok(/function mdToggleExpand\(iid\)/.test(APP_SRC), 'mdToggleExpand 정의');
+  assert.ok(/mdToggleExpand\(iid\)/.test(mdCode()), '툴바에서 mdToggleExpand 호출');
+  assert.ok(/펼치기/.test(section) && /접기/.test(section), '펼치기/접기 라벨 토글');
+  // 펼침 상태 클래스 + 인스턴스별 플래그.
+  assert.ok(/md-card--expanded/.test(APP_SRC), '펼침 상태 클래스(md-card--expanded)');
+  assert.ok(/st\.expanded/.test(APP_SRC), '인스턴스별 expanded 플래그(wstate)');
+  // textarea 오토사이즈(내부 스크롤 대신 본문 높이로).
+  assert.ok(/function mdAutosizeTextarea\(/.test(APP_SRC), 'mdAutosizeTextarea 정의');
+  assert.ok(/scrollHeight/.test(APP_SRC), 'scrollHeight 로 높이 맞춤');
+  assert.ok(/id:\s*'mdAutosize'/.test(APP_SRC), 'RG.widget mdAutosize 렌더 후 배선');
+});
+
+test('MD-EXP-1 — 레이아웃 엔진: 펼침 셀은 저장 높이 무시하고 자연 높이(masonry·freeform 모두)', () => {
+  // 두 배치 경로 모두 .md-card--expanded 를 감지해 forceAuto 로 --sized 를 걸지 않는다.
+  const hooks = (APP_SRC.match(/forceAuto\s*=\s*!!\(content && content\.querySelector\('\.md-card--expanded'\)\)/g) || []);
+  assert.ok(hooks.length >= 2, 'masonry·freeform 두 경로에 forceAuto 훅');
+  assert.ok(/!forceAuto && typeof sz\.h === 'number'/.test(APP_SRC), '펼침이면 사용자 지정 높이(sz.h) 미적용');
+  assert.ok(/setHomeCellHRow\(cell, id, forceAuto \? undefined : sz\.h\)/.test(APP_SRC), '펼침이면 hrow 도 자동(상세 UI)');
+});
+
+test('MD-EXP-1 — CSS: 펼침 시 편집기·미리보기가 내용 높이로(내부 스크롤 제거)', () => {
+  assert.ok(/\.md-card--expanded \.md-editor\s*\{[^}]*overflow:\s*hidden/.test(CSS), '펼침 편집기 내부 스크롤 제거(JS 높이)');
+  assert.ok(/\.md-card--expanded \.md-preview\s*\{[^}]*overflow:\s*visible/.test(CSS), '펼침 미리보기 자연 높이');
+  assert.ok(/\.md-card--expanded \.md-main\s*\{[^}]*align-items:\s*start/.test(CSS), '패널 상단 정렬(빈 칸 방지)');
+});

@@ -2147,6 +2147,7 @@ function initBrowser() {
         view: 'split',    // 'edit' | 'preview' | 'split'
         busy: false,      // create/import/export in-flight
         aiBusy: false,    // [MD-AI-1] AI 보정 in-flight
+        expanded: false,  // [MD-EXP-1] 펼치기 — 본문 전체 높이로(저장 높이 무시). 원래 배치로 토글.
         dirty: false,     // 미저장 변경
         code: null,       // 실패 코드(고정 토큰)
         _seeded: false,
@@ -5416,6 +5417,8 @@ function initBrowser() {
     if (!st.activeId) return;
     st.body = value;
     st.dirty = true;
+    // [MD-EXP-1] 펼침 상태면 입력에 따라 편집기 높이를 본문에 맞춘다(내부 스크롤 대신 위젯이 자라게).
+    if (st.expanded) { var ta = cellQuery(iid, '.md-editor'); if (ta) mdAutosizeTextarea(ta); }
     mdUpdatePreview(iid);
     mdSetStatus(iid, '편집 중…');
     if (st._saveTimer) clearTimeout(st._saveTimer);
@@ -5447,6 +5450,23 @@ function initBrowser() {
     var st = wstate(iid);
     if (st._saveTimer) { clearTimeout(st._saveTimer); st._saveTimer = null; }
     if (st.dirty) await mdSaveNow(iid);
+  }
+
+  /* [MD-EXP-1] 펼치기/접기 토글 — 본문 전체가 보이도록 위젯 높이를 늘였다가 원래 배치로 되돌린다.
+   *   펼침 상태는 인스턴스별(wstate.expanded) — 편집기 여럿이면 각자 독립. 저장 높이(sz.h)는 무시하고
+   *   자연 높이로 두어 masonry 가 본문 높이만큼 셀을 배치한다(layoutMasonryGrid 의 forceAuto 훅). */
+  function mdToggleExpand(iid) {
+    var st = wstate(iid);
+    if (!st.activeId) return;
+    st.expanded = !st.expanded;
+    render(); // 재렌더 후 RG.widget(mdAutosize)가 textarea 높이를 본문에 맞추고 masonry 가 재측정한다.
+  }
+
+  /** textarea 를 내용 높이에 맞춰 키운다(펼침 상태 전용 — 내부 스크롤 없이 본문 전체 표시). */
+  function mdAutosizeTextarea(ta) {
+    if (!ta) return;
+    ta.style.height = 'auto';
+    ta.style.height = (ta.scrollHeight + 2) + 'px';
   }
 
   /* [MD-AI-1] AI 마크다운 보정 — 편집 영역의 **선택된 내용**(없으면 **전체**)을 대상으로, 설정의 AI 연결
@@ -5896,7 +5916,7 @@ function initBrowser() {
     var st = wstate(iid);             // 문서함(목록·적재 상태)·연 문서 모두 이 인스턴스의 것
     var hasDoc = !!st.activeId;
     var card = el('div', {
-      cls: 'md-card hw-card',
+      cls: 'md-card hw-card' + (st.expanded ? ' md-card--expanded' : ''),
       style: HOME_CARD + 'padding:16px 16px 12px;',
       attrs: { 'data-view': st.view },
     });
@@ -5912,6 +5932,12 @@ function initBrowser() {
     tools.appendChild(mdToolBtn('이름 변경', [{ t: 'path', d: 'M4 20h4l10-10-4-4L4 16z' }, { t: 'path', d: 'M14 6l4 4' }], function () { mdRenameDoc(iid); }, st.busy || !hasDoc));
     // [MD-AI-1] AI 보정 — 선택 영역(없으면 전체)의 마크다운 문법 오류를 설정의 AI 연결로 교정한다.
     tools.appendChild(mdToolBtn('AI 보정 (선택 영역 또는 전체)', [{ t: 'path', d: 'M12 3l1.9 4.6L18.5 9.5 13.9 11.4 12 16l-1.9-4.6L5.5 9.5l4.6-1.9z' }, { t: 'path', d: 'M18 15l.8 1.9 1.9.8-1.9.8L18 21l-.8-1.9L15.3 18l1.9-.8z' }], function () { mdAiCorrect(iid); }, st.busy || st.aiBusy || !hasDoc));
+    // [MD-EXP-1] 펼치기/접기 — 본문 전체가 보이도록 위젯 높이를 늘였다가 원래 배치로 토글.
+    tools.appendChild(mdToolBtn(st.expanded ? '접기 (원래 크기로)' : '펼치기 (본문 전체 보기)',
+      st.expanded
+        ? [{ t: 'path', d: 'M7 11l5-5 5 5' }, { t: 'path', d: 'M7 17l5-5 5 5' }]
+        : [{ t: 'path', d: 'M7 7l5 5 5-5' }, { t: 'path', d: 'M7 13l5 5 5-5' }],
+      function () { mdToggleExpand(iid); }, st.busy || !hasDoc));
     // 삭제는 툴바가 아니라 문서 칩마다 붙는 × 버튼이 담당한다(mdDocBar) — 지울 문서를 열지 않아도 지운다.
     head.appendChild(tools);
     card.appendChild(head);
@@ -10253,13 +10279,16 @@ function initBrowser() {
       var cellW = colW * w + HOME_GAP * (w - 1);
       cell.dataset.density = densityTier(cellW);
       // 높이: 사용자 h면 콘텐츠에 강제(초과분 클립), 아니면 자연 높이.
+      //   [MD-EXP-1] 펼침 상태의 마크다운 편집기(.md-card--expanded)는 저장 높이를 무시하고 자연 높이로
+      //   두어 본문 전체가 보이게 한다(masonry 가 그 높이만큼 셀을 배치 → 다른 위젯을 아래로 민다).
       var content = cell.querySelector('.home-section__content');
+      var forceAuto = !!(content && content.querySelector('.md-card--expanded'));
       if (content) {
         // [홈 위젯 높이 반응] 사용자 지정 높이면 --sized 표식 → 높이 채우는 위젯(예: 메일 목록)이 남는 공간을 활용.
-        if (typeof sz.h === 'number' && sz.h > 0) { content.style.height = sz.h + 'px'; content.style.overflow = 'hidden'; content.classList.add('home-section__content--sized'); }
+        if (!forceAuto && typeof sz.h === 'number' && sz.h > 0) { content.style.height = sz.h + 'px'; content.style.overflow = 'hidden'; content.classList.add('home-section__content--sized'); }
         else { content.style.height = ''; content.style.overflow = ''; content.classList.remove('home-section__content--sized'); }
       }
-      setHomeCellHRow(cell, id, sz.h);
+      setHomeCellHRow(cell, id, forceAuto ? undefined : sz.h);
       var hpx = content ? content.getBoundingClientRect().height : cell.getBoundingClientRect().height;
       var span = Math.max(1, Math.ceil((hpx + HOME_GAP) / (HOME_ROW_UNIT + HOME_GAP)));
       cell.style.gridRowEnd = 'span ' + span;
@@ -10304,11 +10333,12 @@ function initBrowser() {
       cell.style.gridRowEnd = '';
       cell.dataset.density = densityTier(wPx);
       var content = cell.querySelector('.home-section__content');
+      var forceAuto = !!(content && content.querySelector('.md-card--expanded')); // [MD-EXP-1] 펼침이면 자연 높이
       if (content) {
-        if (typeof sz.h === 'number' && sz.h > 0) { content.style.height = sz.h + 'px'; content.style.overflow = 'hidden'; content.classList.add('home-section__content--sized'); }
+        if (!forceAuto && typeof sz.h === 'number' && sz.h > 0) { content.style.height = sz.h + 'px'; content.style.overflow = 'hidden'; content.classList.add('home-section__content--sized'); }
         else { content.style.height = ''; content.style.overflow = ''; content.classList.remove('home-section__content--sized'); }
       }
-      setHomeCellHRow(cell, id, sz.h);
+      setHomeCellHRow(cell, id, forceAuto ? undefined : sz.h);
       var hpx = cell.getBoundingClientRect().height;
       if (padT + px.top + hpx > maxBottom) maxBottom = padT + px.top + hpx;
     }
@@ -11925,6 +11955,20 @@ function initBrowser() {
       return null;
     },
     destroy: () => { /* 리스너는 교체된 노드와 함께 GC — 별도 정리 불필요 */ },
+  });
+  // [MD-EXP-1] 펼침 상태 편집기의 textarea 를 본문 높이에 맞춘다(렌더 후 DOM 삽입 시점 — scrollHeight 유효).
+  //   높이가 커지면 .home-section__content 의 ResizeObserver 가 masonry 를 재측정한다(위젯이 본문만큼 자람).
+  RG.widget.define({
+    id: 'mdAutosize',
+    init: (root) => {
+      if (typeof document === 'undefined') return null;
+      const scope = root || document;
+      if (typeof scope.querySelectorAll !== 'function') return null;
+      const tas = scope.querySelectorAll('.md-card--expanded .md-editor');
+      for (let i = 0; i < tas.length; i++) mdAutosizeTextarea(tas[i]);
+      return null;
+    },
+    destroy: () => { /* 인라인 height 는 교체 노드와 함께 GC */ },
   });
 
   /** [M10-P4] 커밋 차트 영역만 부분 갱신 — builderFn 은 빈 호스트만(차트는 commitChart 위젯 소유).

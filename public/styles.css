@@ -683,6 +683,14 @@ input, button, select { font-family: inherit; }
 .home-section__content--sized .md-editor,
 .home-section__content--sized .md-preview { min-height: 0; }
 
+/* [MD-EXP-1] 펼치기 — 본문 전체가 보이도록 편집기·미리보기를 내용 높이로 키운다(내부 스크롤 제거).
+ *   편집기 높이는 JS(mdAutosizeTextarea)가 scrollHeight 로 맞추고, 미리보기는 자연 높이로 흐른다.
+ *   패널은 상단 정렬 — 둘 중 짧은 쪽이 남는 세로 공간에 늘어나지 않게(빈 칸 방지). */
+.md-card--expanded .md-main { align-items: start; }
+.md-card--expanded[data-view="split"] .md-main { grid-template-rows: auto; }
+.md-card--expanded .md-editor { flex: 0 0 auto; overflow: hidden; min-height: 0; }
+.md-card--expanded .md-preview { flex: 0 0 auto; overflow: visible; min-height: 0; }
+
 .md-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex: 0 0 auto; padding-top: 8px; }
 .md-status { font-size: 10.5px; color: #a8a29e; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* [MD-AI-1] AI 보정 진행 중 — 강조색 + 점멸로 처리 중임을 알린다. */
@@ -754,6 +762,8 @@ input, button, select { font-family: inherit; }
 /* 위젯이 좁아지면 2단을 접는다 — 세로가 넉넉하면 상하 스택으로 두 패널을 모두 살린다(1×2·1×3·1×4). */
 @container hw (max-width: 560px) {
   .md-card[data-view="split"] .md-main { grid-template-columns: 1fr; grid-template-rows: minmax(110px, 1fr) minmax(110px, 1fr); }
+  /* [MD-EXP-1] 펼침이면 좁은 폭에서도 행을 내용 높이로(고정 minmax 대신) — 스택된 두 패널 모두 전체 표시. */
+  .md-card--expanded[data-view="split"] .md-main { grid-template-rows: auto; }
   .md-doc { max-width: 130px; }
   /* 세로도 최소(1행)면 상하 스택은 두 패널 모두 뭉갠다 — 편집만 두고 미리보기는 세그먼트로 전환해 본다. */
   .home-section[data-hrow="1"] .md-card[data-view="split"] .md-main { grid-template-rows: 1fr; }

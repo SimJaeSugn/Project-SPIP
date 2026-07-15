@@ -92,8 +92,9 @@ test('6조합 — homeHRow: 최소 높이=1행, 배수마다 행 증가, 상한 
   assert.strictEqual(homeHRow('mail', 240), 2);
 });
 test('6조합 — setHomeCellHRow 가 masonry/freeform 배치에서 셀에 [data-hrow] 부여', () => {
-  assert.ok(/setHomeCellHRow\(cell, id, sz\.h\)/.test(fnBody('layoutMasonryGrid', 2800)), 'masonry 에서 hrow 부여');
-  assert.ok(/setHomeCellHRow\(cell, id, sz\.h\)/.test(fnBody('layoutHomeFreeform', 3000)), 'freeform 에서 hrow 부여');
+  // [MD-EXP-1] 펼침 셀은 자연 높이라 hrow 를 자동(undefined)으로 — forceAuto ? undefined : sz.h.
+  assert.ok(/setHomeCellHRow\(cell, id, forceAuto \? undefined : sz\.h\)/.test(fnBody('layoutMasonryGrid', 2800)), 'masonry 에서 hrow 부여');
+  assert.ok(/setHomeCellHRow\(cell, id, forceAuto \? undefined : sz\.h\)/.test(fnBody('layoutHomeFreeform', 3000)), 'freeform 에서 hrow 부여');
 });
 
 // ── ③ 무잘림 공통 CSS 패턴 ───────────────────────────────────────────────────
