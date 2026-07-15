@@ -92,8 +92,10 @@ const AGENT_SYSTEM = [
   '',
   '문서 관련 질문 처리 방법(중요):',
   '- "○○ 문서를 찾아 …" 처럼 문서 내용에 대한 질문이면, 지어내지 말고 반드시 도구로 실제 내용을 읽어 근거로 답한다.',
-  '- 순서: find_document(제목으로 찾기) → read_document 또는 search_document(키워드로 관련 부분 발췌) → 그 내용을 바탕으로 final 작성.',
-  '- 문서에 없는 내용은 추측하지 말고 "문서에 없다"고 답한다.',
+  '- 순서: find_document(제목으로 찾기) → read_document(문서 전체 본문) → 그 본문 내용을 근거로 final 작성.',
+  '- read_document 의 body 는 문서 전체 내용이다. 그 본문에 답이 있으면 반드시 그 내용을 반영해 답한다 — 문서를 읽고도 "없다"고 하지 마라.',
+  '- 문서가 매우 길어 truncated=true 면 search_document 로 키워드 부분을 추가로 발췌한다.',
+  '- 본문에 정말 관련 내용이 없을 때만 "문서에 없다"고 답한다.',
   '',
   '사용 가능한 도구 — 탐색기/브리핑:',
   '- list_explorer_roots: 탐색기 열람 루트 목록. args {}.',
@@ -529,12 +531,20 @@ function buildTools(ctx, uiActions) {
       },
     },
     read_document: {
-      desc: '문서 본문 읽기(모든 편집기에서 id 로 찾음). args = {"id":"..."}',
+      desc: '문서 본문 전체 읽기(모든 편집기에서 id 로 찾음). args = {"id":"..."}',
       run: async (a) => {
         a = a || {};
         if (!a.id) return { ok: false, error: 'need_id' };
         for (const box of allEditorBoxes(ctx)) {
-          try { const r = markdownIpc.get({ box, id: a.id }, ctx); if (r && r.ok && r.doc) return { ok: true, title: r.doc.title, body: clampStr(r.doc.body, 8000) }; } catch (_) { /* skip */ }
+          try {
+            const r = markdownIpc.get({ box, id: a.id }, ctx);
+            if (r && r.ok && r.doc) {
+              const body = String(r.doc.body || '');
+              // 문서 전체를 컨텍스트로 넘긴다(관찰 상한 내). truncated 시 search_document 로 특정 부분 발췌 안내.
+              const clamped = clampStr(body, 22000);
+              return { ok: true, title: r.doc.title, length: body.length, truncated: clamped.length < body.length, body: clamped };
+            }
+          } catch (_) { /* skip */ }
         }
         return { ok: false, error: 'not_found' };
       },

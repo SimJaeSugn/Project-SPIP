@@ -11971,6 +11971,14 @@ function initBrowser() {
             break;
           }
         }
+        // [위젯 독립] 화이트리스트 밖이라도 위젯 셀 안의 입력/텍스트영역이면 그 인스턴스(iid)로 포커스를 복원한다.
+        //   → 타 위젯의 render() 로 DOM 이 교체돼도 에이전트 입력창 등이 포커스를 잃지 않는다(인스턴스별).
+        if (!snap.focus && ae && rootEl.contains(ae) && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA') && typeof ae.closest === 'function') {
+          const cell = ae.closest('.home-section[data-home-section]');
+          if (cell && cell.dataset && cell.dataset.homeSection) {
+            snap.focus = { homeSection: cell.dataset.homeSection, cls: (ae.className || ''), tag: ae.tagName, start: ae.selectionStart, end: ae.selectionEnd, dir: ae.selectionDirection };
+          }
+        }
         return snap;
       },
       /** 재렌더 후 동일 셀렉터의 새 노드에 스냅샷 복원. */
@@ -11992,7 +12000,18 @@ function initBrowser() {
         }
         const f = snap.focus;
         if (f) {
-          const e = rootEl.querySelector(f.sel);
+          let e = null;
+          if (f.homeSection) {
+            // [위젯 독립] 같은 인스턴스(iid) 셀 안에서 같은 입력을 찾아 복원(클래스 우선, 없으면 tag).
+            const esc = (typeof CSS !== 'undefined' && CSS.escape) ? CSS.escape(f.homeSection) : f.homeSection;
+            const cell = rootEl.querySelector('.home-section[data-home-section="' + esc + '"]');
+            if (cell) {
+              const clsSel = (f.cls || '').trim() ? '.' + f.cls.trim().split(/\s+/).join('.') : '';
+              e = (clsSel && cell.querySelector(clsSel)) || (f.tag ? cell.querySelector(f.tag) : null);
+            }
+          } else if (f.sel) {
+            e = rootEl.querySelector(f.sel);
+          }
           if (e && typeof e.focus === 'function') {
             try {
               e.focus({ preventScroll: true });

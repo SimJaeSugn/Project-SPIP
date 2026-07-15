@@ -647,3 +647,38 @@ test('AG-9 — 프롬프트에 문서 Q&A 도구·지침', () => {
   assert.ok(/find_document/.test(agentIpc.AGENT_SYSTEM) && /search_document/.test(agentIpc.AGENT_SYSTEM), '문서 검색 도구');
   assert.ok(/지어내지 말고|근거로 답/.test(agentIpc.AGENT_SYSTEM), '문서 내용 근거 지침(환각 방지)');
 });
+
+/* ───── [문서 전체를 컨텍스트로 — 관찰 미절단] AG-10 ───── */
+
+test('AG-10 — 문서 뒤쪽 내용도 관찰에 온전히 전달(2000자 클램프 회귀 방지)', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'spip-agent-long-'));
+  const uiPath = path.join(dir, 'ui.json');
+  const mdPath = path.join(dir, 'md.json');
+  fs.writeFileSync(uiPath, JSON.stringify({ schemaVersion: 6, homeWidgets: [{ iid: 'w5', type: 'mdedit', name: '' }], scratchpads: {} }), 'utf8');
+  const ctx = { uiStatePath: uiPath, mdDocsPath: mdPath, nowMs: () => 1700000000000, config: { briefing: { baseURL: 'x', model: 'm' } } };
+  const md = require('../electron/ipc/markdown');
+  // 릴리즈 내용을 앞쪽 채움(>2000자) 뒤에 배치 — 구버전 2000자 관찰 클램프면 잘려 사라진다.
+  const body = '# Project-SPIP\n\n' + '설명 문장입니다. '.repeat(400) + '\n\n## 릴리즈 방법\n1. npm run release 로 게시\n';
+  assert.ok(body.length > 2500, '문서가 2500자 이상(릴리즈는 2000자 뒤쪽)');
+  const created = md.create({ box: 'w5', title: 'Project-SPIP', body }, ctx);
+  const tools = agentIpc.buildTools(ctx, []);
+  const rd = await tools.read_document.run({ id: created.doc.id });
+  assert.ok(/npm run release/.test(rd.body), 'read_document 에 뒤쪽 릴리즈 내용 포함(8000자 이상 읽음)');
+  // 루프 관찰(safeStringify)까지 잘리지 않아야 LLM 이 실제로 참조한다.
+  const obs = agent.safeStringify(rd);
+  assert.ok(obs.length > 2000, '관찰이 2000자보다 큼(옛 클램프 초과)');
+  assert.ok(/npm run release/.test(obs), '관찰에 뒤쪽 릴리즈 내용 유지(미절단)');
+});
+
+/* ───── [위젯 독립 — 인스턴스별 포커스 보존] AG-11 ───── */
+
+test('AG-11 — preserve 가 위젯 셀 입력 포커스를 인스턴스(iid)별로 캡처·복원', () => {
+  const ROOT = path.join(__dirname, '..');
+  const APP = fs.readFileSync(path.join(ROOT, 'public', 'app.js'), 'utf8');
+  // 캡처: 화이트리스트 밖이라도 위젯 셀(.home-section[data-home-section]) 안의 INPUT/TEXTAREA 면 iid 로 캡처.
+  assert.ok(/ae\.tagName === 'INPUT' \|\| ae\.tagName === 'TEXTAREA'/.test(APP), '셀 입력 포커스 캡처');
+  assert.ok(/homeSection:\s*cell\.dataset\.homeSection/.test(APP), 'iid(homeSection) 로 캡처');
+  // 복원: 같은 iid 셀 안에서 같은 입력을 찾아 포커스 복원.
+  assert.ok(/f\.homeSection[\s\S]{0,260}home-section\[data-home-section=/.test(APP), 'iid 셀에서 복원');
+  assert.ok(/e\.focus\(\{ preventScroll: true \}\)/.test(APP), '스크롤 튐 없이 포커스 복원');
+});
