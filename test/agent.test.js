@@ -474,7 +474,7 @@ test('AG-6 마크다운 — create/list/read/update/delete 왕복', async () => 
   assert.strictEqual((await tools.update_document.run({ id, body: '# 회의록\n\n수정됨' })).ok, true);
   assert.match((await tools.read_document.run({ id })).body, /수정됨/);
   assert.strictEqual((await tools.delete_document.run({ id })).ok, true);
-  assert.strictEqual((await tools.read_document.run({ id })).error, 'NOT_FOUND', '삭제 후엔 없음');
+  assert.strictEqual((await tools.read_document.run({ id })).error, 'not_found', '삭제 후엔 없음');
 });
 
 test('AG-6 마크다운 — correct_document 가 문법 보정 후 저장', async () => {
@@ -590,4 +590,60 @@ test('AG-8 — 렌더러가 plan·reflect 단계를 표시', () => {
   assert.ok(/st\.phase === 'plan'/.test(APP) && /agent-plan__list/.test(APP), '계획 단계 렌더');
   assert.ok(/st\.phase === 'reflect'/.test(APP) && /검증 통과|검증 실패/.test(APP), '검증 단계 렌더');
   assert.ok(/\.agent-plan\s*\{/.test(CSS) && /\.agent-reflect/.test(CSS), '계획·검증 CSS');
+});
+
+/* ───── [문서 Q&A — 여러 편집기·제목찾기·키워드발췌] AG-9 ───── */
+
+function ctxWithSpipDoc() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'spip-agent-doc-'));
+  const uiPath = path.join(dir, 'ui.json');
+  const mdPath = path.join(dir, 'md.json');
+  // 편집기 2개 — Project-SPIP 문서는 '두 번째' 편집기(w5)에 둔다(첫 편집기만 보면 못 찾는 케이스).
+  fs.writeFileSync(uiPath, JSON.stringify({
+    schemaVersion: 6,
+    homeWidgets: [{ iid: 'md1', type: 'mdedit', name: '' }, { iid: 'w5', type: 'mdedit', name: '' }],
+    scratchpads: {},
+  }), 'utf8');
+  const ctx = { uiStatePath: uiPath, mdDocsPath: mdPath, nowMs: () => 1700000000000, config: { briefing: { baseURL: 'x', model: 'm' } } };
+  const md = require('../electron/ipc/markdown');
+  const body = '# Project-SPIP\n\n## 개요\n대시보드 앱.\n\n## 릴리즈 방법\n1. npm version 으로 버전 올리기\n2. git tag 후 push\n3. npm run release 로 GitHub 게시\n4. gh release edit 로 노트 작성\n\n## 기타\n끝.';
+  const r = md.create({ box: 'w5', title: 'Project-SPIP', body }, ctx);
+  return { ctx, docId: r.doc.id };
+}
+
+test('AG-9 — find/read/search_document 가 모든 편집기에 걸쳐 동작(제목·키워드)', async () => {
+  const { ctx, docId } = ctxWithSpipDoc();
+  const tools = agentIpc.buildTools(ctx, []);
+  // 두 번째 편집기의 문서도 목록·검색에 포함.
+  const list = await tools.list_documents.run({});
+  assert.ok(list.docs.some((d) => d.title === 'Project-SPIP' && d.editor === 'w5'), '다중 편집기 목록');
+  const f = await tools.find_document.run({ query: 'spip' });
+  assert.strictEqual(f.matches[0].id, docId, '제목으로 찾기');
+  const s = await tools.search_document.run({ id: docId, keyword: '릴리즈' });
+  assert.ok(s.found >= 1 && /npm run release/.test(s.excerpts.join('\n')), '키워드 발췌에 릴리즈 절차');
+  const rd = await tools.read_document.run({ id: docId });
+  assert.ok(/릴리즈 방법/.test(rd.body), '본문 전체 읽기(첫 편집기 아님)');
+});
+
+test('AG-9 — IPC run: "SPIP 문서 찾아 릴리즈 방법 설명" 흐름(찾기→발췌→근거 답변)', async () => {
+  const { ctx, docId } = ctxWithSpipDoc();
+  const script = [
+    '{"plan":["Project-SPIP 문서를 찾는다","릴리즈 관련 내용을 발췌한다","내용을 근거로 설명한다"]}',
+    '{"thought":"제목으로 문서 찾기","tool":"find_document","args":{"query":"Project-SPIP"}}',
+    '{"thought":"릴리즈 부분 발췌","tool":"search_document","args":{"id":"' + docId + '","keyword":"릴리즈"}}',
+    '{"final":"Project-SPIP 문서의 릴리즈 방법: 1) npm version 으로 버전 올리고 2) git tag 후 push, 3) npm run release 로 GitHub 게시, 4) gh release edit 로 노트 작성."}',
+    '{"is_valid":true,"critique":""}',
+  ];
+  let i = 0;
+  ctx.llmClient = { streamBriefing: async () => ({ ok: true, text: script[i++] }) };
+  const res = await agentIpc.run({ message: '마크다운 편집기에서 spip 관련 문서를 찾아 릴리즈 방법에 대해 설명해줘' }, ctx);
+  assert.strictEqual(res.ok, true);
+  assert.ok(res.steps.some((s) => s.tool === 'find_document'), 'find_document 실행');
+  assert.ok(res.steps.some((s) => s.tool === 'search_document' && /npm run release/.test(s.observation)), 'search_document 로 릴리즈 내용 확보');
+  assert.ok(/npm run release/.test(res.final) && /gh release/.test(res.final), '문서 내용을 근거로 릴리즈 방법 답변');
+});
+
+test('AG-9 — 프롬프트에 문서 Q&A 도구·지침', () => {
+  assert.ok(/find_document/.test(agentIpc.AGENT_SYSTEM) && /search_document/.test(agentIpc.AGENT_SYSTEM), '문서 검색 도구');
+  assert.ok(/지어내지 말고|근거로 답/.test(agentIpc.AGENT_SYSTEM), '문서 내용 근거 지침(환각 방지)');
 });

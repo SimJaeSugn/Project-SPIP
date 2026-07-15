@@ -80,13 +80,20 @@ const AGENT_SYSTEM = [
   '- append_memo: 메모 끝에 줄 추가(기존 보존). args = {"text":"...","iid":"..."(선택)}.',
   '- clear_memo: 메모 비우기. args = {"iid":"..."(선택)}.',
   '',
-  '사용 가능한 도구 — 마크다운 문서(첫 편집기):',
-  '- list_documents: 문서 목록. args {}.',
-  '- read_document: 문서 본문 읽기. args = {"id":"..."}.',
+  '사용 가능한 도구 — 마크다운 문서(모든 편집기):',
+  '- list_documents: 모든 편집기의 문서 목록(id·제목). args {}.',
+  '- find_document: 제목으로 문서 찾기. args = {"query":"제목 일부"}. 특정 문서를 찾을 때 먼저 쓴다.',
+  '- read_document: 문서 본문 전체 읽기. args = {"id":"..."}.',
+  '- search_document: 문서 안에서 키워드가 든 부분만 발췌. args = {"id":"...","keyword":"..."}. 긴 문서에서 특정 주제만 볼 때.',
   '- create_document: 문서 새로 만들기. args = {"title":"...","body":"...(선택)"}.',
   '- update_document: 문서 수정. args = {"id":"...","title":"...(선택)","body":"...(선택)"}.',
   '- delete_document: 문서 삭제. args = {"id":"..."}.',
   '- correct_document: 문서의 마크다운 문법을 AI 로 보정(내용은 바꾸지 않음). args = {"id":"..."}.',
+  '',
+  '문서 관련 질문 처리 방법(중요):',
+  '- "○○ 문서를 찾아 …" 처럼 문서 내용에 대한 질문이면, 지어내지 말고 반드시 도구로 실제 내용을 읽어 근거로 답한다.',
+  '- 순서: find_document(제목으로 찾기) → read_document 또는 search_document(키워드로 관련 부분 발췌) → 그 내용을 바탕으로 final 작성.',
+  '- 문서에 없는 내용은 추측하지 말고 "문서에 없다"고 답한다.',
   '',
   '사용 가능한 도구 — 탐색기/브리핑:',
   '- list_explorer_roots: 탐색기 열람 루트 목록. args {}.',
@@ -183,6 +190,17 @@ function homeWidgets(ctx) {
 function firstWidgetIid(ctx, type) {
   const w = homeWidgets(ctx).find((x) => x && x.type === type);
   return (w && typeof w.iid === 'string') ? w.iid : null;
+}
+/** 배치된 모든 마크다운 편집기 인스턴스의 iid(=문서함). 여러 편집기의 문서를 두루 찾을 때. */
+function allEditorBoxes(ctx) {
+  return homeWidgets(ctx).filter((w) => w && w.type === 'mdedit' && typeof w.iid === 'string').map((w) => w.iid);
+}
+/** 모든 편집기를 뒤져 문서 id 가 있는 문서함(box)을 찾는다(없으면 null). */
+function findDocBox(ctx, id) {
+  for (const box of allEditorBoxes(ctx)) {
+    try { const r = markdownIpc.get({ box, id }, ctx); if (r && r.ok && r.doc) return box; } catch (_) { /* skip */ }
+  }
+  return null;
 }
 /** 프로젝트 1건 → 소형 뷰(스캔 store 원본 필드 방어적 매핑). */
 function projectBrief(p) {
@@ -484,25 +502,66 @@ function buildTools(ctx, uiActions) {
         catch (_) { return { ok: false, error: 'failed' }; }
       },
     },
-    /* ── 마크다운 편집기 위젯 — 인스턴스별(첫 편집기) ── */
+    /* ── 마크다운 편집기 위젯 — 배치된 모든 편집기의 문서를 두루 다룬다 ── */
     list_documents: {
-      desc: '마크다운 문서 목록(첫 편집기)',
+      desc: '모든 편집기의 마크다운 문서 목록(id·제목)',
       run: async () => {
-        const box = firstWidgetIid(ctx, 'mdedit');
-        if (!box) return { ok: false, error: 'no_editor_widget' };
-        try { const r = markdownIpc.list({ box }, ctx); return (r && r.ok !== false) ? { ok: true, docs: (r.docs || []).map((d) => ({ id: d.id, title: d.title, size: d.size })) } : { ok: false, error: (r && r.code) || 'failed' }; }
-        catch (_) { return { ok: false, error: 'failed' }; }
+        const boxes = allEditorBoxes(ctx);
+        if (!boxes.length) return { ok: false, error: 'no_editor_widget' };
+        const docs = [];
+        for (const box of boxes) {
+          try { const r = markdownIpc.list({ box }, ctx); if (r && r.ok) (r.docs || []).forEach((d) => docs.push({ id: d.id, title: d.title, size: d.size, editor: box })); } catch (_) { /* skip */ }
+        }
+        return { ok: true, count: docs.length, docs };
+      },
+    },
+    find_document: {
+      desc: '제목으로 문서 찾기(모든 편집기). args = {"query":"제목 일부"}',
+      run: async (a) => {
+        a = a || {};
+        const q = (typeof a.query === 'string') ? a.query.trim().toLowerCase() : '';
+        if (!q) return { ok: false, error: 'need_query' };
+        const matches = [];
+        for (const box of allEditorBoxes(ctx)) {
+          try { const r = markdownIpc.list({ box }, ctx); if (r && r.ok) (r.docs || []).forEach((d) => { if (String(d.title || '').toLowerCase().indexOf(q) >= 0) matches.push({ id: d.id, title: d.title, editor: box }); }); } catch (_) { /* skip */ }
+        }
+        return { ok: true, matches };
       },
     },
     read_document: {
-      desc: '마크다운 문서 본문 읽기. args = {"id":"..."}',
+      desc: '문서 본문 읽기(모든 편집기에서 id 로 찾음). args = {"id":"..."}',
       run: async (a) => {
         a = a || {};
-        const box = firstWidgetIid(ctx, 'mdedit');
-        if (!box) return { ok: false, error: 'no_editor_widget' };
         if (!a.id) return { ok: false, error: 'need_id' };
-        try { const r = markdownIpc.get({ box, id: a.id }, ctx); return (r && r.ok && r.doc) ? { ok: true, title: r.doc.title, body: clampStr(r.doc.body, 1500) } : { ok: false, error: (r && r.code) || 'not_found' }; }
-        catch (_) { return { ok: false, error: 'failed' }; }
+        for (const box of allEditorBoxes(ctx)) {
+          try { const r = markdownIpc.get({ box, id: a.id }, ctx); if (r && r.ok && r.doc) return { ok: true, title: r.doc.title, body: clampStr(r.doc.body, 8000) }; } catch (_) { /* skip */ }
+        }
+        return { ok: false, error: 'not_found' };
+      },
+    },
+    search_document: {
+      desc: '문서 안에서 키워드가 든 부분만 발췌. args = {"id":"...","keyword":"릴리즈"}',
+      run: async (a) => {
+        a = a || {};
+        if (!a.id) return { ok: false, error: 'need_id' };
+        const box = findDocBox(ctx, a.id);
+        if (!box) return { ok: false, error: 'not_found' };
+        let doc;
+        try { const r = markdownIpc.get({ box, id: a.id }, ctx); doc = r && r.ok && r.doc; } catch (_) { doc = null; }
+        if (!doc) return { ok: false, error: 'not_found' };
+        const body = String(doc.body || '');
+        const kw = (typeof a.keyword === 'string') ? a.keyword.trim() : '';
+        if (!kw) return { ok: true, title: doc.title, excerpts: [clampStr(body, 4000)] };
+        const lines = body.split('\n');
+        const low = kw.toLowerCase();
+        const excerpts = [];
+        for (let i = 0; i < lines.length; i++) {
+          if (lines[i].toLowerCase().indexOf(low) >= 0) {
+            excerpts.push(clampStr(lines.slice(Math.max(0, i - 1), Math.min(lines.length, i + 8)).join('\n'), 900));
+            if (excerpts.length >= 8) break;
+          }
+        }
+        return { ok: true, title: doc.title, keyword: kw, excerpts, found: excerpts.length };
       },
     },
     create_document: {
@@ -519,9 +578,9 @@ function buildTools(ctx, uiActions) {
       desc: '마크다운 문서 수정. args = {"id":"...", "title":"...(선택)", "body":"...(선택)"}',
       run: async (a) => {
         a = a || {};
-        const box = firstWidgetIid(ctx, 'mdedit');
-        if (!box) return { ok: false, error: 'no_editor_widget' };
         if (!a.id) return { ok: false, error: 'need_id' };
+        const box = findDocBox(ctx, a.id);
+        if (!box) return { ok: false, error: 'not_found' };
         const patch = { box, id: a.id };
         if (typeof a.title === 'string') patch.title = a.title;
         if (typeof a.body === 'string') patch.body = a.body;
@@ -534,9 +593,9 @@ function buildTools(ctx, uiActions) {
       desc: '마크다운 문서 삭제. args = {"id":"..."}',
       run: async (a) => {
         a = a || {};
-        const box = firstWidgetIid(ctx, 'mdedit');
-        if (!box) return { ok: false, error: 'no_editor_widget' };
         if (!a.id) return { ok: false, error: 'need_id' };
+        const box = findDocBox(ctx, a.id);
+        if (!box) return { ok: false, error: 'not_found' };
         try { const r = markdownIpc.remove({ box, id: a.id }, ctx); return (r && r.ok) ? { ok: true, id: a.id } : { ok: false, error: (r && r.code) || 'not_found' }; }
         catch (_) { return { ok: false, error: 'failed' }; }
       },
@@ -545,9 +604,9 @@ function buildTools(ctx, uiActions) {
       desc: '문서의 마크다운 문법을 AI 로 보정(내용 첨삭 없이). args = {"id":"..."}',
       run: async (a) => {
         a = a || {};
-        const box = firstWidgetIid(ctx, 'mdedit');
-        if (!box) return { ok: false, error: 'no_editor_widget' };
         if (!a.id) return { ok: false, error: 'need_id' };
+        const box = findDocBox(ctx, a.id);
+        if (!box) return { ok: false, error: 'not_found' };
         try {
           const g = markdownIpc.get({ box, id: a.id }, ctx);
           if (!g || !g.ok || !g.doc) return { ok: false, error: (g && g.code) || 'not_found' };
