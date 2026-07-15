@@ -147,3 +147,16 @@ test('[항목3] usage 없으면 r.usage=null, total 누락 시 input+output로 �
   const r = await partial.streamBriefing({});
   assert.deepStrictEqual(r.usage, { promptTokens: 5, completionTokens: 7, totalTokens: 12 });
 });
+
+test('R-34 — streamBriefing: 호출별 temperature·maxTokens 오버라이드가 모델 구성에 반영', async () => {
+  const seen = [];
+  const chatFactory = (args) => { seen.push(args); return { async stream() { return (async function* () { yield { content: 'ok' }; })(); } }; };
+  const client = createLlmClient({ getConfig: () => CFG, chatFactory });
+  // 미지정 → config/기본값(CFG엔 temperature 없음 → DEFAULT 0.3)
+  await client.streamBriefing({ system: 's', user: 'u' });
+  assert.strictEqual(seen[0].temperature, 0.3, '미지정이면 config/기본 temperature');
+  // 지정 → 그 값(마크다운 문법 교정은 temperature 0)
+  await client.streamBriefing({ system: 's', user: 'u', temperature: 0, maxTokens: 4096 });
+  assert.strictEqual(seen[1].temperature, 0, '오버라이드 temperature 0');
+  assert.strictEqual(seen[1].maxTokens, 4096, '오버라이드 maxTokens');
+});

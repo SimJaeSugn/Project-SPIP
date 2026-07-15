@@ -386,6 +386,17 @@ test('MD-AI-1 correct — 선택/전체 텍스트를 교정해 돌려준다(syst
   assert.strictEqual(ctx.llmClient.calls.length, 1);
   assert.strictEqual(ctx.llmClient.calls[0].user, '#제목\n\n-항목', '원문이 user 로 전달');
   assert.ok(/마크다운/.test(ctx.llmClient.calls[0].system), 'system 은 마크다운 교정 지시');
+  // 결정적·충실 교정을 위해 temperature 0 + maxTokens 상향으로 호출한다.
+  assert.strictEqual(ctx.llmClient.calls[0].temperature, 0, 'temperature 0(환언 억제)');
+  assert.ok(ctx.llmClient.calls[0].maxTokens >= 4096, '긴 문서도 안 잘리게 maxTokens 상향');
+});
+
+test('MD-AI-1 correct — 프롬프트는 문법만·내용 첨삭 금지 + 표 줄바꿈 교정 지시', () => {
+  const sys = ipc.MD_CORRECT_SYSTEM;
+  assert.ok(/첨삭/.test(sys) || /바꾸지 않는다/.test(sys), '내용 첨삭 금지 명시');
+  assert.ok(/맞춤법/.test(sys) && /하지 않는다/.test(sys), '맞춤법·글 교정은 하지 않음');
+  assert.ok(/표/.test(sys) && /줄바꿈/.test(sys), '표를 줄바꿈해 올바른 표로(한 줄로 붙은 표 교정)');
+  assert.ok(/값[^\n]*바꾸지 않는다|셀 값/.test(sys), '셀 값 등 텍스트 값 보존');
 });
 
 test('MD-AI-1 correct — 연결 정보(baseURL·model) 없으면 NO_CONN(호출 0)', async () => {
