@@ -295,6 +295,11 @@ contextBridge.exposeInMainWorld('spip', {
     correct: (text) => ipcRenderer.invoke('spip:md:correct', { text: text == null ? '' : String(text) }),
   },
 
+  // [AG-1] Agent 위젯 — 자연어 요청을 ReAct 루프로 처리(POC: 할 일 제어). 응답: { ok, final, steps, todos }.
+  agent: {
+    run: (message) => ipcRenderer.invoke('spip:agent:run', { message: message == null ? '' : String(message) }),
+  },
+
   // 이벤트 구독(on/send) — 콜백만 받고 ipcRenderer 원본은 노출하지 않음(보안).
   onScanProgress: (cb) => {
     if (typeof cb !== 'function') return () => {};

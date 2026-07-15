@@ -161,7 +161,7 @@ test('normalizeHomeLayout — 비배열/손상 → 기본 순서 전체 복원',
 test('normalizeHomeLayout — 화이트리스트 외/중복 제거 + 누락 보충(끝)', () => {
   const r = store.normalizeHomeLayout(['mail', 'attention', 'mail', 'bogus', 42, 'mail']);
   // 유효 순서 보존(mail, attention) → 중복·미지·비문자열 제거 → 누락 섹션 기본 순서로 끝에 보충
-  assert.deepStrictEqual(r, ['mail', 'attention', 'briefing', 'summary', 'productivity', 'activity', 'todos', 'disk', 'aiusage', 'shelf', 'shelfWide', 'scratchpad', 'commitHeatmap', 'systemStatus', 'explorer', 'mdedit', 'featureAdd']);
+  assert.deepStrictEqual(r, ['mail', 'attention', 'briefing', 'summary', 'productivity', 'activity', 'todos', 'disk', 'aiusage', 'shelf', 'shelfWide', 'scratchpad', 'commitHeatmap', 'systemStatus', 'explorer', 'mdedit', 'agent', 'featureAdd']);
   // 항상 화이트리스트 전체의 순열
   assert.strictEqual(r.length, store.HOME_SECTION_IDS.length);
   assert.deepStrictEqual(r.slice().sort(), store.HOME_SECTION_IDS.slice().sort());

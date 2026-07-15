@@ -703,7 +703,7 @@ function shouldPollCommit(view, visible) {
 // [탐색기 위젯] 폴더 탐색기(explorer) 추가 — 메인 uiStateStore.HOME_SECTION_IDS 와 동형(드리프트 테스트).
 // [MD 편집기 위젯] 마크다운 편집기(mdedit) 추가 — 메인 uiStateStore.HOME_SECTION_IDS 와 동형(드리프트 테스트).
 // [브리핑 분리] 상단 고정 히어로를 위젯으로 — 'briefing'·'summary' 를 맨 앞에(메인 uiStateStore 와 동형).
-const HOME_SECTION_IDS = ['briefing', 'summary', 'attention', 'productivity', 'activity', 'todos', 'mail', 'disk', 'aiusage', 'shelf', 'shelfWide', 'scratchpad', 'commitHeatmap', 'systemStatus', 'explorer', 'mdedit', 'featureAdd'];
+const HOME_SECTION_IDS = ['briefing', 'summary', 'attention', 'productivity', 'activity', 'todos', 'mail', 'disk', 'aiusage', 'shelf', 'shelfWide', 'scratchpad', 'commitHeatmap', 'systemStatus', 'explorer', 'mdedit', 'agent', 'featureAdd'];
 
 // [위젯 추가/제거] 토글 가능한 콘텐츠 위젯 메타(갤러리·제거 UI용). 'featureAdd'는 추가 트리거라 제외(항상 표시).
 //   메인 uiStateStore.TOGGLEABLE_WIDGET_IDS 와 동형(드리프트 0 — homeLayout-front 테스트가 교차검증).
@@ -728,6 +728,7 @@ const WIDGET_META = {
   systemStatus: { name: '시스템 상태', desc: '개발 머신 CPU·메모리·디스크 사용량' },
   explorer: { name: '폴더 탐색기', desc: '지정한 폴더의 파일·디렉터리를 탐색하고 열기' },
   mdedit: { name: '마크다운 편집기', desc: '문서를 쓰고 미리보고 .md 파일로 주고받기' },
+  agent: { name: 'AI 에이전트', desc: '자연어로 요청하면 도구를 써서 처리 — 지금은 할 일 제어(추가·완료·삭제)' },
 };
 
 /* [로드맵 Phase 1·L] 레이아웃 템플릿 — 갤러리에서 골라 '새 프리셋'으로 적용. visible 외 토글 위젯은 숨김.
@@ -954,6 +955,7 @@ function homeDefaultSpan(id) {
   if (t === 'commitHeatmap') return 2;
   if (t === 'explorer') return 2; // [탐색기 위젯] 이름+크기+수정일 3열이 편하게 들어가는 기본 폭
   if (t === 'mdedit') return 2;   // [MD 편집기] 편집+미리보기 2단이 펴지는 기본 폭
+  if (t === 'agent') return 2;    // [Agent] 대화·트랜스크립트가 읽히는 기본 폭
   if (isGroupId(id)) return 2; // [Phase 5·M] 프리폼 그룹 블록 기본 2열
   return 1;
 }
@@ -969,6 +971,8 @@ const HOME_WIDGET_MIN_H = {
   explorer: 190, shelf: 300, shelfWide: 300,
   // [MD 편집기] 툴바 + 문서 바 + 에디터 최소 높이. 이보다 낮추면 편집 영역이 사라지므로 하한.
   mdedit: 240,
+  // [Agent] 트랜스크립트 + 입력창이 함께 보이는 최소 높이.
+  agent: 240,
 };
 /** 위젯 id → 최소 높이(px). 위젯별 값이 전역 하한보다 크면 그 값을, 아니면 HOME_H_MIN.
  *   [위젯 인스턴스] 최소 높이는 **타입**의 성질 — iid 를 받으면 타입으로 해석해 조회한다. */
@@ -2185,6 +2189,15 @@ function initBrowser() {
     if (type === 'scratchpad') {
       return { _saveTimer: null, _savedAt: null };
     }
+    if (type === 'agent') {
+      return {
+        input: '',        // 이 에이전트 입력창(인스턴스별)
+        running: false,   // 실행 중(툴바·입력 비활성)
+        steps: [],        // 마지막 실행의 ReAct 트레이스(thought/tool/observation/final)
+        final: '',        // 마지막 최종 답변
+        code: null,       // 실패 코드(고정 토큰)
+      };
+    }
     return {};
   }
   /** iid → 인스턴스 UI 상태(없으면 타입에 맞춰 생성). */
@@ -3161,6 +3174,7 @@ function initBrowser() {
       case 'systemStatus': return renderHomeSystemStatus(inst);
       case 'explorer':     return renderHomeExplorer(inst);
       case 'mdedit':       return renderHomeMdEdit(inst);
+      case 'agent':        return renderHomeAgent(inst);
       case 'featureAdd':   return renderHomeFeatureAdd();
       default:             return null;
     }
@@ -6016,6 +6030,117 @@ function initBrowser() {
   }
 
   /* ===== [MD 편집기 위젯] 끝 ================================================================= */
+
+  /* ===== [Agent 위젯 AG-1] AI 에이전트 — 자연어 요청을 ReAct 루프로 처리(POC: 할 일 제어) =====
+   *   egress 는 메인 단독(spip.agent.run). 렌더러는 요청 텍스트를 보내고 { final, steps, todos } 를 받아
+   *   트레이스를 표시하고 할 일 변경을 즉시 반영한다. 텍스트는 전부 textContent(L-1). 인스턴스별 상태(wstate). */
+  function agentBridge() { return (typeof spip !== 'undefined' && spip && spip.agent && typeof spip.agent.run === 'function') ? spip.agent : null; }
+  var AGENT_CODES = {
+    BAD_INPUT: '요청 내용을 입력하세요.',
+    NO_CONN: 'AI 연결이 설정되지 않았습니다 — 설정 > 연동에서 모델 연결을 먼저 등록하세요.',
+    NO_FINAL: '작업을 끝맺지 못했습니다. 더 구체적으로 요청해 보세요.',
+    MAX_STEPS: '단계가 너무 많아 중단했습니다. 요청을 나눠서 시도해 보세요.',
+    LLM_ERROR: 'AI 응답에 실패했습니다 — 설정에서 연결을 확인하세요.',
+    INTERNAL: '작업에 실패했습니다.',
+  };
+  function agentMessage(code) { return (code && AGENT_CODES[code] != null) ? AGENT_CODES[code] : 'AI 응답에 실패했습니다.'; }
+  function agentArgsBrief(args) { try { var s = JSON.stringify(args || {}); return (s === '{}') ? '' : s.slice(0, 120); } catch (_) { return ''; } }
+  function agentObsBrief(obs) { var s = String(obs == null ? '' : obs); return s.length > 200 ? s.slice(0, 200) + '…' : s; }
+
+  /** ReAct 트레이스(스텝들)를 호스트에 렌더 — thought/action/observation. 최종(final)은 호출측이 별도로 표시. */
+  function renderAgentSteps(host, steps) {
+    (steps || []).forEach(function (st) {
+      if (st.final) return;
+      var row = el('div', { cls: 'agent-step' });
+      if (st.thought) row.appendChild(el('div', { cls: 'agent-thought', text: st.thought }));
+      if (st.tool) {
+        var act = el('div', { cls: 'agent-action' });
+        act.appendChild(el('span', { cls: 'agent-tool', text: st.tool }));
+        var brief = agentArgsBrief(st.args);
+        if (brief) act.appendChild(el('span', { cls: 'agent-args', text: brief }));
+        row.appendChild(act);
+      }
+      if (st.observation) row.appendChild(el('div', { cls: 'agent-obs', text: agentObsBrief(st.observation) }));
+      host.appendChild(row);
+    });
+  }
+
+  function renderHomeAgent(inst) {
+    var iid = inst.iid;
+    var st = wstate(iid);
+    var card = el('div', { cls: 'agent-card hw-card', style: HOME_CARD + 'padding:16px 16px 12px;' });
+
+    var head = el('div', { cls: 'agent-head' });
+    var titleWrap = el('div', { style: 'flex:1 1 0%;min-width:0;' });
+    titleWrap.appendChild(el('div', { cls: 'agent-title', text: widgetCardTitle(inst, 'AI 에이전트') }));
+    titleWrap.appendChild(el('div', { cls: 'agent-sub', text: '할 일을 자연어로 — 예: “우유 사기 추가”, “장보기 완료”' }));
+    head.appendChild(titleWrap);
+    card.appendChild(head);
+
+    var body = el('div', { cls: 'agent-body hw-body spip-scroll' });
+    if (!agentBridge()) {
+      body.appendChild(el('div', { cls: 'agent-empty', text: 'Electron 앱에서만 사용할 수 있습니다.' }));
+    } else if (st.running) {
+      renderAgentSteps(body, st.steps);
+      body.appendChild(el('div', { cls: 'agent-running', text: '생각하는 중…' }));
+    } else if (st.steps.length === 0 && !st.final && !st.code) {
+      var e = el('div', { cls: 'agent-empty' });
+      e.appendChild(el('div', { text: '무엇을 도와드릴까요?' }));
+      e.appendChild(el('div', { cls: 'agent-empty__hint', text: '요청을 입력하면 도구(할 일 추가·완료·삭제)를 써서 처리하고 그 과정을 보여줍니다.' }));
+      body.appendChild(e);
+    } else {
+      renderAgentSteps(body, st.steps);
+      if (st.final) body.appendChild(el('div', { cls: 'agent-final', text: st.final }));
+      if (st.code) body.appendChild(el('div', { cls: 'agent-error', text: agentMessage(st.code) }));
+    }
+    card.appendChild(body);
+
+    var form = el('div', { cls: 'agent-input' });
+    var ta = el('textarea', {
+      cls: 'agent-textarea',
+      attrs: { rows: '1', placeholder: '예: 내일 오전 회의 준비 할일 추가', 'aria-label': '에이전트에게 요청', spellcheck: 'false' },
+      on: {
+        input: function (e) { st.input = e.target.value; },
+        keydown: function (e) { e.stopPropagation(); if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); agentRun(iid); } },
+        pointerdown: function (e) { e.stopPropagation(); },
+      },
+    });
+    ta.value = st.input;
+    form.appendChild(ta);
+    var runBtn = el('button', {
+      cls: 'agent-run', text: st.running ? '실행 중…' : '실행',
+      attrs: { type: 'button', 'aria-label': '에이전트 실행' },
+      on: { click: function () { agentRun(iid); } },
+    });
+    if (st.running || !agentBridge()) runBtn.disabled = true;
+    form.appendChild(runBtn);
+    card.appendChild(form);
+
+    return card;
+  }
+
+  /** 에이전트 실행 — 요청을 메인 ReAct 루프에 넘기고 트레이스·최종답·할 일 변경을 반영한다. */
+  async function agentRun(iid) {
+    var st = wstate(iid);
+    if (st.running) return;
+    var b = agentBridge();
+    if (!b) { toast('이 버전에서는 에이전트를 쓸 수 없습니다.', true); return; }
+    var msg = (st.input || '').trim();
+    if (!msg) { toast('요청 내용을 입력하세요.', true); return; }
+    st.running = true; st.code = null; st.steps = []; st.final = ''; render();
+    var res;
+    try { res = await b.run(msg); } catch (_) { res = null; }
+    st.running = false;
+    if (!res) { st.code = 'INTERNAL'; render(); return; }
+    st.steps = Array.isArray(res.steps) ? res.steps : [];
+    st.final = (typeof res.final === 'string') ? res.final : '';
+    st.code = res.ok ? null : (res.code || 'INTERNAL');
+    if (Array.isArray(res.todos)) store.todos = res.todos; // 도구가 바꾼 할 일 즉시 반영(할 일 위젯 동기화)
+    if (res.ok) st.input = '';
+    render();
+  }
+
+  /* ===== [Agent 위젯 AG-1] 끝 ============================================================== */
 
   /** [위젯 인스턴스] 위젯 카드 우상단 제거(×) 버튼 — 그 **인스턴스 하나만** 제거한다(같은 타입의 다른 배치는 남는다). */
   function widgetRemoveBtn(inst) {

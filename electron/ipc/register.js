@@ -28,6 +28,7 @@ const mailArchiveIpc = require('./mailArchive');
 const insightsIpc = require('./insights');
 const uiStateIpc = require('./uiState');
 const briefingIpc = require('./briefing');
+const agentIpc = require('./agent');
 const shelfIpc = require('./shelf');
 const notifyIpc = require('./notify');
 const autoUpdate = require('../autoUpdate');
@@ -290,6 +291,8 @@ function registerIpcHandlers(deps) {
   guard('spip:addTodo', (args) => uiStateIpc.addTodo(args, ctx));
   guard('spip:toggleTodo', (args) => uiStateIpc.toggleTodo(args, ctx));
   guard('spip:removeTodo', (args) => uiStateIpc.removeTodo(args, ctx));
+  // [AG-1] Agent 위젯 — ReAct 루프로 할 일 도구를 호출(egress 메인 단독, ctx 에 config·llmClient 포함).
+  guard('spip:agent:run', (args) => agentIpc.run(args, ctx));
   // [백로그2-4] 할 일 마감 일시 설정/해제 + 마감 도래 시 OS 토스트 알림.
   guard('spip:setTodoDue', (args) => uiStateIpc.setTodoDue(args, ctx));
   guard('spip:notify', (args) => notifyIpc.notify(args, ctx));

@@ -17,11 +17,11 @@ const STORE_SRC = fs.readFileSync(path.join(__dirname, '..', 'lib', 'common', 'u
 // ── HOME_SECTION_IDS 계약 동형 ────────────────────────────────────────────
 // [SH-2] 셸프 2변형 + [Phase 3·G] 스크래치패드·커밋 히트맵·시스템 상태 + [탐색기] 폴더 탐색기('explorer')
 //   + [MD 편집기] 마크다운 편집기('mdedit') + [브리핑 분리] 오늘의 브리핑('briefing')·요약 지표('summary')를
-//   맨 앞에 → 17섹션 enum.
-const N_SECTIONS = 17;
-test('R-32 — HOME_SECTION_IDS: 17섹션 enum(배열 순서 = 기본 순서)', () => {
+//   맨 앞에 + [Agent 위젯] 'agent'(mdedit 뒤) → 18섹션 enum.
+const N_SECTIONS = 18;
+test('R-32 — HOME_SECTION_IDS: 18섹션 enum(배열 순서 = 기본 순서)', () => {
   assert.deepStrictEqual(HOME_SECTION_IDS,
-    ['briefing', 'summary', 'attention', 'productivity', 'activity', 'todos', 'mail', 'disk', 'aiusage', 'shelf', 'shelfWide', 'scratchpad', 'commitHeatmap', 'systemStatus', 'explorer', 'mdedit', 'featureAdd']);
+    ['briefing', 'summary', 'attention', 'productivity', 'activity', 'todos', 'mail', 'disk', 'aiusage', 'shelf', 'shelfWide', 'scratchpad', 'commitHeatmap', 'systemStatus', 'explorer', 'mdedit', 'agent', 'featureAdd']);
 });
 
 test('R-32 — 렌더러 HOME_SECTION_IDS 가 메인 uiStateStore 와 동일 집합·순서', () => {
@@ -527,7 +527,7 @@ test('로드맵 Phase 3·C — 메일 위젯 밀도 소비: 요약 노드·시�
 
 // ── applyHomeLayout (순서 정규화, 메인 normalizeHomeLayout 과 동일 규칙) ──
 test('R-32 — applyHomeLayout: 유효 순열은 그대로 유지', () => {
-  const input = ['briefing', 'summary', 'mail', 'attention', 'disk', 'todos', 'shelf', 'activity', 'productivity', 'aiusage', 'shelfWide', 'scratchpad', 'commitHeatmap', 'systemStatus', 'explorer', 'mdedit', 'featureAdd'];
+  const input = ['briefing', 'summary', 'mail', 'attention', 'disk', 'todos', 'shelf', 'activity', 'productivity', 'aiusage', 'shelfWide', 'scratchpad', 'commitHeatmap', 'systemStatus', 'explorer', 'mdedit', 'agent', 'featureAdd'];
   assert.deepStrictEqual(applyHomeLayout(input), input);
 });
 
@@ -536,7 +536,7 @@ test('R-32 — applyHomeLayout: 부분 순서는 나머지를 기본 순서로 �
   assert.strictEqual(out.length, N_SECTIONS);
   assert.deepStrictEqual(out.slice(0, 2), ['mail', 'todos']);
   // 나머지는 기본 순서 유지(중복 없이).
-  assert.deepStrictEqual(out, ['mail', 'todos', 'briefing', 'summary', 'attention', 'productivity', 'activity', 'disk', 'aiusage', 'shelf', 'shelfWide', 'scratchpad', 'commitHeatmap', 'systemStatus', 'explorer', 'mdedit', 'featureAdd']);
+  assert.deepStrictEqual(out, ['mail', 'todos', 'briefing', 'summary', 'attention', 'productivity', 'activity', 'disk', 'aiusage', 'shelf', 'shelfWide', 'scratchpad', 'commitHeatmap', 'systemStatus', 'explorer', 'mdedit', 'agent', 'featureAdd']);
 });
 
 test('R-32 — applyHomeLayout: 화이트리스트 외·중복·비문자열 제거', () => {
