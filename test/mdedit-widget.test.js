@@ -109,7 +109,7 @@ test('MD-1 — preload 채널명 ↔ register.js 등록 채널 정합(드리프�
   const re = /'(spip:md:[A-Za-z]+)'/g;
   let m;
   while ((m = re.exec(PRELOAD_SRC)) !== null) chans.add(m[1]);
-  assert.strictEqual(chans.size, 7, 'preload 가 7개 md 채널을 호출');
+  assert.strictEqual(chans.size, 8, 'preload 가 8개 md 채널을 호출(list/get/create/update/remove/import/export/correct)');
   for (const c of chans) assert.ok(REGISTER_SRC.includes("guard('" + c + "'"), 'register.js 미등록 채널: ' + c);
 });
 
@@ -377,4 +377,31 @@ test('MD-1 — 파서는 app.js 보다 먼저 로드되고, 미로드 환경에�
   // 전역 부재(테스트·웹)에서도 app.js 가 죽지 않게 지연 참조한다.
   assert.ok(/function mdParser\(\) \{ return \(typeof SpipMarkdown !== 'undefined'\)/.test(APP_SRC),
     '파서 전역은 지연 참조(top-level 참조 금지)');
+});
+
+/* ───── [MD-AI-1] AI 마크다운 보정 배선 ───── */
+
+test('MD-AI-1 — AI 보정 3계층 배선(preload correct · register 채널 · markdown.correct 핸들러)', () => {
+  assert.ok(preloadMdKeys().has('correct'), 'preload md.correct 노출');
+  assert.ok(/spip:md:correct/.test(PRELOAD_SRC), 'preload 가 spip:md:correct 채널로 invoke');
+  assert.ok(/guard\('spip:md:correct'/.test(REGISTER_SRC), 'register 에 spip:md:correct 가드 배선');
+  const md = require('../electron/ipc/markdown');
+  assert.strictEqual(typeof md.correct, 'function', 'markdown IPC 가 correct 핸들러 export');
+});
+
+test('MD-AI-1 — 렌더러: 툴바 버튼 + mdAiCorrect + 선택영역(cellQuery) + 진행표시 + 연결없음 코드', () => {
+  const code = mdCode();
+  assert.ok(/function mdAiCorrect\(iid\)/.test(APP_SRC), 'mdAiCorrect 정의');
+  assert.ok(/mdAiCorrect\(iid\)/.test(code) && /AI 보정/.test(mdSection()), '툴바에 AI 보정 버튼');
+  // 선택 영역은 전역 querySelector 가 아니라 그 인스턴스 셀에서만 읽는다(편집기 여럿 대응).
+  assert.ok(/cellQuery\(iid, '\.md-editor'\)/.test(APP_SRC), '선택은 인스턴스 셀(cellQuery)에서');
+  assert.ok(/selectionStart/.test(APP_SRC) && /selectionEnd/.test(APP_SRC), '선택 범위 사용(없으면 전체)');
+  // 진행 상태(aiBusy) + 연결 없음 안내 코드.
+  assert.ok(/aiBusy/.test(APP_SRC), 'AI 보정 in-flight 플래그(aiBusy)');
+  assert.ok(/NO_CONN:/.test(APP_SRC), 'MD_CODES.NO_CONN 안내');
+});
+
+test('MD-AI-1 — egress 는 메인 단독: context 가 공유 llmClient 를 ctx 로 노출', () => {
+  const CTX_SRC = fs.readFileSync(path.join(ROOT, 'electron', 'context.js'), 'utf8');
+  assert.ok(/ctx\.llmClient\s*=\s*llmClient/.test(CTX_SRC), 'ctx.llmClient 노출(마크다운 보정이 재사용)');
 });

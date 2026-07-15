@@ -291,6 +291,8 @@ contextBridge.exposeInMainWorld('spip', {
     remove: (box, id) => ipcRenderer.invoke('spip:md:remove', { box: String(box), id: String(id) }),
     importFile: (box) => ipcRenderer.invoke('spip:md:import', { box: String(box) }),
     exportFile: (box, id) => ipcRenderer.invoke('spip:md:export', { box: String(box), id: String(id) }),
+    // [MD-AI-1] AI 마크다운 문법 보정 — 선택/전체 텍스트를 보내면 교정된 텍스트를 돌려준다(경로·문서함 무관).
+    correct: (text) => ipcRenderer.invoke('spip:md:correct', { text: text == null ? '' : String(text) }),
   },
 
   // 이벤트 구독(on/send) — 콜백만 받고 ipcRenderer 원본은 노출하지 않음(보안).

@@ -2146,6 +2146,7 @@ function initBrowser() {
         body: '',         // 편집 중 본문
         view: 'split',    // 'edit' | 'preview' | 'split'
         busy: false,      // create/import/export in-flight
+        aiBusy: false,    // [MD-AI-1] AI 보정 in-flight
         dirty: false,     // 미저장 변경
         code: null,       // 실패 코드(고정 토큰)
         _seeded: false,
@@ -5198,6 +5199,13 @@ function initBrowser() {
     WRITE_FAILED: '저장하지 못했습니다.',
     CANCELLED: '',
     FORBIDDEN: '권한이 없습니다.',
+    // [MD-AI-1] AI 보정 관련 코드.
+    NO_CONN: 'AI 연결이 설정되지 않았습니다 — 설정 > 연동에서 모델 연결을 먼저 등록하세요.',
+    CONN_REFUSED: 'AI 모델 서버에 연결하지 못했습니다 — 설정에서 연결을 확인하세요.',
+    TIMEOUT: 'AI 응답이 지연됩니다 — 잠시 후 다시 시도하세요.',
+    AUTH: 'AI 인증에 실패했습니다 — 설정에서 API 키를 확인하세요.',
+    NO_MODEL: '모델을 찾을 수 없습니다 — 설정에서 모델명을 확인하세요.',
+    EMPTY: 'AI 보정 결과가 비어 있습니다. 다시 시도해 주세요.',
     INTERNAL: '작업에 실패했습니다.',
   };
   function mdMessage(code) { return (code && MD_CODES[code] != null) ? MD_CODES[code] : '작업에 실패했습니다.'; }
@@ -5439,6 +5447,47 @@ function initBrowser() {
     var st = wstate(iid);
     if (st._saveTimer) { clearTimeout(st._saveTimer); st._saveTimer = null; }
     if (st.dirty) await mdSaveNow(iid);
+  }
+
+  /* [MD-AI-1] AI 마크다운 보정 — 편집 영역의 **선택된 내용**(없으면 **전체**)을 대상으로, 설정의 AI 연결
+   *   (config.briefing 모델)으로 마크다운 문법 오타·오용을 교정한다. egress 는 메인 단독(spip.md.correct).
+   *   선택 보정이면 그 범위만 교체하고, 전체면 통째로 바꾼 뒤 저장한다. 진행 중엔 툴바 비활성. */
+  async function mdAiCorrect(iid) {
+    var st = wstate(iid);
+    if (!st.activeId || st.aiBusy) return;
+    var b = mdBridge();
+    if (!b || typeof b.correct !== 'function') { toast('이 버전에서는 AI 보정을 쓸 수 없습니다.', true); return; }
+
+    // 그 인스턴스의 편집기에서 선택 범위를 읽는다(전역 querySelector 금지 — 편집기 여럿일 수 있음).
+    var ta = cellQuery(iid, '.md-editor');
+    var whole = st.body;
+    var selStart = ta ? ta.selectionStart : 0;
+    var selEnd = ta ? ta.selectionEnd : 0;
+    var hasSel = !!ta && selEnd > selStart;
+    var target = hasSel ? whole.slice(selStart, selEnd) : whole;
+    if (!target.trim()) { toast(hasSel ? '선택한 영역에 보정할 내용이 없습니다.' : '보정할 내용이 없습니다.', true); return; }
+
+    await mdFlushSave(iid);           // 진행 중 편집을 먼저 확정(교체 대상과 저장본 일치)
+    st.aiBusy = true; st.code = null; render();
+
+    var res = await b.correct(target);
+    st.aiBusy = false;
+    if (!res || !res.ok) {
+      st.code = (res && res.code) || 'INTERNAL';
+      toast(mdMessage(st.code), true);
+      render();
+      return;
+    }
+    var corrected = String(res.text == null ? '' : res.text);
+    var next = hasSel ? (whole.slice(0, selStart) + corrected + whole.slice(selEnd)) : corrected;
+    if (next === whole) { toast('고칠 마크다운 문법 오류를 찾지 못했습니다.'); render(); return; }
+
+    st.body = next;
+    st.dirty = true;
+    st.code = null;
+    await mdSaveNow(iid);             // 교정 결과 저장(실패해도 본문은 화면에 반영됨)
+    render();
+    toast(hasSel ? '선택 영역을 AI 보정했습니다.' : 'AI 보정을 적용했습니다.');
   }
 
   /* ───── 부분 DOM 갱신(전체 render 없이 — 캐럿 보존) ─────
@@ -5861,6 +5910,8 @@ function initBrowser() {
     tools.appendChild(mdToolBtn('불러오기', [{ t: 'path', d: 'M12 3v12' }, { t: 'path', d: 'M7 10l5 5 5-5' }, { t: 'path', d: 'M4 19h16' }], function () { mdImportDoc(iid); }, st.busy));
     tools.appendChild(mdToolBtn('파일로 내보내기', [{ t: 'path', d: 'M12 15V3' }, { t: 'path', d: 'M7 8l5-5 5 5' }, { t: 'path', d: 'M4 19h16' }], function () { mdExportDoc(iid); }, st.busy || !hasDoc));
     tools.appendChild(mdToolBtn('이름 변경', [{ t: 'path', d: 'M4 20h4l10-10-4-4L4 16z' }, { t: 'path', d: 'M14 6l4 4' }], function () { mdRenameDoc(iid); }, st.busy || !hasDoc));
+    // [MD-AI-1] AI 보정 — 선택 영역(없으면 전체)의 마크다운 문법 오류를 설정의 AI 연결로 교정한다.
+    tools.appendChild(mdToolBtn('AI 보정 (선택 영역 또는 전체)', [{ t: 'path', d: 'M12 3l1.9 4.6L18.5 9.5 13.9 11.4 12 16l-1.9-4.6L5.5 9.5l4.6-1.9z' }, { t: 'path', d: 'M18 15l.8 1.9 1.9.8-1.9.8L18 21l-.8-1.9L15.3 18l1.9-.8z' }], function () { mdAiCorrect(iid); }, st.busy || st.aiBusy || !hasDoc));
     // 삭제는 툴바가 아니라 문서 칩마다 붙는 × 버튼이 담당한다(mdDocBar) — 지울 문서를 열지 않아도 지운다.
     head.appendChild(tools);
     card.appendChild(head);
@@ -5927,8 +5978,8 @@ function initBrowser() {
     // 푸터 — 저장 상태 + 실패 코드(고정 문구). 조용한 실패 금지.
     var foot = el('div', { cls: 'md-foot' });
     foot.appendChild(el('div', {
-      cls: 'md-status',
-      text: st.code ? mdMessage(st.code) : (st.dirty ? '편집 중…' : (st._savedAt ? '저장됨' : (hasDoc ? '자동 저장' : ''))),
+      cls: 'md-status' + (st.aiBusy ? ' md-status--ai' : ''),
+      text: st.aiBusy ? 'AI 보정 중…' : (st.code ? mdMessage(st.code) : (st.dirty ? '편집 중…' : (st._savedAt ? '저장됨' : (hasDoc ? '자동 저장' : '')))),
     }));
     if (hasDoc) {
       foot.appendChild(el('div', { cls: 'md-count', text: st.body.length.toLocaleString() + '자', style: HOME_MONO }));

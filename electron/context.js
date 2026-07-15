@@ -62,6 +62,9 @@ function buildContext(opts) {
   const carryOverStore = briefingIpc.makeCarryOverStore({ logger, uiStatePath: opts.uiStatePath });
   const getConfig = () => ({ briefing: ctx.config.briefing });
   const llmClient = createLlmClient({ getConfig, logger });
+  // [MD-AI-1] 마크다운 편집기 AI 보정이 재사용할 공유 LLM 클라이언트(같은 연결 정보 config.briefing).
+  //   egress 는 메인 단독(llmClient 만 Langchain) — markdown IPC 는 이 인스턴스로 일회성 보정 호출만 한다.
+  ctx.llmClient = llmClient;
   ctx.briefingOrchestrator = new BriefingOrchestrator({
     getConfig,
     logger,

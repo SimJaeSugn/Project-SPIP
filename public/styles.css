@@ -685,6 +685,9 @@ input, button, select { font-family: inherit; }
 
 .md-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex: 0 0 auto; padding-top: 8px; }
 .md-status { font-size: 10.5px; color: #a8a29e; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* [MD-AI-1] AI 보정 진행 중 — 강조색 + 점멸로 처리 중임을 알린다. */
+.md-status--ai { color: var(--accent); animation: md-ai-pulse 1s ease-in-out infinite; }
+@keyframes md-ai-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
 .md-count { font-size: 10px; color: #c7c2bd; flex: 0 0 auto; }
 
 .md-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 20px 12px; text-align: center; font-size: 12px; color: #a8a29e; }

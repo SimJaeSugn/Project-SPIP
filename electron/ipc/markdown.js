@@ -320,6 +320,58 @@ async function exportFile(args, ctx) {
   return { ok: true, name: path.basename(res.filePath) };
 }
 
+/* ───── AI 마크다운 보정 (MD-AI-1) ─────
+ *   설정의 AI 연결(config.briefing: baseURL·model·apiKey)을 그대로 재사용해 **마크다운 "문법"** 의
+ *   오타·오용만 교정한다. 내용·의미·언어는 바꾸지 않는다. egress 는 llmClient(메인 단독) — 렌더러는
+ *   순수 텍스트만 주고받는다(문서함·경로 무관). 보안: 연결 정보(baseURL/apiKey)는 응답·로그에 노출하지
+ *   않는다(고정 code 만, L-3). */
+const MD_CORRECT_SYSTEM = [
+  '당신은 마크다운 문법 교정기입니다. 입력된 마크다운 텍스트에서 마크다운 "문법"의 오타나 잘못 사용된 부분만 찾아 고칩니다.',
+  '반드시 지킬 규칙:',
+  '- 문서의 내용·의미·언어·어조·정보는 절대 바꾸지 않는다. 문장을 새로 쓰거나 요약·번역·추가하지 않는다.',
+  '- 오직 마크다운 문법 오류만 교정한다. 예: 제목 기호(#) 뒤 공백 누락, 리스트 기호(-, *, 1.)·들여쓰기 오류, 강조(**, *, _) 짝 안 맞음, 링크·이미지 [](...) 문법, 코드펜스(```) 개폐 불일치, 표(|)의 정렬 구분자, 인용(>) 기호.',
+  '- 일반 산문의 맞춤법·띄어쓰기·오타는 건드리지 않는다(마크다운 문법에 한정).',
+  '- 고칠 문법 오류가 없으면 입력을 그대로 반환한다.',
+  '- 출력은 교정된 마크다운 전문만. 설명·머리말·꼬리말을 붙이지 말고, 전체를 코드펜스로 감싸지 않는다.',
+].join('\n');
+
+/** 모델이 결과 전체를 ```로 감쌌으면 그 한 겹만 벗긴다(문서 내부의 코드펜스는 보존). */
+function stripWrappingFence(text) {
+  const s = String(text == null ? '' : text);
+  const m = /^\s*```[a-zA-Z0-9]*\n([\s\S]*?)\n```\s*$/.exec(s);
+  return m ? m[1] : s;
+}
+
+/**
+ * spip:md:correct — 선택/전체 마크다운을 AI 로 문법 보정. 경로·문서함 무관(순수 텍스트 변환).
+ *   연결 정보(config.briefing.baseURL·model)가 없으면 NO_CONN. LLM 실패는 고정 code. 성공 시 { ok, text }.
+ * @param {object} args { text }
+ */
+async function correct(args, ctx) {
+  args = (args && typeof args === 'object') ? args : {};
+  const text = (typeof args.text === 'string') ? args.text : null;
+  if (text == null || !text.trim()) return { ok: false, code: 'BAD_INPUT' };
+  if (text.length > mdDocStore.MAX_BODY) return { ok: false, code: 'LIMIT_SIZE' };
+
+  const cfg = (ctx && ctx.config) || {};
+  const b = (cfg.briefing && typeof cfg.briefing === 'object') ? cfg.briefing : {};
+  if (!b.baseURL || !b.model) return { ok: false, code: 'NO_CONN' }; // 설정에서 AI 연결을 먼저 등록해야 함
+
+  const client = ctx && ctx.llmClient;
+  if (!client || typeof client.streamBriefing !== 'function') return { ok: false, code: 'INTERNAL' };
+
+  let r;
+  try {
+    r = await client.streamBriefing({ system: MD_CORRECT_SYSTEM, user: text });
+  } catch (_) {
+    return { ok: false, code: 'INTERNAL' }; // 스택·URL·키 비노출(L-3)
+  }
+  if (!r || !r.ok) return { ok: false, code: (r && r.code) || 'INTERNAL' };
+  const out = stripWrappingFence(r.text);
+  if (!out.trim()) return { ok: false, code: 'EMPTY' };
+  return { ok: true, text: out };
+}
+
 module.exports = {
   list,
   get,
@@ -328,6 +380,9 @@ module.exports = {
   remove,
   importFile,
   exportFile,
+  correct,
+  stripWrappingFence,
+  MD_CORRECT_SYSTEM,
   adoptLegacy,
   firstEditorBox,
   deriveTitle,

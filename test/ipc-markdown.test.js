@@ -359,3 +359,76 @@ test('MD-BOX 이행 — 편집기가 아직 배치되지 않았으면 레거시 
   const raw = mdDocStore.read({ mdDocsPath: ctx.mdDocsPath });
   assert.strictEqual(raw.legacy.length, 1, '레거시는 그대로 보존');
 });
+
+/* ───── AI 마크다운 보정 (MD-AI-1) ───── */
+
+/** 마지막 호출 인자를 기록하는 llmClient 목(네트워크 0). reply 로 응답을 지정. */
+function stubLlm(reply) {
+  const calls = [];
+  return {
+    calls,
+    streamBriefing: async (a) => { calls.push(a); return reply || { ok: true, text: '# 제목\n\n본문', code: 'OK' }; },
+  };
+}
+/** config.briefing 연결이 있는 ctx(보정용). */
+function aiCtx(over, reply) {
+  const ctx = ctxWith(over);
+  ctx.config = { briefing: { baseURL: 'http://127.0.0.1:1234/v1', model: 'local-model', apiKey: '' } };
+  ctx.llmClient = stubLlm(reply);
+  return ctx;
+}
+
+test('MD-AI-1 correct — 선택/전체 텍스트를 교정해 돌려준다(system+user 로 LLM 호출)', async () => {
+  const ctx = aiCtx(undefined, { ok: true, text: '# 제목\n\n- 항목', code: 'OK' });
+  const r = await ipc.correct({ text: '#제목\n\n-항목' }, ctx);
+  assert.ok(r.ok);
+  assert.strictEqual(r.text, '# 제목\n\n- 항목', '교정된 마크다운 반환');
+  assert.strictEqual(ctx.llmClient.calls.length, 1);
+  assert.strictEqual(ctx.llmClient.calls[0].user, '#제목\n\n-항목', '원문이 user 로 전달');
+  assert.ok(/마크다운/.test(ctx.llmClient.calls[0].system), 'system 은 마크다운 교정 지시');
+});
+
+test('MD-AI-1 correct — 연결 정보(baseURL·model) 없으면 NO_CONN(호출 0)', async () => {
+  const ctx = aiCtx();
+  ctx.config = { briefing: { baseURL: '', model: '' } };
+  const r = await ipc.correct({ text: '# x' }, ctx);
+  assert.deepStrictEqual(r, { ok: false, code: 'NO_CONN' });
+  assert.strictEqual(ctx.llmClient.calls.length, 0, '연결 없으면 LLM 미호출');
+});
+
+test('MD-AI-1 correct — 빈/공백 입력은 BAD_INPUT, 상한 초과는 LIMIT_SIZE', async () => {
+  const ctx = aiCtx();
+  assert.deepStrictEqual(await ipc.correct({ text: '   \n ' }, ctx), { ok: false, code: 'BAD_INPUT' });
+  assert.deepStrictEqual(await ipc.correct({}, ctx), { ok: false, code: 'BAD_INPUT' });
+  const big = 'a'.repeat(mdDocStore.MAX_BODY + 1);
+  assert.deepStrictEqual(await ipc.correct({ text: big }, ctx), { ok: false, code: 'LIMIT_SIZE' });
+});
+
+test('MD-AI-1 correct — 결과 전체를 감싼 코드펜스는 한 겹 벗긴다(내부 펜스 보존)', async () => {
+  const ctx = aiCtx(undefined, { ok: true, text: '```markdown\n# 제목\n\n```js\ncode\n```\n```', code: 'OK' });
+  const r = await ipc.correct({ text: '# 제목' }, ctx);
+  assert.ok(r.ok);
+  assert.strictEqual(r.text, '# 제목\n\n```js\ncode\n```', '바깥 한 겹만 제거, 내부 펜스 유지');
+});
+
+test('MD-AI-1 correct — LLM 실패 code 는 그대로 전달, 빈 결과는 EMPTY', async () => {
+  const ctxErr = aiCtx(undefined, { ok: false, text: '', code: 'CONN_REFUSED' });
+  assert.deepStrictEqual(await ipc.correct({ text: '# x' }, ctxErr), { ok: false, code: 'CONN_REFUSED' });
+  const ctxEmpty = aiCtx(undefined, { ok: true, text: '   \n  ', code: 'OK' });
+  assert.deepStrictEqual(await ipc.correct({ text: '# x' }, ctxEmpty), { ok: false, code: 'EMPTY' });
+});
+
+test('MD-AI-1 correct — llmClient 부재/예외는 고정 INTERNAL(스택·URL 비노출)', async () => {
+  const ctx = aiCtx();
+  ctx.llmClient = null;
+  assert.deepStrictEqual(await ipc.correct({ text: '# x' }, ctx), { ok: false, code: 'INTERNAL' });
+  const ctxThrow = aiCtx();
+  ctxThrow.llmClient = { streamBriefing: async () => { throw new Error('boom http://secret/key'); } };
+  assert.deepStrictEqual(await ipc.correct({ text: '# x' }, ctxThrow), { ok: false, code: 'INTERNAL' });
+});
+
+test('MD-AI-1 stripWrappingFence — 감싼 펜스만 제거, 아니면 원문 유지', () => {
+  assert.strictEqual(ipc.stripWrappingFence('```\nhi\n```'), 'hi');
+  assert.strictEqual(ipc.stripWrappingFence('# 제목\n본문'), '# 제목\n본문', '펜스 없으면 그대로');
+  assert.strictEqual(ipc.stripWrappingFence('앞\n```\nhi\n```'), '앞\n```\nhi\n```', '전체를 감싼 게 아니면 유지');
+});

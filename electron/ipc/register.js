@@ -184,6 +184,8 @@ function registerIpcHandlers(deps) {
   guard('spip:md:remove', (args) => markdownIpc.remove(args, markdownCtx()));
   guard('spip:md:import', (args) => markdownIpc.importFile(args, markdownCtx()));
   guard('spip:md:export', (args) => markdownIpc.exportFile(args, markdownCtx()));
+  // [MD-AI-1] AI 마크다운 문법 보정 — 설정의 AI 연결(config.briefing)을 재사용. 텍스트만 주고받는다(경로 무관).
+  guard('spip:md:correct', (args) => markdownIpc.correct(args, markdownCtx()));
 
   // [M6 R-17] 클립보드 — main clipboard 주입.
   guard('spip:copyText', (args) => clipboardIpc.copyText(args, { clipboard }));
