@@ -224,3 +224,92 @@ test('AG-2 — 렌더러 멀티턴·미터 배선(turns·history·reset·meter)'
   assert.ok(/function renderAgentMeter\(/.test(APP) && /agent-meter__fill/.test(APP), '컨텍스트 미터 렌더');
   assert.ok(/컨텍스트 .*토큰/.test(APP) && /제한|limit/.test(APP), '사용량/제한 표시');
 });
+
+/* ───── [메일 위젯 제어 도구] AG-3 ───── */
+
+function mockMailClient() {
+  return {
+    async fetchUnseenDigestAll() {
+      return { unseen: 2, items: [
+        { uid: 10, subject: '회의 안내', from: 'boss@x.com', date: '2026-07-15', mailbox: 'INBOX' },
+        { uid: 11, subject: '영수증', from: 'shop@y.com', date: '2026-07-14', mailbox: 'INBOX' },
+      ] };
+    },
+    // 본문은 ASCII(테스트 fixture — charset 헤더 없는 한글은 파서가 깨뜨림). 실제 메일은 Content-Type charset 보유.
+    async fetchMessage() { return 'Subject: 회의 안내\r\nFrom: boss@x.com\r\nDate: Tue, 15 Jul 2026 09:00:00 +0900\r\n\r\nPlease prepare for the meeting tomorrow morning.'; },
+    async fetchMailIndexAll() { return {}; },
+    async deleteMessages() { return; },
+  };
+}
+function ctxWithMail() {
+  const ctx = ctxWithTodos();
+  ctx.config.mailAccounts = [{ id: 'm1', host: 'imap.x.com', port: 993, secure: true, user: 'me@x.com', pass: 'secret', label: '내 메일' }];
+  ctx.mailClientFactory = () => mockMailClient();
+  ctx.mailArchivePath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'spip-agent-arch-')), 'archive.json');
+  return ctx;
+}
+
+test('AG-3 — 메일 도구 6종이 buildTools 에 배선', () => {
+  const ctx = ctxWithMail();
+  const tools = agentIpc.buildTools(ctx);
+  for (const name of ['list_mail_accounts', 'get_mail_summary', 'read_mail', 'get_mail_archive', 'sync_mail', 'delete_mail']) {
+    assert.strictEqual(typeof tools[name].run, 'function', '도구 배선: ' + name);
+  }
+  // 시스템 프롬프트가 메일 도구를 설명한다.
+  assert.ok(/get_mail_summary/.test(agentIpc.AGENT_SYSTEM) && /delete_mail/.test(agentIpc.AGENT_SYSTEM), '프롬프트에 메일 도구');
+  assert.ok(/되돌리기 어렵다|휴지통/.test(agentIpc.AGENT_SYSTEM), '삭제·읽음 신중 지침');
+});
+
+test('AG-3 — list_mail_accounts: 자격증명 없이 계정 목록', async () => {
+  const tools = agentIpc.buildTools(ctxWithMail());
+  const r = await tools.list_mail_accounts.run({});
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(r.accounts.length, 1);
+  assert.strictEqual(r.accounts[0].accountId, 'm1');
+  assert.strictEqual(r.accounts[0].email, 'me@x.com');
+  assert.ok(!/secret/.test(JSON.stringify(r)), '비밀번호 미노출');
+});
+
+test('AG-3 — get_mail_summary: 안 읽은 다이제스트 요약(uid·제목·발신자)', async () => {
+  const tools = agentIpc.buildTools(ctxWithMail());
+  const r = await tools.get_mail_summary.run({});
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(r.accounts[0].unseen, 2);
+  assert.strictEqual(r.accounts[0].items.length, 2);
+  assert.strictEqual(r.accounts[0].items[0].uid, 10);
+  assert.strictEqual(r.accounts[0].items[0].subject, '회의 안내');
+});
+
+test('AG-3 — read_mail: 본문 열람(요약 반환)', async () => {
+  const tools = agentIpc.buildTools(ctxWithMail());
+  const r = await tools.read_mail.run({ accountId: 'm1', uid: 10, mailbox: 'INBOX' });
+  assert.strictEqual(r.ok, true, JSON.stringify(r));
+  assert.strictEqual(r.subject, '회의 안내', '제목 파싱');
+  assert.ok(/meeting/.test(r.text), '본문 텍스트 반환');
+});
+
+test('AG-3 — get_mail_archive: 로컬 보관함 요약(빈 보관함도 계정 구조)', async () => {
+  const tools = agentIpc.buildTools(ctxWithMail());
+  const r = await tools.get_mail_archive.run({});
+  assert.strictEqual(r.ok, true);
+  assert.ok(Array.isArray(r.accounts), '계정 배열');
+});
+
+test('AG-3 — delete_mail: accountId·mailbox·uid 없으면 거부(추측 삭제 방지)', async () => {
+  const tools = agentIpc.buildTools(ctxWithMail());
+  assert.strictEqual((await tools.delete_mail.run({})).error, 'need_account_mailbox_uid');
+  assert.strictEqual((await tools.delete_mail.run({ accountId: 'm1', uid: 10 })).error, 'need_account_mailbox_uid');
+});
+
+test('AG-3 — IPC run: 에이전트가 get_mail_summary 도구로 메일을 확인', async () => {
+  const ctx = ctxWithMail();
+  const scripted = [
+    '{"thought":"안 읽은 메일 확인","tool":"get_mail_summary","args":{}}',
+    '{"final":"안 읽은 메일 2통이 있어요: 회의 안내, 영수증."}',
+  ];
+  let n = 0;
+  ctx.llmClient = { streamBriefing: async () => ({ ok: true, text: scripted[n++] }) };
+  const res = await agentIpc.run({ message: '안 읽은 메일 알려줘' }, ctx);
+  assert.strictEqual(res.ok, true);
+  assert.ok(res.steps.some((s) => s.tool === 'get_mail_summary' && /회의 안내/.test(s.observation)), '메일 도구 실행·관찰');
+});

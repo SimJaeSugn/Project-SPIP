@@ -728,7 +728,7 @@ const WIDGET_META = {
   systemStatus: { name: '시스템 상태', desc: '개발 머신 CPU·메모리·디스크 사용량' },
   explorer: { name: '폴더 탐색기', desc: '지정한 폴더의 파일·디렉터리를 탐색하고 열기' },
   mdedit: { name: '마크다운 편집기', desc: '문서를 쓰고 미리보고 .md 파일로 주고받기' },
-  agent: { name: 'AI 에이전트', desc: '자연어로 요청하면 도구를 써서 처리 — 지금은 할 일 제어(추가·완료·삭제)' },
+  agent: { name: 'AI 에이전트', desc: '자연어로 요청하면 도구를 써서 처리 — 할 일·메일 제어(추가·완료·삭제·읽기·동기화)' },
 };
 
 /* [로드맵 Phase 1·L] 레이아웃 템플릿 — 갤러리에서 골라 '새 프리셋'으로 적용. visible 외 토글 위젯은 숨김.
@@ -6090,7 +6090,7 @@ function initBrowser() {
     var head = el('div', { cls: 'agent-head' });
     var titleWrap = el('div', { style: 'flex:1 1 0%;min-width:0;' });
     titleWrap.appendChild(el('div', { cls: 'agent-title', text: widgetCardTitle(inst, 'AI 에이전트') }));
-    titleWrap.appendChild(el('div', { cls: 'agent-sub', text: '할 일을 자연어로 — 예: “우유 사기 추가”, “장보기 완료”' }));
+    titleWrap.appendChild(el('div', { cls: 'agent-sub', text: '할 일·메일을 자연어로 — 예: “우유 사기 추가”, “안 읽은 메일 알려줘”' }));
     head.appendChild(titleWrap);
     // [멀티턴] 대화가 있으면 '새 대화' 리셋.
     if ((st.turns || []).length > 0 && !st.running) {
@@ -6107,7 +6107,7 @@ function initBrowser() {
     } else if ((st.turns || []).length === 0 && !st.running) {
       var e = el('div', { cls: 'agent-empty' });
       e.appendChild(el('div', { text: '무엇을 도와드릴까요?' }));
-      e.appendChild(el('div', { cls: 'agent-empty__hint', text: '요청을 입력하면 도구(할 일 추가·완료·삭제)를 써서 처리하고 그 과정을 보여줍니다. 대화는 이어집니다(멀티턴).' }));
+      e.appendChild(el('div', { cls: 'agent-empty__hint', text: '요청을 입력하면 도구(할 일 추가·완료·삭제, 메일 확인·읽기·동기화·삭제)를 써서 처리하고 그 과정을 보여줍니다. 대화는 이어집니다(멀티턴).' }));
       body.appendChild(e);
     } else {
       // [멀티턴] 지금까지의 대화 — 각 턴: 사용자 말풍선 + 트레이스 + 최종/오류.
