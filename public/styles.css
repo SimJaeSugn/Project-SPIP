@@ -768,9 +768,12 @@ input, button, select { font-family: inherit; }
 .md-hr { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
 .md-img { max-width: 100%; height: auto; border-radius: 8px; }
 
-/* [Mermaid] 다이어그램 — 격리 iframe 이 렌더한 SVG 를 이미지로만 표시(중앙 정렬, 카드폭 내 축소). */
-.md-mermaid { margin: 0 0 12px; display: flex; justify-content: center; }
-.md-mermaid__img { max-width: 100%; height: auto; }
+/* [Mermaid] 다이어그램 — 격리 iframe 이 렌더한 SVG 를 이미지로만 표시. 실제 그림일 때만 코드블록처럼
+ *   캔버스로 감싸 중앙 정렬하고, 카드폭을 넘으면 이미지를 축소(max-width:100%)하되 그래도 넘치면
+ *   자기 안에서 가로 스크롤(카드 밖으로 새지 않음 — 무잘림 계약). */
+.md-mermaid { margin: 0 0 12px; display: flex; justify-content: center; align-items: flex-start; overflow-x: auto; }
+.md-mermaid:has(.md-mermaid__img) { padding: 12px; border: 1px solid var(--border-soft); border-radius: 10px; background: var(--surface-2); }
+.md-mermaid__img { max-width: 100%; height: auto; min-width: 0; display: block; }
 .md-mermaid__loading { width: 100%; box-sizing: border-box; text-align: center; font-size: 11.5px; color: var(--t4); padding: 16px; border: 1px dashed var(--border); border-radius: 10px; background: var(--surface-2); }
 .md-mermaid__err { width: 100%; box-sizing: border-box; border: 1px solid var(--border); border-left: 3px solid #ef4444; border-radius: 0 8px 8px 0; padding: 8px 12px; background: var(--surface-2); }
 .md-mermaid__err-head { font-size: 11px; font-weight: 700; color: #b91c1c; margin-bottom: 4px; }

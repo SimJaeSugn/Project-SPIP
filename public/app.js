@@ -5784,7 +5784,12 @@ function initBrowser() {
    *   숨은 싱글턴 iframe(app://index.html?mermaid=1)에서만 돌린다. 소스를 postMessage 로 보내고
    *   결과 SVG 를 **data:URI** 로 받아 미리보기엔 <img> 로만 표시 → iframe/인라인스타일 유입 0.
    *   소스 해시로 캐시해 타이핑 시 미리보기가 통째로 재빌드돼도 렌더는 재요청하지 않는다(깜빡임 0). */
-  var _mmd = { frame: null, ready: false, seq: 0, queue: [], pending: {}, cache: {}, inflight: {}, srcByHash: {} };
+  var _mmd = { frame: null, ready: false, seq: 0, queue: [], pending: {}, cache: {}, inflight: {}, srcByHash: {}, themeByHash: {} };
+
+  /** 현재 앱 테마 → mermaid 테마(다이어그램 색이 라이트/다크에 맞게). */
+  function mmdMermaidTheme() {
+    try { return (resolveTheme() === 'dark') ? 'dark' : 'default'; } catch (_) { return 'default'; }
+  }
 
   function mmdHash(s) {
     s = String(s || ''); var h = 5381;
@@ -5823,11 +5828,11 @@ function initBrowser() {
     _mmd.frame.contentWindow.postMessage({ type: 'mmd:render', id: job.id, code: job.code, theme: job.theme }, '*');
   }
   /** 소스 → Promise<{ok, svg(dataUri)?, w?, h?, error?}>. */
-  function mmdRenderSource(code) {
+  function mmdRenderSource(code, theme) {
     var eng = mmdEngine();
     return new Promise(function (resolve) {
       if (!eng.frame) { resolve({ ok: false, error: 'Electron 앱에서만 렌더할 수 있습니다.' }); return; }
-      var job = { id: 'j' + (++eng.seq), code: String(code || ''), theme: 'neutral', resolve: resolve, timer: null };
+      var job = { id: 'j' + (++eng.seq), code: String(code || ''), theme: theme || 'default', resolve: resolve, timer: null };
       if (eng.ready && eng.frame.contentWindow) _mmdPost(job); else eng.queue.push(job);
     });
   }
@@ -5838,7 +5843,7 @@ function initBrowser() {
     var src = _mmd.srcByHash[hash];
     if (src == null) return;
     _mmd.inflight[hash] = 1;
-    mmdRenderSource(src).then(function (res) {
+    mmdRenderSource(src, _mmd.themeByHash[hash]).then(function (res) {
       delete _mmd.inflight[hash];
       _mmd.cache[hash] = (res && res.ok)
         ? { ok: true, dataUri: res.svg, w: res.w, h: res.h }
@@ -5862,8 +5867,10 @@ function initBrowser() {
   /** ```mermaid 블록 → 그림 자리(캐시 hit 이면 즉시 이미지, 아니면 로딩 자리 + 렌더 대기 표식). */
   function mdMermaidNode(src) {
     var code = String(src || '');
-    var hash = mmdHash(code);
+    var theme = mmdMermaidTheme();
+    var hash = mmdHash(theme + '\n' + code); // 테마 포함 — 라이트/다크 전환 시 자연히 재렌더(캐시 미스)
     _mmd.srcByHash[hash] = code;
+    _mmd.themeByHash[hash] = theme;
     var fig = el('div', { cls: 'md-mermaid', attrs: { 'data-mmd-hash': hash } });
     var cached = _mmd.cache[hash];
     if (cached && cached.ok) fig.appendChild(mdMermaidImg(cached));
@@ -5873,7 +5880,9 @@ function initBrowser() {
   }
   function mdMermaidImg(r) {
     var img = el('img', { cls: 'md-mermaid__img', attrs: { src: r.dataUri, alt: '다이어그램' } });
-    if (r.w) img.style.maxWidth = Math.min(r.w, 100000) + 'px';
+    // 넘침 방지: 폭은 CSS(max-width:100%)가 컨테이너에 맞춰 축소한다. 자연 크기(px)는 width 로만 주고
+    //   max-width 인라인은 주지 않는다(주면 CSS 100% 를 덮어써 미리보기를 넘쳐 그려진다 — 이번 버그).
+    if (r.w) img.style.width = Math.min(r.w, 100000) + 'px';
     if (r.w && r.h) img.style.aspectRatio = r.w + ' / ' + r.h; // 리플로우 시 높이 확보(레이아웃 튐 방지)
     return img;
   }

@@ -488,3 +488,17 @@ test('MD-MMD — 렌더러: mermaid 블록은 격리 iframe 로 렌더하고 <im
   // L-1: mermaid 결과를 innerHTML 로 메인 문서에 넣지 않는다(el/textContent + <img> 만).
   assert.ok(!/md-mermaid[\s\S]{0,400}innerHTML/.test(APP_SRC), 'mermaid 렌더 innerHTML 미사용(L-1)');
 });
+
+test('MD-MMD — 크기/테마: 미리보기 밖으로 안 넘침(max-width) + 라이트/다크 테마 반영', () => {
+  const FRAME = fs.readFileSync(path.join(ROOT, 'public', 'mermaid-frame.js'), 'utf8');
+  // 넘침 방지: 이미지는 CSS max-width:100% 로 축소, 컨테이너는 넘치면 자기 안에서 가로 스크롤.
+  assert.ok(/\.md-mermaid__img \{[^}]*max-width: 100%/.test(CSS), '이미지 폭 컨테이너에 맞춤');
+  assert.ok(/\.md-mermaid \{[^}]*overflow-x: auto/.test(CSS), '넘치면 내부 가로 스크롤(카드 밖 유출 방지)');
+  assert.ok(/\.md-mermaid:has\(\.md-mermaid__img\)/.test(CSS), '실제 그림일 때만 캔버스 프레임');
+  // 인라인 max-width(px)로 CSS 100% 를 덮어써 넘치던 버그 회귀 방지 — width 만 준다.
+  assert.ok(/max-width 인라인은 주지 않는다/.test(APP_SRC), '인라인 max-width 미사용(넘침 회귀 방지)');
+  // 테마: 앱 라이트/다크 → mermaid 테마. 소스해시에 테마 포함(전환 시 재렌더) + 프레임이 테마 적용.
+  assert.ok(/function mmdMermaidTheme\(/.test(APP_SRC) && /resolveTheme\(\) === 'dark'/.test(APP_SRC), '앱 테마→mermaid 테마');
+  assert.ok(/mmdHash\(theme /.test(APP_SRC) && /_mmd\.themeByHash\[hash\] = theme/.test(APP_SRC), '캐시 키에 테마 포함(전환 시 재렌더)');
+  assert.ok(/function ensureTheme\(/.test(FRAME) && /ensureTheme\(msg\.theme\)/.test(FRAME), '프레임이 요청 테마 적용');
+});

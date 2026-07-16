@@ -19,21 +19,32 @@
     try { target.postMessage(msg, origin || '*'); } catch (_) { /* noop */ }
   }
 
+  var BASE_CFG = {
+    startOnLoad: false,
+    securityLevel: 'strict',   // 라벨 내 HTML·클릭 스크립트 차단
+    htmlLabels: false,         // SVG <text> 로 라벨(<img> 로 표시돼도 안 깨짐; foreignObject 회피)
+    flowchart: { htmlLabels: false, useMaxWidth: true, curve: 'basis', padding: 8 },
+    sequence: { useMaxWidth: true },
+    gantt: { useMaxWidth: true },
+    theme: 'default',
+    fontFamily: '"Pretendard","Malgun Gothic","Apple SD Gothic Neo",system-ui,-apple-system,"Segoe UI",sans-serif',
+    fontSize: 14,
+  };
+  var curTheme = 'default';
+  function ensureTheme(theme) {
+    var t = (theme === 'dark' || theme === 'forest' || theme === 'neutral' || theme === 'default' || theme === 'base') ? theme : 'default';
+    if (t === curTheme) return;
+    curTheme = t;
+    var cfg = Object.assign({}, BASE_CFG, { theme: t });
+    try { mermaid.initialize(cfg); } catch (_) { /* 렌더 시 에러로 드러남 */ }
+  }
+
   if (!mermaid || typeof mermaid.render !== 'function') {
     // 라이브러리 로드 실패 — 첫 요청에 에러로 답하도록 플래그만 두고 리턴.
     window.__mmdReady = false;
   } else {
     window.__mmdReady = true;
-    try {
-      mermaid.initialize({
-        startOnLoad: false,
-        securityLevel: 'strict',   // 라벨 내 HTML·클릭 스크립트 차단
-        htmlLabels: false,         // SVG <text> 로 라벨(<img> 로 표시돼도 안 깨짐; foreignObject 회피)
-        flowchart: { htmlLabels: false, useMaxWidth: true },
-        theme: 'neutral',
-        fontFamily: 'system-ui, -apple-system, "Segoe UI", "Malgun Gothic", sans-serif',
-      });
-    } catch (_) { /* 초기화 실패는 렌더 시 에러로 드러남 */ }
+    try { mermaid.initialize(BASE_CFG); } catch (_) { /* 초기화 실패는 렌더 시 에러로 드러남 */ }
   }
 
   /** SVG 문자열 → { dataUri, w, h }. viewBox 로 자연 크기 산출, width/height 를 px 로 고정(<img> 사이징). */
@@ -68,6 +79,7 @@
     if (!window.__mmdReady) { reply({ ok: false, error: 'mermaid 라이브러리를 불러오지 못했습니다.' }); return; }
     if (!code.trim()) { reply({ ok: false, error: '빈 다이어그램' }); return; }
 
+    ensureTheme(msg.theme); // 앱 테마(라이트/다크)에 맞춰 다이어그램 색 적용
     var renderId = 'mmd-r' + (++seq);
     try {
       var out = mermaid.render(renderId, code); // v10: Promise<{svg}>
