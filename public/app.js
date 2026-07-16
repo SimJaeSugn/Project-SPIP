@@ -1436,6 +1436,24 @@ function briefingSettingsView(res) {
       coalesceMs: Number.isFinite(adv.coalesceMs) ? adv.coalesceMs : null,
       deadlineH: Number.isFinite(adv.deadlineH) ? adv.deadlineH : null,
     },
+    // [AI 연결 복수화] 저장된 연결 목록(공개뷰) + 활성 id. 위 baseURL/model/hasApiKey 등은 활성 연결의 실효값.
+    connections: Array.isArray(r.connections) ? r.connections.map(function (c) {
+      c = (c && typeof c === 'object') ? c : {};
+      return {
+        id: (typeof c.id === 'string') ? c.id : '',
+        label: (typeof c.label === 'string') ? c.label : '',
+        baseURL: (typeof c.baseURL === 'string') ? c.baseURL : '',
+        model: (typeof c.model === 'string') ? c.model : '',
+        hasApiKey: c.hasApiKey === true,
+      };
+    }) : [],
+    activeId: (typeof r.activeId === 'string') ? r.activeId : '',
+    // 활성 연결의 라벨(폼 편집용) — connections 에서 activeId 로 찾는다.
+    activeLabel: (function () {
+      var list = Array.isArray(r.connections) ? r.connections : [];
+      var a = list.find(function (c) { return c && c.id === r.activeId; });
+      return (a && typeof a.label === 'string') ? a.label : '';
+    })(),
   };
 }
 
@@ -2082,7 +2100,10 @@ function initBrowser() {
       testResult: null,          // testConnection 결과 {ok,model?,latencyMs?,code?}
       busyTest: false, busySettings: false,
       keyInput: '',              // 설정 키 입력(쓰기 전용 — 저장 후 비움, store 영속 안 함)
-      form: { baseURL: '', model: '', systemPrompt: '' }, // 설정 입력 폼(컨트롤드 — getSettings 로 초기화)
+      form: { baseURL: '', model: '', systemPrompt: '', label: '' }, // 설정 입력 폼(컨트롤드 — getSettings 로 초기화)
+      connections: [],           // [AI 연결 복수화] 저장된 연결 공개뷰 목록
+      activeId: '',              // 활성 연결 id
+      busyConn: false,           // 연결 추가/삭제/활성 전환 in-flight
       subscribed: false,
       _unsubs: [],
     },
@@ -7288,13 +7309,18 @@ function initBrowser() {
 
   /* [M13 R-39] 브리핑 AI 설정 — enabled·baseURL·model·apiKey(쓰기전용)·연결테스트·external 경고·advanced.
    *   apiKey 는 렌더러에 평문 보관/표시 안 함(hasApiKey 불리언만). setSettings shape 은 메인이 재검증. */
+  // 설정 뷰 → store 반영(폼·연결목록·활성). 활성/연결 전환 시 폼이 새 활성 연결값으로 재적재된다.
+  function applyBriefingView(v) {
+    store.briefing.settings = v;
+    store.briefing.enabled = v.enabled;
+    store.briefing.connections = v.connections || [];
+    store.briefing.activeId = v.activeId || '';
+    store.briefing.form = { baseURL: v.baseURL, model: v.model, systemPrompt: v.systemPrompt, label: v.activeLabel || '' };
+  }
   function refreshBriefingSettings() {
     if (!spip || !spip.briefing || typeof spip.briefing.getSettings !== 'function') return;
     Promise.resolve(spip.briefing.getSettings()).then(function (res) {
-      var v = briefingSettingsView(res);
-      store.briefing.settings = v;
-      store.briefing.enabled = v.enabled;
-      store.briefing.form = { baseURL: v.baseURL, model: v.model, systemPrompt: v.systemPrompt };
+      applyBriefingView(briefingSettingsView(res));
       if (store.showSettings) render();
     }).catch(function () { /* graceful */ });
   }
@@ -7304,17 +7330,53 @@ function initBrowser() {
     Promise.resolve(spip.briefing.setSettings(patch)).then(function (res) {
       store.briefing.busySettings = false;
       store.briefing.keyInput = ''; // 키 입력 비움(평문 미보관)
-      var v = briefingSettingsView(res);
       if (res && res.ok === false) {
         toast(res.code === 'BAD_URL' ? '주소(baseURL)가 올바르지 않습니다.' : '브리핑 설정 저장에 실패했습니다.', true);
       } else {
-        store.briefing.settings = v;
-        store.briefing.enabled = v.enabled;
-        store.briefing.form = { baseURL: v.baseURL, model: v.model, systemPrompt: v.systemPrompt };
+        applyBriefingView(briefingSettingsView(res));
       }
       render();
       patchBriefing();
     }).catch(function () { store.briefing.busySettings = false; render(); });
+  }
+  // [AI 연결 복수화] 연결 목록 응답(getConnections/add/remove/activate) → store 반영 후 활성 연결값 재적재.
+  function onBriefingConnResult(res, failMsg) {
+    store.briefing.busyConn = false;
+    if (res && res.ok === false) {
+      toast(res.code === 'LAST' ? '연결은 최소 1개는 있어야 합니다.'
+        : res.code === 'LIMIT' ? '연결 개수 한도에 도달했습니다.'
+          : (failMsg || '연결 변경에 실패했습니다.'), true);
+      render();
+      return;
+    }
+    // 목록/활성만 바뀌었으므로 getSettings 로 활성 연결의 폼값까지 최신화(활성 전환 시 폼 재적재).
+    refreshBriefingSettings();
+    render();
+    patchBriefing();
+  }
+  function onAddBriefingConnection() {
+    if (!spip || !spip.briefing || typeof spip.briefing.addConnection !== 'function') return;
+    store.briefing.busyConn = true; render();
+    Promise.resolve(spip.briefing.addConnection('새 연결')).then(function (res) {
+      onBriefingConnResult(res, '연결 추가에 실패했습니다.');
+    }).catch(function () { store.briefing.busyConn = false; render(); });
+  }
+  function onActivateBriefingConnection(id) {
+    if (!spip || !spip.briefing || typeof spip.briefing.activateConnection !== 'function') return;
+    if (!id || id === store.briefing.activeId) return; // 이미 활성이면 무동작
+    store.briefing.busyConn = true; render();
+    Promise.resolve(spip.briefing.activateConnection(id)).then(function (res) {
+      onBriefingConnResult(res, '연결 활성화에 실패했습니다.');
+    }).catch(function () { store.briefing.busyConn = false; render(); });
+  }
+  function onRemoveBriefingConnection(id) {
+    if (!spip || !spip.briefing || typeof spip.briefing.removeConnection !== 'function') return;
+    if (!id) return;
+    if (typeof window !== 'undefined' && window.confirm && !window.confirm('이 AI 연결을 삭제할까요?')) return;
+    store.briefing.busyConn = true; render();
+    Promise.resolve(spip.briefing.removeConnection(id)).then(function (res) {
+      onBriefingConnResult(res, '연결 삭제에 실패했습니다.');
+    }).catch(function () { store.briefing.busyConn = false; render(); });
   }
   function onTestBriefingConnection() {
     if (!spip || !spip.briefing || typeof spip.briefing.testConnection !== 'function') return;
@@ -7343,6 +7405,65 @@ function initBrowser() {
       checked: v.enabled, disabled: store.briefing.busySettings,
       onChange: function (checked) { onSetBriefingSettings({ enabled: !!checked }); },
     }));
+
+    // [AI 연결 복수화] 연결 목록 — 여러 개 저장하고 하나를 활성화. 활성 연결(●)의 세부 설정은 아래 폼에서 편집.
+    const connSection = el('div', { cls: 'briefing-conns' });
+    const connHead = el('div', { cls: 'briefing-conns__head' });
+    connHead.appendChild(el('span', { cls: 'briefing-conns__title', text: 'AI 연결' }));
+    const addConnBtn = el('button', {
+      cls: 'btn btn--sm', text: '+ 연결 추가',
+      attrs: { type: 'button', 'aria-label': 'AI 연결 추가' },
+      on: { click: onAddBriefingConnection },
+    });
+    if (store.briefing.busyConn) addConnBtn.disabled = true;
+    connHead.appendChild(addConnBtn);
+    connSection.appendChild(connHead);
+
+    const conns = (v.connections && v.connections.length) ? v.connections : [];
+    if (!conns.length) {
+      connSection.appendChild(el('div', { cls: 'briefing-conns__empty', text: '저장된 연결이 없습니다.' }));
+    } else {
+      const connList = el('div', { cls: 'briefing-conns__list' });
+      conns.forEach(function (c) {
+        const active = c.id === v.activeId;
+        const row = el('div', { cls: 'briefing-conn' + (active ? ' is-active' : '') });
+        const pick = el('button', {
+          cls: 'briefing-conn__pick',
+          attrs: { type: 'button', 'aria-pressed': active ? 'true' : 'false', 'aria-label': (c.label || '연결') + ' 활성화' },
+          on: { click: function () { onActivateBriefingConnection(c.id); } },
+        });
+        pick.appendChild(el('span', { cls: 'briefing-conn__dot' + (active ? ' is-on' : ''), text: active ? '●' : '○' }));
+        const meta = el('span', { cls: 'briefing-conn__meta' });
+        meta.appendChild(el('span', { cls: 'briefing-conn__label', text: c.label || '(이름 없음)' }));
+        meta.appendChild(el('span', {
+          cls: 'briefing-conn__sub',
+          text: (c.model || '(모델 미지정)') + (c.baseURL ? ' · ' + c.baseURL : '') + (c.hasApiKey ? ' · 키 설정됨' : ''),
+        }));
+        pick.appendChild(meta);
+        if (active) pick.appendChild(el('span', { cls: 'briefing-conn__badge', text: '활성' }));
+        row.appendChild(pick);
+        const delBtn = el('button', {
+          cls: 'briefing-conn__del', text: '삭제',
+          attrs: { type: 'button', 'aria-label': (c.label || '연결') + ' 삭제', title: '연결 삭제' },
+          on: { click: function () { onRemoveBriefingConnection(c.id); } },
+        });
+        if (store.briefing.busyConn || conns.length <= 1) delBtn.disabled = true;
+        row.appendChild(delBtn);
+        connList.appendChild(row);
+      });
+      connSection.appendChild(connList);
+    }
+    connSection.appendChild(el('p', { cls: 'settings__opt-sub', text: '여러 AI 연결을 저장하고 하나를 활성화할 수 있습니다. 아래 설정은 활성 연결(●)에 적용됩니다.' }));
+    block.appendChild(connSection);
+
+    // 연결 이름(라벨) — 활성 연결에 적용
+    const labelField = el('label', { cls: 'mailform__field' });
+    labelField.appendChild(el('span', { cls: 'mailform__label', text: '연결 이름' }));
+    const labelInput = el('input', { cls: 'rootmgr__input', attrs: { type: 'text', placeholder: '예: 로컬 LM Studio', autocomplete: 'off', spellcheck: 'false' } });
+    labelInput.value = store.briefing.form.label || '';
+    labelInput.addEventListener('input', (e) => { store.briefing.form.label = e.target.value || ''; });
+    labelField.appendChild(labelInput);
+    block.appendChild(labelField);
 
     // baseURL
     const urlField = el('label', { cls: 'mailform__field' });
@@ -7441,6 +7562,8 @@ function initBrowser() {
         const patch = {
           baseURL: store.briefing.form.baseURL,
           model: store.briefing.form.model,
+          // [AI 연결 복수화] 연결 이름 — 활성 연결 엔트리에 반영.
+          label: (typeof store.briefing.form.label === 'string') ? store.briefing.form.label : '',
           // 시스템 프롬프트: 항상 전송(빈 문자열 = 시드 복원). 메인이 정제·길이상한 강제.
           systemPrompt: (typeof store.briefing.form.systemPrompt === 'string') ? store.briefing.form.systemPrompt : '',
         };
@@ -10040,9 +10163,7 @@ function initBrowser() {
     // 설정 적재(enabled·hasApiKey — 키 평문 없음).
     if (typeof spip.briefing.getSettings === 'function') {
       Promise.resolve(spip.briefing.getSettings()).then(function (res) {
-        var v = briefingSettingsView(res);
-        store.briefing.settings = v;
-        store.briefing.enabled = v.enabled;
+        applyBriefingView(briefingSettingsView(res));
         patchBriefing();
       }).catch(function () { /* graceful — 정적 폴백 유지 */ });
     }

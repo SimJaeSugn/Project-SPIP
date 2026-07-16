@@ -19,6 +19,7 @@
 const config = require('../../lib/common/config');
 const uiStateStore = require('../../lib/common/uiStateStore');
 const briefingPrompt = require('../../lib/ai/briefingPrompt');
+const briefingConnReg = require('../../lib/ai/briefingConnections');
 
 /** ctx에서 orchestrator 해석. */
 function orch(ctx) {
@@ -88,6 +89,9 @@ function getSettings(_args, ctx) {
       coalesceMs: (b.advanced && b.advanced.coalesceMs) || config.DEFAULTS.briefing.advanced.coalesceMs,
       deadlineH: (b.advanced && b.advanced.deadlineH) || config.DEFAULTS.briefing.advanced.deadlineH,
     },
+    // [AI 연결 복수화] 저장된 연결 목록(공개뷰·apiKey 제외) + 활성 연결 id. 위 필드들은 활성 연결의 실효값.
+    connections: briefingConnReg.toPublicList(Array.isArray(cfg.briefingConnections) ? cfg.briefingConnections : []),
+    activeId: typeof cfg.activeBriefingId === 'string' ? cfg.activeBriefingId : '',
   };
 }
 
@@ -112,6 +116,11 @@ function validateSettingsArgs(args) {
   if (args.model !== undefined) {
     if (typeof args.model !== 'string' || args.model.length > 200) return { ok: false, code: 'BAD_ARGS' };
     patch.model = args.model;
+  }
+  // [AI 연결 복수화] 활성 연결 라벨(선택) — 정제·길이상한은 연결 레지스트리가 강제(여기선 shape만).
+  if (args.label !== undefined) {
+    if (typeof args.label !== 'string' || args.label.length > 200) return { ok: false, code: 'BAD_ARGS' };
+    patch.label = args.label;
   }
   if (args.apiKey !== undefined) {
     if (args.apiKey === null) patch.apiKey = '';
@@ -153,19 +162,40 @@ function setSettings(args, ctx) {
   const cfg = (ctx && ctx.config) || {};
   const cur = (cfg.briefing && typeof cfg.briefing === 'object') ? cfg.briefing : Object.assign({}, config.DEFAULTS.briefing);
 
-  // 병합(apiKey 미전송 = 기존 유지). advanced는 부분 병합.
+  // 병합(apiKey 미전송 = 기존 유지). advanced는 부분 병합. label 은 연결 엔트리 전용(normalizeBriefing 무시).
   const mergedAdvanced = Object.assign({}, cur.advanced, v.patch.advanced || {});
   const merged = Object.assign({}, cur, v.patch, { advanced: mergedAdvanced });
 
-  // 정규화(재검증) 후 ctx.config 갱신 + 0600 영속.
+  // 정규화(재검증). 이 값은 "활성 연결의 실효 설정"이자 briefing 미러의 원천이다.
   const normalized = config.normalizeBriefing(merged, ctx && ctx.logger);
-  if (cfg && typeof cfg === 'object') cfg.briefing = normalized;
+
+  // [AI 연결 복수화] 편집을 **활성 연결 엔트리**에 반영해 미러 불변식을 유지한다.
+  //   ① 활성 연결이 없거나 레거시면 resolveState 가 briefing 을 첫 연결로 승격.
+  //   ② 활성 연결을 normalized(+라벨)로 교체 — apiKey 는 normalized 값 그대로(해제 '' 도 반영).
+  //   ③ resolveState 로 briefing 을 다시 활성 연결에서 미러링.
+  const dnorm = (inp) => config.normalizeBriefing(inp, ctx && ctx.logger);
+  const connDeps = { normalizeSettings: dnorm };
+  const curConns = Array.isArray(cfg.briefingConnections) ? cfg.briefingConnections : [];
+  const curActive = typeof cfg.activeBriefingId === 'string' ? cfg.activeBriefingId : '';
+  const base = briefingConnReg.resolveState(normalized, curConns, curActive, connDeps);
+  const label = (v.patch.label !== undefined) ? v.patch.label : undefined;
+  const connectionsNext = base.connections.map((c) => (c.id === base.activeId)
+    ? briefingConnReg.normalizeConnection(
+      Object.assign({}, normalized, { id: c.id, label: (label !== undefined) ? label : c.label }),
+      connDeps, { id: c.id, fallbackLabel: c.label })
+    : c);
+  const resolved = briefingConnReg.resolveState(normalized, connectionsNext, base.activeId, connDeps);
+
+  if (cfg && typeof cfg === 'object') {
+    cfg.briefing = resolved.briefing;
+    cfg.briefingConnections = resolved.connections;
+    cfg.activeBriefingId = resolved.activeId;
+  }
   try {
-    config.persistConfigKeys({ briefing: normalized }, {
-      logger: ctx && ctx.logger,
-      configPath: ctx && ctx.configPath,
-      deps: ctx && ctx.configDeps,
-    });
+    config.persistConfigKeys(
+      { briefing: resolved.briefing, briefingConnections: resolved.connections, activeBriefingId: resolved.activeId },
+      { logger: ctx && ctx.logger, configPath: ctx && ctx.configPath, deps: ctx && ctx.configDeps },
+    );
   } catch (_) {
     return { ok: false, code: 'PERSIST' };
   }

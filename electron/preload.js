@@ -33,6 +33,7 @@ function _briefingArgs(s) {
   if (s.enabled != null) out.enabled = !!s.enabled;
   if (s.baseURL != null) out.baseURL = String(s.baseURL);
   if (s.model != null) out.model = String(s.model);
+  if (s.label != null) out.label = String(s.label); // [AI 연결 복수화] 활성 연결 라벨(선택)
   if ('apiKey' in s) out.apiKey = s.apiKey === null ? null : String(s.apiKey); // null=해제
   // 시스템 프롬프트(사용자 편집·신뢰 영역). 빈 문자열/null=시드 복원. main 핸들러가 정제·길이상한 재검증.
   if ('systemPrompt' in s) out.systemPrompt = s.systemPrompt === null ? '' : String(s.systemPrompt);
@@ -223,6 +224,12 @@ contextBridge.exposeInMainWorld('spip', {
     getSettings: () => ipcRenderer.invoke('spip:briefing:getSettings'),
     setSettings: (s) => ipcRenderer.invoke('spip:briefing:setSettings', _briefingArgs(s)),
     testConnection: (s) => ipcRenderer.invoke('spip:briefing:testConnection', _briefingArgs(s)),
+
+    // [AI 연결 복수화] 연결 목록 CRUD·활성 전환 — 응답에 apiKey 평문 없음(공개뷰).
+    getConnections: () => ipcRenderer.invoke('spip:briefing:getConnections'),
+    addConnection: (label) => ipcRenderer.invoke('spip:briefing:addConnection', { label: String(label || '') }),
+    removeConnection: (id) => ipcRenderer.invoke('spip:briefing:removeConnection', { id: String(id || '') }),
+    activateConnection: (id) => ipcRenderer.invoke('spip:briefing:activateConnection', { id: String(id || '') }),
 
     // 단방향 push 구독 — 콜백만 받고 ipcRenderer 원본 비노출. unsubscribe 반환.
     onState: (cb) => _sub('spip:briefing:state', cb),

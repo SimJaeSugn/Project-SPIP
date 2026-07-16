@@ -28,6 +28,7 @@ const mailArchiveIpc = require('./mailArchive');
 const insightsIpc = require('./insights');
 const uiStateIpc = require('./uiState');
 const briefingIpc = require('./briefing');
+const briefingConnectionsIpc = require('./briefingConnections');
 const agentIpc = require('./agent');
 const shelfIpc = require('./shelf');
 const notifyIpc = require('./notify');
@@ -308,6 +309,11 @@ function registerIpcHandlers(deps) {
   guard('spip:briefing:getSettings', (args) => briefingIpc.getSettings(args, ctx));
   guard('spip:briefing:setSettings', (args) => briefingIpc.setSettings(args, ctx));
   guard('spip:briefing:testConnection', (args) => briefingIpc.testConnection(args, ctx));
+  // [AI 연결 복수화] 연결 목록 CRUD·활성 전환 — apiKey 평문 회송 0(공개뷰). briefing 미러는 핸들러가 유지.
+  guard('spip:briefing:getConnections', (args) => briefingConnectionsIpc.getConnections(args, ctx));
+  guard('spip:briefing:addConnection', (args) => briefingConnectionsIpc.addConnection(args, ctx));
+  guard('spip:briefing:removeConnection', (args) => briefingConnectionsIpc.removeConnection(args, ctx));
+  guard('spip:briefing:activateConnection', (args) => briefingConnectionsIpc.activateConnection(args, ctx));
 
   // [SH-2/SH-3] 즐겨찾기 셸프 위젯 — shelf.js. folder/file(localMeta)·url(urlMeta 크롤·SSRF·og).
   //   shell 주입(file=openPath / url=openExternal). add/open 양쪽 pathPolicy 재게이트. main이 id·시각 스탬프.
