@@ -33,6 +33,40 @@
   font-display: swap;
   src: local('Geist Mono'), url('./fonts/GeistMono.woff2') format('woff2-variations'), url('./fonts/GeistMono.woff2') format('woff2');
 }
+/* [포스트잇 테마] 손글씨 폰트 Gaegu(OFL) — CDN 금지(로컬 Electron·CSP font-src 'self')라 woff2 로컬 번들.
+   한글·라틴 서브셋을 unicode-range 로 나눠 필요한 글리프만 로드. local() 먼저(OS 설치본 재사용). */
+@font-face {
+  font-family: 'Gaegu';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Gaegu'), url('./fonts/gaegu/gaegu-latin-400-normal.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Gaegu';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Gaegu'), url('./fonts/gaegu/gaegu-korean-400-normal.woff2') format('woff2');
+  unicode-range: U+1100-11FF, U+3001-3003, U+3008-3011, U+3013-301B, U+301D-301F, U+302E-3030, U+3037, U+30FB, U+3131-318E, U+3200-321E, U+3260-327E, U+327F, U+3380-3384, U+3388-33CA, U+33CF, U+33D0, U+33D3, U+33D6, U+33D8, U+33DB-33DD, U+A960-A97C, U+AC00-D7A3, U+D7B0-D7C6, U+D7CB-D7FB, U+F900-FA0B, U+FF01-FF60, U+FFE0-FFE6;
+}
+@font-face {
+  font-family: 'Gaegu';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: local('Gaegu'), url('./fonts/gaegu/gaegu-latin-700-normal.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Gaegu';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: local('Gaegu'), url('./fonts/gaegu/gaegu-korean-700-normal.woff2') format('woff2');
+  unicode-range: U+1100-11FF, U+3001-3003, U+3008-3011, U+3013-301B, U+301D-301F, U+302E-3030, U+3037, U+30FB, U+3131-318E, U+3200-321E, U+3260-327E, U+327F, U+3380-3384, U+3388-33CA, U+33CF, U+33D0, U+33D3, U+33D6, U+33D8, U+33DB-33DD, U+A960-A97C, U+AC00-D7A3, U+D7B0-D7C6, U+D7CB-D7FB, U+F900-FA0B, U+FF01-FF60, U+FFE0-FFE6;
+}
 
 :root {
   color-scheme: light;      /* 네이티브 컨트롤(datetime 피커·스크롤바 등)을 라이트로 */
@@ -1911,4 +1945,162 @@ textarea.briefing-systemprompt {
  *   prefers-reduced-motion 존중: 모션 비활성 시 어떤 잔여 transition 도 즉시 무효화(방어). */
 @media (prefers-reduced-motion: reduce) {
   .cards .card { transition: none !important; }
+}
+
+/* =====================================================================
+ * 포스트잇 테마 (data-theme="postit") — 홈 대시보드 코르크보드 + 스티키노트 스킨
+ *   claude.ai/design 시안 '홈 대시보드 A · 포스트잇' 재현(docs/design/postit-theme/).
+ *   ─ 축: 라이트/다크/시스템에 이은 4번째 테마. data-theme 값으로 직접 적용된다.
+ *   ─ 범위: **홈 대시보드만** 재도장한다. 앱 크롬(상단바·사이드·모달)은 :root 라이트 팔레트를 계승.
+ *   ─ 방식: 홈 위젯 카드(.home-section__content > *)를 종이 노트로 override(인라인 HOME_CARD 색을
+ *          !important 로 덮음). 회전·압정·테이프는 셀(.home-section)에 얹어 클립되지 않게 한다
+ *          (.home-section__content 는 높이지정 시 overflow:hidden 이 되므로 장식을 셀에 둔다).
+ *   ─ 반응형/masonry/리사이즈/재정렬 계약은 그대로 — 회전은 레이아웃 박스를 바꾸지 않는 시각 효과다.
+ * ===================================================================== */
+:root[data-theme="postit"] {
+  color-scheme: light;                     /* 네이티브 컨트롤 라이트(라이트 팔레트 계승) */
+  --hw-note-font: 'Gaegu', var(--font);    /* 카드 제목 손글씨 폰트 */
+}
+
+/* 코르크보드 — 홈 대시보드 스크롤 영역 **전체**(상단 대시보드 칩/편집 바까지 포함). 점 격자 + 따뜻한 코르크.
+   프로젝트 대시보드 뷰(.dash__main)와 공유되는 클래스라 홈 전용 마커(.dash__main--home)로 스코프. */
+:root[data-theme="postit"] .dash__main--home {
+  background:
+    radial-gradient(circle at 50% 50%, rgba(0,0,0,.05) 1px, transparent 1.6px) 0 0 / 8px 8px,
+    radial-gradient(circle at 50% 50%, rgba(255,255,255,.06) 1px, transparent 1.6px) 4px 4px / 8px 8px,
+    radial-gradient(130% 120% at 25% 5%, #d8b478 0%, #c69a5a 55%, #b1823f 100%) !important;
+}
+/* masonry/그룹 그리드는 투과 — 위 전체 코르크가 비친다(중첩 코르크 박스·라운드 경계 방지). */
+:root[data-theme="postit"] .home-masonry,
+:root[data-theme="postit"] .home-group__grid {
+  background: transparent;
+}
+
+/* 스티키노트 — 셀 회전(시각 효과, 레이아웃 박스 불변). --paper/--rot/--pin 은 nth-child 가 지정. */
+:root[data-theme="postit"] .home-masonry > .home-section {
+  --paper: #fff7ad;
+  --rot: -1deg;
+  --pin: #d02f3a;
+  transform: rotate(var(--rot));
+  transition: transform .18s ease, box-shadow .18s ease;
+}
+/* 상호작용 중엔 곧게 편다 — 리사이즈 아웃라인·핸들 정렬이 회전으로 어긋나지 않게. */
+:root[data-theme="postit"] .home-masonry > .home-section--resizing,
+:root[data-theme="postit"] .home-masonry > .home-section:hover {
+  transform: rotate(0deg);
+}
+
+/* 종이 노트 도장 — 인라인 HOME_CARD(배경/테두리/라운드)를 덮는다(!important 로 인라인 override).
+   메일·즐겨찾기는 content > (mail|shelf)-region > 카드 2단 래핑이라, 래퍼는 아래에서 투과시키고 안쪽 카드를 종이로. */
+:root[data-theme="postit"] .home-section__content > *,
+:root[data-theme="postit"] .home-section__content > .mail-region > *,
+:root[data-theme="postit"] .home-section__content > .shelf-region > * {
+  background:
+    repeating-linear-gradient(90deg, rgba(90,70,30,.05) 0 1px, transparent 1px 3px),
+    repeating-linear-gradient(0deg,  rgba(90,70,30,.05) 0 1px, transparent 1px 3px),
+    radial-gradient(circle at 20% 80%, rgba(0,0,0,.03), transparent 60%),
+    linear-gradient(170deg, color-mix(in srgb, var(--paper, #fff7ad) 92%, #fff), var(--paper, #fff7ad)) !important;
+  border: 1px solid rgba(0,0,0,.06) !important;
+  border-radius: 5px !important;
+  /* 종이 밖으로 새는 자식 배경을 라운드 모서리에 맞춰 자른다 — .hw-card 가 아닌 위젯(마크다운 편집기·탐색기 등)은
+     자체 overflow:hidden 이 없어, 흰 편집영역 같은 꽉 찬 배경이 둥근 모서리 밖으로 사각으로 삐져나온다(모서리 불투명).
+     스티키노트는 '한 장의 종이'라 내부가 새어나올 이유가 없으므로 카드에서 일괄 클립한다. */
+  overflow: hidden !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.5),
+    inset 0 -18px 20px -18px rgba(0,0,0,.12),
+    0 1px 1px rgba(0,0,0,.09),
+    0 12px 24px -8px rgba(0,0,0,.32) !important;
+}
+/* 클릭 가능한 노트가 떠오르는 느낌 — 셀 호버 시 카드 그림자 강조. */
+:root[data-theme="postit"] .home-masonry > .home-section:hover .home-section__content > *,
+:root[data-theme="postit"] .home-masonry > .home-section:hover .home-section__content > .mail-region > *,
+:root[data-theme="postit"] .home-masonry > .home-section:hover .home-section__content > .shelf-region > * {
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.5),
+    0 2px 2px rgba(0,0,0,.1),
+    0 22px 40px -10px rgba(0,0,0,.4) !important;
+}
+/* 래퍼(mail/shelf-region)는 투과 — 종이·그림자·클립은 안쪽 카드가 갖는다(래퍼가 종이를 덮지 않게). */
+:root[data-theme="postit"] .home-section__content > .mail-region,
+:root[data-theme="postit"] .home-section__content > .shelf-region {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  overflow: visible !important;
+  border-radius: 0 !important;
+}
+
+/* 압정 — 노트 상단 중앙(::before). 셀에 얹어 콘텐츠 overflow 클립을 피한다. */
+:root[data-theme="postit"] .home-masonry > .home-section::before {
+  content: '';
+  position: absolute;
+  top: -7px; left: 50%;
+  width: 15px; height: 15px;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--pin, #d02f3a) 45%, #fff), var(--pin, #d02f3a) 72%);
+  box-shadow: 0 2px 3px rgba(0,0,0,.3), inset 0 -1px 1px rgba(0,0,0,.2);
+  z-index: 5;
+  pointer-events: none;
+}
+/* 워시테이프 — 매 3번째 노트는 압정 대신 테이프(::after). */
+:root[data-theme="postit"] .home-masonry > .home-section:nth-child(3n)::before { display: none; }
+:root[data-theme="postit"] .home-masonry > .home-section:nth-child(3n)::after {
+  content: '';
+  position: absolute;
+  top: -11px; left: 26px;
+  width: 78px; height: 20px;
+  transform: rotate(-5deg);
+  background: rgba(250,240,200,.5);
+  box-shadow: 0 1px 3px rgba(0,0,0,.12);
+  border-left: 1px solid rgba(255,255,255,.5);
+  border-right: 1px solid rgba(255,255,255,.5);
+  z-index: 5;
+  pointer-events: none;
+}
+
+/* 노트 색조·기울기·압정색 — 6개 팔레트 순환(위젯 개수와 무관하게 자연스러운 배색). */
+:root[data-theme="postit"] .home-masonry > .home-section:nth-child(6n+1) { --paper: #feee86; --rot: -1.3deg; --pin: #c98a12; }
+:root[data-theme="postit"] .home-masonry > .home-section:nth-child(6n+2) { --paper: #ffc2d1; --rot:  1.1deg; --pin: #b23a5b; }
+:root[data-theme="postit"] .home-masonry > .home-section:nth-child(6n+3) { --paper: #bcdcff; --rot: -1.6deg; --pin: #2f7ad0; }
+:root[data-theme="postit"] .home-masonry > .home-section:nth-child(6n+4) { --paper: #c4efab; --rot:  1.4deg; --pin: #12a34d; }
+:root[data-theme="postit"] .home-masonry > .home-section:nth-child(6n+5) { --paper: #ffd591; --rot: -1.0deg; --pin: #d98a12; }
+:root[data-theme="postit"] .home-masonry > .home-section:nth-child(6n)   { --paper: #d8c9ff; --rot:  1.2deg; --pin: #6d5ac0; }
+
+/* 카드 제목 손글씨체 — .hw-title(핵심 위젯)·.agent-title·브리핑 인사말. */
+:root[data-theme="postit"] .hw-title,
+:root[data-theme="postit"] .agent-title {
+  font-family: var(--hw-note-font);
+  font-weight: 700;
+  font-size: 19px !important;
+  letter-spacing: .2px;
+}
+:root[data-theme="postit"] .briefing-widget__greet {
+  font-family: var(--hw-note-font);
+  font-weight: 700;
+  font-size: 30px !important;
+  letter-spacing: 0;
+}
+
+/* 히어로 — '오늘의 브리핑' 위젯은 핀꽂힌 다크 배너로. 자식이 쓰는 테마 변수를 이 서브트리에서만
+ *   밝은 값으로 재정의 → 내부 텍스트(var(--t1)…)가 자동으로 다크 배경 위에서 읽힌다(L-1 그대로 textContent). */
+:root[data-theme="postit"] .home-section__content > .briefing-widget {
+  --panel: transparent;
+  --t1: #ffffff; --t2: #e7e5e4; --t3: #c9c5c0; --t4: #a8a29e;
+  --border: rgba(255,255,255,.10); --border-soft: rgba(255,255,255,.08); --hairline: rgba(255,255,255,.06);
+  --surface-2: rgba(255,255,255,.05); --surface-3: rgba(255,255,255,.08); --track: rgba(255,255,255,.12);
+  --accent: #a5b4fc; --accent-bg: rgba(129,140,248,.16); --accent-border: rgba(129,140,248,.4); --accent-text: #c7d2fe;
+  background: radial-gradient(135% 135% at 80% -10%, #241f1a 0%, #0c0a09 68%) !important;
+  border: 1px solid rgba(255,255,255,.08) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 2px 2px rgba(0,0,0,.15), 0 18px 34px -10px rgba(0,0,0,.5) !important;
+  color: #e7e5e4;
+}
+
+/* 그룹/스택 컨테이너 — 코르크가 비치도록 반투명(흰 블록이 코르크 위에 뜨는 것 방지). */
+:root[data-theme="postit"] .home-group,
+:root[data-theme="postit"] .home-stack > .home-section__content {
+  background: rgba(255,255,255,.28);
+  border-color: rgba(0,0,0,.10);
 }

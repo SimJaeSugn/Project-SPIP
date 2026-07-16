@@ -1852,7 +1852,7 @@ function uiStateView(res) {
   const order = (Array.isArray(r.order) ? r.order : []).filter((x) => typeof x === 'string');
   const sortMode = (r.sortMode === 'manual') ? 'manual' : 'auto';
   const names = (r.names && typeof r.names === 'object' && !Array.isArray(r.names)) ? r.names : {};
-  const theme = (r.theme === 'light' || r.theme === 'dark' || r.theme === 'system') ? r.theme : 'system';
+  const theme = (r.theme === 'light' || r.theme === 'dark' || r.theme === 'system' || r.theme === 'postit') ? r.theme : 'system';
   return { favorites, order, sortMode, names, theme };
 }
 
@@ -2954,7 +2954,8 @@ function initBrowser() {
     var root = el('div', { cls: 'dash home' });
     root.appendChild(renderHeader());
 
-    var main = el('main', { cls: 'dash__main spip-scroll', attrs: { id: 'main' }, style: 'background:var(--bg);color:var(--t1);font-family:Geist,Pretendard,system-ui,sans-serif;' });
+    // [포스트잇 테마] dash__main--home 마커 — 홈 스크롤 영역 전체에 코르크 배경을 입히는 스코프(프로젝트 대시보드 뷰는 제외).
+    var main = el('main', { cls: 'dash__main dash__main--home spip-scroll', attrs: { id: 'main' }, style: 'background:var(--bg);color:var(--t1);font-family:Geist,Pretendard,system-ui,sans-serif;' });
     var wrap = el('div', { style: 'max-width:1480px;margin:0 auto;' });
 
     // 스캔된 프로젝트가 없으면(팝업을 닫았어도) 재스캔 진입 배너를 노출.
@@ -3259,7 +3260,7 @@ function initBrowser() {
     return head;
   }
   function homeTitle(text) {
-    return el('div', { text: text, style: 'font-size:15px;font-weight:600;letter-spacing:-0.01em;flex:1 1 0%;' });
+    return el('div', { cls: 'hw-title', text: text, style: 'font-size:15px;font-weight:600;letter-spacing:-0.01em;flex:1 1 0%;' });
   }
   function homeBadge(text, kind) {
     var c = { amber: 'background:#fef3c7;color:#b45309;border:1px solid #fde68a;', blue: 'background:#dbeafe;color:#1d4ed8;border:1px solid #bfdbfe;', cyan: 'background:#cffafe;color:#0e7490;border:1px solid #a5f3fc;' }[kind] || '';
@@ -3292,7 +3293,7 @@ function initBrowser() {
     var unread = mailUnreadTotal();
     var rec = reclaim || diskReclaim(vms);
     var card = el('div', { cls: 'hw-card', style: HOME_CARD + 'padding:21px 22px;' });
-    card.appendChild(el('div', { text: widgetCardTitle(inst, '요약 지표'), style: 'font-size:15px;font-weight:600;letter-spacing:-0.01em;margin-bottom:14px;flex:0 0 auto;' }));
+    card.appendChild(el('div', { cls: 'hw-title', text: widgetCardTitle(inst, '요약 지표'), style: 'font-size:15px;font-weight:600;letter-spacing:-0.01em;margin-bottom:14px;flex:0 0 auto;' }));
     var grid = el('div', { cls: 'summary-grid hw-body' });
     var tile = function (val, label, color) {
       var c = el('div', { cls: 'summary-tile' });
@@ -3316,7 +3317,7 @@ function initBrowser() {
     var icon = el('div', { style: 'width:30px;height:30px;border-radius:8px;background:#fef3c7;display:flex;align-items:center;justify-content:center;flex:0 0 auto;' });
     icon.appendChild(svg([{ t: 'path', d: 'M12 9v4M12 17h.01' }, { t: 'path', d: 'M10.3 3.86l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3.14l-8-14a2 2 0 0 0-3.4 0z' }], { size: 16, stroke: '#b45309' }));
     var titleWrap = el('div', { style: 'flex:1 1 0%;' });
-    titleWrap.appendChild(el('div', { text: widgetCardTitle(inst, '주의가 필요한 프로젝트'), style: 'font-size:15px;font-weight:600;letter-spacing:-0.01em;' }));
+    titleWrap.appendChild(el('div', { cls: 'hw-title', text: widgetCardTitle(inst, '주의가 필요한 프로젝트'), style: 'font-size:15px;font-weight:600;letter-spacing:-0.01em;' }));
     titleWrap.appendChild(el('div', { text: '미커밋 · 미푸시 · 방치 ' + items.length + '건', style: 'font-size:11.5px;color:var(--t4);margin-top:1px;' }));
     var open = el('span', {
       style: 'font-size:12.5px;font-weight:600;color:var(--accent);display:inline-flex;align-items:center;gap:4px;cursor:pointer;',
@@ -3361,7 +3362,7 @@ function initBrowser() {
     var days = Array.isArray(ca.days) ? ca.days.slice(-7) : [];
     var total7 = days.reduce(function (s, d) { return s + (d.count || 0); }, 0);
     var hd = el('div', { style: 'display:flex;align-items:baseline;gap:9px;margin-bottom:3px;' });
-    hd.appendChild(el('div', { text: widgetCardTitle(inst, '주간 생산성'), style: 'font-size:15px;font-weight:600;flex:1 1 0%;' }));
+    hd.appendChild(el('div', { cls: 'hw-title', text: widgetCardTitle(inst, '주간 생산성'), style: 'font-size:15px;font-weight:600;flex:1 1 0%;' }));
     hd.appendChild(el('span', { text: total7 + ' 커밋', style: HOME_MONO + 'font-size:12.5px;font-weight:600;color:var(--t1);' }));
     leftCol.appendChild(hd);
     leftCol.appendChild(el('div', { text: store.commitActivityLoaded ? '최근 7일 커밋 빈도' : '집계하려면 새로고침…', style: 'font-size:11.5px;color:var(--t4);margin-bottom:18px;' }));
@@ -3404,7 +3405,7 @@ function initBrowser() {
   function renderHomeActivity(inst) {
     var events = homeRecentActivity(store.viewModels || [], 6);
     var card = el('div', { cls: 'hw-card', style: HOME_CARD + 'padding:21px 22px;' });
-    card.appendChild(el('div', { text: widgetCardTitle(inst, '최근 활동 타임라인'), style: 'font-size:15px;font-weight:600;margin-bottom:16px;flex:0 0 auto;' }));
+    card.appendChild(el('div', { cls: 'hw-title', text: widgetCardTitle(inst, '최근 활동 타임라인'), style: 'font-size:15px;font-weight:600;margin-bottom:16px;flex:0 0 auto;' }));
     // [반응형] 위젯이 넓으면 다열 — 다열 시 세로 연결선(.hw-tl-rail)은 @container 로 숨김(다음 항목이 우측이라 무의미).
     var list = el('div', { cls: 'hw-cols hw-body', style: 'column-gap:22px;' });
     if (events.length === 0) {
@@ -3458,7 +3459,7 @@ function initBrowser() {
     var open = todos.filter(function (t) { return !t.done; }).length;
     var card = el('div', { cls: 'hw-card', style: HOME_CARD + 'padding:21px 20px;' });
     var head = el('div', { style: 'display:flex;align-items:center;gap:10px;margin-bottom:15px;flex:0 0 auto;' });
-    head.appendChild(el('div', { text: widgetCardTitle(inst, '할 일'), style: 'font-size:15px;font-weight:600;flex:1 1 0%;' }));
+    head.appendChild(el('div', { cls: 'hw-title', text: widgetCardTitle(inst, '할 일'), style: 'font-size:15px;font-weight:600;flex:1 1 0%;' }));
     var cnt = el('span', { style: HOME_MONO + 'font-size:12px;font-weight:600;color:var(--t1);' });
     cnt.appendChild(el('span', { text: String(open) }));
     cnt.appendChild(el('span', { text: '/' + todos.length, style: 'color:var(--t4);' }));
@@ -4342,7 +4343,7 @@ function initBrowser() {
   function renderHomeDisk(reclaim, inst) {
     var card = el('div', { cls: 'hw-card', style: HOME_CARD + 'padding:21px 20px;' });
     var head = el('div', { style: 'display:flex;align-items:baseline;gap:9px;margin-bottom:3px;flex:0 0 auto;' });
-    head.appendChild(el('div', { text: widgetCardTitle(inst, '디스크 회수'), style: 'font-size:15px;font-weight:600;flex:1 1 0%;' }));
+    head.appendChild(el('div', { cls: 'hw-title', text: widgetCardTitle(inst, '디스크 회수'), style: 'font-size:15px;font-weight:600;flex:1 1 0%;' }));
     head.appendChild(el('span', { text: reclaim.label, style: 'font-size:22px;font-weight:700;color:#15803d;font-variant-numeric:tabular-nums;letter-spacing:-0.02em;' }));
     card.appendChild(head);
     card.appendChild(el('div', { text: '방치 프로젝트 node_modules 정리 시', style: 'font-size:11.5px;color:var(--t4);margin-bottom:16px;flex:0 0 auto;' }));
@@ -4538,7 +4539,7 @@ function initBrowser() {
 
     // 헤더 — 제목 + 요약 + 새로고침.
     var head = el('div', { style: 'display:flex;align-items:center;gap:10px;margin-bottom:12px;flex:0 0 auto;' });
-    head.appendChild(el('div', { text: widgetCardTitle(inst, '커밋 히트맵'), style: 'font-size:15px;font-weight:600;flex:1 1 0%;' }));
+    head.appendChild(el('div', { cls: 'hw-title', text: widgetCardTitle(inst, '커밋 히트맵'), style: 'font-size:15px;font-weight:600;flex:1 1 0%;' }));
     if (loaded && model.total > 0) {
       head.appendChild(el('span', { text: model.total + '커밋 · ' + model.activeDays + '일 활동', style: HOME_MONO + 'font-size:11px;color:var(--t3);flex:0 0 auto;' }));
     }
@@ -4660,7 +4661,7 @@ function initBrowser() {
     var card = el('div', { cls: 'hw-card', style: HOME_CARD + 'padding:18px 18px 16px;' });
     var busy = store.busySystemStatus;
     var head = el('div', { style: 'display:flex;align-items:center;gap:10px;margin-bottom:14px;flex:0 0 auto;' });
-    head.appendChild(el('div', { text: widgetCardTitle(inst, '시스템 상태'), style: 'font-size:15px;font-weight:600;flex:1 1 0%;' }));
+    head.appendChild(el('div', { cls: 'hw-title', text: widgetCardTitle(inst, '시스템 상태'), style: 'font-size:15px;font-weight:600;flex:1 1 0%;' }));
     head.appendChild(el('button', {
       cls: 'home-mail-more', text: busy ? '갱신 중…' : '새로고침',
       attrs: Object.assign({ type: 'button', 'aria-label': '시스템 상태 새로고침' }, busy ? { disabled: 'disabled' } : {}),
@@ -7411,11 +7412,12 @@ function initBrowser() {
       block.appendChild(el('div', { cls: 'rootmgr__empty', text: '이 환경에서는 테마를 변경할 수 없습니다.' }));
       return block;
     }
-    block.appendChild(el('p', { cls: 'settings__opt-sub', text: '밝은 테마 / 어두운 테마 / 시스템 설정 따름 중에서 선택합니다.' }));
+    block.appendChild(el('p', { cls: 'settings__opt-sub', text: '밝은 테마 / 어두운 테마 / 시스템 설정 따름, 또는 홈 대시보드를 코르크보드+스티키노트로 꾸미는 포스트잇 중에서 선택합니다.' }));
     block.appendChild(segToggle([
       ['light', '라이트', store.theme === 'light', () => onSetTheme('light')],
       ['dark', '다크', store.theme === 'dark', () => onSetTheme('dark')],
       ['system', '시스템', store.theme === 'system', () => onSetTheme('system')],
+      ['postit', '포스트잇', store.theme === 'postit', () => onSetTheme('postit')],
     ]));
     // [로드맵 Phase 1·J] 액센트 색 + UI 배율.
     if (bridgeHas('setThemePrefs')) {
@@ -11741,9 +11743,10 @@ function initBrowser() {
     if (bridgeHas('exportDashboard')) acts.push({ id: 'dash.export', title: '대시보드 내보내기', group: '대시보드', keywords: 'export backup json 내보내기 백업', run: function () { store.state.view = 'home'; openDashboardIO('export'); } });
     if (bridgeHas('importDashboard')) acts.push({ id: 'dash.import', title: '대시보드 가져오기', group: '대시보드', keywords: 'import restore json 가져오기 복원', run: function () { store.state.view = 'home'; openDashboardIO('import'); } });
     // 테마 전환.
-    ['light', 'dark', 'system'].forEach(function (t) {
-      var label = t === 'light' ? '라이트' : (t === 'dark' ? '다크' : '시스템');
-      acts.push({ id: 'theme.' + t, title: '테마: ' + label, group: '앱', keywords: 'theme 테마 ' + t + ' ' + label, enabled: function () { return store.theme !== t; }, run: function () { setTheme(t); } });
+    var THEME_LABELS = { light: '라이트', dark: '다크', system: '시스템', postit: '포스트잇' };
+    ['light', 'dark', 'system', 'postit'].forEach(function (t) {
+      var label = THEME_LABELS[t];
+      acts.push({ id: 'theme.' + t, title: '테마: ' + label, group: '앱', keywords: 'theme 테마 ' + t + ' ' + label, enabled: function () { return store.theme !== t; }, run: function () { onSetTheme(t); } });
     });
     // [로드맵 Phase 4·I / 위젯 인스턴스] 배치된 **각 인스턴스**를 포커스 액션으로(표시명으로 구분).
     (store.homeWidgets || []).forEach(function (w) {
@@ -11904,7 +11907,8 @@ function initBrowser() {
     try { return !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches); } catch (_) { return false; }
   }
   function resolveTheme() {
-    if (store.theme === 'light' || store.theme === 'dark') return store.theme;
+    // [포스트잇 테마] 'postit'은 system 해석 대상이 아니라 data-theme 값으로 직접 적용(라이트 팔레트 계승 + 홈 스킨).
+    if (store.theme === 'light' || store.theme === 'dark' || store.theme === 'postit') return store.theme;
     return prefersDark() ? 'dark' : 'light'; // system
   }
   var UI_SCALE_ZOOM = { compact: 0.92, normal: 1, comfortable: 1.08, large: 1.18 };
@@ -11932,7 +11936,7 @@ function initBrowser() {
   }
   /** 테마 변경(낙관적 반영 + IPC 영속). */
   function onSetTheme(theme) {
-    store.theme = (theme === 'light' || theme === 'dark' || theme === 'system') ? theme : 'system';
+    store.theme = (theme === 'light' || theme === 'dark' || theme === 'system' || theme === 'postit') ? theme : 'system';
     applyTheme();
     render();
     if (bridgeHas('setTheme')) ipc('setTheme', store.theme);
