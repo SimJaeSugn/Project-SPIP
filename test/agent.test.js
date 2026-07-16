@@ -493,6 +493,13 @@ test('AG-6 — 프롬프트에 신규 메모·문서 도구 설명', () => {
   }
 });
 
+test('AG-6 — "할일 추가"는 그대로 1건, 임의 분해·문서생성 금지 지침', () => {
+  const S = agentIpc.AGENT_SYSTEM;
+  assert.ok(/그대로 add_todo 한 번|그대로 한 건/.test(S), '문구 그대로 add_todo 1건 지침');
+  assert.ok(/여러 할 일로 쪼개지 말고|쪼개지 마라/.test(S), '임의 분해 금지 지침');
+  assert.ok(/시키지 않은 작업|스스로 덧붙이지 마라/.test(S), '요청 외 작업(문서생성 등) 추가 금지 지침');
+});
+
 /* ───── [스크롤 위치 보존] AG-7 ───── */
 
 test('AG-7 — 트랜스크립트 스크롤 위치 인스턴스별 보존 배선', () => {
@@ -572,6 +579,17 @@ test('AG-8 planStep/reflectStep — 유닛', async () => {
   assert.strictEqual(rf2.is_valid, true);
 });
 
+test('AG-8 planStep — 단순 요청 과분해 방지(3~6 강제 없음·최소 단계 지시)', async () => {
+  // 플래너가 LLM 에 보내는 user 프롬프트를 가로채 검증한다.
+  let seen = '';
+  const llm = async (_s, u) => { seen = u; return { ok: true, text: '{"plan":["할 일 하나 추가"]}' }; };
+  const p = await agent.planStep(llm, { system: 'P', message: 'MTEB 평가 진행 (3개 임베딩 모델) 할일 추가' });
+  assert.deepStrictEqual(p.plan, ['할 일 하나 추가'], '1단계 계획 그대로 통과');
+  assert.ok(!/3~6/.test(seen), '더 이상 3~6개 하한을 강제하지 않음');
+  assert.ok(/최소 단계|1단계로 계획/.test(seen), '최소 단계·원자적 요청 1단계 지시');
+  assert.ok(/쪼개지 마라|덧붙이|임의로/.test(seen), '항목 분해·임의 작업 추가 금지 지시');
+});
+
 test('AG-8 IPC run — 응답 steps 에 plan·reflect 단계 포함', async () => {
   const ctx = ctxWithTodos();
   const script = ['{"plan":["할 일 확인"]}', '{"tool":"list_todos","args":{}}', '{"final":"없어요"}', '{"is_valid":true,"critique":""}'];
@@ -590,6 +608,43 @@ test('AG-8 — 렌더러가 plan·reflect 단계를 표시', () => {
   assert.ok(/st\.phase === 'plan'/.test(APP) && /agent-plan__list/.test(APP), '계획 단계 렌더');
   assert.ok(/st\.phase === 'reflect'/.test(APP) && /검증 통과|검증 실패/.test(APP), '검증 단계 렌더');
   assert.ok(/\.agent-plan\s*\{/.test(CSS) && /\.agent-reflect/.test(CSS), '계획·검증 CSS');
+});
+
+/* ───── [리즈닝 자연어화 — JSON 비노출] AG-10 ───── */
+
+test('AG-10 agentActionText — 도구+args 를 JSON 없이 자연어 문장으로', () => {
+  const app = require('../public/app.js');
+  assert.strictEqual(app.agentActionText('add_todo', { text: '우유 사기' }), '할 일을 추가 — ‘우유 사기’');
+  assert.strictEqual(app.agentActionText('list_todos', {}), '할 일 목록을 확인');
+  assert.strictEqual(app.agentActionText('get_mail_summary', {}), '안 읽은 메일을 확인');
+  assert.strictEqual(app.agentActionText('create_document', { title: '회의록' }), '문서를 생성 — ‘회의록’');
+  // 알 수 없는 도구도 밋밋하게라도 자연어로(원문 JSON 노출 금지)
+  const unk = app.agentActionText('foo_bar', { x: 1 });
+  assert.ok(/실행/.test(unk) && !/\{|\}|"/.test(unk), '미지 도구 폴백에 JSON 없음');
+});
+
+test('AG-10 agentOutcomeText — observation(JSON) 을 자연어 결과로, 원문 미노출', () => {
+  const app = require('../public/app.js');
+  assert.strictEqual(app.agentOutcomeText('{"ok":true,"todos":[{"id":"t1"},{"id":"t2"},{"id":"t3"}]}'), '완료 (할 일 3개)');
+  assert.strictEqual(app.agentOutcomeText('{"ok":true}'), '완료');
+  assert.strictEqual(app.agentOutcomeText('{"ok":true,"title":"회의록"}'), '완료 — ‘회의록’');
+  assert.strictEqual(app.agentOutcomeText('{"ok":false,"error":"not_found"}'), '실패 — 대상을 찾지 못함');
+  // 어떤 결과든 중괄호/따옴표 같은 JSON 토큰이 새지 않아야 한다
+  const out = app.agentOutcomeText('{"ok":true,"todos":[],"extra":{"deep":1}}');
+  assert.ok(!/[{}]|"todos"|"extra"/.test(out), '결과 문장에 JSON 원문 없음');
+});
+
+test('AG-10 — 렌더러가 트레이스에서 JSON(args·observation) 을 직접 뿌리지 않음', () => {
+  const ROOT = path.join(__dirname, '..');
+  const APP = fs.readFileSync(path.join(ROOT, 'public', 'app.js'), 'utf8');
+  const CSS = fs.readFileSync(path.join(ROOT, 'public', 'styles.css'), 'utf8');
+  // 자연어 humanizer 로 렌더 — 옛 JSON 헬퍼는 제거됨.
+  assert.ok(/agentActionText\(st\.tool, st\.args\)/.test(APP), 'action 은 자연어 문장으로 렌더');
+  assert.ok(/agentOutcomeText\(st\.observation\)/.test(APP), 'observation 은 자연어 요약으로 렌더');
+  assert.ok(!/agentArgsBrief|agentObsBrief/.test(APP), 'JSON 원문 헬퍼(agentArgsBrief/agentObsBrief) 제거');
+  // observation 을 JSON.stringify 슬라이스로 그대로 뿌리는 코드가 없어야 한다.
+  assert.ok(!/cls: 'agent-obs', text: agentObsBrief/.test(APP), '관찰 JSON 직렌더 제거');
+  assert.ok(/\.agent-act\s*\{/.test(CSS), '자연어 액션 CSS(.agent-act)');
 });
 
 /* ───── [문서 Q&A — 여러 편집기·제목찾기·키워드발췌] AG-9 ───── */

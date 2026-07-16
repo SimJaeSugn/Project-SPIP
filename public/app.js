@@ -6054,8 +6054,6 @@ function initBrowser() {
     INTERNAL: '작업에 실패했습니다.',
   };
   function agentMessage(code) { return (code && AGENT_CODES[code] != null) ? AGENT_CODES[code] : 'AI 응답에 실패했습니다.'; }
-  function agentArgsBrief(args) { try { var s = JSON.stringify(args || {}); return (s === '{}') ? '' : s.slice(0, 120); } catch (_) { return ''; } }
-  function agentObsBrief(obs) { var s = String(obs == null ? '' : obs); return s.length > 200 ? s.slice(0, 200) + '…' : s; }
 
   /** 트레이스(스텝들)를 호스트에 렌더 — 계획/thought·action·observation/검증. 최종(final)은 호출측이 별도 표시. */
   function renderAgentSteps(host, steps) {
@@ -6086,14 +6084,16 @@ function initBrowser() {
       if (st.final) return;
       var row = el('div', { cls: 'agent-step' });
       if (st.thought) row.appendChild(el('div', { cls: 'agent-thought', text: st.thought }));
+      // 도구 호출·관찰을 JSON 원문 대신 자연어 문장으로(리즈닝 가독성).
       if (st.tool) {
         var act = el('div', { cls: 'agent-action' });
-        act.appendChild(el('span', { cls: 'agent-tool', text: st.tool }));
-        var brief = agentArgsBrief(st.args);
-        if (brief) act.appendChild(el('span', { cls: 'agent-args', text: brief }));
+        act.appendChild(el('span', { cls: 'agent-act', text: agentActionText(st.tool, st.args) }));
         row.appendChild(act);
       }
-      if (st.observation) row.appendChild(el('div', { cls: 'agent-obs', text: agentObsBrief(st.observation) }));
+      if (st.observation) {
+        var out = agentOutcomeText(st.observation);
+        if (out) row.appendChild(el('div', { cls: 'agent-obs', text: out }));
+      }
       host.appendChild(row);
     });
   }
@@ -12463,11 +12463,94 @@ function initBrowser() {
 }
 
 /* =====================================================================
+ * [Agent 리즈닝 자연어화] 트레이스의 도구/args/observation(JSON)을 사람이 읽는 문장으로.
+ *   렌더러가 JSON 원문을 노출하지 않도록 순수 함수로 분리 — DOM 비의존, 헤드리스 테스트.
+ * ===================================================================== */
+
+/** 도구 id → 사람이 읽는 동작 라벨(자연어). */
+var AGENT_TOOL_LABELS = {
+  list_todos: '할 일 목록을 확인', add_todo: '할 일을 추가', complete_todo: '할 일을 완료 처리',
+  uncomplete_todo: '할 일 완료를 취소', delete_todo: '할 일을 삭제',
+  list_mail_accounts: '메일 계정을 확인', get_mail_summary: '안 읽은 메일을 확인', read_mail: '메일 본문을 읽음',
+  get_mail_archive: '메일 보관함을 확인', sync_mail: '메일을 다시 수집', delete_mail: '메일을 삭제',
+  open_mailbox: '메일함을 열기', open_mail: '메일을 열기',
+  list_projects: '프로젝트 목록을 확인', get_project_stats: '프로젝트 집계를 확인', get_commit_activity: '커밋 활동을 확인',
+  get_system_status: '시스템 상태를 확인', get_token_usage: '토큰 사용량을 확인',
+  list_bookmarks: '즐겨찾기를 확인', add_bookmark: '즐겨찾기를 추가', remove_bookmark: '즐겨찾기를 삭제',
+  list_memos: '메모 목록을 확인', get_memo: '메모를 읽음', set_memo: '메모를 저장', append_memo: '메모에 내용을 추가', clear_memo: '메모를 비움',
+  list_documents: '문서 목록을 확인', find_document: '문서를 검색', read_document: '문서를 읽음', search_document: '문서에서 키워드를 발췌',
+  create_document: '문서를 생성', update_document: '문서를 수정', delete_document: '문서를 삭제', correct_document: '문서 문법을 보정',
+  list_explorer_roots: '탐색기 루트를 확인', list_folder: '폴더 내용을 확인', refresh_briefing: 'AI 브리핑을 새로 생성',
+};
+
+/** 문자열을 한 줄로 다듬고 길면 말줄임(리즈닝 인라인 표시용). */
+function agentClampInline(s, n) {
+  var str = String(s == null ? '' : s).replace(/\s+/g, ' ').trim();
+  var lim = (typeof n === 'number' && n > 0) ? n : 40;
+  return str.length > lim ? str.slice(0, lim) + '…' : str;
+}
+
+/** 도구 오류 코드 → 사람이 읽는 사유. */
+function agentErrText(code) {
+  var m = {
+    not_found: '대상을 찾지 못함', NOT_FOUND: '대상을 찾지 못함',
+    no_editor_widget: '편집기 위젯이 없음', no_editor: '편집기 위젯이 없음',
+    need_id: '대상 지정이 필요함', need_title_or_body: '제목이나 내용이 필요함',
+    no_memo: '메모가 없음', failed: '처리하지 못함', tool_error: '도구 실행 오류',
+  };
+  var k = String(code || '');
+  return m[k] || (k || '처리하지 못함');
+}
+
+/** 도구 호출(tool+args) → 자연어 동작 문장. JSON args 를 노출하지 않는다. */
+function agentActionText(tool, args) {
+  var base = AGENT_TOOL_LABELS[tool] || (String(tool || '작업').replace(/_/g, ' ') + ' 실행');
+  var a = (args && typeof args === 'object') ? args : {};
+  var d = '';
+  if (tool === 'add_todo' || tool === 'complete_todo' || tool === 'uncomplete_todo' || tool === 'delete_todo') d = a.text;
+  else if (tool === 'create_document' || tool === 'update_document') d = a.title;
+  else if (tool === 'find_document') d = a.query;
+  else if (tool === 'search_document') d = a.keyword;
+  else if (tool === 'set_memo' || tool === 'append_memo') d = a.text;
+  else if (tool === 'add_bookmark') d = a.url;
+  else if (tool === 'list_folder') d = a.path;
+  d = d ? agentClampInline(d, 40) : '';
+  return d ? base + ' — ‘' + d + '’' : base;
+}
+
+/** 도구 관찰(observation, 대개 JSON 문자열) → 자연어 결과 요약. JSON 원문을 노출하지 않는다. */
+function agentOutcomeText(observation) {
+  var s = String(observation == null ? '' : observation).trim();
+  if (!s) return '';
+  var obj = null;
+  if (s.charAt(0) === '{' || s.charAt(0) === '[') { try { obj = JSON.parse(s); } catch (_) { obj = null; } }
+  if (obj && typeof obj === 'object') {
+    if (obj.ok === false) return '실패 — ' + agentErrText(obj.error || obj.code);
+    var counts = [
+      ['todos', '할 일'], ['accounts', '계정'], ['projects', '프로젝트'], ['bookmarks', '즐겨찾기'],
+      ['memos', '메모'], ['documents', '문서'], ['excerpts', '발췌'], ['folders', '폴더'],
+      ['roots', '루트'], ['items', '항목'], ['entries', '항목'],
+    ];
+    for (var i = 0; i < counts.length; i++) {
+      if (Array.isArray(obj[counts[i][0]])) return '완료 (' + counts[i][1] + ' ' + obj[counts[i][0]].length + '개)';
+    }
+    if (typeof obj.title === 'string' && obj.title) return '완료 — ‘' + agentClampInline(obj.title) + '’';
+    return '완료';
+  }
+  // JSON 이 아니면 이미 자연어(에러 안내 등) — 그대로 짧게.
+  return agentClampInline(s, 160);
+}
+
+/* =====================================================================
  * 환경 분기
  * ===================================================================== */
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     toViewModel,
+    // [Agent 리즈닝 자연어화] 트레이스 humanizer(순수, 헤드리스 테스트)
+    agentActionText,
+    agentOutcomeText,
+    agentErrText,
     // 궤도 맵 노드 픽(순수)
     orbPick,
     ORB_PICK_MIN,
