@@ -27,8 +27,14 @@
     sequence: { useMaxWidth: true },
     gantt: { useMaxWidth: true },
     theme: 'default',
-    fontFamily: '"Pretendard","Malgun Gothic","Apple SD Gothic Neo",system-ui,-apple-system,"Segoe UI",sans-serif',
-    fontSize: 14,
+    // SVG 를 <img> 로 표시하므로 웹폰트(Pretendard 등)는 렌더에 못 쓴다(측정↔렌더 불일치도 유발) →
+    //   시스템 폰트만. 라틴은 Segoe UI/Helvetica 로, 한글만 Malgun Gothic/Apple SD Gothic Neo 로 떨어지게
+    //   **라틴 폰트를 앞에** 둔다(Malgun Gothic 을 앞에 두면 라틴까지 투박하게 그려져 어색해짐).
+    fontFamily: '"Segoe UI","Helvetica Neue",Arial,"Malgun Gothic","Apple SD Gothic Neo",sans-serif',
+    fontSize: 13,
+    // themeVariables 로도 폰트를 못박는다 — 일부 테마 CSS 가 "trebuchet ms" 를 하드코딩해 config.fontFamily
+    //   만으론 안 바뀌는 경우가 있다(그 폰트가 없으면 라틴/한글이 투박하게 폴백돼 어색).
+    themeVariables: { fontFamily: '"Segoe UI","Helvetica Neue",Arial,"Malgun Gothic","Apple SD Gothic Neo",sans-serif' },
   };
   var curTheme = 'default';
   function ensureTheme(theme) {
