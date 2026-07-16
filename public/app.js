@@ -3376,7 +3376,7 @@ function initBrowser() {
     card.appendChild(el('div', { cls: 'hw-vrule', style: 'width:1px;background:var(--border-soft);flex:0 0 auto;' })); // [반응형] 스택 시 숨김
     // 우: 언어 · 스택 추세
     var rightCol = el('div', { style: 'flex:1 1 0%;min-width:0;' });
-    rightCol.appendChild(el('div', { text: '언어 · 스택 추세', style: 'font-size:15px;font-weight:600;margin-bottom:3px;' }));
+    rightCol.appendChild(el('div', { cls: 'hw-title', text: '언어 · 스택 추세', style: 'font-size:15px;font-weight:600;margin-bottom:3px;' }));
     var facets = languageFacets(store.viewModels || []);
     var totalProj = facets.reduce(function (s, f) { return s + f.count; }, 0) || 1;
     rightCol.appendChild(el('div', { text: '전체 ' + (store.viewModels || []).length + '개 기준', style: 'font-size:11.5px;color:var(--t4);margin-bottom:18px;' }));
@@ -3646,7 +3646,7 @@ function initBrowser() {
     var items = mailFlatItems(12); // 높이가 크면 더 많이 노출(기본은 .mail-list max-height 로 5행 남짓 캡·스크롤)
     var replies = items.filter(function (m) { return homeIsReply(m.subject); }).length;
     var head = el('div', { style: 'display:flex;align-items:center;gap:10px;margin-bottom:14px;' });
-    head.appendChild(el('div', { text: title || '메일', style: 'font-size:15px;font-weight:600;flex:1 1 0%;' }));
+    head.appendChild(el('div', { cls: 'hw-title', text: title || '메일', style: 'font-size:15px;font-weight:600;flex:1 1 0%;' }));
     if (replies > 0) head.appendChild(homeBadge(replies + ' 회신 필요', 'blue'));
     // 헤더 → 메일함(보관함) 팝업 열기(항목 클릭은 본문 팝업). 계정 설정은 팝업 안/전역 설정에서.
     head.appendChild(el('button', {
@@ -4686,7 +4686,7 @@ function initBrowser() {
     var memo = store.scratchpads[iid] || { text: '', updatedAt: null };
     var card = el('div', { style: HOME_CARD + 'padding:18px 18px 14px;display:flex;flex-direction:column;min-height:0;' });
     var head = el('div', { style: 'display:flex;align-items:center;gap:10px;margin-bottom:10px;' });
-    head.appendChild(el('div', { text: widgetDisplayName(inst) || '메모', style: 'font-size:15px;font-weight:600;flex:1 1 0%;' }));
+    head.appendChild(el('div', { cls: 'hw-title', text: widgetDisplayName(inst) || '메모', style: 'font-size:15px;font-weight:600;flex:1 1 0%;' }));
     // 저장 상태 표시 — 디바운스 저장 완료 시 직접 DOM 갱신(재렌더 없이 포커스 보존).
     head.appendChild(el('span', { cls: 'scratch-status', text: st._savedAt ? '저장됨' : '자동 저장', style: 'font-size:11px;color:var(--t4);flex:0 0 auto;' }));
 
@@ -5210,7 +5210,7 @@ function initBrowser() {
     });
     card.appendChild(el('div', { text: '+', style: 'width:34px;height:34px;border-radius:9px;background:var(--panel);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--t4);font-size:22px;line-height:1;flex:0 0 auto;' }));
     var t = el('div');
-    t.appendChild(el('div', { text: '위젯 추가', style: 'font-size:13px;font-weight:600;color:var(--t2);' }));
+    t.appendChild(el('div', { cls: 'hw-title', text: '위젯 추가', style: 'font-size:13px;font-weight:600;color:var(--t2);' }));
     t.appendChild(el('div', { text: '현재 ' + placed + '개 배치됨 · 같은 위젯도 여러 개 추가할 수 있어요', style: 'font-size:11px;color:var(--t4);margin-top:2px;' }));
     card.appendChild(t);
     return card;
@@ -6904,7 +6904,7 @@ function initBrowser() {
     head.appendChild(ico);
     var mid = el('div', { style: 'flex:1;min-width:0;' });
     var titleRow = el('div', { style: 'display:flex;align-items:center;gap:8px;' });
-    titleRow.appendChild(el('span', { text: title || '즐겨찾기 셸프', style: 'font-size:15.5px;font-weight:600;letter-spacing:-.015em;' }));
+    titleRow.appendChild(el('span', { cls: 'hw-title', text: title || '즐겨찾기 셸프', style: 'font-size:15.5px;font-weight:600;letter-spacing:-.015em;' }));
     titleRow.appendChild(el('span', { text: String(count), style: HOME_MONO + 'font-size:11px;font-weight:600;color:var(--t3);background:var(--surface-3);border:1px solid var(--border);padding:1px 7px;border-radius:6px;' }));
     mid.appendChild(titleRow);
     mid.appendChild(el('div', { cls: 'shelf-sub', text: '사이트·폴더·파일을 한 셸프에서 즐겨찾기', style: 'font-size:11.5px;color:var(--t4);margin-top:2px;' }));

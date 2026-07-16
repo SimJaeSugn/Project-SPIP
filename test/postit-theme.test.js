@@ -155,6 +155,39 @@ test('PT-7 — hw-title 클래스 훅이 핵심 위젯 제목에 배선(손글�
   assert.ok(titles.length >= 6, '핵심 위젯 제목 다수에 hw-title (>=6), 실제=' + titles.length);
 });
 
+test('PT-7b — 전수조사: 그동안 빠졌던 위젯 제목도 모두 hw-title(손글씨) 적용', () => {
+  // 메일·메모·언어추세·즐겨찾기·기능추가 — widgetCardTitle 이 아닌 경로라 누락됐던 제목들.
+  assert.ok(/cls: 'hw-title', text: title \|\| '메일'/.test(APP), '메일 제목');
+  assert.ok(/cls: 'hw-title', text: widgetDisplayName\(inst\) \|\| '메모'/.test(APP), '메모 제목');
+  assert.ok(/cls: 'hw-title', text: '언어 · 스택 추세'/.test(APP), '언어·스택 추세 제목');
+  assert.ok(/cls: 'hw-title', text: title \|\| '즐겨찾기 셸프'/.test(APP), '즐겨찾기 제목');
+  assert.ok(/cls: 'hw-title', text: '위젯 추가'/.test(APP), '기능추가 제목');
+  // 클래스가 이미 있는 위젯 제목(탐색기·마크다운)은 CSS 선택자로 손글씨 적용.
+  assert.ok(/:root\[data-theme="postit"\] \.fx-title,[\s\S]*?\.md-title\s*\{[\s\S]*?font-family: var\(--hw-note-font\)/.test(CSS),
+    '탐색기·마크다운 제목 손글씨');
+});
+
+test('PT-10 — 마우스 오버 시 기울기 변경 중단(리사이즈에서만 곧게 폄)', () => {
+  const seg = postitScope();
+  assert.ok(/\.home-section--resizing\s*\{\s*transform: rotate\(0deg\);/.test(seg), '리사이즈 시에만 곧게 폄');
+  assert.ok(!/:hover\s*\{\s*transform: rotate\(0deg\)/.test(seg), '호버로 기울기 변경하는 규칙 없음');
+});
+
+test('PT-11 — 입력창은 종이 색이 비치도록 반투명(흰 사각형 방지)', () => {
+  const seg = postitScope();
+  assert.ok(/\.home-section__content input,[\s\S]*?textarea,[\s\S]*?select\s*\{\s*background: rgba\(255, 255, 255, \.45\) !important/.test(seg),
+    '입력창 반투명 배경');
+  assert.ok(/input:focus,[\s\S]*?textarea:focus,[\s\S]*?select:focus\s*\{\s*background: rgba\(255, 255, 255, \.7\) !important/.test(seg),
+    '포커스 시 약간 더 또렷');
+});
+
+test('PT-9 — 컨트롤 레일 가림 방지: 상호작용 셀 z-index 승격(회전 스태킹 컨텍스트 보정)', () => {
+  // 회전이 각 셀을 별도 스태킹 컨텍스트로 만들어, 우측 외곽 레일(.home-rail)이 DOM 상 뒤의 오른쪽 노트
+  //   아래로 가려진다 → 호버/포커스/리사이즈 셀을 z-index 로 올려 레일이 이웃 위에 그려지게 한다.
+  assert.ok(/\.home-section:hover,[\s\S]*?\.home-section:focus-within,[\s\S]*?\.home-section--resizing\s*\{\s*z-index: 20;/.test(postitScope()),
+    '호버·포커스·리사이즈 셀 z-index:20');
+});
+
 test('PT-8 — L-1 유지: 스킨은 클래스/CSS 로만 — 홈 렌더에 innerHTML 도입 없음', () => {
   // 이번 변경으로 홈 위젯 렌더 영역에 innerHTML 주입이 생기지 않았는지(스킨은 순수 CSS/클래스) 확인.
   const s = APP.indexOf('var HOME_CARD =');

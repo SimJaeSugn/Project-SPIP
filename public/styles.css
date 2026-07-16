@@ -1984,10 +1984,17 @@ textarea.briefing-systemprompt {
   transform: rotate(var(--rot));
   transition: transform .18s ease, box-shadow .18s ease;
 }
-/* 상호작용 중엔 곧게 편다 — 리사이즈 아웃라인·핸들 정렬이 회전으로 어긋나지 않게. */
-:root[data-theme="postit"] .home-masonry > .home-section--resizing,
-:root[data-theme="postit"] .home-masonry > .home-section:hover {
+/* 리사이즈 중에만 곧게 편다 — 아웃라인·핸들 정렬이 회전으로 어긋나지 않게. (호버 시엔 기울기 유지) */
+:root[data-theme="postit"] .home-masonry > .home-section--resizing {
   transform: rotate(0deg);
+}
+/* 회전이 각 셀을 별도 스태킹 컨텍스트로 만들어, 우측 외곽 컨트롤 레일(.home-rail — 크게보기·이름변경·삭제)이
+   DOM 상 뒤에 오는 오른쪽 이웃 노트 아래로 가려진다. 상호작용(호버·포커스·리사이즈) 중인 셀을 위로 올려
+   레일이 이웃 노트 위에 그려지게 한다(라이트/다크는 회전이 없어 무관 → postit 스코프). */
+:root[data-theme="postit"] .home-masonry > .home-section:hover,
+:root[data-theme="postit"] .home-masonry > .home-section:focus-within,
+:root[data-theme="postit"] .home-masonry > .home-section--resizing {
+  z-index: 20;
 }
 
 /* 종이 노트 도장 — 인라인 HOME_CARD(배경/테두리/라운드)를 덮는다(!important 로 인라인 override).
@@ -2068,7 +2075,9 @@ textarea.briefing-systemprompt {
 :root[data-theme="postit"] .home-masonry > .home-section:nth-child(6n+5) { --paper: #ffd591; --rot: -1.0deg; --pin: #d98a12; }
 :root[data-theme="postit"] .home-masonry > .home-section:nth-child(6n)   { --paper: #d8c9ff; --rot:  1.2deg; --pin: #6d5ac0; }
 
-/* 카드 제목 손글씨체 — .hw-title(핵심 위젯)·.agent-title·브리핑 인사말. */
+/* 카드 제목 손글씨체 — 전 위젯 제목에 일관 적용.
+   ─ .hw-title(대다수 위젯 제목·요약/주의/생산성/언어추세/활동/할일/메일/디스크/토큰/히트맵/시스템/메모/즐겨찾기/기능추가)
+   ─ .agent-title(AI 에이전트) — 크기 통일(19px). */
 :root[data-theme="postit"] .hw-title,
 :root[data-theme="postit"] .agent-title {
   font-family: var(--hw-note-font);
@@ -2076,11 +2085,30 @@ textarea.briefing-systemprompt {
   font-size: 19px !important;
   letter-spacing: .2px;
 }
+/* 컴팩트 툴바 위젯 제목(탐색기 .fx-title·마크다운 .md-title) — 손글씨체, 고유 크기 유지(툴바 넘침 방지). */
+:root[data-theme="postit"] .fx-title,
+:root[data-theme="postit"] .md-title {
+  font-family: var(--hw-note-font);
+  font-weight: 700;
+}
 :root[data-theme="postit"] .briefing-widget__greet {
   font-family: var(--hw-note-font);
   font-weight: 700;
   font-size: 30px !important;
   letter-spacing: 0;
+}
+
+/* 입력창(input·textarea·select)은 종이 색이 비치도록 반투명 — 노트 색이 제각각이라 흰 사각형이 뜨면 어색하다.
+   반투명 흰색이 어떤 종이 색조 위에서도 그 색의 옅은 톤으로 읽혀 자연스럽게 블렌드된다. 텍스트는 var(--t1) 유지. */
+:root[data-theme="postit"] .home-section__content input,
+:root[data-theme="postit"] .home-section__content textarea,
+:root[data-theme="postit"] .home-section__content select {
+  background: rgba(255, 255, 255, .45) !important;
+}
+:root[data-theme="postit"] .home-section__content input:focus,
+:root[data-theme="postit"] .home-section__content textarea:focus,
+:root[data-theme="postit"] .home-section__content select:focus {
+  background: rgba(255, 255, 255, .7) !important;
 }
 
 /* 히어로 — '오늘의 브리핑' 위젯은 핀꽂힌 다크 배너로. 자식이 쓰는 테마 변수를 이 서브트리에서만
