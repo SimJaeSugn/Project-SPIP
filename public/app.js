@@ -5573,6 +5573,7 @@ function initBrowser() {
     if (!host) return;
     while (host.firstChild) host.removeChild(host.firstChild);
     host.appendChild(mdRenderPreview(wstate(iid).body));
+    mdWireMermaid(iid); // [Mermaid] 대기 중 다이어그램 렌더(디바운스 — 타이핑 코얼레싱)
     scheduleHomeMasonryLayout(); // 미리보기 높이가 바뀌면 masonry 재측정
   }
 
@@ -5672,6 +5673,8 @@ function initBrowser() {
           out.push(el('p', { cls: 'md-p', children: mdInlineNodes(b.inline) }));
           break;
         case 'code': {
+          // ```mermaid 은 격리 iframe 에서 다이어그램으로 렌더(결과는 SVG 이미지). 그 외는 코드블록.
+          if (String(b.lang || '').trim().toLowerCase() === 'mermaid') { out.push(mdMermaidNode(b.text)); break; }
           var pre = el('pre', { cls: 'md-pre spip-scroll' });
           pre.appendChild(el('code', { cls: 'md-pre__code', text: b.text })); // textContent — 하이라이트 없음(L-1)
           if (b.lang) pre.appendChild(el('span', { cls: 'md-pre__lang', text: b.lang }));
@@ -5774,6 +5777,132 @@ function initBrowser() {
       root.appendChild(ol);
     }
     return root;
+  }
+
+  /* ───── [Mermaid] 격리 iframe 렌더 엔진 ─────────────────────────────────────────────
+   *   메인 문서의 엄격 CSP(인라인 스타일 금지)를 지키기 위해, mermaid 는 자체 스코프 CSP 를 가진
+   *   숨은 싱글턴 iframe(app://index.html?mermaid=1)에서만 돌린다. 소스를 postMessage 로 보내고
+   *   결과 SVG 를 **data:URI** 로 받아 미리보기엔 <img> 로만 표시 → iframe/인라인스타일 유입 0.
+   *   소스 해시로 캐시해 타이핑 시 미리보기가 통째로 재빌드돼도 렌더는 재요청하지 않는다(깜빡임 0). */
+  var _mmd = { frame: null, ready: false, seq: 0, queue: [], pending: {}, cache: {}, inflight: {}, srcByHash: {} };
+
+  function mmdHash(s) {
+    s = String(s || ''); var h = 5381;
+    for (var i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+    return (h >>> 0).toString(36);
+  }
+  function mmdEngine() {
+    if (_mmd.frame || typeof document === 'undefined') return _mmd;
+    var f = document.createElement('iframe');
+    f.className = 'md-mermaid-engine';
+    f.setAttribute('aria-hidden', 'true');
+    f.setAttribute('tabindex', '-1');
+    // 오프스크린이되 레이아웃 유지(mermaid 텍스트 측정 getBBox 필요 — display:none 금지).
+    f.style.cssText = 'position:fixed;left:-99999px;top:0;width:1400px;height:1400px;border:0;visibility:hidden;pointer-events:none;';
+    f.src = 'app://index.html?mermaid=1';
+    (document.body || document.documentElement).appendChild(f);
+    _mmd.frame = f;
+    window.addEventListener('message', function (ev) {
+      if (!_mmd.frame || ev.source !== _mmd.frame.contentWindow) return; // 우리 엔진 iframe 만
+      var m = ev.data;
+      if (!m || typeof m !== 'object') return;
+      if (m.type === 'mmd:ready') { _mmd.ready = true; var q = _mmd.queue; _mmd.queue = []; q.forEach(_mmdPost); return; }
+      if (m.type === 'mmd:done') {
+        var p = _mmd.pending[m.id];
+        if (p) { delete _mmd.pending[m.id]; clearTimeout(p.timer); p.resolve(m); }
+      }
+    });
+    return _mmd;
+  }
+  function _mmdPost(job) {
+    _mmd.pending[job.id] = job;
+    job.timer = setTimeout(function () {
+      if (_mmd.pending[job.id]) { delete _mmd.pending[job.id]; job.resolve({ ok: false, error: '렌더 시간 초과' }); }
+    }, 9000);
+    // targetOrigin '*' — 특정 contentWindow 로만 보내고 내용은 사용자 자신의 다이어그램(민감정보 아님).
+    _mmd.frame.contentWindow.postMessage({ type: 'mmd:render', id: job.id, code: job.code, theme: job.theme }, '*');
+  }
+  /** 소스 → Promise<{ok, svg(dataUri)?, w?, h?, error?}>. */
+  function mmdRenderSource(code) {
+    var eng = mmdEngine();
+    return new Promise(function (resolve) {
+      if (!eng.frame) { resolve({ ok: false, error: 'Electron 앱에서만 렌더할 수 있습니다.' }); return; }
+      var job = { id: 'j' + (++eng.seq), code: String(code || ''), theme: 'neutral', resolve: resolve, timer: null };
+      if (eng.ready && eng.frame.contentWindow) _mmdPost(job); else eng.queue.push(job);
+    });
+  }
+  /** 해시 단위 렌더(중복/캐시 억제) → 완료 시 그 해시의 모든 미리보기 이미지 갱신. */
+  function mmdRenderHash(hash) {
+    if (_mmd.cache[hash]) { mmdApplyHash(hash); return; }
+    if (_mmd.inflight[hash]) return;
+    var src = _mmd.srcByHash[hash];
+    if (src == null) return;
+    _mmd.inflight[hash] = 1;
+    mmdRenderSource(src).then(function (res) {
+      delete _mmd.inflight[hash];
+      _mmd.cache[hash] = (res && res.ok)
+        ? { ok: true, dataUri: res.svg, w: res.w, h: res.h }
+        : { ok: false, error: (res && res.error) || '렌더 실패' };
+      mmdApplyHash(hash);
+    });
+  }
+  function mmdApplyHash(hash) {
+    if (typeof document === 'undefined') return;
+    var cached = _mmd.cache[hash];
+    if (!cached) return;
+    var sel = '.md-mermaid[data-mmd-hash="' + ((window.CSS && CSS.escape) ? CSS.escape(hash) : hash) + '"]';
+    var figs = document.querySelectorAll(sel);
+    Array.prototype.forEach.call(figs, function (fig) {
+      while (fig.firstChild) fig.removeChild(fig.firstChild);
+      fig.removeAttribute('data-mmd-pending');
+      fig.appendChild(cached.ok ? mdMermaidImg(cached) : mdMermaidError(_mmd.srcByHash[hash] || '', cached.error));
+    });
+    if (figs.length) scheduleHomeMasonryLayout();
+  }
+  /** ```mermaid 블록 → 그림 자리(캐시 hit 이면 즉시 이미지, 아니면 로딩 자리 + 렌더 대기 표식). */
+  function mdMermaidNode(src) {
+    var code = String(src || '');
+    var hash = mmdHash(code);
+    _mmd.srcByHash[hash] = code;
+    var fig = el('div', { cls: 'md-mermaid', attrs: { 'data-mmd-hash': hash } });
+    var cached = _mmd.cache[hash];
+    if (cached && cached.ok) fig.appendChild(mdMermaidImg(cached));
+    else if (cached) fig.appendChild(mdMermaidError(code, cached.error));
+    else { fig.setAttribute('data-mmd-pending', '1'); fig.appendChild(el('div', { cls: 'md-mermaid__loading', text: '다이어그램 렌더링…' })); }
+    return fig;
+  }
+  function mdMermaidImg(r) {
+    var img = el('img', { cls: 'md-mermaid__img', attrs: { src: r.dataUri, alt: '다이어그램' } });
+    if (r.w) img.style.maxWidth = Math.min(r.w, 100000) + 'px';
+    if (r.w && r.h) img.style.aspectRatio = r.w + ' / ' + r.h; // 리플로우 시 높이 확보(레이아웃 튐 방지)
+    return img;
+  }
+  function mdMermaidError(code, msg) {
+    var box = el('div', { cls: 'md-mermaid__err' });
+    box.appendChild(el('div', { cls: 'md-mermaid__err-head', text: '⚠ 다이어그램 오류' }));
+    if (msg) box.appendChild(el('div', { cls: 'md-mermaid__err-msg', text: String(msg) }));
+    var pre = el('pre', { cls: 'md-pre spip-scroll' });
+    pre.appendChild(el('code', { cls: 'md-pre__code', text: code }));
+    box.appendChild(pre);
+    return box;
+  }
+  /** 미리보기 안의 대기 중 mermaid 블록을 렌더 요청(디바운스 — 타이핑 코얼레싱). immediate 면 즉시. */
+  function mdWireMermaid(iid, immediate) {
+    if (typeof document === 'undefined') return;
+    var host = cellQuery(iid, '.md-preview');
+    if (!host) return;
+    if (!host.querySelector('.md-mermaid[data-mmd-pending="1"]')) return;
+    var st = wstate(iid);
+    var run = function () {
+      var figs = host.querySelectorAll('.md-mermaid[data-mmd-pending="1"]');
+      var seen = {};
+      Array.prototype.forEach.call(figs, function (f) {
+        var h = f.getAttribute('data-mmd-hash');
+        if (h && !seen[h]) { seen[h] = 1; mmdRenderHash(h); }
+      });
+    };
+    if (immediate) run();
+    else { if (st._mmdTimer) clearTimeout(st._mmdTimer); st._mmdTimer = setTimeout(run, 450); }
   }
 
   /* ───── 렌더 ───── */
@@ -12369,6 +12498,25 @@ function initBrowser() {
       return null;
     },
     destroy: () => { /* 인라인 height 는 교체 노드와 함께 GC */ },
+  });
+  // [Mermaid] 렌더/패치 후 미리보기에 남은 대기 다이어그램을 즉시 렌더(초기 마운트·탭 전환 등).
+  //   타이핑 경로는 mdUpdatePreview 가 디바운스로 처리하고, 여기선 노드 교체 직후 한 번 흘려보낸다.
+  RG.widget.define({
+    id: 'mermaidWire',
+    init: (root) => {
+      if (typeof document === 'undefined') return null;
+      const scope = root || document;
+      if (typeof scope.querySelectorAll !== 'function') return null;
+      const previews = scope.querySelectorAll('.md-preview');
+      for (let i = 0; i < previews.length; i++) {
+        if (!previews[i].querySelector('.md-mermaid[data-mmd-pending="1"]')) continue;
+        const cell = (typeof previews[i].closest === 'function') ? previews[i].closest('.home-section[data-home-section]') : null;
+        const iid = cell && cell.dataset ? cell.dataset.homeSection : null;
+        if (iid) mdWireMermaid(iid, true);
+      }
+      return null;
+    },
+    destroy: () => { /* 캐시·타이머는 인스턴스 상태/전역에 있음 */ },
   });
   // [Agent] 트랜스크립트 스크롤 위치를 인스턴스별로 복원 — render() 로 노드가 교체돼도 위치 유지.
   //   마소너리는 rAF 뒤에야 셀 높이(=스크롤 범위)가 정해지므로 레이아웃이 앉은 뒤 2프레임에 걸쳐 건다

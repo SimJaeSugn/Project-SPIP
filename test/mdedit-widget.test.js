@@ -450,3 +450,41 @@ test('MD-EXP-1 — CSS: 펼침 시 편집기·미리보기가 내용 높이로(�
   assert.ok(/\.md-card--expanded \.md-preview\s*\{[^}]*overflow:\s*visible/.test(CSS), '펼침 미리보기 자연 높이');
   assert.ok(/\.md-card--expanded \.md-main\s*\{[^}]*align-items:\s*start/.test(CSS), '패널 상단 정렬(빈 칸 방지)');
 });
+
+/* ───── [Mermaid] 격리 iframe 다이어그램 렌더 (MD-MMD) ───── */
+
+const MAIN_SRC = fs.readFileSync(path.join(ROOT, 'electron', 'main.js'), 'utf8');
+const SEC_SRC = fs.readFileSync(path.join(ROOT, 'electron', 'security.js'), 'utf8');
+
+test('MD-MMD — 라이브러리/프레임 자산 vendor + 격리 렌더 문서', () => {
+  // mermaid UMD 번들이 vendor 에 있고(3MB대), 프레임 로직 파일 존재.
+  const lib = fs.statSync(path.join(ROOT, 'public', 'vendor', 'mermaid.min.js'));
+  assert.ok(lib.size > 1000000, 'mermaid.min.js 번들 존재(대형)');
+  const frame = fs.readFileSync(path.join(ROOT, 'public', 'mermaid-frame.js'), 'utf8');
+  assert.ok(/securityLevel:\s*'strict'/.test(frame), 'securityLevel strict');
+  assert.ok(/ev\.source !== window\.parent/.test(frame), '부모 외 메시지 무시');
+  assert.ok(/data:image\/svg\+xml/.test(frame), '결과는 SVG data:URI');
+  // 격리 문서는 인라인 스크립트 없이 자체 번들만 로드(CSP script-src 'self').
+  assert.ok(/function buildMermaidDoc\(/.test(MAIN_SRC), 'buildMermaidDoc 정의');
+  assert.ok(/\.\/vendor\/mermaid\.min\.js/.test(MAIN_SRC) && /\.\/mermaid-frame\.js/.test(MAIN_SRC), '자체 번들 참조');
+  assert.ok(/mermaid'\)\s*===\s*'1'/.test(MAIN_SRC) || /get\('mermaid'\) === '1'/.test(MAIN_SRC), '?mermaid=1 분기');
+});
+
+test('MD-MMD — 렌더러: mermaid 블록은 격리 iframe 로 렌더하고 <img>(data:URI)로만 표시(메인 CSP 불변)', () => {
+  // 코드블록 파서 분기: lang mermaid → 다이어그램 노드.
+  assert.ok(/toLowerCase\(\) === 'mermaid'/.test(APP_SRC) && /mdMermaidNode\(/.test(APP_SRC), 'mermaid lang 분기');
+  // 엔진: 숨은 싱글턴 iframe(app://index.html?mermaid=1) + postMessage 렌더.
+  assert.ok(/app:\/\/index\.html\?mermaid=1/.test(APP_SRC), '격리 렌더 iframe src');
+  assert.ok(/function mmdEngine\(/.test(APP_SRC) && /postMessage\(\{ type: 'mmd:render'/.test(APP_SRC), '엔진 postMessage');
+  // 결과는 이미지로만(메인 문서에 iframe/인라인스타일 유입 0) + 소스해시 캐시.
+  assert.ok(/function mdMermaidImg\(/.test(APP_SRC) && /'md-mermaid__img'/.test(APP_SRC), 'data:URI 이미지 표시');
+  assert.ok(/function mmdHash\(/.test(APP_SRC) && /_mmd\.cache\[hash\]/.test(APP_SRC), '소스해시 캐시(재빌드 시 재요청 억제)');
+  // 렌더/타이핑 후 배선.
+  assert.ok(/id:\s*'mermaidWire'/.test(APP_SRC), 'RG.widget mermaidWire(마운트 후 렌더)');
+  assert.ok(/mdWireMermaid\(iid\)/.test(APP_SRC), '타이핑 경로 배선(mdUpdatePreview)');
+  // CSS: 다이어그램 표시 + 오프스크린 엔진.
+  assert.ok(/\.md-mermaid \{/.test(CSS) && /\.md-mermaid__img \{/.test(CSS), '다이어그램 CSS');
+  assert.ok(/\.md-mermaid-engine \{[^}]*visibility: hidden/.test(CSS), '엔진 iframe 오프스크린');
+  // L-1: mermaid 결과를 innerHTML 로 메인 문서에 넣지 않는다(el/textContent + <img> 만).
+  assert.ok(!/md-mermaid[\s\S]{0,400}innerHTML/.test(APP_SRC), 'mermaid 렌더 innerHTML 미사용(L-1)');
+});

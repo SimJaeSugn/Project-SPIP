@@ -50,6 +50,20 @@ test('[메일 뷰어] cspForUrl — 이메일 문서엔 격리 CSP(스크립트 
   assert.strictEqual(security.isMailViewUrl('app://index.html'), false);
 });
 
+test('[Mermaid] cspForUrl — 렌더러 문서엔 스코프 CSP(스타일 인라인·eval 자체번들만), 메인은 스트릭트 유지', () => {
+  const mc = security.cspForUrl('app://index.html?mermaid=1');
+  assert.ok(/script-src 'self' 'unsafe-eval'/.test(mc), '자체 번들 스크립트 + eval(격리 한정)');
+  assert.ok(/style-src 'self' 'unsafe-inline'/.test(mc), 'mermaid 인라인 스타일 허용(격리 한정)');
+  assert.ok(/frame-ancestors 'self'/.test(mc), '메인(app://index.html)만 임베드');
+  assert.ok(/connect-src 'none'/.test(mc) && /form-action 'none'/.test(mc), '네트워크·폼 차단');
+  // 메인 앱 CSP 는 완화되지 않는다(unsafe-inline/eval 유입 0).
+  assert.strictEqual(security.cspForUrl('app://index.html'), security.CSP_POLICY);
+  assert.ok(!/unsafe-inline/.test(security.CSP_POLICY) && !/unsafe-eval/.test(security.CSP_POLICY), '앱 CSP 는 여전히 엄격');
+  assert.strictEqual(security.isMermaidUrl('app://index.html?mermaid=1'), true);
+  assert.strictEqual(security.isMermaidUrl('app://index.html'), false);
+  assert.strictEqual(security.isMermaidUrl('app://index.html?mailview=1'), false);
+});
+
 test('[메일 뷰어] applyCspHeaders — mailview URL엔 이메일 CSP, 기존 CSP 헤더는 교체', () => {
   let cb = null;
   security.applyCspHeaders({ webRequest: { onHeadersReceived: (f) => { cb = f; } } });

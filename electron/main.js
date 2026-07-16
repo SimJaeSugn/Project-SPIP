@@ -126,9 +126,31 @@ function buildMailViewerDoc(html) {
     + '<style>' + css + '</style></head><body>' + safe + '</body></html>';
 }
 
+/** [Mermaid] 격리 렌더러 문서 빌드 — 인라인 스크립트 없음(CSP). 자체 번들 mermaid + frame 로직만 로드하고,
+ *   부모(app://index.html)와 postMessage 로 다이어그램 소스↔SVG(data:URI) 만 주고받는다. */
+function buildMermaidDoc() {
+  const css = 'html,body{margin:0;padding:0;background:transparent;}#mmd-stage{position:absolute;left:-99999px;top:0;}';
+  return '<!doctype html><html><head><meta charset="utf-8">'
+    + '<style>' + css + '</style>'
+    + '<script src="./vendor/mermaid.min.js" defer></' + 'script>'
+    + '<script src="./mermaid-frame.js" defer></' + 'script>'
+    + '</head><body><div id="mmd-stage"></div></body></html>';
+}
+
 /** app:// 자산 요청을 public/ 루트로 안전 매핑(디렉터리 이탈 차단). */
 function registerAppProtocol() {
   protocol.handle('app', (request) => {
+    // [Mermaid] app://index.html?mermaid=1 → 격리 다이어그램 렌더러 문서(메인과 동일 origin이라 'self' 프레이밍 가능).
+    //   응답 CSP는 onHeadersReceived가 mermaid용(스타일 인라인·eval 허용, 이 iframe 한정)으로 부여. 스크립트는
+    //   자체 번들(./vendor/mermaid.min.js·./mermaid-frame.js)만. 외부 유입은 사용자 다이어그램 텍스트(postMessage)뿐.
+    let isMermaidDoc = false;
+    try { isMermaidDoc = new URL(request.url).searchParams.get('mermaid') === '1'; } catch (_) { /* noop */ }
+    if (isMermaidDoc) {
+      return new Response(buildMermaidDoc(), {
+        status: 200,
+        headers: { 'content-type': 'text/html; charset=utf-8' },
+      });
+    }
     // [메일 뷰어] app://index.html?mailview=1 → 격리 이메일 HTML 문서(메인과 동일 origin이라 'self' 프레이밍 가능).
     //   응답 CSP는 onHeadersReceived가 이메일용으로 부여(스크립트 금지·이미지 통제). 메인 페이지(쿼리 없음)는 영향 없음.
     let isMailView = false;

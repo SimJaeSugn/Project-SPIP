@@ -61,9 +61,41 @@ function buildMailCsp(showImages) {
   ].join('; ');
 }
 
-/** url별 적용할 CSP 문자열. 이메일 뷰어 문서면 이메일 CSP(?img=1 시 원격 이미지 허용), 그 외는 스트릭트 앱 CSP. */
+// [Mermaid] 격리 다이어그램 렌더러 문서는 메인 페이지와 **동일 origin**(app://index.html)에 ?mermaid=1로 서빙한다.
+//   → 'self' 프레이밍이 표준대로 동작(메일 뷰어와 동일 근거). 이 문서 응답에만 mermaid용 CSP를 부여해,
+//   앱 전체 스트릭트 CSP는 그대로 유지한다. 완화는 이 격리 iframe 한정이다.
+const MERMAID_PARAM = 'mermaid';
+
+/** url이 격리 mermaid 렌더러 문서(…?mermaid=1)인가. */
+function isMermaidUrl(url) {
+  try { return new URL(String(url)).searchParams.get(MERMAID_PARAM) === '1'; } catch (_) { return false; }
+}
+
+/**
+ * [Mermaid] 다이어그램 렌더러 전용 CSP. 스크립트는 자체 번들(mermaid.min.js·mermaid-frame.js)만('self') 허용하되,
+ *   mermaid 가 렌더 중 쓰는 인라인 스타일(style-src 'unsafe-inline')과 일부 파서의 Function 사용(script-src
+ *   'unsafe-eval')을 **이 격리 iframe 안에서만** 허용한다. 네트워크·폼·객체·부모 외 프레이밍은 전부 차단.
+ *   외부에서 온 것은 사용자 자신의 다이어그램 텍스트(DATA)뿐이고 결과는 SVG 이미지로만 부모에 회신한다.
+ */
+function buildMermaidCsp() {
+  return [
+    "default-src 'none'",
+    "script-src 'self' 'unsafe-eval'",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data:",
+    "font-src 'self' data:",
+    "connect-src 'none'",
+    "object-src 'none'",
+    "base-uri 'none'",
+    "form-action 'none'",
+    "frame-ancestors 'self'", // 메인 app://index.html 만 임베드 가능
+  ].join('; ');
+}
+
+/** url별 적용할 CSP 문자열. 이메일 뷰어·mermaid 렌더러 문서면 각 격리 CSP, 그 외는 스트릭트 앱 CSP. */
 function cspForUrl(url) {
   if (isMailViewUrl(url)) return buildMailCsp(/[?&]img=1(?:&|$)/.test(String(url || '')));
+  if (isMermaidUrl(url)) return buildMermaidCsp();
   return CSP_POLICY;
 }
 
@@ -117,4 +149,4 @@ function hardenWebContents(webContents, opts) {
   });
 }
 
-module.exports = { TRUSTED_ORIGIN, CSP_POLICY, buildCspHeader, applyCspHeaders, hardenWebContents, MAIL_VIEW_PARAM, isMailViewUrl, buildMailCsp, cspForUrl };
+module.exports = { TRUSTED_ORIGIN, CSP_POLICY, buildCspHeader, applyCspHeaders, hardenWebContents, MAIL_VIEW_PARAM, isMailViewUrl, buildMailCsp, MERMAID_PARAM, isMermaidUrl, buildMermaidCsp, cspForUrl };
