@@ -137,7 +137,17 @@ test('PT-5 — 압정(::before)·테이프(3n::after)는 셀에 얹어 콘텐츠
   const seg = postitScope();
   assert.ok(/\.home-masonry > \.home-section::before\s*\{[\s\S]*?border-radius: 50%/.test(seg), '압정 원형');
   assert.ok(/nth-child\(3n\)::after/.test(seg), '3n 테이프');
-  assert.ok(/nth-child\(6n\+1\)\s*\{ --paper: #feee86/.test(seg), '노트 색조 순환 팔레트');
+  assert.ok(/nth-child\(6n\+1\)\s*\{\s*--paper: #feee86/.test(seg), '노트 색조 순환 팔레트');
+});
+
+test('PT-12 — 시안 코히런스: 노트마다 글자·구분선을 종이 색의 따뜻한 저채도 톤으로 물들인다', () => {
+  const seg = postitScope();
+  // 각 nth-child 팔레트가 --paper 뿐 아니라 잉크(--t1..t4)·구분선(--border*)까지 종이별로 재정의한다.
+  assert.ok(/nth-child\(6n\+1\)\s*\{[\s\S]*?--t3: #8a7a3a;[\s\S]*?--border: rgba\(120,95,25/.test(seg), '노랑 노트 올리브 잉크');
+  assert.ok(/nth-child\(6n\+3\)\s*\{[\s\S]*?--t2: #3f5a80;/.test(seg), '파랑 노트 슬레이트 잉크');
+  assert.ok(/nth-child\(6n\+4\)\s*\{[\s\S]*?--t3: #5f8a48;/.test(seg), '초록 노트 모스 잉크');
+  // 제목은 손글씨 + 시안처럼 큰 크기(21px) + 노트 잉크 색.
+  assert.ok(/\.hw-title,[\s\S]*?font-size: 21px !important;[\s\S]*?color: var\(--t1\)/.test(seg), '제목 21px + 잉크색');
 });
 
 test('PT-6 — 손글씨 제목(.hw-title) + 히어로 다크 배너(브리핑 서브트리 변수 재정의)', () => {

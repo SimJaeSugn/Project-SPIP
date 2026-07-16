@@ -2067,13 +2067,40 @@ textarea.briefing-systemprompt {
   pointer-events: none;
 }
 
-/* 노트 색조·기울기·압정색 — 6개 팔레트 순환(위젯 개수와 무관하게 자연스러운 배색). */
-:root[data-theme="postit"] .home-masonry > .home-section:nth-child(6n+1) { --paper: #feee86; --rot: -1.3deg; --pin: #c98a12; }
-:root[data-theme="postit"] .home-masonry > .home-section:nth-child(6n+2) { --paper: #ffc2d1; --rot:  1.1deg; --pin: #b23a5b; }
-:root[data-theme="postit"] .home-masonry > .home-section:nth-child(6n+3) { --paper: #bcdcff; --rot: -1.6deg; --pin: #2f7ad0; }
-:root[data-theme="postit"] .home-masonry > .home-section:nth-child(6n+4) { --paper: #c4efab; --rot:  1.4deg; --pin: #12a34d; }
-:root[data-theme="postit"] .home-masonry > .home-section:nth-child(6n+5) { --paper: #ffd591; --rot: -1.0deg; --pin: #d98a12; }
-:root[data-theme="postit"] .home-masonry > .home-section:nth-child(6n)   { --paper: #d8c9ff; --rot:  1.2deg; --pin: #6d5ac0; }
+/* 노트 색조·기울기·압정색 + **잉크(글자·구분선) 색** — 6개 팔레트 순환.
+   핵심: 각 노트의 본문/보조 글자·구분선을 그 종이 색의 따뜻한 저채도 톤으로 물들인다(시안의 코히런스 재현).
+   앱 기본 중립 그레이(var(--t1..t4)/border)를 종이별로 재정의해 '색 카드'가 아니라 '손글씨 쪽지'처럼 보이게 한다.
+   (셀에 정의 → 카드·내용이 상속. 브리핑 다크 배너는 카드 레벨에서 밝은 값으로 재정의하므로 영향 없음.) */
+:root[data-theme="postit"] .home-masonry > .home-section:nth-child(6n+1) {
+  --paper: #feee86; --rot: -1.3deg; --pin: #c98a12;
+  --t1: #3d3512; --t2: #6b5f2a; --t3: #8a7a3a; --t4: #a89a5c;
+  --border: rgba(120,95,25,.24); --border-soft: rgba(120,95,25,.15); --hairline: rgba(120,95,25,.09);
+}
+:root[data-theme="postit"] .home-masonry > .home-section:nth-child(6n+2) {
+  --paper: #ffc2d1; --rot: 1.1deg; --pin: #b23a5b;
+  --t1: #4a1f30; --t2: #8a3a55; --t3: #b3728a; --t4: #c99aac;
+  --border: rgba(140,50,80,.22); --border-soft: rgba(140,50,80,.14); --hairline: rgba(140,50,80,.08);
+}
+:root[data-theme="postit"] .home-masonry > .home-section:nth-child(6n+3) {
+  --paper: #bcdcff; --rot: -1.6deg; --pin: #2f7ad0;
+  --t1: #1e3050; --t2: #3f5a80; --t3: #5a76a0; --t4: #8298b8;
+  --border: rgba(40,70,120,.22); --border-soft: rgba(40,70,120,.14); --hairline: rgba(40,70,120,.08);
+}
+:root[data-theme="postit"] .home-masonry > .home-section:nth-child(6n+4) {
+  --paper: #c4efab; --rot: 1.4deg; --pin: #12a34d;
+  --t1: #293d19; --t2: #4a6b30; --t3: #5f8a48; --t4: #82a566;
+  --border: rgba(60,100,40,.22); --border-soft: rgba(60,100,40,.14); --hairline: rgba(60,100,40,.08);
+}
+:root[data-theme="postit"] .home-masonry > .home-section:nth-child(6n+5) {
+  --paper: #ffd591; --rot: -1.0deg; --pin: #d98a12;
+  --t1: #4a3512; --t2: #6b551f; --t3: #8a7030; --t4: #a89050;
+  --border: rgba(120,85,25,.24); --border-soft: rgba(120,85,25,.15); --hairline: rgba(120,85,25,.09);
+}
+:root[data-theme="postit"] .home-masonry > .home-section:nth-child(6n) {
+  --paper: #d8c9ff; --rot: 1.2deg; --pin: #6d5ac0;
+  --t1: #2e2350; --t2: #554890; --t3: #6b5c9a; --t4: #8a7cb0;
+  --border: rgba(80,60,140,.22); --border-soft: rgba(80,60,140,.14); --hairline: rgba(80,60,140,.08);
+}
 
 /* 카드 제목 손글씨체 — 전 위젯 제목에 일관 적용.
    ─ .hw-title(대다수 위젯 제목·요약/주의/생산성/언어추세/활동/할일/메일/디스크/토큰/히트맵/시스템/메모/즐겨찾기/기능추가)
@@ -2082,8 +2109,9 @@ textarea.briefing-systemprompt {
 :root[data-theme="postit"] .agent-title {
   font-family: var(--hw-note-font);
   font-weight: 700;
-  font-size: 19px !important;
+  font-size: 21px !important;
   letter-spacing: .2px;
+  color: var(--t1);
 }
 /* 컴팩트 툴바 위젯 제목(탐색기 .fx-title·마크다운 .md-title) — 손글씨체, 고유 크기 유지(툴바 넘침 방지). */
 :root[data-theme="postit"] .fx-title,
