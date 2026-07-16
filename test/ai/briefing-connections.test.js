@@ -209,3 +209,17 @@ test('AICONN-13 배선 — preload 채널·register guard·app.js 핸들러/stor
   assert.ok(/store\.briefing\.connections/.test(APP) && /store\.briefing\.activeId/.test(APP), 'store 연결 상태');
   assert.ok(/briefing-conn__pick/.test(APP) && /\.briefing-conn__pick/.test(CSS), '연결 목록 UI/CSS');
 });
+
+test('AICONN-14 포커스 유실 방지 — 재렌더 시 close.focus 미강탈·업데이트 렌더 좁힘·data-fk 보존', () => {
+  const ROOT = path.join(__dirname, '..', '..');
+  const APP = fs.readFileSync(path.join(ROOT, 'public', 'app.js'), 'utf8');
+  // ① 모달 초기 포커스는 최초 열림(enter)에만 — 재렌더마다 close.focus() 로 입력 포커스 강탈 금지.
+  assert.ok(APP.includes('if (opts.enter !== false) setTimeout(() => { try { close.focus('), 'buildModal close.focus 는 enter일 때만');
+  // ② 업데이트 진행률 재렌더는 '업데이트' 탭일 때만(다른 설정 탭 편집 중 다운로드 진행률이 폼을 재렌더→포커스 강탈 방지).
+  assert.ok((APP.match(/store\.showSettings && store\.settingsTab === 'update'/g) || []).length >= 2, '업데이트 렌더 좁힘(2곳)');
+  // ③ 연결 입력에 안정 포커스 키(data-fk) — 같은 클래스 입력이 여럿이어도 정확한 칸으로 캐럿 복원.
+  for (const fk of ['briefing.label', 'briefing.baseURL', 'briefing.model', 'briefing.systemPrompt', 'briefing.apiKey']) {
+    assert.ok(APP.includes("'data-fk': '" + fk + "'"), 'data-fk ' + fk);
+  }
+  assert.ok(/ae\.dataset\.fk/.test(APP) && /\[data-fk="/.test(APP), 'preserve capture/restore 가 data-fk 처리');
+});

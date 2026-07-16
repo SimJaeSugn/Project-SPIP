@@ -7130,7 +7130,10 @@ function initBrowser() {
         if (active === last || !dialog.contains(active)) { e.preventDefault(); first.focus(); }
       }
     });
-    setTimeout(() => { try { close.focus(); } catch (_) { /* ignore */ } }, 0);
+    // 최초 열림(enter)에만 닫기 버튼으로 초기 포커스를 옮긴다. 재렌더(다운로드 진행률·설정 갱신 등)마다
+    //   close.focus() 를 부르면 입력 중이던 칸에서 포커스를 빼앗아 "입력이 안 된다"가 된다 —
+    //   재렌더 시 포커스 연속성은 RG.preserve.restore(안정 키 data-fk 등)가 담당한다.
+    if (opts.enter !== false) setTimeout(() => { try { close.focus(); } catch (_) { /* ignore */ } }, 0);
     return overlay;
   }
 
@@ -7350,9 +7353,9 @@ function initBrowser() {
       return;
     }
     // 목록/활성만 바뀌었으므로 getSettings 로 활성 연결의 폼값까지 최신화(활성 전환 시 폼 재적재).
+    //   설정 전용 변경이라 홈 브리핑(patchBriefing)은 건드리지 않는다 — 불필요한 재렌더/포커스 교란 방지.
+    //   refreshBriefingSettings 가 showSettings 일 때 재렌더하므로 별도 render() 중복 호출도 제거.
     refreshBriefingSettings();
-    render();
-    patchBriefing();
   }
   function onAddBriefingConnection() {
     if (!spip || !spip.briefing || typeof spip.briefing.addConnection !== 'function') return;
@@ -7459,7 +7462,7 @@ function initBrowser() {
     // 연결 이름(라벨) — 활성 연결에 적용
     const labelField = el('label', { cls: 'mailform__field' });
     labelField.appendChild(el('span', { cls: 'mailform__label', text: '연결 이름' }));
-    const labelInput = el('input', { cls: 'rootmgr__input', attrs: { type: 'text', placeholder: '예: 로컬 LM Studio', autocomplete: 'off', spellcheck: 'false' } });
+    const labelInput = el('input', { cls: 'rootmgr__input', attrs: { type: 'text', placeholder: '예: 로컬 LM Studio', autocomplete: 'off', spellcheck: 'false', 'data-fk': 'briefing.label' } });
     labelInput.value = store.briefing.form.label || '';
     labelInput.addEventListener('input', (e) => { store.briefing.form.label = e.target.value || ''; });
     labelField.appendChild(labelInput);
@@ -7468,7 +7471,7 @@ function initBrowser() {
     // baseURL
     const urlField = el('label', { cls: 'mailform__field' });
     urlField.appendChild(el('span', { cls: 'mailform__label', text: '서버 주소(baseURL)' }));
-    const urlInput = el('input', { cls: 'rootmgr__input', attrs: { type: 'text', placeholder: 'http://127.0.0.1:1234/v1', autocomplete: 'off', spellcheck: 'false' } });
+    const urlInput = el('input', { cls: 'rootmgr__input', attrs: { type: 'text', placeholder: 'http://127.0.0.1:1234/v1', autocomplete: 'off', spellcheck: 'false', 'data-fk': 'briefing.baseURL' } });
     urlInput.value = store.briefing.form.baseURL || '';
     urlInput.addEventListener('input', (e) => { store.briefing.form.baseURL = e.target.value || ''; });
     urlField.appendChild(urlInput);
@@ -7482,7 +7485,7 @@ function initBrowser() {
     // model
     const modelField = el('label', { cls: 'mailform__field' });
     modelField.appendChild(el('span', { cls: 'mailform__label', text: '모델 이름' }));
-    const modelInput = el('input', { cls: 'rootmgr__input', attrs: { type: 'text', placeholder: '예: exaone-3.5-7.8b-instruct', autocomplete: 'off', spellcheck: 'false' } });
+    const modelInput = el('input', { cls: 'rootmgr__input', attrs: { type: 'text', placeholder: '예: exaone-3.5-7.8b-instruct', autocomplete: 'off', spellcheck: 'false', 'data-fk': 'briefing.model' } });
     modelInput.value = store.briefing.form.model || '';
     modelInput.addEventListener('input', (e) => { store.briefing.form.model = e.target.value || ''; });
     modelField.appendChild(modelInput);
@@ -7498,7 +7501,7 @@ function initBrowser() {
       attrs: {
         rows: '8', autocomplete: 'off', spellcheck: 'false',
         placeholder: v.defaultSystemPrompt || '비우면 기본 프롬프트를 사용합니다.',
-        'aria-label': '브리핑 시스템 프롬프트',
+        'aria-label': '브리핑 시스템 프롬프트', 'data-fk': 'briefing.systemPrompt',
       },
     });
     // 폼 미초기화(undefined)면 settings 값으로 채운다(빈 문자열 = 시드 미적용 상태).
@@ -7547,7 +7550,7 @@ function initBrowser() {
     // apiKey (쓰기 전용 — 평문 미표시. "설정됨/미설정" + 입력 시 저장 / 비우고 해제)
     const keyField = el('label', { cls: 'mailform__field' });
     keyField.appendChild(el('span', { cls: 'mailform__label', text: 'API 키' + (v.hasApiKey ? ' (설정됨)' : ' (미설정)') }));
-    const keyInput = el('input', { cls: 'rootmgr__input', attrs: { type: 'password', placeholder: v.hasApiKey ? '변경하려면 새 키 입력(필요 없으면 비움)' : '필요 시 입력(로컬은 보통 불필요)', autocomplete: 'new-password', spellcheck: 'false' } });
+    const keyInput = el('input', { cls: 'rootmgr__input', attrs: { type: 'password', placeholder: v.hasApiKey ? '변경하려면 새 키 입력(필요 없으면 비움)' : '필요 시 입력(로컬은 보통 불필요)', autocomplete: 'new-password', spellcheck: 'false', 'data-fk': 'briefing.apiKey' } });
     keyInput.value = store.briefing.keyInput || '';
     keyInput.addEventListener('input', (e) => { store.briefing.keyInput = e.target.value || ''; });
     keyField.appendChild(keyInput);
@@ -7856,8 +7859,10 @@ function initBrowser() {
     store.update.packaged = !!res.packaged;
     store.update.currentVersion = (typeof res.currentVersion === 'string') ? res.currentVersion : '';
     applyUpdateStatusPayload(res.status);
-    // 설정이 열려 있거나, 배지가 켜져야 하는 상태면 재렌더(헤더 아이콘 배지 반영).
-    if (store.showSettings || updateHasBadge(store.update)) render();
+    // 재렌더는 (a) 설정의 '업데이트' 탭을 보고 있을 때(진행바 갱신 필요) 또는 (b) 헤더 배지가 켜질 때만.
+    //   다른 설정 탭(연동 등)을 편집하는 동안 다운로드 진행률 푸시가 폼을 다시 그려 입력 포커스를 강탈하던
+    //   문제를 차단한다(입력 칸에 글자가 안 써지는 증상).
+    if ((store.showSettings && store.settingsTab === 'update') || updateHasBadge(store.update)) render();
   }
 
   /** onUpdateStatus push 페이로드를 store.update 에 반영(순수 매핑). */
@@ -9965,8 +9970,9 @@ function initBrowser() {
     const unsub = spip.onUpdateStatus((payload) => {
       const before = updateHasBadge(store.update);
       applyUpdateStatusPayload(payload);
-      // 설정이 열려 있거나 배지 표시 여부가 바뀌면 재렌더(헤더/카테고리 배지 반영).
-      if (store.showSettings || before !== updateHasBadge(store.update)) render();
+      // 재렌더는 '업데이트' 탭을 보고 있을 때(진행바 갱신) 또는 배지 표시 여부가 바뀔 때만 —
+      //   다운로드 진행률 푸시가 다른 설정 탭의 입력 포커스를 강탈(글자 안 써짐)하지 않도록 좁힌다.
+      if ((store.showSettings && store.settingsTab === 'update') || before !== updateHasBadge(store.update)) render();
     });
     store.update.unsubscribe = (typeof unsub === 'function') ? unsub : null;
   }
@@ -12080,13 +12086,22 @@ function initBrowser() {
     //   기존 render() 인라인 복원 로직을 동작 동일하게 흡수(로직 변경 없이 위치만). 회귀 0.
     const SCROLL_SEL = ['.settings-pane', '.modal__body', '.drawer', '.orbit__panel', '.dash__main', '.mailbox-tree', '.mailbox-list'];
     const FOCUS_SEL = ['.topbar__search-input', '.orbit__search', '.shelf-input', '.shelf-edit-input', '.shelf-switch'];
+    // 일부 input 타입(number/email 등)은 selectionStart 접근이 예외/ null — 안전 조회.
+    function safeSel(el, prop) { try { return el[prop]; } catch (_) { return null; } }
     const preserve = {
       /** 재렌더 전 스냅샷(활성 입력의 포커스/캐럿 + 스크롤 위치). */
       capture(rootEl) {
         const snap = { scroll: {}, focus: null };
         SCROLL_SEL.forEach((sel) => { const e = rootEl.querySelector(sel); if (e) snap.scroll[sel] = e.scrollTop; });
         const ae = (typeof document !== 'undefined') ? document.activeElement : null;
+        // [포커스 보존 — 안정 키] data-fk 가 있는 입력은 그 키로 포커스/캐럿을 보존한다. 같은 클래스
+        //   입력이 한 화면에 여럿 있어도(예: 설정 폼의 이름·주소·모델 = 모두 .rootmgr__input) 정확한
+        //   그 칸으로 복원된다 — 셀렉터 첫 매치로 엉뚱한 칸에 포커스가 튀는 문제(글자 지워짐)를 차단.
+        if (ae && rootEl.contains(ae) && ae.dataset && ae.dataset.fk) {
+          snap.focus = { fk: ae.dataset.fk, start: safeSel(ae, 'selectionStart'), end: safeSel(ae, 'selectionEnd'), dir: ae.selectionDirection };
+        }
         for (const sel of FOCUS_SEL) {
+          if (snap.focus) break;
           if (ae && rootEl.contains(ae) && typeof ae.matches === 'function' && ae.matches(sel)) {
             snap.focus = { sel, start: ae.selectionStart, end: ae.selectionEnd, dir: ae.selectionDirection };
             break;
@@ -12122,7 +12137,11 @@ function initBrowser() {
         const f = snap.focus;
         if (f) {
           let e = null;
-          if (f.homeSection) {
+          if (f.fk) {
+            // [포커스 보존 — 안정 키] 같은 data-fk 를 가진 새 노드로 정확히 복원.
+            const escFk = (typeof CSS !== 'undefined' && CSS.escape) ? CSS.escape(f.fk) : f.fk;
+            e = rootEl.querySelector('[data-fk="' + escFk + '"]');
+          } else if (f.homeSection) {
             // [위젯 독립] 같은 인스턴스(iid) 셀 안에서 같은 입력을 찾아 복원(클래스 우선, 없으면 tag).
             const esc = (typeof CSS !== 'undefined' && CSS.escape) ? CSS.escape(f.homeSection) : f.homeSection;
             const cell = rootEl.querySelector('.home-section[data-home-section="' + esc + '"]');
