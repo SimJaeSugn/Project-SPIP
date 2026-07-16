@@ -680,7 +680,13 @@ input, button, select { font-family: inherit; }
   font-family: 'Geist Mono', var(--mono); font-size: 12px; line-height: 1.65; color:var(--t1);
 }
 .md-editor:focus { border-color: var(--accent-border); background:var(--panel); }
-.md-preview { flex: 1 1 auto; min-height: 120px; overflow-y: auto; overflow-x: hidden; padding-right: 4px; }
+/* 미리보기 = 렌더된 '종이' 패널. 편집기(회색 소스 상자)와 짝을 이루도록 테두리·모서리·여백을 맞춰
+ *   2단일 때 좌(편집)·우(미리보기)가 시각적으로 균형을 이룬다. 넓은 콘텐츠는 내부에서 스크롤(무잘림). */
+.md-preview {
+  flex: 1 1 auto; min-height: 120px; overflow-y: auto; overflow-x: hidden;
+  border: 1px solid var(--border); border-radius: 10px; padding: 12px 15px; background: var(--panel);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .015), 0 1px 2px rgba(0, 0, 0, .03);
+}
 /* 사용자가 높이를 지정하면 기본 최소높이 캡을 풀어 실제 높이에 반응(잘림 대신 내부 스크롤). */
 .home-section__content--sized .md-editor,
 .home-section__content--sized .md-preview { min-height: 0; }
@@ -710,6 +716,7 @@ input, button, select { font-family: inherit; }
  *    카드 밖으로 새지 않는다(무잘림 계약). 렌더는 전부 textContent 로 조립된 DOM 이다(L-1). ── */
 .md-rendered { font-size: 12.5px; line-height: 1.7; color:var(--t1); word-break: break-word; overflow-wrap: anywhere; }
 .md-rendered > *:first-child { margin-top: 0; }
+.md-rendered > *:last-child { margin-bottom: 0; } /* 종이 패널 여백과 콘텐츠 마진이 겹쳐 하단이 뜨지 않게 */
 .md-h { font-weight: 700; color:var(--t1); line-height: 1.35; margin: 16px 0 8px; }
 .md-h1 { font-size: 18px; padding-bottom: 5px; border-bottom: 1px solid var(--border); }
 .md-h2 { font-size: 16px; padding-bottom: 4px; border-bottom: 1px solid var(--border-soft); }
@@ -722,9 +729,9 @@ input, button, select { font-family: inherit; }
 .md-link:hover { text-decoration: underline; }
 .md-code { font-family: 'Geist Mono', var(--mono); font-size: 11.5px; background: var(--surface-3); border: 1px solid var(--border-soft); border-radius: 5px; padding: 1px 5px; }
 .md-pre { position: relative; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; margin: 0 0 12px; overflow-x: auto; }
-.md-pre__code { font-family: 'Geist Mono', var(--mono); font-size: 11.5px; line-height: 1.6; color: #292524; white-space: pre; }
+.md-pre__code { font-family: 'Geist Mono', var(--mono); font-size: 11.5px; line-height: 1.6; color: var(--t1); white-space: pre; } /* 테마 적응(라이트/다크 모두 가독) */
 .md-pre__lang { position: absolute; top: 6px; right: 10px; font-size: 9.5px; color: var(--t4); text-transform: uppercase; letter-spacing: .04em; }
-.md-quote { margin: 0 0 12px; padding: 6px 0 6px 12px; border-left: 3px solid var(--border); color: var(--t3); }
+.md-quote { margin: 0 0 12px; padding: 8px 14px; border-left: 3px solid var(--border-soft); border-radius: 0 8px 8px 0; background: var(--surface-2); color: var(--t3); }
 .md-quote > *:last-child { margin-bottom: 0; }
 
 /* GitHub Alerts — > [!NOTE] 등. 인용의 시각 변형. */
@@ -744,15 +751,19 @@ input, button, select { font-family: inherit; }
 .md-list { margin: 0 0 12px; padding-left: 22px; }
 .md-list--tight .md-p { margin-bottom: 0; }
 .md-li { margin: 3px 0; }
+.md-li::marker { color: var(--accent); } /* 자연스러운 강조 — 불릿/번호에 포인트색 */
 .md-li--task { list-style: none; margin-left: -18px; display: flex; align-items: flex-start; gap: 7px; }
 .md-task { margin-top: 3px; flex: 0 0 auto; }
 .md-li__body { min-width: 0; flex: 1 1 auto; }
 
-/* 표 — 넓으면 카드를 밀지 않고 자기 안에서 가로 스크롤. */
-.md-tablewrap { overflow-x: auto; margin: 0 0 12px; }
+/* 표 — 넓으면 카드를 밀지 않고 자기 안에서 가로 스크롤. 얇은 격자 + 은은한 줄무늬로 가독성. */
+.md-tablewrap { overflow-x: auto; margin: 0 0 12px; border: 1px solid var(--border); border-radius: 9px; }
 .md-table { border-collapse: collapse; font-size: 12px; min-width: 100%; }
-.md-table th, .md-table td { border: 1px solid var(--border); padding: 5px 10px; text-align: left; }
+.md-table th, .md-table td { border-bottom: 1px solid var(--border-soft); border-right: 1px solid var(--border-soft); padding: 6px 11px; text-align: left; }
+.md-table th:last-child, .md-table td:last-child { border-right: none; }
+.md-table tbody tr:last-child td { border-bottom: none; }
 .md-table th { background: var(--surface-2); font-weight: 700; white-space: nowrap; }
+.md-table tbody tr:nth-child(2n) td { background: var(--surface-2); }
 
 .md-hr { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
 .md-img { max-width: 100%; height: auto; border-radius: 8px; }

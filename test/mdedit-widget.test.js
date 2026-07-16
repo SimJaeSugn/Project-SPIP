@@ -321,6 +321,20 @@ test('6조합 — CSS: 어떤 조합에서도 콘텐츠가 카드 밖으로 새�
   assert.ok(/\.md-docs \{[^}]*overflow-x: auto/.test(CSS));
 });
 
+test('디자인 — 미리보기(2단 우측)는 편집기와 짝을 이루는 종이 패널(테두리·배경·여백) + 테마 적응', () => {
+  // 미리보기 패널: 편집기처럼 테두리·모서리·배경·여백을 가져 2단에서 좌우가 균형을 이룬다.
+  assert.ok(/\.md-preview \{[^}]*border: 1px solid var\(--border\)[^}]*border-radius: 10px[^}]*background: var\(--panel\)/.test(CSS), '미리보기 종이 패널(테두리·배경)');
+  assert.ok(/\.md-preview \{[^}]*padding: 12px 15px/.test(CSS), '미리보기 내부 여백');
+  // 하단 마진 겹침 방지(패널 여백과 콘텐츠 마진).
+  assert.ok(/\.md-rendered > \*:last-child \{ margin-bottom: 0/.test(CSS), '패널 하단 여백 정리');
+  // 인용은 은은한 배경 채움, 코드블록 글자색은 테마 변수(하드코딩 색 금지 — 다크 가독).
+  assert.ok(/\.md-quote \{[^}]*background: var\(--surface-2\)/.test(CSS), '인용 배경');
+  assert.ok(/\.md-pre__code \{[^}]*color: var\(--t1\)/.test(CSS), '코드블록 테마 적응 색');
+  assert.ok(!/\.md-pre__code \{[^}]*#292524/.test(CSS), '코드블록 하드코딩 색 제거');
+  // 표: 얇은 격자 + 줄무늬.
+  assert.ok(/\.md-table tbody tr:nth-child\(2n\) td \{ background: var\(--surface-2\)/.test(CSS), '표 줄무늬');
+});
+
 test('6조합 — §3 코너 규약: 위젯 우하단을 점유하는 상시 컨트롤 없음(리사이즈 핸들과 충돌 금지)', () => {
   assert.ok(!/\.md-[a-z-]*\s*\{[^}]*position: absolute[^}]*bottom: 0[^}]*right: 0/.test(CSS), '우하단 고정 컨트롤 금지');
   assert.ok(/\.md-tools \{/.test(CSS), '액션은 상단 툴바');
