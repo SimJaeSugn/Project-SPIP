@@ -1763,7 +1763,9 @@ textarea.briefing-systemprompt {
 @media (max-width: 520px) { .help__row { grid-template-columns: 1fr; gap: 2px; } }
 
 /* =========================== 궤도 맵(Orbit Map) — 다크 테마 전용 뷰 (UI 템플릿 정합) =========================== */
-.orbit { height: 100vh; display: flex; overflow: hidden; color: var(--border); font-family: var(--font);
+/* height: 100%(100vh 아님) — .app-root 가 이미 body zoom(--ui-zoom)을 보정한다. 여기서 100vh 를
+   재지정하면 배율≠1 일 때 100vh×zoom 이 되어 뷰포트를 넘겨 하단 여백·2겹 스크롤이 생긴다(.dash 규칙과 동일). */
+.orbit { height: 100%; display: flex; overflow: hidden; color: var(--border); font-family: var(--font);
   background: radial-gradient(120% 120% at 50% 42%, #1b1714 0%, #0c0a09 62%); }
 .orbit__panel { flex: none; width: 316px; height: 100%; display: flex; flex-direction: column; gap: 17px;
   padding: 20px 20px 22px; border-right: 1px solid rgba(255,255,255,.07); background: rgba(255,255,255,.02); overflow: auto; }

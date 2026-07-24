@@ -8683,7 +8683,15 @@ function initBrowser() {
     orb.ot0 = (typeof performance !== 'undefined' ? performance.now() : Date.now());
     orb.introT0 = orb.ot0; orb.angT = orb.angT || 0;
     orb.layoutMix = store.orbit.layout === 'lang' ? 1 : 0; orb.stars = null;
-    const pos = (e) => { const r = canvas.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+    // [배율 보정] body { zoom } 적용 시 getBoundingClientRect(줌 반영 시각 좌표)와 clientWidth(레이아웃 px)가
+    //   zoom 배 어긋난다. 캔버스는 clientWidth 공간에 그리므로(_x/_y 도 그 공간), 포인터 좌표를 그 공간으로
+    //   되돌려야 히트가 노드 위치·배율과 무관하게 정확하다. zoom=1 이면 sx=sy=1 로 무보정.
+    const pos = (e) => {
+      const r = canvas.getBoundingClientRect();
+      const sx = r.width ? canvas.clientWidth / r.width : 1;
+      const sy = r.height ? canvas.clientHeight / r.height : 1;
+      return { x: (e.clientX - r.left) * sx, y: (e.clientY - r.top) * sy };
+    };
     const onMove = (e) => {
       if (orb.dragging) {
         orb.panX += e.clientX - orb.lx; orb.panY += e.clientY - orb.ly; orb.lx = e.clientX; orb.ly = e.clientY;

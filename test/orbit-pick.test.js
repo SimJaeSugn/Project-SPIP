@@ -89,3 +89,21 @@ test('궤도 클릭 배선 — mousedown 에서 pressId 래치, click 에서 폴
 test('궤도 클릭 배선 — 렌더 루프가 라벨 박스(_lx/_ly/_lw/_lh)를 매 프레임 기록한다', () => {
   assert.match(APP_SRC, /n\._lx = x - lw \/ 2; n\._ly = lTop; n\._lw = lw; n\._lh = lfs \+ 2;/);
 });
+
+// ── 배율 보정 — body { zoom } 하에서 클릭 좌표가 캔버스 그리기 공간(레이아웃 px)으로 정규화되는지 ──
+// 원 버그: pos() 가 getBoundingClientRect(줌 좌표)만 써서, 배율≠1 이면 원점에서 멀수록(노드 위치)·배율에
+//   비례해 히트가 어긋났다. 계약: clientWidth/rect.width 비율로 되돌려 위치·배율과 무관하게 정확.
+test('궤도 배율 보정 — pos()가 clientWidth/rect.width 비율로 포인터 좌표를 정규화한다', () => {
+  assert.match(APP_SRC, /const sx = r\.width \? canvas\.clientWidth \/ r\.width : 1;/);
+  assert.match(APP_SRC, /const sy = r\.height \? canvas\.clientHeight \/ r\.height : 1;/);
+  assert.match(APP_SRC, /return \{ x: \(e\.clientX - r\.left\) \* sx, y: \(e\.clientY - r\.top\) \* sy \};/);
+});
+
+// ── 배율 보정(하단 여백) — .orbit 는 100vh 를 재지정하지 않는다(.app-root 가 이미 zoom 보정) ──
+const CSS_SRC = fs.readFileSync(path.join(__dirname, '..', 'public', 'styles.css'), 'utf8');
+test('궤도 레이아웃 — .orbit 는 height:100% 를 쓴다(100vh 금지 — 배율 시 하단 여백 방지)', () => {
+  const m = CSS_SRC.match(/\.orbit \{[^}]*\}/);
+  assert.ok(m, '.orbit 규칙이 존재한다');
+  assert.match(m[0], /height:\s*100%/, '.orbit 는 height:100% 로 .app-root 를 채운다');
+  assert.doesNotMatch(m[0], /height:\s*100vh/, '.orbit 에 100vh 재지정 금지');
+});
