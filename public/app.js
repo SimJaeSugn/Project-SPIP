@@ -1894,6 +1894,27 @@ function orbPick(nodes, mx, my, minPick) {
   });
   if (best) return best;
   // 라벨 박스 — 점을 못 맞혔을 때의 2순위 표적(가장 가까운 라벨 중심).
+  return orbPickLabel(nodes, mx, my);
+}
+
+/**
+ * 궤도 포인터→캔버스 좌표(순수). UI 배율은 body{zoom} 으로 적용되며, 이때 포인터 clientX/Y 는
+ * **시각(줌 적용)** 좌표이고 getBoundingClientRect·캔버스 그리기(_x/_y)는 **레이아웃(비줌)** 좌표다
+ * (Chromium CSS zoom 특성). clientX 를 z 로 나눠 레이아웃 좌표로 되돌린 뒤 rect 를 빼면 그리기 공간과
+ * 정확히 일치한다. z=1(기본 배율)이면 무보정 항등.
+ * @param {number} clientX @param {number} clientY @param {number} rectLeft @param {number} rectTop
+ * @param {number} uiZoom :root --ui-zoom (양수). 비정상/미지정이면 1.
+ * @returns {{x:number,y:number}}
+ */
+function orbClientToCanvas(clientX, clientY, rectLeft, rectTop, uiZoom) {
+  const z = (typeof uiZoom === 'number' && isFinite(uiZoom) && uiZoom > 0) ? uiZoom : 1;
+  return { x: clientX / z - rectLeft, y: clientY / z - rectTop };
+}
+
+/** 라벨 박스 픽(orbPick 2순위 분리 — 위 return 뒤 도달 보장). */
+function orbPickLabel(nodes, mx, my) {
+  const list = Array.isArray(nodes) ? nodes : [];
+  let best = null, bestD2 = Infinity;
   list.forEach((n) => {
     if (!n || typeof n._lx !== 'number' || typeof n._lw !== 'number' || !(n._lw > 0)) return;
     const pad = 3;
@@ -8683,18 +8704,21 @@ function initBrowser() {
     orb.ot0 = (typeof performance !== 'undefined' ? performance.now() : Date.now());
     orb.introT0 = orb.ot0; orb.angT = orb.angT || 0;
     orb.layoutMix = store.orbit.layout === 'lang' ? 1 : 0; orb.stars = null;
-    // [배율 보정] body { zoom } 적용 시 getBoundingClientRect(줌 반영 시각 좌표)와 clientWidth(레이아웃 px)가
-    //   zoom 배 어긋난다. 캔버스는 clientWidth 공간에 그리므로(_x/_y 도 그 공간), 포인터 좌표를 그 공간으로
-    //   되돌려야 히트가 노드 위치·배율과 무관하게 정확하다. zoom=1 이면 sx=sy=1 로 무보정.
+    // [배율 보정] UI 배율은 body{zoom} 으로 적용된다. 이때 포인터 이벤트의 clientX/Y 는 **시각(줌 적용)**
+    //   좌표인데, getBoundingClientRect()·캔버스 그리기(_x/_y)는 **레이아웃(비줌)** 좌표다(Chromium CSS zoom
+    //   특성 — elementFromPoint 로 실측 확인). 그대로 빼면 배율≠1 에서 (rect.left+_x)*(z-1) 만큼 히트가
+    //   어긋난다(위치·배율 비례, 일정 방향). clientX 를 z 로 나눠 레이아웃 좌표로 되돌린 뒤 rect 를 빼야
+    //   그리기 공간과 정확히 일치한다(z=1 이면 무보정). z 는 :root 의 --ui-zoom(applyThemePrefs 단일 출처).
+    const uiZoom = () => parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--ui-zoom')) || 1;
     const pos = (e) => {
       const r = canvas.getBoundingClientRect();
-      const sx = r.width ? canvas.clientWidth / r.width : 1;
-      const sy = r.height ? canvas.clientHeight / r.height : 1;
-      return { x: (e.clientX - r.left) * sx, y: (e.clientY - r.top) * sy };
+      return orbClientToCanvas(e.clientX, e.clientY, r.left, r.top, uiZoom());
     };
     const onMove = (e) => {
       if (orb.dragging) {
-        orb.panX += e.clientX - orb.lx; orb.panY += e.clientY - orb.ly; orb.lx = e.clientX; orb.ly = e.clientY;
+        // 드래그 델타도 시각 좌표라 z 로 나눠 레이아웃(그리기·pan) 공간으로 맞춘다(배율≠1 에서 속도 왜곡 방지).
+        const z = uiZoom();
+        orb.panX += (e.clientX - orb.lx) / z; orb.panY += (e.clientY - orb.ly) / z; orb.lx = e.clientX; orb.ly = e.clientY;
         if (Math.abs(e.clientX - orb.dsx) + Math.abs(e.clientY - orb.dsy) > 4) orb.moved = true;
         orb.hoverId = null; canvas.style.cursor = 'grabbing'; return;
       }
@@ -12966,6 +12990,7 @@ if (typeof module !== 'undefined' && module.exports) {
     agentErrText,
     // 궤도 맵 노드 픽(순수)
     orbPick,
+    orbClientToCanvas,
     ORB_PICK_MIN,
     // 홈(브리핑) 순수 뷰모델
     homeGreeting,

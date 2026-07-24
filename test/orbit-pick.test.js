@@ -13,7 +13,7 @@ const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
 
-const { orbPick, ORB_PICK_MIN } = require('../public/app.js');
+const { orbPick, orbClientToCanvas, ORB_PICK_MIN } = require('../public/app.js');
 const APP_SRC = fs.readFileSync(path.join(__dirname, '..', 'public', 'app.js'), 'utf8');
 
 const node = (id, x, y, r) => ({ id, _x: x, _y: y, _r: r });
@@ -90,13 +90,33 @@ test('궤도 클릭 배선 — 렌더 루프가 라벨 박스(_lx/_ly/_lw/_lh)�
   assert.match(APP_SRC, /n\._lx = x - lw \/ 2; n\._ly = lTop; n\._lw = lw; n\._lh = lfs \+ 2;/);
 });
 
-// ── 배율 보정 — body { zoom } 하에서 클릭 좌표가 캔버스 그리기 공간(레이아웃 px)으로 정규화되는지 ──
-// 원 버그: pos() 가 getBoundingClientRect(줌 좌표)만 써서, 배율≠1 이면 원점에서 멀수록(노드 위치)·배율에
-//   비례해 히트가 어긋났다. 계약: clientWidth/rect.width 비율로 되돌려 위치·배율과 무관하게 정확.
-test('궤도 배율 보정 — pos()가 clientWidth/rect.width 비율로 포인터 좌표를 정규화한다', () => {
-  assert.match(APP_SRC, /const sx = r\.width \? canvas\.clientWidth \/ r\.width : 1;/);
-  assert.match(APP_SRC, /const sy = r\.height \? canvas\.clientHeight \/ r\.height : 1;/);
-  assert.match(APP_SRC, /return \{ x: \(e\.clientX - r\.left\) \* sx, y: \(e\.clientY - r\.top\) \* sy \};/);
+// ── 배율(UI zoom) 보정 — body{zoom} 하에서 포인터 clientX(시각 좌표)를 캔버스 그리기 좌표(레이아웃)로 되돌린다 ──
+// 실측(elementFromPoint): body{zoom:z} 에서 clientX 는 시각(줌) 좌표, getBoundingClientRect·그리기(_x/_y)는
+//   레이아웃(비줌) 좌표. 그대로 빼면 (rect.left+_x)*(z-1) 만큼 어긋난다(위치·배율 비례, 일정 방향).
+//   계약: clientX 를 z 로 나눠 레이아웃 좌표로 되돌린 뒤 rect 를 뺀다(z=1 이면 무보정 항등).
+test('궤도 배율 보정(순수) — z=1(기본 배율)이면 항등(무보정)', () => {
+  assert.deepStrictEqual(orbClientToCanvas(500, 300, 120, 80, 1), { x: 380, y: 220 });
+});
+
+test('궤도 배율 보정(순수) — 배율≠1: 시각 clientX 를 z 로 나눠 그리기 좌표를 정확히 복원(원 버그)', () => {
+  // 캔버스가 레이아웃 rect.left=120, 노드가 그리기 좌표 Dx=300 에 그려짐 → 시각 clientX=(120+300)*z.
+  const z = 1.18, rectLeft = 120, rectTop = 80, Dx = 300, Dy = 200;
+  const p = orbClientToCanvas((rectLeft + Dx) * z, (rectTop + Dy) * z, rectLeft, rectTop, z);
+  assert.ok(Math.abs(p.x - Dx) < 1e-9 && Math.abs(p.y - Dy) < 1e-9, 'z 로 나눠 그리기 좌표 복원');
+  // 옛 공식(clientX - rectLeft)은 (rectLeft+Dx)*(z-1) 만큼 크게 어긋난다(회귀 방지).
+  assert.ok(Math.abs(((rectLeft + Dx) * z - rectLeft) - Dx) > 50, '옛 공식은 배율에서 크게 어긋난다');
+});
+
+test('궤도 배율 보정(순수) — 비정상 z(0·NaN·음수)는 1 로 폴백', () => {
+  assert.deepStrictEqual(orbClientToCanvas(200, 100, 10, 20, 0), { x: 190, y: 80 });
+  assert.deepStrictEqual(orbClientToCanvas(200, 100, 10, 20, NaN), { x: 190, y: 80 });
+  assert.deepStrictEqual(orbClientToCanvas(200, 100, 10, 20, -1), { x: 190, y: 80 });
+});
+
+test('궤도 배율 보정 배선 — pos()는 --ui-zoom 으로 나눠 orbClientToCanvas 에 위임하고, 드래그 델타도 z 보정', () => {
+  assert.match(APP_SRC, /getPropertyValue\('--ui-zoom'\)/, 'z 출처는 :root --ui-zoom');
+  assert.match(APP_SRC, /orbClientToCanvas\(e\.clientX, e\.clientY, r\.left, r\.top, uiZoom\(\)\)/, 'pos 가 보정 헬퍼에 위임');
+  assert.match(APP_SRC, /orb\.panX \+= \(e\.clientX - orb\.lx\) \/ z;/, '드래그 팬 델타도 z 로 나눔');
 });
 
 // ── 배율 보정(하단 여백) — .orbit 는 100vh 를 재지정하지 않는다(.app-root 가 이미 zoom 보정) ──
