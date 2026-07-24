@@ -896,6 +896,20 @@ function applyScratchpads(input) {
   return out;
 }
 
+/** [할 일 위젯 = 인스턴스] getUiState.todoBoxes 방어 적재 — { iid: Todo[] } 중 iid 키·정상 항목만.
+ *   메인이 단일 신뢰 경계(격리·id 스탬프)라 여기선 형식 방어만: id 문자열 없는 항목은 버린다. */
+function applyTodoBoxes(input) {
+  const out = {};
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return out;
+  for (const iid of Object.keys(input)) {
+    if (!isIid(iid)) continue;
+    const list = input[iid];
+    if (!Array.isArray(list)) continue;
+    out[iid] = list.filter((t) => t && typeof t.id === 'string');
+  }
+  return out;
+}
+
 /** [로드맵 Phase 5·B] 레이아웃 모드 방어 적재 — 'masonry'|'freeform'만, 그 외 masonry. */
 function applyLayoutMode(m) { return m === 'freeform' ? 'freeform' : 'masonry'; }
 /** [로드맵 Phase 5·B] 프리폼 좌표 방어 적재 — { id:{x,y} } 토글 위젯·유한 정수만(메인이 단일 신뢰 경계). */
@@ -1965,18 +1979,11 @@ function initBrowser() {
     detectDefaults: [],          // 기본값(복원 안내용)
     detectInput: '',             // 직접 입력(컨트롤드)
     busyDetect: false,           // 추가/삭제/복원 in-flight
-    // 할 일(홈 브리핑) — getUiState 응답의 todos
-    todos: [],                   // [{id,text,done,createdAt}]
-    todoInput: '',               // 추가 입력(컨트롤드)
-    todoAdding: false,           // '+ 할 일 추가' 인라인 입력 표시
+    // 할 일 — [위젯 인스턴스] 목록·입력·마감·알림은 모두 인스턴스별(store.wstate[iid], makeWState('todos')).
+    //   getUiState.todoBoxes({iid:Todo[]}) 를 각 인스턴스 wstate[iid].todos 로 분배한다(전역 store.todos 폐지).
+    _todoBoxes: {},              // 마지막 getUiState 의 todoBoxes 원본(iid→Todo[]) — wstate 시드·재적재 소스
     _composing: false,           // [R-25 RG-1] IME 조합 중 — 조합 중 재렌더 보류(자모 분리 방지)
-    busyTodos: false,            // 추가/토글/삭제 in-flight
-    // [백로그2-4] 할 일 마감 일시 — 추가/편집 입력(datetime-local 문자열), 편집 대상 id, 알림 발화 dedupe.
-    todoDueInput: '',            // 추가 폼의 마감 입력
-    todoDueEditId: null,         // 인라인 마감 편집 중인 할 일 id
-    todoDueEditInput: '',        // 편집 폼의 마감 입력
-    notifiedDue: new Set(),      // 이미 토스트 발화한 할 일 id(세션 내 1회)
-    _dueTimer: null,             // 마감 도래 감시 타이머
+    _dueTimer: null,             // 마감 도래 감시 타이머(전 박스 순회, 뷰 무관)
     // 메일 다이제스트(홈 브리핑) — getMailSummary 응답(계정별 unseen + 제목/발신자 미리보기)
     mailSummary: [],             // [{id,label,host,user,unseen,items:[{subject,from,date}],ok,code}]
     busyMailSummary: false,      // getMailSummary in-flight
@@ -2210,6 +2217,21 @@ function initBrowser() {
     if (type === 'scratchpad') {
       return { _saveTimer: null, _savedAt: null };
     }
+    // [할 일 위젯 = 인스턴스] 목록·입력·마감·알림 dedupe 를 전부 인스턴스별로 갖는다(전역 store.todos 대체).
+    //   할 일 위젯 2개는 서로 다른 목록·입력 상태를 갖는다 — 편집기 2개가 다른 문서를 갖는 것과 동형.
+    if (type === 'todos') {
+      return {
+        todos: [],             // 이 박스(iid)의 할 일 목록 — getUiState.todoBoxes[iid] 에서 분배
+        loaded: false,         // getUiState 로부터 최초 분배 완료(빈 박스와 미적재 구분)
+        todoInput: '',         // 추가 입력(컨트롤드)
+        todoAdding: false,     // '+ 할 일 추가' 인라인 입력 표시
+        busyTodos: false,      // 추가/토글/삭제/마감 in-flight
+        todoDueInput: '',      // 추가 폼의 마감 입력(datetime-local)
+        todoDueEditId: null,   // 인라인 마감 편집 중인 할 일 id
+        todoDueEditInput: '',  // 편집 폼의 마감 입력
+        notifiedDue: {},       // 이미 토스트 발화한 할 일 id 표(세션 내 1회) — 인스턴스별 dedupe
+      };
+    }
     if (type === 'agent') {
       return {
         input: '',        // 이 에이전트 입력창(인스턴스별)
@@ -2225,7 +2247,18 @@ function initBrowser() {
   }
   /** iid → 인스턴스 UI 상태(없으면 타입에 맞춰 생성). */
   function wstate(iid) {
-    if (!store.wstate[iid]) store.wstate[iid] = makeWState(widgetTypeOf(iid));
+    if (!store.wstate[iid]) {
+      var type = widgetTypeOf(iid);
+      var st = makeWState(type);
+      // [할 일 위젯 = 인스턴스] 최초 생성 시 마지막 getUiState 의 todoBoxes 에서 이 박스 목록을 시드한다.
+      //   프리셋 전환으로 나중에 붙는 할 일 위젯도 자기 박스 데이터를 갖고 나타나게(재적재 없이). box 데이터는
+      //   preset 과 직교(iid 키 전역)라 store._todoBoxes 에 보존된다.
+      if (type === 'todos' && store._todoBoxes && Array.isArray(store._todoBoxes[iid])) {
+        st.todos = store._todoBoxes[iid];
+        st.loaded = true;
+      }
+      store.wstate[iid] = st;
+    }
     return store.wstate[iid];
   }
   /** 배치에서 사라진 인스턴스의 UI 상태를 정리(메모리 누수·유령 상태 방지). */
@@ -2762,7 +2795,7 @@ function initBrowser() {
   /** 정적 브리핑 문장(폴백·기본). 기존 KPI 기반 문장 보존. */
   function staticBriefingLine() {
     var kpis = homeKpis(store.viewModels || []);
-    var todosOpen = (store.todos || []).filter(function (t) { return !t.done; }).length;
+    var todosOpen = openTodoCount(); // [위젯 인스턴스] 전 박스 합산(전역 store.todos 폐지)
     var unread = mailUnreadTotal();
     return fmtDate(store.now ? store.now.toISOString() : null)
       + ' · 주의가 필요한 프로젝트 ' + kpis.attention + '개, 안 읽은 메일 ' + unread
@@ -3289,7 +3322,7 @@ function initBrowser() {
   function renderHomeSummary(reclaim, inst) {
     var vms = store.viewModels || [];
     var kpis = homeKpis(vms);
-    var todosOpen = (store.todos || []).filter(function (t) { return !t.done; }).length;
+    var todosOpen = openTodoCount(); // [위젯 인스턴스] 전 박스 합산(전역 store.todos 폐지)
     var unread = mailUnreadTotal();
     var rec = reclaim || diskReclaim(vms);
     var card = el('div', { cls: 'hw-card', style: HOME_CARD + 'padding:21px 22px;' });
@@ -3454,8 +3487,12 @@ function initBrowser() {
     return { state: state, color: color, label: label };
   }
 
+  /** [위젯 인스턴스] 이 할 일 위젯(inst.iid)의 박스만 렌더. 목록·입력·마감 상태는 전부 wstate(iid).
+   *   같은 타입 위젯이 여럿이라도 각자 자기 박스만 보인다(전역 store.todos 폐지). */
   function renderHomeTodos(inst) {
-    var todos = Array.isArray(store.todos) ? store.todos : [];
+    var iid = inst && inst.iid;
+    var st = wstate(iid);
+    var todos = Array.isArray(st.todos) ? st.todos : [];
     var open = todos.filter(function (t) { return !t.done; }).length;
     var card = el('div', { cls: 'hw-card', style: HOME_CARD + 'padding:21px 20px;' });
     var head = el('div', { style: 'display:flex;align-items:center;gap:10px;margin-bottom:15px;flex:0 0 auto;' });
@@ -3475,7 +3512,7 @@ function initBrowser() {
       var box = el('span', {
         attrs: { role: 'checkbox', 'aria-checked': t.done ? 'true' : 'false', 'aria-label': '완료: ' + t.text, tabindex: '0' },
         style: 'width:18px;height:18px;border-radius:6px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;margin-top:1px;cursor:pointer;' + (t.done ? 'border:1.5px solid var(--accent);background:var(--accent);' : 'border:1.5px solid var(--border);background:var(--panel);'),
-        on: { click: function () { onToggleTodo(t.id, !t.done); } },
+        on: { click: function () { onToggleTodo(iid, t.id, !t.done); } },
       });
       if (t.done) box.appendChild(svg([{ t: 'path', d: 'M5 12l4 4 10-10' }], { size: 11, stroke: '#fff', sw: 3 }));
       row.appendChild(box);
@@ -3488,7 +3525,7 @@ function initBrowser() {
         text: due ? due.label : '+ 마감',
         attrs: { role: 'button', tabindex: '0', 'aria-label': '마감 일시 설정' },
         style: 'flex:0 0 auto;font-size:10.5px;font-weight:600;cursor:pointer;' + (due ? ('color:' + due.color + ';') : 'color:var(--t4);') + (due && due.state === 'overdue' ? 'text-decoration:underline;' : ''),
-        on: { click: function () { openTodoDueEditor(t); } },
+        on: { click: function () { openTodoDueEditor(iid, t); } },
       });
       txtRow.appendChild(dueBadge);
       txt.appendChild(txtRow);
@@ -3496,7 +3533,7 @@ function initBrowser() {
         cls: 'home-todo-del', text: '삭제',
         attrs: { type: 'button', 'aria-label': '할 일 삭제: ' + t.text },
         style: 'appearance:none;border:none;background:none;cursor:pointer;padding:0;margin-top:1px;font-size:10.5px;color:var(--t4);',
-        on: { click: function () { onRemoveTodo(t.id); } },
+        on: { click: function () { onRemoveTodo(iid, t.id); } },
       }));
       row.appendChild(txt);
       row.appendChild(el('span', { style: 'width:7px;height:7px;border-radius:50%;flex:0 0 auto;margin-top:6px;background:' + (t.done ? 'var(--border)' : (due ? due.color : '#b45309')) + ';' }));
@@ -3505,31 +3542,31 @@ function initBrowser() {
     card.appendChild(list);
 
     // [백로그2-4] 인라인 마감 일시 편집기(특정 할 일 선택 시) — datetime-local 입력 + 설정/해제.
-    if (store.todoDueEditId) {
-      var editing = todos.filter(function (t) { return t.id === store.todoDueEditId; })[0];
-      if (editing) card.appendChild(renderTodoDueEditor(editing));
-      else store.todoDueEditId = null;
+    if (st.todoDueEditId) {
+      var editing = todos.filter(function (t) { return t.id === st.todoDueEditId; })[0];
+      if (editing) card.appendChild(renderTodoDueEditor(iid, editing));
+      else st.todoDueEditId = null;
     }
 
     // + 할 일 추가(클릭 시 인라인 입력)
-    if (store.todoAdding) {
+    if (st.todoAdding) {
       var addWrap = el('div', { style: 'border-top:1px solid var(--border-soft);margin-top:10px;padding-top:12px;display:flex;flex-direction:column;gap:8px;' });
       var addRow = el('div', { style: 'display:flex;gap:8px;' });
       var input = el('input', { attrs: { type: 'text', placeholder: '할 일 입력 후 Enter', 'aria-label': '할 일 추가', autocomplete: 'off' }, style: 'flex:1;min-width:0;border:1px solid var(--border);border-radius:8px;padding:7px 10px;font-size:12.5px;color:var(--t1);background:var(--panel);outline:none;' });
-      input.value = store.todoInput;
-      input.addEventListener('input', function (e) { store.todoInput = e.target.value || ''; });
-      input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); onAddTodo(); } if (e.key === 'Escape') { store.todoAdding = false; store.todoInput = ''; store.todoDueInput = ''; render(); } });
-      var b = el('button', { text: '추가', attrs: { type: 'button' }, style: 'border:none;background:var(--accent);color:#fff;border-radius:8px;padding:0 14px;font-size:12.5px;font-weight:600;cursor:pointer;', on: { click: onAddTodo } });
-      if (store.busyTodos) { input.disabled = true; b.disabled = true; }
+      input.value = st.todoInput;
+      input.addEventListener('input', function (e) { st.todoInput = e.target.value || ''; });
+      input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); onAddTodo(iid); } if (e.key === 'Escape') { st.todoAdding = false; st.todoInput = ''; st.todoDueInput = ''; render(); } });
+      var b = el('button', { text: '추가', attrs: { type: 'button' }, style: 'border:none;background:var(--accent);color:#fff;border-radius:8px;padding:0 14px;font-size:12.5px;font-weight:600;cursor:pointer;', on: { click: function () { onAddTodo(iid); } } });
+      if (st.busyTodos) { input.disabled = true; b.disabled = true; }
       addRow.appendChild(input); addRow.appendChild(b);
       addWrap.appendChild(addRow);
       // [백로그2-4] 선택 마감 일시(datetime-local). 비우면 마감 없음.
       var dueRow = el('div', { style: 'display:flex;align-items:center;gap:8px;' });
       dueRow.appendChild(el('span', { text: '마감(선택)', style: 'font-size:11px;color:var(--t4);flex:0 0 auto;' }));
       var dueInput = el('input', { attrs: { type: 'datetime-local', 'aria-label': '마감 일시' }, style: 'flex:1;min-width:0;border:1px solid var(--border);border-radius:8px;padding:6px 9px;font-size:12px;color:var(--t2);background:var(--panel);outline:none;' });
-      dueInput.value = store.todoDueInput || '';
-      dueInput.addEventListener('input', function (e) { store.todoDueInput = e.target.value || ''; });
-      if (store.busyTodos) dueInput.disabled = true;
+      dueInput.value = st.todoDueInput || '';
+      dueInput.addEventListener('input', function (e) { st.todoDueInput = e.target.value || ''; });
+      if (st.busyTodos) dueInput.disabled = true;
       dueRow.appendChild(dueInput);
       addWrap.appendChild(dueRow);
       card.appendChild(addWrap);
@@ -3538,7 +3575,7 @@ function initBrowser() {
       var add = el('div', {
         style: 'border-top:1px solid var(--border-soft);margin-top:10px;padding-top:12px;display:flex;align-items:center;gap:7px;color:var(--t4);font-size:12.5px;font-weight:600;cursor:pointer;',
         attrs: { role: 'button', tabindex: '0', 'aria-label': '할 일 추가' },
-        on: { click: function () { store.todoAdding = true; render(); } },
+        on: { click: function () { st.todoAdding = true; render(); } },
       });
       add.appendChild(el('span', { text: '+', style: 'font-size:15px;line-height:1;' }));
       add.appendChild(el('span', { text: ' 할 일 추가' }));
@@ -3547,9 +3584,54 @@ function initBrowser() {
     return card;
   }
 
-  function applyTodoResult(res) {
-    if (res && res.ok && Array.isArray(res.todos)) { store.todos = res.todos; return true; }
-    return false;
+  /** IPC 응답을 그 인스턴스 상태에 반영 — 응답의 box 가 이 인스턴스일 때만(엉뚱한 박스 반영 방지).
+   *   [위젯 인스턴스] box 가 없거나 다르면 무시한다(다른 위젯 목록을 덮어쓰지 않게). */
+  function applyTodoResult(iid, res) {
+    if (!res || !res.ok || !Array.isArray(res.todos)) return false;
+    if (res.box && res.box !== iid) return false; // 인스턴스 오배달 방어 — 응답 box(uiState.js)가 이 위젯이 아니면 무시.
+    wstate(iid).todos = res.todos;
+    return true;
+  }
+
+  /* ───── 공유 집계(요약·브리핑·마감 감시) ─────
+   * 할 일은 이제 박스(인스턴스)별이라, "남은 할 일 N건" 같은 전역 지표는 배치된 모든 할 일 위젯의
+   * 목록을 합산해야 한다(전역 store.todos 가정 폐지). 아래 헬퍼가 그 단일 합산 경계다. */
+
+  /** store._todoBoxes(getUiState 원본)를 현재 배치된 할 일 위젯 인스턴스의 wstate 로 반영.
+   *   배치돼 있는데 박스 데이터가 없으면 빈 목록으로 둔다(신규 위젯). 이미 있는 인스턴스는 목록만 갱신. */
+  function distributeTodoBoxes() {
+    var boxes = store._todoBoxes || {};
+    widgetsOfType('todos').forEach(function (w) {
+      var st = wstate(w.iid); // wstate 생성 시 시드도 하지만, 재적재(getUiState 갱신)에선 명시적으로 최신화
+      st.todos = Array.isArray(boxes[w.iid]) ? boxes[w.iid] : [];
+      st.loaded = true;
+    });
+  }
+
+  /** 배치된 모든 할 일 위젯 인스턴스의 [{iid, todos}] — 미적재 박스는 빈 목록. */
+  function allTodoBoxes() {
+    return widgetsOfType('todos').map(function (w) {
+      var st = wstate(w.iid);
+      return { iid: w.iid, todos: Array.isArray(st.todos) ? st.todos : [] };
+    });
+  }
+  /** 모든 박스의 할 일을 하나로 합친 배열(집계용 — 순서는 배치 순서). */
+  function allTodos() {
+    var out = [];
+    allTodoBoxes().forEach(function (b) { out = out.concat(b.todos); });
+    return out;
+  }
+  /** 전 박스 미완료 할 일 수(요약·브리핑 KPI 공용). */
+  function openTodoCount() {
+    return allTodos().filter(function (t) { return t && !t.done; }).length;
+  }
+  /** 할 일 위젯 중 하나라도 인라인 추가/마감 입력 중인가 — 라이브 갱신 보류 게이트(포커스 방해 방지).
+   *   [위젯 인스턴스] 입력 상태가 인스턴스별이라 전 박스를 OR 로 합산한다(과거 전역 store.todoAdding 대체). */
+  function anyTodoEditing() {
+    return widgetsOfType('todos').some(function (w) {
+      var st = store.wstate[w.iid];
+      return !!(st && (st.todoAdding || st.todoDueEditId));
+    });
   }
   /** [백로그2-4] datetime-local 문자열('YYYY-MM-DDTHH:mm') → ms(로컬). 빈/무효는 null. */
   function parseDueInput(v) {
@@ -3570,66 +3652,72 @@ function initBrowser() {
     var p = function (n) { return ('0' + n).slice(-2); };
     return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + 'T' + p(d.getHours()) + ':' + p(d.getMinutes());
   }
-  async function onAddTodo() {
-    var v = (store.todoInput || '').trim();
+  async function onAddTodo(iid) {
+    var st = wstate(iid);
+    var v = (st.todoInput || '').trim();
     if (!v) { toast('할 일 내용을 입력하세요.', true); return; }
-    if (store.busyTodos || !bridgeHas('addTodo')) return;
+    if (st.busyTodos || !bridgeHas('addTodo')) return;
     // [기본 마감] 마감 일자를 입력하지 않았으면 오늘 날짜를 기본으로 넣는다.
-    var dueAt = parseDueInput(store.todoDueInput);
+    var dueAt = parseDueInput(st.todoDueInput);
     if (dueAt == null) dueAt = todayDefaultDue();
-    store.busyTodos = true; render();
-    var res = await ipc('addTodo', v, dueAt);
-    store.busyTodos = false;
-    if (applyTodoResult(res)) { store.todoInput = ''; store.todoDueInput = ''; store.todoAdding = false; }
+    st.busyTodos = true; render();
+    var res = await ipc('addTodo', iid, v, dueAt); // 첫 인자 = 박스(iid)
+    st.busyTodos = false;
+    if (applyTodoResult(iid, res)) { st.todoInput = ''; st.todoDueInput = ''; st.todoAdding = false; }
     else toast(res && res.code === 'LIMIT' ? '할 일이 너무 많습니다.' : '할 일 추가에 실패했습니다.', true);
     // [F-1] todoAdding(editing) 해제 가능 지점 — release()로 즉시 1회 반영 + 잔류 pending 소비.
     RG.coalesce.release();
     maybeFlushCommitRefresh(); // [M10-P1] editing 해제 → 보류된 커밋 폴링 따라감
   }
-  /** [백로그2-4] 특정 할 일의 마감 편집기 열기(인라인). */
-  function openTodoDueEditor(t) {
-    store.todoDueEditId = t.id;
-    store.todoDueEditInput = toDueInput(t.dueAt);
+  /** [백로그2-4] 특정 할 일의 마감 편집기 열기(인라인) — 이 인스턴스 상태에만. */
+  function openTodoDueEditor(iid, t) {
+    var st = wstate(iid);
+    st.todoDueEditId = t.id;
+    st.todoDueEditInput = toDueInput(t.dueAt);
     render();
   }
-  /** [백로그2-4] 마감 일시 편집기 UI(설정/해제). */
-  function renderTodoDueEditor(t) {
+  /** [백로그2-4] 마감 일시 편집기 UI(설정/해제) — iid 로 이 인스턴스 상태를 읽고 쓴다. */
+  function renderTodoDueEditor(iid, t) {
+    var st = wstate(iid);
     var wrap = el('div', { style: 'border-top:1px solid var(--border-soft);margin-top:8px;padding-top:10px;display:flex;flex-direction:column;gap:8px;' });
     wrap.appendChild(el('div', { text: '“' + t.text + '” 마감 일시', style: 'font-size:11.5px;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;' }));
     var row = el('div', { style: 'display:flex;gap:8px;align-items:center;' });
     var inp = el('input', { attrs: { type: 'datetime-local', 'aria-label': '마감 일시 변경' }, style: 'flex:1;min-width:0;border:1px solid var(--border);border-radius:8px;padding:6px 9px;font-size:12px;color:var(--t2);background:var(--panel);outline:none;' });
-    inp.value = store.todoDueEditInput || '';
-    inp.addEventListener('input', function (e) { store.todoDueEditInput = e.target.value || ''; });
+    inp.value = st.todoDueEditInput || '';
+    inp.addEventListener('input', function (e) { st.todoDueEditInput = e.target.value || ''; });
     row.appendChild(inp);
-    row.appendChild(el('button', { text: '설정', attrs: { type: 'button' }, style: 'border:none;background:var(--accent);color:#fff;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;flex:0 0 auto;', on: { click: function () { onSetTodoDue(t.id, parseDueInput(store.todoDueEditInput)); } } }));
-    if (t.dueAt) row.appendChild(el('button', { text: '해제', attrs: { type: 'button' }, style: 'border:1px solid var(--border);background:var(--panel);color:var(--t3);border-radius:8px;padding:6px 12px;font-size:12px;cursor:pointer;flex:0 0 auto;', on: { click: function () { onSetTodoDue(t.id, null); } } }));
-    row.appendChild(el('button', { text: '닫기', attrs: { type: 'button' }, style: 'border:none;background:none;color:var(--t4);font-size:12px;cursor:pointer;flex:0 0 auto;', on: { click: function () { store.todoDueEditId = null; render(); } } }));
+    row.appendChild(el('button', { text: '설정', attrs: { type: 'button' }, style: 'border:none;background:var(--accent);color:#fff;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;flex:0 0 auto;', on: { click: function () { onSetTodoDue(iid, t.id, parseDueInput(st.todoDueEditInput)); } } }));
+    if (t.dueAt) row.appendChild(el('button', { text: '해제', attrs: { type: 'button' }, style: 'border:1px solid var(--border);background:var(--panel);color:var(--t3);border-radius:8px;padding:6px 12px;font-size:12px;cursor:pointer;flex:0 0 auto;', on: { click: function () { onSetTodoDue(iid, t.id, null); } } }));
+    row.appendChild(el('button', { text: '닫기', attrs: { type: 'button' }, style: 'border:none;background:none;color:var(--t4);font-size:12px;cursor:pointer;flex:0 0 auto;', on: { click: function () { st.todoDueEditId = null; render(); } } }));
     wrap.appendChild(row);
     return wrap;
   }
-  async function onSetTodoDue(id, dueAt) {
-    if (store.busyTodos || !bridgeHas('setTodoDue')) { store.todoDueEditId = null; render(); return; }
-    store.busyTodos = true; render();
-    var res = await ipc('setTodoDue', id, dueAt);
-    store.busyTodos = false;
-    if (applyTodoResult(res)) { store.todoDueEditId = null; store.notifiedDue.delete(id); } // 재설정 시 알림 재무장
+  async function onSetTodoDue(iid, id, dueAt) {
+    var st = wstate(iid);
+    if (st.busyTodos || !bridgeHas('setTodoDue')) { st.todoDueEditId = null; render(); return; }
+    st.busyTodos = true; render();
+    var res = await ipc('setTodoDue', iid, id, dueAt); // 첫 인자 = 박스(iid)
+    st.busyTodos = false;
+    if (applyTodoResult(iid, res)) { st.todoDueEditId = null; delete st.notifiedDue[id]; } // 재설정 시 알림 재무장
     else toast('마감 일시 설정에 실패했습니다.', true);
     render();
   }
-  async function onToggleTodo(id, done) {
-    if (store.busyTodos || !bridgeHas('toggleTodo')) return;
-    store.busyTodos = true; render();
-    var res = await ipc('toggleTodo', id, done);
-    store.busyTodos = false;
-    if (!applyTodoResult(res)) toast('할 일 상태 변경에 실패했습니다.', true);
+  async function onToggleTodo(iid, id, done) {
+    var st = wstate(iid);
+    if (st.busyTodos || !bridgeHas('toggleTodo')) return;
+    st.busyTodos = true; render();
+    var res = await ipc('toggleTodo', iid, id, done); // 첫 인자 = 박스(iid)
+    st.busyTodos = false;
+    if (!applyTodoResult(iid, res)) toast('할 일 상태 변경에 실패했습니다.', true);
     render();
   }
-  async function onRemoveTodo(id) {
-    if (store.busyTodos || !bridgeHas('removeTodo')) return;
-    store.busyTodos = true; render();
-    var res = await ipc('removeTodo', id);
-    store.busyTodos = false;
-    if (!applyTodoResult(res)) toast('할 일 삭제에 실패했습니다.', true);
+  async function onRemoveTodo(iid, id) {
+    var st = wstate(iid);
+    if (st.busyTodos || !bridgeHas('removeTodo')) return;
+    st.busyTodos = true; render();
+    var res = await ipc('removeTodo', iid, id); // 첫 인자 = 박스(iid)
+    st.busyTodos = false;
+    if (!applyTodoResult(iid, res)) toast('할 일 삭제에 실패했습니다.', true);
     render();
   }
 
@@ -6383,9 +6471,12 @@ function initBrowser() {
       code: res.ok ? null : (res.code || 'INTERNAL'),
     }]);
     st.context = (res.context && typeof res.context === 'object') ? res.context : st.context;
-    if (Array.isArray(res.todos)) store.todos = res.todos; // 도구가 바꾼 할 일 즉시 반영(할 일 위젯 동기화)
     if (!res.ok) st.input = msg; // 실패 시 입력 복원(재시도 편의)
     render();
+    // [위젯 인스턴스] 에이전트가 할 일을 바꿨을 수 있으니 getUiState 로 전 박스를 재동기(전역 store.todos 폐지).
+    //   백엔드 확정: 에이전트 todo 도구는 첫 박스(agentTodoBox)로 라우팅된다 — 응답을 직접 반영하지 않고
+    //   getUiState 재적재로 그 박스 위젯에 정합시킨다(전역 store.todos = res.todos 배선은 이미 제거됨).
+    if (bridgeHas('getUiState')) { loadUiState().then(function () { render(); }).catch(function () { /* graceful */ }); }
     // [UI 액티브 이벤트] 에이전트가 요청한 열기 동작(메일함/메일)을 렌더러가 실행 — 렌더 뒤에(팝업이 위로).
     agentApplyUiActions(res.uiActions);
   }
@@ -10205,7 +10296,7 @@ function initBrowser() {
    *   편집(할 일 입력)·모달 중에는 보류해 포커스/스크롤 방해를 막는다. */
   function maybeAutoRefreshMail() {
     if (store.state.view !== 'home' || !bridgeHas('syncMailArchive')) return;
-    if (store.busyMailSummary || store.showSettings || store.showHelp || store.todoAdding || store._scratchEditing) return;
+    if (store.busyMailSummary || store.showSettings || store.showHelp || anyTodoEditing() || store._scratchEditing) return;
     refreshMailSummary({ silent: true }); // [M11] 폴링/push 는 silent(진입 로딩 render 생략 → 깜빡임 0)
   }
   function subscribeMailUpdated() {
@@ -10232,18 +10323,26 @@ function initBrowser() {
    *   임박/경과 상태가 바뀌면 홈에서 할 일 위젯 색을 갱신(과도 렌더 방지로 상태 시그니처 비교). 뷰 무관 동작(알림은 항상). */
   var _lastDueSig = '';
   function tickTodoDue() {
-    var todos = Array.isArray(store.todos) ? store.todos : [];
+    // [위젯 인스턴스] 전 박스 순회 — 마감 감시·알림은 배치된 모든 할 일 위젯을 대상으로 한다.
+    //   dedupe(notifiedDue)는 인스턴스별(각 박스의 wstate.notifiedDue) — 서로 다른 박스의 같은 텍스트도 독립.
+    var boxes = allTodoBoxes();
     var now = Date.now();
     var sig = [];
-    for (var i = 0; i < todos.length; i++) {
-      var t = todos[i];
-      if (!t || t.done || typeof t.dueAt !== 'number' || !isFinite(t.dueAt) || t.dueAt <= 0) continue;
-      var info = todoDueInfo(t.dueAt, now);
-      if (info) sig.push(t.id + ':' + info.state);
-      // 마감 경과 + 미발화 → 토스트 1회.
-      if (now >= t.dueAt && !store.notifiedDue.has(t.id)) {
-        store.notifiedDue.add(t.id);
-        if (bridgeHas('notify')) { try { ipc('notify', '할 일 마감', t.text); } catch (_) { /* graceful */ } }
+    for (var b = 0; b < boxes.length; b++) {
+      var iid = boxes[b].iid;
+      var st = wstate(iid);
+      if (!st.notifiedDue) st.notifiedDue = {};
+      var todos = boxes[b].todos;
+      for (var i = 0; i < todos.length; i++) {
+        var t = todos[i];
+        if (!t || t.done || typeof t.dueAt !== 'number' || !isFinite(t.dueAt) || t.dueAt <= 0) continue;
+        var info = todoDueInfo(t.dueAt, now);
+        if (info) sig.push(iid + ':' + t.id + ':' + info.state); // iid 병기 — 박스별 상태를 시그니처에 반영
+        // 마감 경과 + 미발화 → 토스트 1회(이 박스 dedupe).
+        if (now >= t.dueAt && !st.notifiedDue[t.id]) {
+          st.notifiedDue[t.id] = 1;
+          if (bridgeHas('notify')) { try { ipc('notify', '할 일 마감', t.text); } catch (_) { /* graceful */ } }
+        }
       }
     }
     var newSig = sig.join('|');
@@ -11185,13 +11284,17 @@ function initBrowser() {
     // [로드맵 Phase 1·J] 테마 개인화 적재(액센트·UI 배율). 화이트리스트 폴백.
     store.accent = (res && res.ok !== false && ['indigo', 'blue', 'violet', 'emerald', 'rose', 'amber'].indexOf(res.accent) >= 0) ? res.accent : 'indigo';
     store.uiScale = (res && res.ok !== false && ['compact', 'normal', 'comfortable', 'large'].indexOf(res.uiScale) >= 0) ? res.uiScale : 'normal';
-    // 할 일(홈 브리핑) — getUiState 응답에 포함. 형식 무효 시 빈 배열.
-    store.todos = (res && res.ok !== false && Array.isArray(res.todos)) ? res.todos.filter((t) => t && typeof t.id === 'string') : [];
     // [위젯 인스턴스] 홈 배치 적재 — [{iid,type,name}]. 구버전 응답(homeLayout+hiddenWidgets)만 오면 레거시 폴백.
     var ok = !!(res && res.ok !== false);
     store.homeWidgets = (ok && Array.isArray(res.homeWidgets))
       ? applyHomeWidgets(res.homeWidgets)
       : widgetsFromLegacy(ok ? res.homeLayout : null, ok ? res.hiddenWidgets : null);
+    // 할 일 — [위젯 인스턴스] getUiState.todoBoxes({iid:Todo[]}) 를 박스별로 보존 후 각 인스턴스로 분배.
+    //   레거시 최상위 res.todos 는 여기서 쓰지 않는다 — 백엔드 확정: getUiState 가 로드 시점에 legacy 를
+    //   첫 todo 박스로 흡수해 todoBoxes 에 담아 내려준다(마크다운 편집기 legacy 흡수와 동형). 따라서 프론트는
+    //   무변경으로 첫 로드에 즉시 표시된다(op 를 기다릴 필요 없음).
+    store._todoBoxes = applyTodoBoxes(ok ? res.todoBoxes : null);
+    distributeTodoBoxes(); // 각 할 일 위젯 인스턴스의 wstate[iid].todos 로 최신 목록 반영
     // [홈 위젯 크기] 인스턴스별 폭·높이 적재(부재/손상 시 빈 = 전부 기본 크기).
     store.homeWidgetSizes = applyHomeWidgetSizes(ok ? res.homeWidgetSizes : null);
     // [로드맵 Phase 2] 대시보드(프리셋) 적재 — 탭/전환용. 활성 프리셋은 위 homeWidgets/sizes 와 동기.
@@ -11230,6 +11333,7 @@ function initBrowser() {
     store._presetRenameId = null;
     store._renameWidgetId = null;
     pruneWState();
+    distributeTodoBoxes(); // [할 일 위젯] 프리셋 전환으로 붙은 할 일 위젯에도 보존된 박스 데이터 반영
     render();
     return true;
   }
@@ -12205,7 +12309,7 @@ function initBrowser() {
         overlayOpen: !!(store.showSettings || store.showHelp || store.state.selectedId),
         busyMail:    store.busyMailSummary === true,
         busyCommit:  store.busyCommitActivity === true,
-        editing:     store.todoAdding === true,
+        editing:     anyTodoEditing(),
       });
     }
 

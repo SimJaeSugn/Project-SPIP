@@ -106,8 +106,8 @@ test('AG-1 IPC run — complete/delete 는 text 부분일치로 대상 지정', 
   const ctx = ctxWithTodos();
   // 선행: 할 일 2개를 직접 추가(도구 배선과 무관하게 fixture).
   const ui = require('../electron/ipc/uiState');
-  ui.addTodo({ text: '장보기' }, ctx);
-  ui.addTodo({ text: '운동하기' }, ctx);
+  ui.addTodo({ box: 'todos', text: '장보기' }, ctx); // [위젯 인스턴스] 기본 배치의 할 일 위젯 iid='todos'
+  ui.addTodo({ box: 'todos', text: '운동하기' }, ctx);
   const scripted = [
     '{"plan":["장보기를 완료한다"]}',
     '{"tool":"complete_todo","args":{"text":"장보기"}}',
@@ -130,6 +130,48 @@ test('AG-1 IPC run — 연결 없으면 NO_CONN, 빈 입력은 BAD_INPUT(LLM 미
   const noConn = Object.assign({}, ctx, { config: { briefing: { baseURL: '', model: '' } } });
   assert.strictEqual((await agentIpc.run({ message: '할일 추가', ...{} }, noConn)).code, 'NO_CONN');
   assert.strictEqual(called, 0, '검증 실패 시 LLM 미호출');
+});
+
+test('AG-1 IPC run — [위젯 인스턴스] add_todo 는 배치된 첫 할 일 박스(todoBox)에 반영·응답에 todoBox 노출', async () => {
+  const ctx = ctxWithTodos();
+  const scripted = [
+    '{"plan":["추가"]}',
+    '{"tool":"add_todo","args":{"text":"박스검증 항목"}}',
+    '{"final":"추가함"}',
+    '{"is_valid":true,"critique":""}',
+  ];
+  let n = 0;
+  ctx.llmClient = { streamBriefing: async () => ({ ok: true, text: scripted[n++] }) };
+  const res = await agentIpc.run({ message: '박스검증 항목 추가' }, ctx);
+  assert.strictEqual(res.ok, true);
+  assert.strictEqual(res.todoBox, 'todos', '기본 배치 첫 할 일 위젯 iid');
+  // 실제로 그 박스(getUiState→todoBoxes[todoBox])에 반영됐는지 — 프론트 재동기 경로와 동일하게 검증.
+  const ui = require('../electron/ipc/uiState');
+  const boxes = ui.getUiState(ctx).todoBoxes;
+  assert.strictEqual(boxes.todos.length, 1, '대상 박스에 실제 반영');
+  assert.strictEqual(boxes.todos[0].text, '박스검증 항목');
+  assert.deepStrictEqual(res.todos, boxes.todos, 'res.todos 는 대상 박스 목록과 일치(재동기 정합)');
+});
+
+test('AG-1 IPC run — 할 일 위젯 미배치 시 add_todo 는 무해히 거절(no_todo_widget), 크래시 없음', async () => {
+  const ctx = ctxWithTodos();
+  // 할 일 위젯을 모두 제거(shelf 만 남김) → 대상 박스 없음.
+  const ui = require('../electron/ipc/uiState');
+  const cur = ui.getUiState(ctx).homeWidgets.filter((w) => w.type === 'todos');
+  for (const w of cur) ui.removeWidget({ iid: w.iid }, ctx);
+  const scripted = [
+    '{"plan":["추가"]}',
+    '{"tool":"add_todo","args":{"text":"버려질 항목"}}',
+    '{"final":"처리했어요"}',
+    '{"is_valid":true,"critique":""}',
+  ];
+  let n = 0;
+  ctx.llmClient = { streamBriefing: async () => ({ ok: true, text: scripted[n++] }) };
+  const res = await agentIpc.run({ message: '추가' }, ctx);
+  assert.strictEqual(res.ok, true, '루프는 정상 종료(무해)');
+  assert.strictEqual(res.todoBox, null, '대상 박스 없음');
+  assert.deepStrictEqual(res.todos, [], '전역 목록 아님 — 빈 배열');
+  assert.ok(res.steps.some((s) => s.tool === 'add_todo' && /no_todo_widget/.test(s.observation || '')), '무해한 거절 관찰');
 });
 
 test('AG-1 IPC — findTodo/parseDue 유닛', () => {

@@ -273,16 +273,19 @@ test('위젯 인스턴스 — setHiddenWidgets 채널은 제거됐다(숨김 대
 
 
 
-// ── 할 일(todos) 핸들러 ──
+// ── 할 일(todos) 핸들러 — [위젯 인스턴스] 박스(iid)별 격리 + 전역 todos 흡수 ──
 function todoCtx(store) {
   let n = 0;
   return { uiStateStore: store, genTodoId: () => 't' + (0x100000 + (n++)).toString(16), nowMs: () => 1700000000000 };
 }
+// 기본 배치엔 'todos' 타입 위젯 인스턴스(iid='todos')가 있다 — 그 박스를 대상으로 CRUD.
+const BOX = 'todos';
 
-test('addTodo — 추가(id·createdAt 스탬프 주입)·trim·todos 반환', () => {
+test('addTodo — 박스에 추가(id·createdAt 스탬프)·trim·{box,todos} 반환', () => {
   const ctx = todoCtx(memStore());
-  const r = uiState.addTodo({ text: '  배포 확인  ' }, ctx);
+  const r = uiState.addTodo({ box: BOX, text: '  배포 확인  ' }, ctx);
   assert.ok(r.ok);
+  assert.strictEqual(r.box, BOX);
   assert.strictEqual(r.todos.length, 1);
   assert.strictEqual(r.todos[0].text, '배포 확인');
   assert.strictEqual(r.todos[0].done, false);
@@ -290,58 +293,215 @@ test('addTodo — 추가(id·createdAt 스탬프 주입)·trim·todos 반환', (
   assert.ok(/^t[0-9a-f]{6,}$/.test(r.todos[0].id));
 });
 
-test('addTodo — 빈 텍스트 → INVALID_TEXT', () => {
-  assert.strictEqual(uiState.addTodo({ text: '   ' }, todoCtx(memStore())).code, 'INVALID_TEXT');
-  assert.strictEqual(uiState.addTodo({}, todoCtx(memStore())).code, 'INVALID_TEXT');
+test('addTodo — [T-1] 박스 격리 선행: 빈 텍스트도 잘못된 박스면 박스 코드가 먼저(오라클 방지)', () => {
+  // 유효 박스 + 빈 텍스트 → INVALID_TEXT.
+  assert.strictEqual(uiState.addTodo({ box: BOX, text: '   ' }, todoCtx(memStore())).code, 'INVALID_TEXT');
+  assert.strictEqual(uiState.addTodo({ box: BOX }, todoCtx(memStore())).code, 'INVALID_TEXT');
+  // [T-1] 박스 형식 불량은 텍스트와 무관하게 BAD_INPUT(빈/유효 텍스트 모두).
+  assert.strictEqual(uiState.addTodo({ box: '../x', text: 'a' }, todoCtx(memStore())).code, 'BAD_INPUT');
+  assert.strictEqual(uiState.addTodo({ box: '../x', text: '   ' }, todoCtx(memStore())).code, 'BAD_INPUT', '빈 텍스트여도 박스 코드 우선');
+  // [T-1] 미배치/남의 박스는 텍스트와 무관하게 NOT_FOUND(존재 오라클 차단).
+  assert.strictEqual(uiState.addTodo({ box: 'wNope', text: 'a' }, todoCtx(memStore())).code, 'NOT_FOUND');
+  assert.strictEqual(uiState.addTodo({ box: 'wNope', text: '   ' }, todoCtx(memStore())).code, 'NOT_FOUND', '빈 텍스트여도 박스 코드 우선');
 });
 
 test('toggleTodo — 완료 토글 / 없는 id / 잘못된 id', () => {
   const ctx = todoCtx(memStore());
-  const id = uiState.addTodo({ text: 'x' }, ctx).todos[0].id;
-  let r = uiState.toggleTodo({ id, done: true }, ctx);
+  const id = uiState.addTodo({ box: BOX, text: 'x' }, ctx).todos[0].id;
+  let r = uiState.toggleTodo({ box: BOX, id, done: true }, ctx);
   assert.ok(r.ok); assert.strictEqual(r.todos[0].done, true);
-  r = uiState.toggleTodo({ id, done: false }, ctx);
+  r = uiState.toggleTodo({ box: BOX, id, done: false }, ctx);
   assert.strictEqual(r.todos[0].done, false);
-  assert.strictEqual(uiState.toggleTodo({ id: 'tffffff', done: true }, ctx).code, 'NOT_FOUND');
-  assert.strictEqual(uiState.toggleTodo({ id: 'BAD' }, ctx).code, 'INVALID_ID');
+  assert.strictEqual(uiState.toggleTodo({ box: BOX, id: 'tffffff', done: true }, ctx).code, 'NOT_FOUND');
+  assert.strictEqual(uiState.toggleTodo({ box: BOX, id: 'BAD' }, ctx).code, 'INVALID_ID');
 });
 
 test('removeTodo — 삭제 / 없는 id', () => {
   const ctx = todoCtx(memStore());
-  const id = uiState.addTodo({ text: 'x' }, ctx).todos[0].id;
-  const r = uiState.removeTodo({ id }, ctx);
+  const id = uiState.addTodo({ box: BOX, text: 'x' }, ctx).todos[0].id;
+  const r = uiState.removeTodo({ box: BOX, id }, ctx);
   assert.ok(r.ok); assert.strictEqual(r.todos.length, 0);
-  assert.strictEqual(uiState.removeTodo({ id: 'tabcabc' }, ctx).code, 'NOT_FOUND');
-  assert.strictEqual(uiState.removeTodo({ id: 'BAD' }, ctx).code, 'INVALID_ID');
+  assert.strictEqual(uiState.removeTodo({ box: BOX, id: 'tabcabc' }, ctx).code, 'NOT_FOUND');
+  assert.strictEqual(uiState.removeTodo({ box: BOX, id: 'BAD' }, ctx).code, 'INVALID_ID');
+});
+
+// ── [위젯 인스턴스] 박스별 격리 — 한 박스 CRUD 가 다른 박스에 안 샌다 ──
+test('todo 박스 격리 — 인스턴스 A/B 는 독립 목록, 남의 id 는 NOT_FOUND', () => {
+  // 할 일 위젯 인스턴스 2개 배치.
+  const store = memStore({ homeWidgets: [{ iid: 'todos', type: 'todos', name: '' }, { iid: 'w1', type: 'todos', name: '' }] });
+  const ctx = todoCtx(store);
+  const a = uiState.addTodo({ box: 'todos', text: 'A일' }, ctx).todos[0].id;
+  const b = uiState.addTodo({ box: 'w1', text: 'B일' }, ctx).todos[0].id;
+  // 각 박스는 자기 항목만.
+  assert.strictEqual(uiState.getUiState(ctx).todoBoxes.todos.length, 1);
+  assert.strictEqual(uiState.getUiState(ctx).todoBoxes.w1.length, 1);
+  // A 박스에서 B의 id 를 토글하려 하면 NOT_FOUND(격리).
+  assert.strictEqual(uiState.toggleTodo({ box: 'todos', id: b, done: true }, ctx).code, 'NOT_FOUND');
+  assert.ok(uiState.toggleTodo({ box: 'w1', id: b, done: true }, ctx).ok);
+  assert.ok(uiState.removeTodo({ box: 'todos', id: a }, ctx).ok);
+});
+
+// ── [위젯 인스턴스] removeWidget → 그 박스 자동 정리(고아 키 0) ──
+test('removeWidget — 삭제된 할 일 위젯의 박스가 정규화에서 자동 정리된다', () => {
+  const store = memStore({ homeWidgets: [{ iid: 'todos', type: 'todos', name: '' }, { iid: 'w1', type: 'todos', name: '' }] });
+  const ctx = todoCtx(store);
+  uiState.addTodo({ box: 'w1', text: '지울박스 항목' }, ctx);
+  assert.ok(store._get().todoBoxes.w1, '삭제 전엔 박스 존재');
+  const r = uiState.removeWidget({ iid: 'w1' }, ctx);
+  assert.ok(r.ok);
+  // 배치에서 사라진 iid 의 박스는 normalizeState 게이트로 제거된다(고아 키 0).
+  assert.strictEqual(store._get().todoBoxes.w1, undefined, '고아 박스 자동 정리');
+  assert.ok(store._get().todoBoxes.todos !== undefined || Object.keys(store._get().todoBoxes).length === 0);
+});
+
+// ── [High-1] 프리셋 전환 시 할 일 박스 보존(전 프리셋 iid 합집합 게이트) ──
+test('High-1 — 비활성 프리셋에만 있는 todos 박스는 프리셋 전환에서 보존된다(영구 손실 없음)', () => {
+  // 프리셋 A(활성): todos 위젯 배치 + 할일. 프리셋 B: todos 위젯 없음(mail 만).
+  const store = memStore({
+    homeWidgets: [{ iid: 'todos', type: 'todos', name: '' }],
+    dashboard: {
+      schemaVersion: 1, activePreset: 'a',
+      presets: [
+        { id: 'a', name: 'A', widgets: [{ iid: 'todos', type: 'todos', name: '' }], sizes: {}, positions: {}, layoutMode: 'masonry', groups: [] },
+        { id: 'b', name: 'B', widgets: [{ iid: 'mail', type: 'mail', name: '' }], sizes: {}, positions: {}, layoutMode: 'masonry', groups: [] },
+      ],
+    },
+  });
+  const ctx = todoCtx(store);
+  uiState.addTodo({ box: 'todos', text: 'A프리셋 할일' }, ctx);
+  assert.strictEqual(store._get().todoBoxes.todos.length, 1, '추가됨');
+
+  // B 로 전환 — 활성 homeWidgets 에 todos 없음. 예전엔 여기서 박스가 삭제됐다.
+  const rb = uiState.setActivePreset({ id: 'b' }, ctx);
+  assert.ok(rb.ok);
+  assert.ok(!rb.homeWidgets.some((w) => w.type === 'todos'), 'B 는 todos 위젯 없음');
+  assert.ok(store._get().todoBoxes.todos, 'B 전환 후에도 A 의 할일 박스 보존');
+  assert.strictEqual(store._get().todoBoxes.todos.length, 1);
+
+  // A 로 복귀 — 할일이 그대로 살아있다.
+  const ra = uiState.setActivePreset({ id: 'a' }, ctx);
+  assert.ok(ra.ok);
+  assert.strictEqual(ra.todoBoxes.todos.length, 1, 'A 복귀 시 할일 보존');
+  assert.strictEqual(ra.todoBoxes.todos[0].text, 'A프리셋 할일');
+});
+
+test('High-1 회귀 — 어느 프리셋에도 없는 iid(진짜 삭제)만 정리된다(요구사항 유지)', () => {
+  // 두 프리셋 모두 todos 위젯이 없다 → 고아 박스(wZ)는 정리돼야(삭제=데이터 삭제 요구).
+  const store = memStore({
+    homeWidgets: [{ iid: 'mail', type: 'mail', name: '' }],
+    todoBoxes: { wZ: [{ id: 't0a1b2c', text: '고아' }] },
+    dashboard: {
+      schemaVersion: 1, activePreset: 'a',
+      presets: [
+        { id: 'a', name: 'A', widgets: [{ iid: 'mail', type: 'mail', name: '' }], sizes: {}, positions: {}, layoutMode: 'masonry', groups: [] },
+        { id: 'b', name: 'B', widgets: [{ iid: 'shelf', type: 'shelf', name: '' }], sizes: {}, positions: {}, layoutMode: 'masonry', groups: [] },
+      ],
+    },
+  });
+  // 어느 프리셋에도 wZ 가 없으므로 정규화에서 제거(진짜 삭제된 위젯의 박스).
+  assert.strictEqual(store._get().todoBoxes.wZ, undefined, '전 프리셋 어디에도 없는 박스는 정리');
+});
+
+test('High-1 회귀 — 단일 레이아웃(프리셋 1개)에서 removeWidget 자동정리 기존 동작 유지', () => {
+  const store = memStore({ homeWidgets: [{ iid: 'todos', type: 'todos', name: '' }, { iid: 'w1', type: 'todos', name: '' }] });
+  const ctx = todoCtx(store);
+  uiState.addTodo({ box: 'w1', text: '지울 것' }, ctx);
+  assert.ok(store._get().todoBoxes.w1, '삭제 전 존재');
+  // 실제 removeWidget → 모든(유일) 프리셋에서 사라짐 → 박스 정리.
+  assert.ok(uiState.removeWidget({ iid: 'w1' }, ctx).ok);
+  assert.strictEqual(store._get().todoBoxes.w1, undefined, 'removeWidget 후 박스 삭제(데이터 삭제 요구)');
 });
 
 // ── [백로그2-4] 할 일 마감 일시(dueAt) ──
 
 test('addTodo — dueAt 설정/무효값 graceful(null)', () => {
   const ctx = todoCtx(memStore());
-  assert.strictEqual(uiState.addTodo({ text: 'a', dueAt: 1800000000000 }, ctx).todos[0].dueAt, 1800000000000);
-  assert.strictEqual(uiState.addTodo({ text: 'b' }, ctx).todos[1].dueAt, null, '미지정 → null');
-  assert.strictEqual(uiState.addTodo({ text: 'c', dueAt: -5 }, ctx).todos[2].dueAt, null, '음수 → null');
-  assert.strictEqual(uiState.addTodo({ text: 'd', dueAt: 'x' }, ctx).todos[3].dueAt, null, '비수치 → null');
+  assert.strictEqual(uiState.addTodo({ box: BOX, text: 'a', dueAt: 1800000000000 }, ctx).todos[0].dueAt, 1800000000000);
+  assert.strictEqual(uiState.addTodo({ box: BOX, text: 'b' }, ctx).todos[1].dueAt, null, '미지정 → null');
+  assert.strictEqual(uiState.addTodo({ box: BOX, text: 'c', dueAt: -5 }, ctx).todos[2].dueAt, null, '음수 → null');
+  assert.strictEqual(uiState.addTodo({ box: BOX, text: 'd', dueAt: 'x' }, ctx).todos[3].dueAt, null, '비수치 → null');
 });
 
 test('setTodoDue — 기존 할 일 마감 설정·해제·검증', () => {
   const ctx = todoCtx(memStore());
-  const id = uiState.addTodo({ text: 'x' }, ctx).todos[0].id;
-  let r = uiState.setTodoDue({ id, dueAt: 1800000000000 }, ctx);
+  const id = uiState.addTodo({ box: BOX, text: 'x' }, ctx).todos[0].id;
+  let r = uiState.setTodoDue({ box: BOX, id, dueAt: 1800000000000 }, ctx);
   assert.ok(r.ok); assert.strictEqual(r.todos[0].dueAt, 1800000000000);
-  r = uiState.setTodoDue({ id, dueAt: null }, ctx); // 해제
+  r = uiState.setTodoDue({ box: BOX, id, dueAt: null }, ctx); // 해제
   assert.strictEqual(r.todos[0].dueAt, null);
-  assert.strictEqual(uiState.setTodoDue({ id: 'tffffff', dueAt: 1 }, ctx).code, 'NOT_FOUND');
-  assert.strictEqual(uiState.setTodoDue({ id: 'BAD' }, ctx).code, 'INVALID_ID');
+  assert.strictEqual(uiState.setTodoDue({ box: BOX, id: 'tffffff', dueAt: 1 }, ctx).code, 'NOT_FOUND');
+  assert.strictEqual(uiState.setTodoDue({ box: BOX, id: 'BAD' }, ctx).code, 'INVALID_ID');
 });
 
-test('getUiState — todos 포함', () => {
-  const ctx = todoCtx(memStore());
-  uiState.addTodo({ text: 'a' }, ctx);
+// ── [위젯 인스턴스] 전역 todos → 첫 할 일 위젯 흡수(무손실 이행) ──
+test('legacy 흡수 — 전역 todos 는 첫 할 일 위젯 인스턴스가 흡수하고 legacyTodos 를 비운다', () => {
+  // 저장본에 구형 전역 todos 만 있고 todoBoxes 는 없음 → normalizeState 가 legacyTodos 로 보존.
+  const store = memStore({ todos: [{ id: 't111111', text: '옛 할 일', done: false, createdAt: 1, dueAt: null }] });
+  assert.strictEqual(store._get().legacyTodos.length, 1, '흡수 전엔 legacyTodos 보존');
+  assert.strictEqual(Object.keys(store._get().todoBoxes).length, 0);
+  const ctx = todoCtx(store);
+  // 첫 할 일 위젯(iid='todos')이 접근하는 순간 흡수.
+  const r = uiState.addTodo({ box: 'todos', text: '새 할 일' }, ctx);
+  assert.ok(r.ok);
+  assert.strictEqual(r.todos.length, 2, '옛 항목 + 새 항목');
+  assert.strictEqual(r.todos[0].text, '옛 할 일');
+  assert.strictEqual(store._get().legacyTodos.length, 0, '흡수 후 legacyTodos 비움');
+});
+
+test('legacy 로드-시 흡수 — getUiState 1회 호출로 첫 할 일 박스에 병합·legacyTodos 비움(mutation 불요)', () => {
+  // 구형 전역 todos 만 있고 아무 mutation 도 안 했다 — getUiState 만 불러도 흡수돼야(앱 기동 직후 표시).
+  const store = memStore({ todos: [
+    { id: 't111111', text: '옛 할 일1', done: false, createdAt: 1, dueAt: null },
+    { id: 't222222', text: '옛 할 일2', done: true, createdAt: 2, dueAt: null },
+  ] });
+  assert.strictEqual(store._get().legacyTodos.length, 2, '흡수 전 legacyTodos 보존');
+  const ctx = todoCtx(store);
   const r = uiState.getUiState(ctx);
-  assert.ok(Array.isArray(r.todos));
-  assert.strictEqual(r.todos.length, 1);
+  // 첫 할 일 박스(iid='todos')에 병합돼 내려온다.
+  assert.strictEqual(r.todoBoxes.todos.length, 2, 'todoBoxes[firstBox]에 병합');
+  assert.strictEqual(r.todoBoxes.todos[0].text, '옛 할 일1');
+  assert.deepStrictEqual(r.legacyTodos, [], 'legacyTodos 비워짐');
+  assert.strictEqual(store._get().legacyTodos.length, 0, '영속 상태도 비움');
+  // 멱등 — 재호출해도 중복 병합 없음.
+  const r2 = uiState.getUiState(ctx);
+  assert.strictEqual(r2.todoBoxes.todos.length, 2, '재호출 멱등(중복 병합 없음)');
+});
+
+test('legacy 로드-시 흡수 — 첫 할 일 위젯 미배치면 보존(무손실), 배치되면 그때 흡수', () => {
+  // 할 일 위젯을 전부 뺀 배치 + 구형 전역 todos.
+  const store = memStore({ homeWidgets: [{ iid: 'shelf', type: 'shelf', name: '' }], todos: [{ id: 't333333', text: '보존', done: false, createdAt: 1, dueAt: null }] });
+  const ctx = todoCtx(store);
+  const r = uiState.getUiState(ctx);
+  assert.strictEqual(r.legacyTodos.length, 1, '흡수 대상 박스 없음 → legacy 보존');
+  assert.deepStrictEqual(r.todoBoxes, {}, '흡수 안 함');
+  // 할 일 위젯을 추가하면 그 인스턴스가 흡수 대상 → 다음 getUiState 에서 흡수.
+  uiState.addWidget({ type: 'todos' }, ctx);
+  const r2 = uiState.getUiState(ctx);
+  const boxIid = r2.homeWidgets.find((w) => w.type === 'todos').iid;
+  assert.strictEqual(r2.todoBoxes[boxIid].length, 1, '새 첫 할 일 위젯이 흡수');
+  assert.deepStrictEqual(r2.legacyTodos, []);
+});
+
+test('legacy 흡수 — 첫 할 일 위젯이 아닌 박스는 흡수하지 않는다(보존)', () => {
+  const store = memStore({
+    homeWidgets: [{ iid: 'todos', type: 'todos', name: '' }, { iid: 'w1', type: 'todos', name: '' }],
+    todos: [{ id: 't222222', text: '옛것', done: false, createdAt: 1, dueAt: null }],
+  });
+  const ctx = todoCtx(store);
+  // 두 번째 인스턴스(w1)가 먼저 접근 — 흡수 안 함.
+  const r = uiState.addTodo({ box: 'w1', text: 'w1 항목' }, ctx);
+  assert.strictEqual(r.todos.length, 1, 'w1 은 자기 것만');
+  assert.strictEqual(store._get().legacyTodos.length, 1, '레거시 보존');
+});
+
+test('getUiState — todoBoxes/legacyTodos 포함, todos 는 폐기(빈 배열)', () => {
+  const ctx = todoCtx(memStore());
+  uiState.addTodo({ box: BOX, text: 'a' }, ctx);
+  const r = uiState.getUiState(ctx);
+  assert.ok(r.todoBoxes && typeof r.todoBoxes === 'object');
+  assert.strictEqual(r.todoBoxes[BOX].length, 1);
+  assert.ok(Array.isArray(r.legacyTodos));
+  assert.deepStrictEqual(r.todos, [], '전역 todos 는 폐기 — 항상 빈 배열');
 });
 
 // ── 언어 추세 baseline 갱신 ──

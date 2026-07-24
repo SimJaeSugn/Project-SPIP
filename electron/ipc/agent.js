@@ -128,10 +128,24 @@ const REFLECTOR_SYSTEM = [
   '출력은 {"is_valid":true|false,"critique":"..."} JSON 하나만.',
 ].join('\n');
 
-/** 현재 할 일 목록(메인 상태). */
-function currentTodos(ctx) {
+/**
+ * [위젯 인스턴스] 에이전트가 조작할 할 일 박스(iid) — 배치된 **첫 할 일 위젯 인스턴스**를 대상으로 한다.
+ *   할 일이 인스턴스별로 갈렸으므로 에이전트도 특정 박스를 골라야 한다(POC: 첫 위젯). 없으면 null.
+ */
+function agentTodoBox(ctx) {
   const r = uiStateIpc.getUiState(ctx);
-  return (r && Array.isArray(r.todos)) ? r.todos : [];
+  const widgets = (r && Array.isArray(r.homeWidgets)) ? r.homeWidgets : [];
+  const first = widgets.find((w) => w && w.type === 'todos');
+  return (first && typeof first.iid === 'string') ? first.iid : null;
+}
+
+/** 현재 할 일 목록(대상 박스의 항목). 박스 없으면 빈 배열.
+ *   [Med-1] 박스 목록 조회는 저장소 단일 헬퍼(uiStateStore.todosOf) 재사용(getUiState 응답의 todoBoxes 형태와 동일). */
+function currentTodos(ctx) {
+  const box = agentTodoBox(ctx);
+  if (!box) return [];
+  const r = uiStateIpc.getUiState(ctx);
+  return uiStateStore.todosOf(r, box);
 }
 
 /** args(id 또는 text)로 할 일 1건을 찾는다 — 정확 id > 정확 text > 부분 text. 없으면 null. */
@@ -268,34 +282,39 @@ function buildTools(ctx, uiActions) {
     add_todo: {
       desc: '할 일 추가',
       run: async (a) => {
-        const r = uiStateIpc.addTodo({ text: (a && a.text), dueAt: parseDue(a && a.dueAt) }, ctx);
+        const box = agentTodoBox(ctx);
+        if (!box) return { ok: false, error: 'no_todo_widget' }; // 배치된 할 일 위젯이 없으면 대상 박스 없음
+        const r = uiStateIpc.addTodo({ box, text: (a && a.text), dueAt: parseDue(a && a.dueAt) }, ctx);
         return r.ok ? { ok: true, added: (a && a.text) || '' } : { ok: false, error: r.code };
       },
     },
     complete_todo: {
       desc: '완료 표시',
       run: async (a) => {
+        const box = agentTodoBox(ctx);
         const t = findTodo(ctx, a);
-        if (!t) return { ok: false, error: 'not_found' };
-        const r = uiStateIpc.toggleTodo({ id: t.id, done: true }, ctx);
+        if (!box || !t) return { ok: false, error: 'not_found' };
+        const r = uiStateIpc.toggleTodo({ box, id: t.id, done: true }, ctx);
         return r.ok ? { ok: true, id: t.id, text: t.text } : { ok: false, error: r.code };
       },
     },
     uncomplete_todo: {
       desc: '완료 취소',
       run: async (a) => {
+        const box = agentTodoBox(ctx);
         const t = findTodo(ctx, a);
-        if (!t) return { ok: false, error: 'not_found' };
-        const r = uiStateIpc.toggleTodo({ id: t.id, done: false }, ctx);
+        if (!box || !t) return { ok: false, error: 'not_found' };
+        const r = uiStateIpc.toggleTodo({ box, id: t.id, done: false }, ctx);
         return r.ok ? { ok: true, id: t.id, text: t.text } : { ok: false, error: r.code };
       },
     },
     delete_todo: {
       desc: '삭제',
       run: async (a) => {
+        const box = agentTodoBox(ctx);
         const t = findTodo(ctx, a);
-        if (!t) return { ok: false, error: 'not_found' };
-        const r = uiStateIpc.removeTodo({ id: t.id }, ctx);
+        if (!box || !t) return { ok: false, error: 'not_found' };
+        const r = uiStateIpc.removeTodo({ box, id: t.id }, ctx);
         return r.ok ? { ok: true, id: t.id, text: t.text } : { ok: false, error: r.code };
       },
     },
@@ -704,7 +723,12 @@ async function run(args, ctx) {
     code: res.code || (res.final ? undefined : 'NO_FINAL'),
     final: res.final || '',
     steps: Array.isArray(res.steps) ? res.steps : [],
-    todos: currentTodos(ctx),       // 실행 후 최신 할 일(렌더러가 즉시 반영)
+    // [위젯 인스턴스] 에이전트는 배치된 **첫 할 일 위젯 박스**(todoBox)에만 쓴다. todos 는 그 박스의 최신
+    //   목록이고 todoBox 는 그 박스의 iid 다(전역 목록이 아니다). 프론트는 에이전트 턴 후 loadUiState()
+    //   (→getUiState→todoBoxes 재분배)로 재동기하므로 이 두 필드는 즉시 반영용 참고값 — 무시해도 안전하다.
+    //   배치된 할 일 위젯이 없으면 todoBox=null, todos=[](도구는 no_todo_widget/not_found 로 무해히 거절).
+    todoBox: agentTodoBox(ctx),
+    todos: currentTodos(ctx),       // 실행 후 대상 박스의 최신 할 일(렌더러 즉시 반영·참고)
     uiActions: uiActions,           // [UI 액티브 이벤트] 렌더러가 실행할 열기 동작(메일함/메일)
     // [컨텍스트 사용현황과 제한기준] 렌더러가 미터로 표시 — 제한 = 모델 컨텍스트 창 최대치.
     context: {

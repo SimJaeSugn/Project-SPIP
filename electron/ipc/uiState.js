@@ -42,7 +42,11 @@ function toResponse(state) {
   return {
     favorites: state.favorites, order: state.order, sortMode: state.sortMode, names: state.names,
     theme: state.theme, accent: state.accent || 'indigo', uiScale: state.uiScale || 'normal', // [Phase 1·J] 테마 개인화
-    todos: state.todos, langTrend: state.langTrend,
+    // [위젯 인스턴스] 할 일은 인스턴스별 박스 { iid: Todo[] }. todos(전역)는 폐기 — 항상 빈 배열(하위호환 키).
+    //   legacyTodos = 아직 어느 인스턴스도 흡수 안 한 전역 시절 할 일(첫 할 일 위젯이 열릴 때 흡수됨).
+    //   렌더러는 자기 iid 의 todoBoxes[iid] 만 표시한다.
+    todos: state.todos, todoBoxes: state.todoBoxes || {}, legacyTodos: state.legacyTodos || [],
+    langTrend: state.langTrend,
     // [위젯 인스턴스] 배치 = [{iid,type,name}] — 배열 순서 = 배치 순서, 없으면 미배치(옛 '숨김').
     //   같은 type 이 여러 번 올 수 있다(중복 배치). name 은 배치별 사용자 지정명(빈 값이면 렌더러가 타입 기본명).
     homeWidgets: state.homeWidgets || [],
@@ -76,9 +80,71 @@ function nowMs(ctx) {
   return Date.now();
 }
 
+/* ── [위젯 인스턴스] 할 일 박스(iid) — 인스턴스별 목록 격리 + 전역 todos 무손실 흡수 ──────────────
+ *   markdown.js(문서함) 선례를 미러링한다: 채널은 첫 인자로 박스(iid)를 받고, 메인이 (a) iid 형식,
+ *   (b) 배치된 위젯의 iid 인지(격리) 를 강제한다. 남의/없는 박스 접근은 NOT_FOUND(mdedit 동형). */
+
+/** args 에서 박스 키(=할 일 위젯 인스턴스 id) — 형식 불량이면 null(호출부가 BAD_INPUT). */
+function argBox(args) {
+  if (!args || typeof args !== 'object' || Array.isArray(args)) return null;
+  const box = args.box;
+  return (typeof box === 'string' && uiStateStore.IID_RE.test(box)) ? box : null;
+}
+
+/** 첫 할 일(todos) 위젯 인스턴스의 iid(배치 순서) — 레거시 전역 할 일을 흡수할 박스. 없으면 null. */
+function firstTodoBox(state) {
+  const widgets = Array.isArray(state.homeWidgets) ? state.homeWidgets : [];
+  const first = widgets.find((w) => w && w.type === 'todos');
+  return (first && typeof first.iid === 'string') ? first.iid : null;
+}
+
+/** 박스가 배치된 할 일 위젯의 iid 인지(격리 검증). */
+function isPlacedTodoBox(state, box) {
+  const widgets = Array.isArray(state.homeWidgets) ? state.homeWidgets : [];
+  return widgets.some((w) => w && w.iid === box && w.type === 'todos');
+}
+
+// [Med-1] 박스 목록 조회/교체는 저장소 단일 헬퍼(uiStateStore.todosOf/withTodos) 재사용 — 로컬 재구현 없음.
+
+/**
+ * [전역 todos → 인스턴스 박스 흡수] 전역 시절의 할 일(state.legacyTodos)을 **첫 할 일 위젯 인스턴스**의
+ *   박스로 흡수한다(markdown.js adoptLegacy 동형). 다른 인스턴스가 먼저 접근해도 흡수하지 않는다(엉뚱한
+ *   위젯으로 가지 않게). 흡수 대상이 아직 배치되지 않았으면 legacyTodos 는 그대로 보존된다(무손실).
+ *   흡수 시 legacyTodos 를 비우고 영속한다. @returns {object} 흡수 후(또는 그대로의) 정규화 상태
+ */
+function adoptLegacyTodos(state, box, store, storeCtx) {
+  const legacy = Array.isArray(state.legacyTodos) ? state.legacyTodos : [];
+  if (legacy.length === 0) return state;
+  if (box !== firstTodoBox(state)) return state;
+
+  const merged = legacy.concat(uiStateStore.todosOf(state, box)).slice(0, uiStateStore.MAX_TODOS);
+  const todoBoxes = uiStateStore.withTodos(state, box, merged);
+  const nextState = Object.assign({}, state, { todoBoxes, legacyTodos: [] });
+  // write 실패해도 응답엔 메모리 병합본을 반영한다(로드-시 흡수가 화면에서 할 일을 잃지 않게) — 정규화 통과.
+  try { return store.write(nextState, storeCtx); } catch (_) { return uiStateStore.normalizeState(nextState); }
+}
+
+/** 박스 스코프 상태 읽기 + 레거시 흡수. 모든 할 일 CRUD 의 단일 진입.
+ *   @returns {{box:string,state:object}|{code:string}} 박스 형식/격리 실패는 code(BAD_INPUT/NOT_FOUND). */
+function readTodoBox(args, store, storeCtx) {
+  const box = argBox(args);
+  if (!box) return { code: 'BAD_INPUT' };
+  let state = store.read(storeCtx);
+  state = adoptLegacyTodos(state, box, store, storeCtx);
+  // 배치된 할 일 위젯 인스턴스가 아니면 접근 거부(격리 — 남의/없는 박스). mdedit NOT_FOUND 동형.
+  if (!isPlacedTodoBox(state, box)) return { code: 'NOT_FOUND' };
+  return { box, state };
+}
+
 /**
  * spip:getUiState — 현재 UI 상태 반환(graceful). 스냅샷이 있으면 즐겨찾기·순서를
  *   현재 프로젝트 id 집합에 맞춰 머지·정리(재스캔으로 사라진 항목 제거)하고 변경 시 영속한다.
+ *
+ * [위젯 인스턴스] 할 일은 read/list 채널이 없고 이 번들로만 내려간다 — 그래서 **여기서 legacyTodos 를
+ *   로드-시 흡수**한다(mdedit 이 readBox→adoptLegacy 로 read 경로에서 흡수하는 것과 대칭). 첫 mutation 전
+ *   앱 기동 직후에도 기존 사용자의 할 일이 첫 할 일 박스에 담겨 즉시 표시된다(프론트 무변경). 첫 할 일 위젯이
+ *   배치돼 있을 때만 흡수하고(없으면 legacy 보존·무손실), 이미 비었으면 no-op(멱등). 상승 세션이면 store.write
+ *   가 디스크 no-op 이지만 메모리 병합 결과를 반환하므로 응답엔 병합본이 반영된다.
  * @returns {{ok:true,favorites,order,sortMode,names,theme}}
  */
 function getUiState(ctx) {
@@ -94,6 +160,12 @@ function getUiState(ctx) {
     } else {
       state = rec.state;
     }
+  }
+  // [로드-시 흡수] 첫 할 일 박스가 배치돼 있으면 legacyTodos 를 그 박스로 흡수(read 경로 흡수). box=null 이거나
+  //   legacy 가 비면 adoptLegacyTodos 가 그대로 상태를 돌려준다(no-op). write 실패는 graceful(메모리 병합만).
+  const firstBox = firstTodoBox(state);
+  if (firstBox) {
+    try { state = adoptLegacyTodos(state, firstBox, store, storeCtx); } catch (_) { /* graceful */ }
   }
   return Object.assign({ ok: true }, toResponse(state));
 }
@@ -457,82 +529,93 @@ function importDashboard(args, ctx) {
 }
 
 /**
- * spip:addTodo — 할 일 추가(메인이 id·createdAt 스탬프). 빈 텍스트 거부, 개수 상한.
- * @param {object} args { text }
- * @returns {{ok:true,todos} | {ok:false,code:'INVALID_TEXT'|'LIMIT'}}
+ * spip:addTodo — 그 박스(위젯 인스턴스)에 할 일 추가(메인이 id·createdAt 스탬프). 박스당 개수 상한.
+ *   [위젯 인스턴스] 첫 인자로 박스(iid)를 받는다.
+ *   [T-1] 검증 순서 = 박스 격리(BAD_INPUT/NOT_FOUND) **먼저**, 그다음 텍스트(INVALID_TEXT). 텍스트를 먼저
+ *   보면 '박스 존재 오라클'(유효 텍스트로만 NOT_FOUND, 빈 텍스트로 INVALID_TEXT → 박스 존재 여부 누설)이
+ *   되므로, 4채널 모두 박스 검증을 선행해 시맨틱을 일관시킨다.
+ * @param {object} args { box, text, dueAt? }
+ * @returns {{ok:true,box,todos} | {ok:false,code:'BAD_INPUT'|'NOT_FOUND'|'INVALID_TEXT'|'LIMIT'}}
  */
 function addTodo(args, ctx) {
+  const { store, storeCtx } = resolveStore(ctx);
+  const r = readTodoBox(args, store, storeCtx); // 박스 격리 선행(오라클 방지)
+  if (r.code) return { ok: false, code: r.code };
   const raw = (args && typeof args === 'object' && typeof args.text === 'string') ? args.text : '';
   const text = uiStateStore.sanitizeTodoText(raw);
   if (!text) return { ok: false, code: 'INVALID_TEXT' };
   // [백로그2-4] 선택 마감 일시(ms). 유한·양수만 허용, 그 외엔 미설정(null).
   const rawDue = (args && typeof args === 'object') ? args.dueAt : undefined;
   const dueAt = (typeof rawDue === 'number' && Number.isFinite(rawDue) && rawDue > 0) ? Math.floor(rawDue) : null;
-  const { store, storeCtx } = resolveStore(ctx);
-  const state = store.read(storeCtx);
-  if (state.todos.length >= uiStateStore.MAX_TODOS) return { ok: false, code: 'LIMIT' };
+  const cur = uiStateStore.todosOf(r.state, r.box);
+  if (cur.length >= uiStateStore.MAX_TODOS) return { ok: false, code: 'LIMIT' };
   const todo = { id: genTodoId(ctx), text, done: false, createdAt: nowMs(ctx), dueAt };
-  const next = store.write(Object.assign({}, state, { todos: state.todos.concat([todo]) }), storeCtx);
-  return { ok: true, todos: next.todos };
+  const next = store.write(Object.assign({}, r.state, { todoBoxes: uiStateStore.withTodos(r.state, r.box, cur.concat([todo])) }), storeCtx);
+  return { ok: true, box: r.box, todos: uiStateStore.todosOf(next, r.box) };
 }
 
 /**
- * [백로그2-4] spip:setTodoDue — 기존 할 일의 마감 일시 설정/해제(dueAt=null=해제).
- * @param {object} args { id, dueAt:number|null }
- * @returns {{ok:true,todos} | {ok:false,code:'INVALID_ID'|'NOT_FOUND'}}
+ * [백로그2-4] spip:setTodoDue — 그 박스의 기존 할 일 마감 일시 설정/해제(dueAt=null=해제).
+ *   [T-1] 박스 격리 선행 후 id 형식 검증.
+ * @param {object} args { box, id, dueAt:number|null }
+ * @returns {{ok:true,box,todos} | {ok:false,code:'BAD_INPUT'|'NOT_FOUND'|'INVALID_ID'}}
  */
 function setTodoDue(args, ctx) {
+  const { store, storeCtx } = resolveStore(ctx);
+  const r = readTodoBox(args, store, storeCtx);
+  if (r.code) return { ok: false, code: r.code };
   const id = (args && typeof args === 'object') ? args.id : undefined;
   if (typeof id !== 'string' || !uiStateStore.TODO_ID_RE.test(id)) return { ok: false, code: 'INVALID_ID' };
   const rawDue = (args && typeof args === 'object') ? args.dueAt : undefined;
   const dueAt = (typeof rawDue === 'number' && Number.isFinite(rawDue) && rawDue > 0) ? Math.floor(rawDue) : null;
-  const { store, storeCtx } = resolveStore(ctx);
-  const state = store.read(storeCtx);
   let found = false;
-  const todos = state.todos.map((t) => {
+  const todos = uiStateStore.todosOf(r.state, r.box).map((t) => {
     if (t.id === id) { found = true; return Object.assign({}, t, { dueAt }); }
     return t;
   });
-  if (!found) return { ok: false, code: 'NOT_FOUND' };
-  const next = store.write(Object.assign({}, state, { todos }), storeCtx);
-  return { ok: true, todos: next.todos };
+  if (!found) return { ok: false, code: 'NOT_FOUND' }; // 다른 박스의 할 일은 못 고친다(격리)
+  const next = store.write(Object.assign({}, r.state, { todoBoxes: uiStateStore.withTodos(r.state, r.box, todos) }), storeCtx);
+  return { ok: true, box: r.box, todos: uiStateStore.todosOf(next, r.box) };
 }
 
 /**
- * spip:toggleTodo — id의 완료 상태 설정.
- * @param {object} args { id, done }
- * @returns {{ok:true,todos} | {ok:false,code:'INVALID_ID'|'NOT_FOUND'}}
+ * spip:toggleTodo — 그 박스에서 id의 완료 상태 설정. [T-1] 박스 격리 선행 후 id 형식 검증.
+ * @param {object} args { box, id, done }
+ * @returns {{ok:true,box,todos} | {ok:false,code:'BAD_INPUT'|'NOT_FOUND'|'INVALID_ID'}}
  */
 function toggleTodo(args, ctx) {
+  const { store, storeCtx } = resolveStore(ctx);
+  const r = readTodoBox(args, store, storeCtx);
+  if (r.code) return { ok: false, code: r.code };
   const id = (args && typeof args === 'object') ? args.id : undefined;
   if (typeof id !== 'string' || !uiStateStore.TODO_ID_RE.test(id)) return { ok: false, code: 'INVALID_ID' };
   const done = !!(args && args.done);
-  const { store, storeCtx } = resolveStore(ctx);
-  const state = store.read(storeCtx);
   let found = false;
-  const todos = state.todos.map((t) => {
+  const todos = uiStateStore.todosOf(r.state, r.box).map((t) => {
     if (t.id === id) { found = true; return Object.assign({}, t, { done }); }
     return t;
   });
   if (!found) return { ok: false, code: 'NOT_FOUND' };
-  const next = store.write(Object.assign({}, state, { todos }), storeCtx);
-  return { ok: true, todos: next.todos };
+  const next = store.write(Object.assign({}, r.state, { todoBoxes: uiStateStore.withTodos(r.state, r.box, todos) }), storeCtx);
+  return { ok: true, box: r.box, todos: uiStateStore.todosOf(next, r.box) };
 }
 
 /**
- * spip:removeTodo — id 삭제.
- * @param {object} args { id }
- * @returns {{ok:true,todos} | {ok:false,code:'INVALID_ID'|'NOT_FOUND'}}
+ * spip:removeTodo — 그 박스에서 id 삭제. [T-1] 박스 격리 선행 후 id 형식 검증.
+ * @param {object} args { box, id }
+ * @returns {{ok:true,box,todos} | {ok:false,code:'BAD_INPUT'|'NOT_FOUND'|'INVALID_ID'}}
  */
 function removeTodo(args, ctx) {
+  const { store, storeCtx } = resolveStore(ctx);
+  const r = readTodoBox(args, store, storeCtx);
+  if (r.code) return { ok: false, code: r.code };
   const id = (args && typeof args === 'object') ? args.id : undefined;
   if (typeof id !== 'string' || !uiStateStore.TODO_ID_RE.test(id)) return { ok: false, code: 'INVALID_ID' };
-  const { store, storeCtx } = resolveStore(ctx);
-  const state = store.read(storeCtx);
-  const todos = state.todos.filter((t) => t.id !== id);
-  if (todos.length === state.todos.length) return { ok: false, code: 'NOT_FOUND' };
-  const next = store.write(Object.assign({}, state, { todos }), storeCtx);
-  return { ok: true, todos: next.todos };
+  const cur = uiStateStore.todosOf(r.state, r.box);
+  const todos = cur.filter((t) => t.id !== id);
+  if (todos.length === cur.length) return { ok: false, code: 'NOT_FOUND' };
+  const next = store.write(Object.assign({}, r.state, { todoBoxes: uiStateStore.withTodos(r.state, r.box, todos) }), storeCtx);
+  return { ok: true, box: r.box, todos: uiStateStore.todosOf(next, r.box) };
 }
 
 /**
@@ -559,4 +642,4 @@ function updateLangTrend(args, ctx) {
 
 // [위젯 인스턴스] setHiddenWidgets 는 제거됐다 — '숨김'이라는 상태가 없어졌다(제거 = 인스턴스 삭제).
 //   addWidget/removeWidget/renameWidget 이 그 자리를 대신한다.
-module.exports = { getUiState, setFavorite, setOrder, setSortMode, setHomeLayout, addWidget, removeWidget, renameWidget, setHomeWidgetSizes, setProjectName, setTheme, setThemePrefs, setScratchpad, addTodo, toggleTodo, removeTodo, setTodoDue, updateLangTrend, setActivePreset, addPreset, duplicatePreset, renamePreset, removePreset, addTemplatePreset, setLayoutMode, setWidgetPositions, setGroups, exportDashboard, importDashboard };
+module.exports = { getUiState, setFavorite, setOrder, setSortMode, setHomeLayout, addWidget, removeWidget, renameWidget, setHomeWidgetSizes, setProjectName, setTheme, setThemePrefs, setScratchpad, addTodo, toggleTodo, removeTodo, setTodoDue, updateLangTrend, setActivePreset, addPreset, duplicatePreset, renamePreset, removePreset, addTemplatePreset, setLayoutMode, setWidgetPositions, setGroups, exportDashboard, importDashboard, adoptLegacyTodos, firstTodoBox, isPlacedTodoBox };

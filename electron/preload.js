@@ -193,15 +193,16 @@ contextBridge.exposeInMainWorld('spip', {
     iid: String(iid), text: text == null ? '' : String(text),
   }),
 
-  // 할 일(홈 브리핑) — 추가/완료토글/삭제/마감설정. 읽기는 getUiState 응답의 todos.
-  //   [백로그2-4] dueAt(ms epoch, 선택)·setTodoDue 추가. 빈/무효 dueAt 은 생략(메인이 null 처리).
-  addTodo: (text, dueAt) => ipcRenderer.invoke('spip:addTodo', Object.assign(
-    { text: String(text) },
+  // 할 일 — 추가/완료토글/삭제/마감설정. [위젯 인스턴스] 할 일은 위젯 인스턴스별이라 첫 인자로 박스(iid)를 보낸다.
+  //   읽기는 getUiState 응답의 todoBoxes({iid:Todo[]}) 중 자기 iid. 검증·격리·id 스탬프는 메인.
+  //   [백로그2-4] dueAt(ms epoch, 선택)·setTodoDue. 빈/무효 dueAt 은 생략(메인이 null 처리).
+  addTodo: (box, text, dueAt) => ipcRenderer.invoke('spip:addTodo', Object.assign(
+    { box: String(box), text: String(text) },
     (dueAt != null && dueAt !== '' && Number.isFinite(Number(dueAt))) ? { dueAt: Number(dueAt) } : {})),
-  toggleTodo: (id, done) => ipcRenderer.invoke('spip:toggleTodo', { id: String(id), done: !!done }),
-  removeTodo: (id) => ipcRenderer.invoke('spip:removeTodo', { id: String(id) }),
-  setTodoDue: (id, dueAt) => ipcRenderer.invoke('spip:setTodoDue', {
-    id: String(id),
+  toggleTodo: (box, id, done) => ipcRenderer.invoke('spip:toggleTodo', { box: String(box), id: String(id), done: !!done }),
+  removeTodo: (box, id) => ipcRenderer.invoke('spip:removeTodo', { box: String(box), id: String(id) }),
+  setTodoDue: (box, id, dueAt) => ipcRenderer.invoke('spip:setTodoDue', {
+    box: String(box), id: String(id),
     dueAt: (dueAt != null && dueAt !== '' && Number.isFinite(Number(dueAt))) ? Number(dueAt) : null,
   }),
   // [백로그2-4] OS 토스트 알림 — 할 일 마감 도래 시 렌더러가 호출(메인이 Electron Notification 표시).

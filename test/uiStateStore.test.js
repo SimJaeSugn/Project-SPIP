@@ -133,9 +133,79 @@ test('normalizeTodos — 개수 상한(MAX_TODOS)', () => {
   assert.strictEqual(store.normalizeTodos(many).length, store.MAX_TODOS);
 });
 
-test('normalizeState — todos 포함(기본 빈 배열)', () => {
+test('normalizeState — todos 포함(폐기 — 항상 빈 배열)', () => {
   assert.deepStrictEqual(store.normalizeState({}).todos, []);
   assert.deepStrictEqual(store.defaultState().todos, []);
+});
+
+// ── [위젯 인스턴스] 인스턴스별 할 일 박스(todoBoxes) 정규화 ──
+test('normalizeTodoBoxes — 키(iid) 형식 화이트리스트·항목 정규화·박스 수 상한', () => {
+  const out = store.normalizeTodoBoxes({
+    todos: [{ id: 't0a1b2c', text: 'A', done: false, createdAt: 1, dueAt: null }],
+    'w1': [{ id: 'tbeef01', text: 'B' }, { id: 'bad', text: 'z' }], // 'bad' id → 폐기
+    '../x': [{ id: 't111111', text: 'Z' }],   // 키 형식 불량 → 박스 제거
+  });
+  assert.deepStrictEqual(Object.keys(out).sort(), ['todos', 'w1'].sort());
+  assert.strictEqual(out.todos.length, 1);
+  assert.strictEqual(out.w1.length, 1, '손상 항목 폐기');
+  assert.strictEqual(out.w1[0].id, 'tbeef01');
+});
+
+test('normalizeTodoBoxes — allowed(배치된 iid) 게이트로 고아 박스 제거', () => {
+  const input = { todos: [{ id: 't0a1b2c', text: 'keep' }], w9: [{ id: 'tbeef01', text: 'orphan' }] };
+  const out = store.normalizeTodoBoxes(input, new Set(['todos']));
+  assert.deepStrictEqual(Object.keys(out), ['todos'], '배치 안 된 w9 박스는 제거');
+});
+
+test('allPresetWidgetIids — 활성 base ∪ 전 프리셋 위젯 iid 합집합(High-1 게이트 소스)', () => {
+  const dashboard = { presets: [
+    { id: 'a', widgets: [{ iid: 'todos' }, { iid: 'mail' }] },
+    { id: 'b', widgets: [{ iid: 'w1' }] },
+    { id: 'c', widgets: 'bad' }, // 손상 → 무시
+  ] };
+  const out = store.allPresetWidgetIids(dashboard, new Set(['todos', 'shelf']));
+  assert.deepStrictEqual([...out].sort(), ['mail', 'shelf', 'todos', 'w1'].sort());
+  // dashboard 부재/손상 → base 만.
+  assert.deepStrictEqual([...store.allPresetWidgetIids(null, new Set(['todos']))], ['todos']);
+});
+
+test('todosOf/withTodos — 저장소 단일 헬퍼(mdDocStore.docsOf/withDocs 동형)', () => {
+  const state = { todoBoxes: { todos: [{ id: 't0a1b2c', text: 'x' }], w1: [] } };
+  assert.strictEqual(store.todosOf(state, 'todos').length, 1);
+  assert.deepStrictEqual(store.todosOf(state, '없음'), [], '없는 박스는 빈 배열');
+  assert.deepStrictEqual(store.todosOf({}, 'todos'), []);
+  const next = store.withTodos(state, 'w1', [{ id: 'tbeef01', text: 'y' }]);
+  assert.strictEqual(next.w1.length, 1, 'w1 만 교체');
+  assert.strictEqual(next.todos.length, 1, '다른 박스 보존(불변)');
+  assert.notStrictEqual(next, state.todoBoxes, '새 객체(불변)');
+});
+
+test('normalizeTodoBoxes — 박스 수 상한(MAX_TODO_BOXES)', () => {
+  const input = {};
+  for (let i = 0; i < store.MAX_TODO_BOXES + 5; i++) input['w' + i.toString(36)] = [];
+  assert.ok(Object.keys(store.normalizeTodoBoxes(input)).length <= store.MAX_TODO_BOXES);
+});
+
+test('migrateLegacyTodos — 전역 todos 우선(무손실), 없으면 legacyTodos 채택', () => {
+  // 전역 todos 가 있으면 그것이 아직 흡수 안 된 레거시(우선) — 손 파일에서 boxes 공존 시에도 무손실.
+  assert.strictEqual(store.migrateLegacyTodos({ todos: [{ id: 't0a1b2c', text: 'x' }] }).length, 1);
+  const r = store.migrateLegacyTodos({ todoBoxes: { todos: [] }, todos: [{ id: 't0a1b2c', text: 'x' }], legacyTodos: [{ id: 'tbeef01', text: 'y' }] });
+  assert.strictEqual(r.length, 1);
+  assert.strictEqual(r[0].text, 'x', '전역 todos 우선');
+  // 전역 todos 부재 → legacyTodos 채택(정상 이행 중간 상태).
+  const r2 = store.migrateLegacyTodos({ todoBoxes: { todos: [] }, legacyTodos: [{ id: 'tbeef01', text: 'y' }] });
+  assert.strictEqual(r2.length, 1);
+  assert.strictEqual(r2[0].text, 'y');
+});
+
+test('normalizeState — 전역 todos → todoBoxes 게이트로 미배치 박스 제거 + legacyTodos 보존', () => {
+  // 배치엔 기본 todos 위젯(iid=todos)만. todoBoxes 의 미배치 iid 는 제거되고, 전역 todos 는 legacyTodos 로.
+  const s = store.normalizeState({ schemaVersion: store.SCHEMA_VERSION, todoBoxes: { wZ: [{ id: 't0a1b2c', text: 'orphan' }] }, todos: [{ id: 'tbeef01', text: 'old', done: false, createdAt: 1, dueAt: null }] });
+  assert.strictEqual(s.todoBoxes.wZ, undefined, '미배치 박스 정리(고아 키 0)');
+  // 전역 todos 는 흡수 전이라 legacyTodos 로 무손실 보존(전역 우선 규칙).
+  assert.strictEqual(s.legacyTodos.length, 1);
+  assert.strictEqual(s.legacyTodos[0].text, 'old');
+  assert.deepStrictEqual(s.todos, [], '전역 todos 출력은 폐기');
 });
 
 // ── 언어 추세(langTrend) 정규화 ──

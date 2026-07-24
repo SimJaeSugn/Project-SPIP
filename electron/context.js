@@ -131,9 +131,17 @@ function deriveSnapshot(ctx, extra) {
   //   done도 그대로 전달(정책이 필터·auto-resolve). 읽기는 작은 로컬 JSON — graceful(실패 시 빈 deadlines).
   try {
     const ui = uiStateStore.read({ uiStatePath: ctx && ctx.uiStatePath, logger: ctx && ctx.logger });
-    const todos = Array.isArray(ui.todos) ? ui.todos : [];
-    for (const t of todos) {
-      if (!t || typeof t.id !== 'string' || typeof t.dueAt !== 'number' || !Number.isFinite(t.dueAt)) continue;
+    // [위젯 인스턴스] 할 일은 인스턴스별 박스 { iid: Todo[] }로 갈렸다 — 마감은 위젯 경계와 무관한 일정 신호이므로
+    //   모든 박스 + 아직 흡수 안 된 legacyTodos 를 합쳐 스캔한다(id 로 중복 제거). 전역 todos 는 폐기(빈 배열).
+    //   [Med-1] 박스 목록 조회는 저장소 단일 헬퍼(uiStateStore.todosOf) 재사용(인라인 재구현 없음).
+    const boxes = (ui.todoBoxes && typeof ui.todoBoxes === 'object') ? ui.todoBoxes : {};
+    const all = [].concat(...Object.keys(boxes).map((k) => uiStateStore.todosOf(ui, k)),
+      Array.isArray(ui.legacyTodos) ? ui.legacyTodos : []);
+    const seen = new Set();
+    for (const t of all) {
+      if (!t || typeof t.id !== 'string' || seen.has(t.id)) continue;
+      if (typeof t.dueAt !== 'number' || !Number.isFinite(t.dueAt)) continue;
+      seen.add(t.id);
       out.deadlines.push({ id: t.id, name: (typeof t.text === 'string') ? t.text : '', dueAt: t.dueAt, done: t.done === true });
     }
   } catch (_) { /* graceful — 빈 deadlines */ }
